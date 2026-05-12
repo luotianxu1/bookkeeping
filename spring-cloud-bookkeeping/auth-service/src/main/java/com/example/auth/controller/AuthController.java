@@ -8,8 +8,11 @@ import com.example.auth.model.UserAccount;
 import com.example.auth.security.JwtService;
 import com.example.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,6 +47,13 @@ public class AuthController {
 
     @GetMapping("/me")
     @Operation(summary = "获取当前登录用户", description = "需要在 Authorization 头中传入 Bearer Token")
+    @Parameter(
+        name = HttpHeaders.AUTHORIZATION,
+        description = "访问令牌，格式：Bearer {token}",
+        in = ParameterIn.HEADER,
+        required = true,
+        example = "Bearer eyJhbGciOiJIUzM4NCJ9.xxx"
+    )
     public Result<CurrentUserResponse> me(@AuthenticationPrincipal String username) {
         UserAccount user = authService.getCurrentUser(username).orElse(null);
         if (user == null) {
