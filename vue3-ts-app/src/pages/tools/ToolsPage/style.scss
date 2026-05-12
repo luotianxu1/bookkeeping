@@ -1,0 +1,75 @@
+.tools-page {
+  min-height: calc(100dvh - 142px);
+  display: grid;
+  align-content: start;
+  gap: var(--space-6);
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.tool-card {
+  min-height: var(--space-96);
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-6);
+  padding: 12px 8px;
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-20);
+  background: linear-gradient(160deg, var(--color-white) 0%, var(--color-bg-card-grad) 100%);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.07);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tool-card.featured {
+  background: transparent;
+  border-color: var(--color-bg-soft-2);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.07);
+}
+
+.tool-icon {
+  width: var(--space-44);
+  height: var(--space-44);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-14);
+  font-size: var(--font-size-18);
+  font-weight: 700;
+}
+
+.tool-title {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.tool-card.tone-blue .tool-icon {
+  color: var(--color-white);
+  background: linear-gradient(180deg, var(--color-brand-strong) 0%, var(--color-brand) 100%);
+}
+
+.tool-card.tone-purple .tool-icon {
+  color: var(--color-purple);
+  background: linear-gradient(180deg, var(--color-bg-purple-grad-1) 0%, var(--color-bg-purple-grad-2) 100%);
+}
+
+.tool-card.tone-sky .tool-icon {
+  color: var(--color-brand);
+  background: linear-gradient(180deg, var(--color-bg-sky-grad-1) 0%, var(--color-bg-sky-grad-2) 100%);
+}
+
+.tool-card.tone-green .tool-icon {
+  color: var(--color-success-strong);
+  background: linear-gradient(180deg, var(--color-bg-green-grad-1) 0%, var(--color-bg-green-grad-2) 100%);
+}
+
+.tool-card.tone-orange .tool-icon {
+  color: var(--color-orange);
+  background: linear-gradient(180deg, var(--color-bg-orange-grad-1) 0%, var(--color-bg-orange-grad-2) 100%);
+}

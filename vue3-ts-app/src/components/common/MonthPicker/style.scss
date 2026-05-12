@@ -1,0 +1,30 @@
+.month-picker {
+  position: relative;
+  min-height: var(--space-40);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+}
+
+.month-picker-arrow {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-16);
+  font-weight: 700;
+}
+
+.month-picker-label {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.month-picker-native {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}

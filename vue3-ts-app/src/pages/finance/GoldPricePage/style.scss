@@ -1,0 +1,265 @@
+.gold-price-page {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.spot-london-card,
+.trend-card,
+.quote-card,
+.jewelry-card,
+.gold-account-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.card-head p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.card-head span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.market-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+}
+
+.market-item {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-10);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-10);
+  background: var(--color-bg-page);
+}
+
+.market-label {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.market-item strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-24);
+  line-height: 1.1;
+}
+
+.market-item em {
+  color: var(--color-danger);
+  font-size: var(--font-size-12);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.market-foot {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.trend-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-6);
+  padding: var(--space-4);
+  border-radius: var(--radius-18);
+  background: var(--color-bg-soft-2);
+}
+
+.trend-tabs button {
+  height: var(--space-32);
+  border: 0;
+  border-radius: var(--radius-14);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  background: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.trend-tabs button.active {
+  color: var(--color-brand);
+  font-weight: 700;
+  background: var(--color-white);
+}
+
+.card-title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.trend-chart {
+  width: 100%;
+  height: 210px;
+}
+
+.quote-card {
+  grid-template-columns: 1fr 1fr;
+}
+
+.quote-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.quote-row span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.quote-row strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.jewelry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.jewelry-row span {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.jewelry-row strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.gold-account-card {
+  padding-top: var(--space-10);
+  padding-bottom: var(--space-10);
+}
+
+.gold-account-row {
+  min-height: var(--space-50);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  border-top: 1px solid var(--color-bg-soft-2);
+}
+
+.gold-account-row:first-of-type {
+  border-top: 0;
+}
+
+.gold-account-left {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.gold-account-left strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.gold-account-left span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.gold-account-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.gold-account-right strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.gold-account-arrow {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-16);
+}
+
+@media (prefers-color-scheme: dark) {
+  .spot-london-card,
+  .trend-card,
+  .quote-card,
+  .jewelry-card,
+  .gold-account-card {
+    border-color: var(--color-dark-card-border);
+    background: var(--color-dark-card-bg);
+  }
+
+  .card-head p,
+  .card-title,
+  .market-item strong,
+  .quote-row strong,
+  .jewelry-row span,
+  .jewelry-row strong,
+  .gold-account-left strong,
+  .gold-account-right strong {
+    color: var(--color-bg-page);
+  }
+
+  .card-head span,
+  .market-label,
+  .market-foot,
+  .quote-row span,
+  .gold-account-left span,
+  .gold-account-arrow {
+    color: var(--color-dark-text-muted);
+  }
+
+  .market-item {
+    border-color: var(--color-dark-card-border);
+    background: var(--color-text-primary);
+  }
+
+  .trend-tabs {
+    background: var(--color-bg-dark-2);
+  }
+
+  .trend-tabs button {
+    color: var(--color-dark-text-muted);
+  }
+
+  .trend-tabs button.active {
+    color: var(--color-brand);
+    background: var(--color-bg-dark-3);
+  }
+
+  .gold-account-row {
+    border-top-color: var(--color-dark-card-border);
+  }
+}

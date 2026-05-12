@@ -1,0 +1,13 @@
+.app-layout {
+  min-height: 100dvh;
+  background: var(--color-bg-page);
+}
+
+.page-content {
+  width: 100%;
+  padding: 10px 16px 126px;
+}
+
+.page-content.without-nav {
+  padding: 10px 16px 16px;
+}

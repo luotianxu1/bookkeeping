@@ -1,0 +1,111 @@
+.asset-card {
+  min-height: 164px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: 12px 12px 14px;
+  border: 1px solid var(--color-border-blue);
+  border-radius: var(--radius-20);
+  background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
+  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+}
+
+.asset-main {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.asset-main-left {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.asset-label,
+.asset-row {
+  margin: 0;
+  color: var(--color-finance-subtitle);
+}
+
+.asset-label {
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+h1 {
+  margin: 0;
+  color: var(--color-finance-title);
+  font-size: var(--font-size-28);
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.budget-ring-wrap {
+  width: var(--space-72);
+  display: grid;
+  place-items: center;
+}
+
+.budget-ring {
+  width: var(--space-60);
+  height: var(--space-60);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--color-green-weak) var(--usage), var(--color-brand-soft) 0);
+}
+
+.budget-ring-inner {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--color-finance-bg-1);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0;
+  text-align: center;
+}
+
+.budget-ring-inner span {
+  color: var(--color-finance-title);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.budget-ring-inner strong {
+  color: var(--color-finance-title);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.asset-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.asset-metric-item {
+  min-height: var(--space-36);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: 6px 8px;
+  border-radius: var(--radius-10);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.asset-metric-item span {
+  color: var(--color-finance-subtitle);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.asset-metric-item strong {
+  color: var(--color-finance-title);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}

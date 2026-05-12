@@ -1,0 +1,96 @@
+.gold-liquidation-page {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.liquidation-summary {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-10);
+  background: var(--color-white);
+}
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.summary-row span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.summary-row strong {
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.summary-row .weight {
+  color: #facc15;
+}
+
+.summary-row .profit {
+  color: #e11d48;
+}
+
+.liquidation-list {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.liquidation-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-10);
+  background: var(--color-white);
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.card-top strong {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.card-top em {
+  color: #e11d48;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-10);
+}
+
+.detail-grid div {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.detail-grid span {
+  color: var(--color-text-subtle);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.detail-grid strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}

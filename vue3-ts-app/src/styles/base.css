@@ -1,0 +1,159 @@
+/* 全局基础样式：字体、盒模型和通用交互元素重置。 */
+:root {
+  /* color tokens */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #334155;
+  --color-text-tertiary: #475569;
+  --color-text-muted: #64748b;
+  --color-text-subtle: #94a3b8;
+  --color-brand: #1d4ed8;
+  --color-brand-strong: #2563eb;
+  --color-brand-soft: #93c5fd;
+  --color-success: #16a34a;
+  --color-success-strong: #15803d;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-white: #ffffff;
+  --color-purple: #7c3aed;
+  --color-orange: #c2410c;
+  --color-green-weak: #22c55e;
+
+  --color-bg-app: #e9eef7;
+  --color-bg-page: #f8fafc;
+  --color-bg-card: #ffffff;
+  --color-bg-soft: #f1f5f9;
+  --color-bg-soft-2: #e2e8f0;
+  --color-bg-brand-soft: #eff6ff;
+  --color-bg-brand-tint: #dbeafe;
+  --color-bg-purple-soft: #f3e8ff;
+  --color-bg-success-soft: #e7f9ef;
+  --color-bg-neutral-soft: #eef2f8;
+  --color-bg-neutral-soft-2: #f7faff;
+  --color-bg-blue-soft: #eaf2ff;
+  --color-bg-blue-strong: #2a56d6;
+  --color-bg-dark-2: #1e293b;
+  --color-bg-dark-3: #22355a;
+  --color-bg-purple-grad-1: #f8e8ff;
+  --color-bg-purple-grad-2: #e9d5ff;
+  --color-bg-sky-grad-1: #e7f0ff;
+  --color-bg-sky-grad-2: #bfdbfe;
+  --color-bg-green-grad-1: #e8f7f0;
+  --color-bg-green-grad-2: #bbf7d0;
+  --color-bg-orange-grad-1: #fff4e6;
+  --color-bg-orange-grad-2: #fed7aa;
+  --color-bg-card-grad: #f5f7fb;
+  --color-bg-white-100: #fbfdff;
+
+  --color-border: #e2e8f0;
+  --color-border-soft: #dbe4f2;
+  --color-border-soft-2: #d1d9e6;
+  --color-border-blue: #d9e5ff;
+  --color-border-brand-soft: #dde3ee;
+  --color-border-blue-soft: #c9dbff;
+  --color-border-blue-ultra-soft: #e8eef8;
+
+  --color-finance-title: #173b8f;
+  --color-finance-subtitle: #4f6ea8;
+  --color-finance-bg-1: #f4f8ff;
+  --color-finance-bg-2: #e5eeff;
+
+  --color-dark-card-border: #253045;
+  --color-dark-card-bg: #121a2b;
+  --color-dark-text-muted: #8fa3c7;
+
+  /* size tokens */
+  --font-size-12: 12px;
+  --font-size-14: 14px;
+  --font-size-16: 16px;
+  --font-size-18: 18px;
+  --font-size-20: 20px;
+  --font-size-24: 24px;
+  --font-size-26: 26px;
+  --font-size-28: 28px;
+  --font-size-30: 30px;
+  --font-size-36: 36px;
+  --font-size-38: 38px;
+  --font-size-44: 44px;
+
+  --radius-3: 3px;
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-14: 14px;
+  --radius-16: 16px;
+  --radius-18: 18px;
+  --radius-20: 20px;
+  --radius-26: 26px;
+  --radius-28: 28px;
+  --radius-36: 36px;
+  --radius-pill: 999px;
+
+  --space-6: 6px;
+  --space-1: 1px;
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-28: 28px;
+  --space-32: 32px;
+  --space-36: 36px;
+  --space-40: 40px;
+  --space-44: 44px;
+  --space-48: 48px;
+  --space-52: 52px;
+  --space-56: 56px;
+  --space-60: 60px;
+  --space-72: 72px;
+  --space-96: 96px;
+
+  color: var(--color-text-primary);
+  background: var(--color-bg-app);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--color-text-primary);
+  background: var(--color-bg-app);
+}
+
+button {
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}

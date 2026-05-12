@@ -1,0 +1,119 @@
+.gold-account-page {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.gold-account-summary {
+  display: grid;
+  gap: var(--space-8);
+  padding: var(--space-14);
+  border: 1px solid var(--color-border-blue);
+  border-radius: var(--radius-20);
+  background: linear-gradient(135deg, var(--color-finance-bg-1), var(--color-finance-bg-2));
+}
+
+.summary-head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.summary-head span {
+  color: var(--color-finance-subtitle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.summary-head strong {
+  color: #facc15;
+  font-size: var(--font-size-36);
+  line-height: 1.1;
+  font-weight: 700;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8) var(--space-12);
+}
+
+.summary-grid article {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.summary-grid span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.summary-grid strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.summary-grid .up {
+  color: #e11d48;
+}
+
+.gold-holding-list {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.gold-holding-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+}
+
+.price-tag {
+  width: fit-content;
+  height: 22px;
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-10);
+  display: inline-grid;
+  place-items: center;
+  color: #d97706;
+  background: #fef3c7;
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.holding-top,
+.holding-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.holding-top strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.holding-top p {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.holding-bottom span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.holding-bottom em {
+  color: #e11d48;
+  font-size: var(--font-size-12);
+  font-style: normal;
+  font-weight: 700;
+}

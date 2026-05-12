@@ -1,0 +1,91 @@
+.exchange-rate-page {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.converter-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-20);
+  background: var(--color-white);
+}
+
+.currency-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-page);
+}
+
+.currency-card p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.currency-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.currency-row select {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.currency-row input {
+  width: 132px;
+  height: var(--space-40);
+  padding: 0 10px;
+  border: 1px solid var(--color-border-brand-soft);
+  border-radius: var(--radius-10);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-24);
+  line-height: 1;
+  font-weight: 700;
+  text-align: right;
+}
+
+.currency-row strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-38);
+  line-height: 1;
+}
+
+.mid-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.mid-row span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.mid-row button {
+  min-height: var(--space-28);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}

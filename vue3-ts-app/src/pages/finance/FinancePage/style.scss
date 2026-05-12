@@ -1,0 +1,39 @@
+.feature-block {
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-14);
+}
+
+.feature-header {
+  min-height: var(--space-16);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.feature-header strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.feature-header span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-16);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.feature-link {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-16);
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.records {
+  display: grid;
+  gap: var(--space-6);
+  margin-top: var(--space-14);
+}

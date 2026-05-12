@@ -1,0 +1,41 @@
+.common-switch-row {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.common-switch-row span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.common-switch {
+  width: 46px;
+  height: var(--space-28);
+  display: flex;
+  align-items: center;
+  padding: var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-soft-2);
+  transition: background-color 180ms ease;
+}
+
+.common-switch.active {
+  background: var(--color-brand);
+}
+
+.common-switch-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--color-white);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.16);
+  transition: transform 180ms ease;
+}
+
+.common-switch.active .common-switch-thumb {
+  transform: translateX(18px);
+}

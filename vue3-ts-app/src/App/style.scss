@@ -1,0 +1,24 @@
+.stage {
+  min-height: 100dvh;
+  background: var(--color-bg-page);
+}
+
+:global(.page-fade-enter-active),
+:global(.page-fade-leave-active) {
+  transition: opacity 0.18s ease;
+}
+
+:global(.page-fade-enter-from),
+:global(.page-fade-leave-to) {
+  opacity: 0;
+}
+
+/* 返回场景避免离场闪烁：保留进入动画，禁用离场动画。 */
+:global(.page-fade-leave-active) {
+  transition: none;
+}
+
+:global(.page-fade-leave-from),
+:global(.page-fade-leave-to) {
+  opacity: 1;
+}

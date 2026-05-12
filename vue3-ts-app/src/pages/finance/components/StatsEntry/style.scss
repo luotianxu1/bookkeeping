@@ -1,0 +1,38 @@
+.stats-entry-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.stats-entry-item {
+  aspect-ratio: 1 / 1;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-6);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  cursor: pointer;
+  transition: border-color 180ms ease;
+}
+
+.entry-icon {
+  width: var(--space-24);
+  height: var(--space-24);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-8);
+  background: var(--color-bg-brand-tint);
+  color: var(--color-brand);
+  font-size: var(--font-size-14);
+  line-height: 1;
+}
+
+.stats-entry-item strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  line-height: 1.1;
+}

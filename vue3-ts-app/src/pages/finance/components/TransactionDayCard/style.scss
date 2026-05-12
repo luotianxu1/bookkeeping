@@ -1,0 +1,146 @@
+.day-card {
+  overflow: hidden;
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+}
+
+.day-header {
+  display: grid;
+  gap: var(--space-6);
+  padding: 12px 14px 8px;
+}
+
+.day-card-inline .day-header {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.day-title,
+.day-summary {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.day-card-inline .day-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.day-card-stacked .day-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.day-title strong {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.day-title span {
+  color: var(--color-bg-soft-2);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.day-summary-group {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.day-card-inline .day-summary-group {
+  grid-template-columns: repeat(2, max-content);
+}
+
+.day-card-stacked .day-summary-group {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.day-summary {
+  justify-items: end;
+}
+
+.day-summary span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.day-card-stacked .day-summary:first-child {
+  justify-items: start;
+}
+
+.day-card-stacked .day-summary:nth-child(2) {
+  justify-items: center;
+}
+
+.day-summary strong {
+  font-size: var(--font-size-12);
+}
+
+.day-card-stacked .day-summary strong {
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.transaction-list {
+  display: grid;
+  margin: 0;
+  padding: 0 14px 0;
+  list-style: none;
+}
+
+.transaction-item {
+  min-height: var(--space-48);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  border-top: 1px solid var(--color-bg-soft-2);
+}
+
+.transaction-copy {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.transaction-copy strong {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+}
+
+.day-card-stacked .transaction-copy strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.day-card-stacked .transaction-copy {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.transaction-copy span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.day-card-stacked .transaction-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.amount {
+  white-space: nowrap;
+  font-size: var(--font-size-14);
+  line-height: 1;
+}

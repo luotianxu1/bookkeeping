@@ -1,0 +1,27 @@
+.common-field {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.common-field span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.common-field-control {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-soft-2);
+  border-radius: var(--radius-10);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  outline: none;
+}
+
+.common-field-control:focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.15);
+}
