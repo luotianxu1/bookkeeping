@@ -1,9 +1,11 @@
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/AuthServiceApplication.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/common/result/Result.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/common/result/ResultCodeEnum.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/config/GlobalExceptionHandler.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/config/OpenApiConfig.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/config/SecurityConfig.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/controller/AuthController.java
-/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/dto/CommonResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/dto/CurrentUserResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/dto/LoginRequest.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/dto/LoginResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/auth-service/src/main/java/com/example/auth/entity/UserEntity.java

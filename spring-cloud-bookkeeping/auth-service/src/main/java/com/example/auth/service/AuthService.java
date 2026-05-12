@@ -30,6 +30,10 @@ public class AuthService {
             .filter(user -> passwordEncoder.matches(password, user.passwordHash()));
     }
 
+    public Optional<UserAccount> getCurrentUser(String username) {
+        return findActiveByLogin(username);
+    }
+
     public void markLoginSuccess(Long userId) {
         LambdaUpdateWrapper<UserEntity> wrapper = new LambdaUpdateWrapper<UserEntity>()
             .eq(UserEntity::getId, userId)

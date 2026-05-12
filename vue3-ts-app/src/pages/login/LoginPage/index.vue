@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { login } from '@/api/modules/auth'
+import { getCurrentUser, login } from '@/api/modules/auth'
 import { ApiError } from '@/api/request'
-import { setStoredToken } from '@/utils/auth-token'
+import { clearStoredToken, setStoredToken } from '@/utils/auth-token'
+import { clearStoredCurrentUser, setStoredCurrentUser } from '@/utils/current-user'
 
 const router = useRouter()
 const phone = ref('')
@@ -32,8 +33,12 @@ async function submitLogin() {
       accessToken: result.accessToken,
       tokenType: result.tokenType,
     })
+    const currentUser = await getCurrentUser()
+    setStoredCurrentUser(currentUser)
     await router.push('/finance')
   } catch (error) {
+    clearStoredToken()
+    clearStoredCurrentUser()
     errorMessage.value = error instanceof ApiError ? error.message : '登录失败，请稍后再试'
   } finally {
     isSubmitting.value = false

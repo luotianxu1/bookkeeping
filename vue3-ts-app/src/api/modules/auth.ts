@@ -12,7 +12,13 @@ export interface LoginResult {
 }
 
 export interface CurrentUser {
+  id: number
   username: string
+  phone?: string | null
+  email?: string | null
+  displayName: string
+  avatarUrl?: string | null
+  roleName?: string | null
 }
 
 export function login(params: LoginParams) {

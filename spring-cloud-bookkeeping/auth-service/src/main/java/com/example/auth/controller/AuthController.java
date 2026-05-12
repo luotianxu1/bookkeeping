@@ -1,6 +1,7 @@
 package com.example.auth.controller;
 
-import com.example.auth.dto.CommonResponse;
+import com.example.auth.common.result.Result;
+import com.example.auth.dto.CurrentUserResponse;
 import com.example.auth.dto.LoginRequest;
 import com.example.auth.dto.LoginResponse;
 import com.example.auth.model.UserAccount;
@@ -14,16 +15,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -77,21 +74,32 @@ public class AuthController {
             )
         )
     })
-    public ResponseEntity<CommonResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
+    public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         UserAccount user = authService.authenticate(request.username(), request.password()).orElse(null);
         if (user == null) {
-            return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
-                .body(CommonResponse.error(HttpStatus.UNAUTHORIZED.value(), "用户名或密码错误"));
+            return Result.<LoginResponse>fail().code(401).message("用户名或密码错误");
         }
         authService.markLoginSuccess(user.id());
         String token = jwtService.generateToken(user.username());
-        return ResponseEntity.ok(CommonResponse.success(new LoginResponse(token, "Bearer", jwtService.getExpirationSeconds())));
+        return Result.ok(new LoginResponse(token, "Bearer", jwtService.getExpirationSeconds()));
     }
 
     @GetMapping("/me")
     @Operation(summary = "获取当前登录用户", description = "需要在 Authorization 头中传入 Bearer Token")
-    public ResponseEntity<CommonResponse<Map<String, String>>> me(@AuthenticationPrincipal String username) {
-        return ResponseEntity.ok(CommonResponse.success(Map.of("username", username)));
+    public Result<CurrentUserResponse> me(@AuthenticationPrincipal String username) {
+        UserAccount user = authService.getCurrentUser(username).orElse(null);
+        if (user == null) {
+            return Result.<CurrentUserResponse>fail().code(401).message("未登录或登录已过期");
+        }
+
+        return Result.ok(new CurrentUserResponse(
+            user.id(),
+            user.username(),
+            user.phone(),
+            user.email(),
+            user.displayName(),
+            user.avatarUrl(),
+            user.roleName()
+        ));
     }
 }

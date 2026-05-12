@@ -1,6 +1,6 @@
 package com.example.auth.security;
 
-import com.example.auth.dto.CommonResponse;
+import com.example.auth.common.result.Result;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
@@ -22,6 +22,6 @@ public class SecurityErrorWriter {
         response.setStatus(status);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getWriter(), CommonResponse.error(status, message));
+        objectMapper.writeValue(response.getWriter(), Result.fail().code(status).message(message));
     }
 }
