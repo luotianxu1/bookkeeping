@@ -65075,7 +65075,7 @@
                           "type": "text",
                           "id": "zTD6V",
                           "fill": "#475569",
-                          "content": "手机号",
+                          "content": "账号",
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "600"
@@ -65102,7 +65102,7 @@
                               "type": "text",
                               "id": "TAJYl",
                               "fill": "#94A3B8",
-                              "content": "请输入手机号",
+                              "content": "请输入账号",
                               "fontFamily": "Inter",
                               "fontSize": 13,
                               "fontWeight": "500"
@@ -65123,7 +65123,7 @@
                           "type": "text",
                           "id": "ASUv0",
                           "fill": "#475569",
-                          "content": "验证码",
+                          "content": "密码",
                           "fontFamily": "Inter",
                           "fontSize": 12,
                           "fontWeight": "600"
@@ -65131,63 +65131,29 @@
                         {
                           "type": "frame",
                           "id": "NONCN",
-                          "name": "codeLine",
+                          "name": "passwordField",
                           "width": "fill_container",
-                          "gap": 10,
+                          "height": 46,
+                          "fill": "#F8FAFC",
+                          "cornerRadius": 12,
+                          "stroke": {
+                            "thickness": 1,
+                            "fill": "#E2E8F0"
+                          },
+                          "padding": [
+                            0,
+                            14
+                          ],
                           "alignItems": "center",
                           "children": [
                             {
-                              "type": "frame",
-                              "id": "kChir",
-                              "width": "fill_container",
-                              "height": 46,
-                              "fill": "#F8FAFC",
-                              "cornerRadius": 12,
-                              "stroke": {
-                                "thickness": 1,
-                                "fill": "#E2E8F0"
-                              },
-                              "padding": [
-                                0,
-                                14
-                              ],
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "cr32q",
-                                  "fill": "#94A3B8",
-                                  "content": "输入验证码",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 13,
-                                  "fontWeight": "500"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
-                              "id": "rzPYx",
-                              "width": 104,
-                              "height": 46,
-                              "fill": "#EFF6FF",
-                              "cornerRadius": 12,
-                              "stroke": {
-                                "thickness": 1,
-                                "fill": "#BFDBFE"
-                              },
-                              "justifyContent": "center",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "ofZrB",
-                                  "fill": "#1D4ED8",
-                                  "content": "获取验证码",
-                                  "fontFamily": "Inter",
-                                  "fontSize": 13,
-                                  "fontWeight": "700"
-                                }
-                              ]
+                              "type": "text",
+                              "id": "cr32q",
+                              "fill": "#94A3B8",
+                              "content": "请输入密码",
+                              "fontFamily": "Inter",
+                              "fontSize": 13,
+                              "fontWeight": "500"
                             }
                           ]
                         }

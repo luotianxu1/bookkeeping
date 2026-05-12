@@ -7,8 +7,8 @@ import { clearStoredToken, setStoredToken } from '@/utils/auth-token'
 import { clearStoredCurrentUser, setStoredCurrentUser } from '@/utils/current-user'
 
 const router = useRouter()
-const phone = ref('')
-const code = ref('')
+const account = ref('')
+const password = ref('')
 const errorMessage = ref('')
 const isSubmitting = ref(false)
 
@@ -18,16 +18,16 @@ async function submitLogin() {
   }
 
   errorMessage.value = ''
-  if (!phone.value.trim() || !code.value.trim()) {
-    errorMessage.value = '请输入手机号和验证码'
+  if (!account.value.trim() || !password.value.trim()) {
+    errorMessage.value = '请输入账号和密码'
     return
   }
 
   isSubmitting.value = true
   try {
     const result = await login({
-      username: phone.value.trim(),
-      password: code.value.trim(),
+      username: account.value.trim(),
+      password: password.value.trim(),
     })
     setStoredToken({
       accessToken: result.accessToken,
@@ -57,16 +57,18 @@ async function submitLogin() {
       <section class="login-form-card">
         <form class="login-fields" @submit.prevent="submitLogin">
           <label class="field">
-            <span>手机号</span>
-            <input v-model="phone" type="tel" inputmode="numeric" placeholder="请输入手机号" />
+            <span>账号</span>
+            <input v-model="account" type="text" autocomplete="username" placeholder="请输入账号" />
           </label>
 
           <div class="field">
-            <span>验证码</span>
-            <div class="code-line">
-              <input v-model="code" type="password" placeholder="输入验证码或密码" />
-              <button type="button" class="code-btn">获取验证码</button>
-            </div>
+            <span>密码</span>
+            <input
+              v-model="password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="请输入密码"
+            />
           </div>
 
           <p v-if="errorMessage" class="login-error">{{ errorMessage }}</p>

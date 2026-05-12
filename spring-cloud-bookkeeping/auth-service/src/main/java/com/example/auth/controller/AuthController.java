@@ -8,11 +8,6 @@ import com.example.auth.model.UserAccount;
 import com.example.auth.security.JwtService;
 import com.example.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -37,43 +32,6 @@ public class AuthController {
 
     @PostMapping("/login")
     @Operation(summary = "用户登录", description = "使用用户名和密码登录，返回 JWT 访问令牌")
-    @ApiResponses({
-        @ApiResponse(
-            responseCode = "200",
-            description = "登录成功",
-            content = @Content(
-                mediaType = "application/json",
-                schema = @Schema(implementation = LoginResponse.class),
-                examples = @ExampleObject(value = """
-                    {
-                      "code": 0,
-                      "data": {
-                        "accessToken": "eyJhbGciOiJIUzI1NiJ9.xxx.yyy",
-                        "tokenType": "Bearer",
-                        "expiresIn": 7200
-                      },
-                      "message": "success",
-                      "timestamp": 1778587200000
-                    }
-                    """)
-            )
-        ),
-        @ApiResponse(
-            responseCode = "401",
-            description = "用户名或密码错误",
-            content = @Content(
-                mediaType = "application/json",
-                examples = @ExampleObject(value = """
-                    {
-                      "code": 401,
-                      "data": null,
-                      "message": "用户名或密码错误",
-                      "timestamp": 1778587200000
-                    }
-                    """)
-            )
-        )
-    })
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
         UserAccount user = authService.authenticate(request.username(), request.password()).orElse(null);
         if (user == null) {
