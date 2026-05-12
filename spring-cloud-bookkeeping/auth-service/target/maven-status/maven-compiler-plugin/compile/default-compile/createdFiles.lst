@@ -1,4 +1,3 @@
-com/example/auth/repository/UserRepository.class
 com/example/auth/dto/LoginRequest.class
 com/example/auth/config/OpenApiConfig.class
 com/example/auth/security/SecurityErrorWriter.class
