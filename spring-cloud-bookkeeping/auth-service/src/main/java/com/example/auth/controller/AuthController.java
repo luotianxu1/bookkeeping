@@ -1,5 +1,6 @@
 package com.example.auth.controller;
 
+import com.example.auth.dto.CommonResponse;
 import com.example.auth.dto.LoginRequest;
 import com.example.auth.dto.LoginResponse;
 import com.example.auth.model.UserAccount;
@@ -48,9 +49,14 @@ public class AuthController {
                 schema = @Schema(implementation = LoginResponse.class),
                 examples = @ExampleObject(value = """
                     {
-                      "accessToken": "eyJhbGciOiJIUzI1NiJ9.xxx.yyy",
-                      "tokenType": "Bearer",
-                      "expiresIn": 7200
+                      "code": 0,
+                      "data": {
+                        "accessToken": "eyJhbGciOiJIUzI1NiJ9.xxx.yyy",
+                        "tokenType": "Bearer",
+                        "expiresIn": 7200
+                      },
+                      "message": "success",
+                      "timestamp": 1778587200000
                     }
                     """)
             )
@@ -62,28 +68,30 @@ public class AuthController {
                 mediaType = "application/json",
                 examples = @ExampleObject(value = """
                     {
-                      "timestamp": "2026-05-01T10:00:00.000+00:00",
-                      "status": 401,
-                      "error": "Unauthorized",
-                      "path": "/api/auth/login"
+                      "code": 401,
+                      "data": null,
+                      "message": "用户名或密码错误",
+                      "timestamp": 1778587200000
                     }
                     """)
             )
         )
     })
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ResponseEntity<CommonResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         UserAccount user = authService.authenticate(request.username(), request.password()).orElse(null);
         if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(CommonResponse.error(HttpStatus.UNAUTHORIZED.value(), "用户名或密码错误"));
         }
         authService.markLoginSuccess(user.id());
         String token = jwtService.generateToken(user.username());
-        return ResponseEntity.ok(new LoginResponse(token, "Bearer", jwtService.getExpirationSeconds()));
+        return ResponseEntity.ok(CommonResponse.success(new LoginResponse(token, "Bearer", jwtService.getExpirationSeconds())));
     }
 
     @GetMapping("/me")
     @Operation(summary = "获取当前登录用户", description = "需要在 Authorization 头中传入 Bearer Token")
-    public ResponseEntity<Map<String, String>> me(@AuthenticationPrincipal String username) {
-        return ResponseEntity.ok(Map.of("username", username));
+    public ResponseEntity<CommonResponse<Map<String, String>>> me(@AuthenticationPrincipal String username) {
+        return ResponseEntity.ok(CommonResponse.success(Map.of("username", username)));
     }
 }
