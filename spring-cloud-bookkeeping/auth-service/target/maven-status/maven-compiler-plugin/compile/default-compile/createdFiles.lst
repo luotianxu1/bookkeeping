@@ -12,3 +12,5 @@ com/example/auth/security/JwtAuthenticationFilter.class
 com/example/auth/AuthServiceApplication.class
 com/example/auth/config/SecurityConfig.class
 com/example/auth/security/JwtService.class
+com/example/auth/mapper/UserMapper.class
+com/example/auth/entity/UserEntity.class
