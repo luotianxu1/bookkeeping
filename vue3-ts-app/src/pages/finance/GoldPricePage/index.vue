@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
+import { getGoldPrices, type GoldPrice, type GoldPriceRange } from '@/api/modules/finance'
 
 type TrendKey = '1日' | '7日' | '30日' | '1年'
 
@@ -12,50 +13,49 @@ const trendOptions: TrendKey[] = ['1日', '7日', '30日', '1年']
 
 const isDark = ref(false)
 const chartRef = ref<HTMLDivElement | null>(null)
+const currentGoldPrice = ref<GoldPrice | null>(null)
+const chartPoints = ref<GoldPrice['chartPoints']>([])
+const isLoadingGoldPrice = ref(false)
+const isLoadingTrend = ref(false)
+const goldPriceError = ref('')
+let requestSequence = 0
+let trendRequestSequence = 0
 let mediaQuery: MediaQueryList | null = null
 let echartsLib: (typeof import('echarts')) | null = null
 let chartIns: ECharts | null = null
 
-const trendDataMap: Record<TrendKey, { x: string[]; y: number[] }> = {
-  '1日': {
-    x: ['09:30', '10:30', '11:30', '13:00', '14:00', '15:00'],
-    y: [556.1, 557.3, 558.5, 557.8, 559.2, 559.36],
-  },
-  '7日': {
-    x: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
-    y: [551.8, 553.6, 552.9, 556.2, 557.5, 558.7, 559.36],
-  },
-  '30日': {
-    x: ['1', '5', '10', '15', '20', '25', '30'],
-    y: [544.2, 546.7, 549.8, 551.3, 553.5, 556.4, 559.36],
-  },
-  '1年': {
-    x: ['1月', '3月', '5月', '7月', '9月', '11月'],
-    y: [482.5, 501.2, 522.6, 538.7, 548.3, 559.36],
-  },
+const trendRangeMap: Record<TrendKey, GoldPriceRange> = {
+  '1日': '1d',
+  '7日': '7d',
+  '30日': '30d',
+  '1年': '1y',
 }
 
-const quoteRows = [
-  { label: '今日开盘', value: '556.10' },
-  { label: '最高', value: '560.42' },
-  { label: '最低', value: '553.87' },
-  { label: '买入参考', value: '559.50' },
-  { label: '卖出参考', value: '559.20' },
-]
+const trendData = computed(() => ({
+  x: chartPoints.value.map((item) => item.label),
+  y: chartPoints.value.map((item) => item.price),
+}))
 
-const jewelryRows = [
-  { brand: '周大福', price: '728/g' },
-  { brand: '老凤祥', price: '726/g' },
-  { brand: '六福珠宝', price: '727/g' },
-]
+const quoteRows = computed(() => {
+  if (!currentGoldPrice.value) return []
 
-const goldAccountRows = [
-  { name: '招商银行纸黄金', grams: '68.90 g', amount: '45,320.00' },
-  { name: '支付宝黄金', grams: '36.60 g', amount: '24,100.00' },
-]
+  return [
+    { label: '今日开盘', value: formatMoney(currentGoldPrice.value.stats.openPrice) },
+    { label: '最高', value: formatMoney(currentGoldPrice.value.stats.highPrice) },
+    { label: '最低', value: formatMoney(currentGoldPrice.value.stats.lowPrice) },
+    { label: '买入参考', value: formatMoney(currentGoldPrice.value.stats.buyPrice) },
+    { label: '卖出参考', value: formatMoney(currentGoldPrice.value.stats.sellPrice) },
+  ]
+})
+
+const jewelryRows = computed(() => (
+  currentGoldPrice.value?.jewelryPrices.map((item) => ({
+    brand: item.brandName,
+    price: `${formatMoney(item.price, 0)}/g`,
+  })) ?? []
+))
 
 const chartOption = computed<EChartsCoreOption>(() => {
-  const current = trendDataMap[activeTrend.value]
   const axisText = isDark.value ? '#8FA3C7' : '#94A3B8'
   const axisLine = isDark.value ? '#253045' : '#CBD5E1'
   const splitLine = isDark.value ? '#1E293B' : '#E2E8F0'
@@ -74,7 +74,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: current.x,
+      data: trendData.value.x,
       axisLine: { lineStyle: { color: axisLine } },
       axisTick: { show: false },
       axisLabel: { color: axisText, fontSize: 11 },
@@ -92,7 +92,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
         type: 'line',
         smooth: true,
         showSymbol: false,
-        data: current.y,
+        data: trendData.value.y,
         lineStyle: { width: 3, color: '#3B82F6' },
         areaStyle: {
           color: {
@@ -110,6 +110,14 @@ const chartOption = computed<EChartsCoreOption>(() => {
       },
     ],
   }
+})
+
+const marketFootText = computed(() => {
+  if (!currentGoldPrice.value) {
+    return '等待行情更新'
+  }
+
+  return `更新时间 ${formatTime(currentGoldPrice.value.updatedAt)}`
 })
 
 function updateThemeState() {
@@ -139,16 +147,111 @@ function onResize() {
   chartIns?.resize()
 }
 
+async function loadGoldPrice() {
+  const currentRequest = ++requestSequence
+  isLoadingGoldPrice.value = true
+  goldPriceError.value = ''
+
+  try {
+    const data = await getGoldPrices(trendRangeMap[activeTrend.value])
+    if (currentRequest !== requestSequence) {
+      return
+    }
+
+    currentGoldPrice.value = {
+      ...data,
+      chartPoints: [],
+    }
+    chartPoints.value = data.chartPoints
+    renderChart()
+  } catch (error) {
+    if (currentRequest !== requestSequence) {
+      return
+    }
+
+    goldPriceError.value = error instanceof Error ? error.message : '金价加载失败'
+  } finally {
+    if (currentRequest === requestSequence) {
+      isLoadingGoldPrice.value = false
+    }
+  }
+}
+
+async function loadTrendData() {
+  if (!currentGoldPrice.value) {
+    await loadGoldPrice()
+    return
+  }
+
+  const currentRequest = ++trendRequestSequence
+  isLoadingTrend.value = true
+  goldPriceError.value = ''
+
+  try {
+    const data = await getGoldPrices(trendRangeMap[activeTrend.value])
+    if (currentRequest !== trendRequestSequence) {
+      return
+    }
+
+    chartPoints.value = data.chartPoints
+    renderChart()
+  } catch (error) {
+    if (currentRequest !== trendRequestSequence) {
+      return
+    }
+
+    goldPriceError.value = error instanceof Error ? error.message : '走势加载失败'
+  } finally {
+    if (currentRequest === trendRequestSequence) {
+      isLoadingTrend.value = false
+    }
+  }
+}
+
+function formatMoney(value?: number, fractionDigits = 2) {
+  return Number(value ?? 0).toLocaleString('zh-CN', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
+}
+
+function formatDelta(change?: number, changePercent?: number) {
+  const normalizedChange = Number(change ?? 0)
+  const sign = normalizedChange >= 0 ? '+' : ''
+  return `${sign}${formatMoney(normalizedChange)} (${sign}${formatMoney(changePercent, 2)}%)`
+}
+
+function formatTime(value?: string) {
+  if (!value) {
+    return '--:--'
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '--:--'
+  }
+
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 onMounted(async () => {
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   updateThemeState()
   mediaQuery.addEventListener('change', handleThemeChange)
   await ensureEcharts()
+  await loadGoldPrice()
   renderChart()
   window.addEventListener('resize', onResize)
 })
 
-watch([activeTrend, isDark], () => {
+watch(activeTrend, () => {
+  loadTrendData()
+})
+
+watch([chartPoints, isDark], () => {
   renderChart()
 })
 
@@ -164,24 +267,43 @@ onBeforeUnmount(() => {
   <section class="gold-price-page" aria-label="金价">
     <PageHeader title="金价" back-label="返回更多功能" />
 
+    <div v-if="isLoadingGoldPrice || isLoadingTrend" class="gold-price-loading" role="status">
+      <div class="gold-price-loading-box">
+        <span class="gold-price-loading-spinner"></span>
+        <span>{{ isLoadingGoldPrice ? '金价加载中...' : '走势加载中...' }}</span>
+      </div>
+    </div>
+
     <section class="spot-london-card" aria-label="现货与伦敦金价">
       <header class="card-head">
         <p>现货 / 伦敦金价</p>
-        <span>实时更新</span>
+        <span>{{ isLoadingGoldPrice ? '更新中...' : '实时更新' }}</span>
       </header>
+      <p v-if="isLoadingGoldPrice && !currentGoldPrice" class="gold-price-message">
+        正在获取实时行情
+      </p>
+      <p v-if="goldPriceError" class="gold-price-message gold-price-message-error">
+        {{ goldPriceError }}
+      </p>
       <div class="market-grid">
         <article class="market-item">
           <p class="market-label">现货金 (CNY/g)</p>
-          <AmountText tag="strong" value="559.36" />
-          <AmountText tag="em" value="+3.12 (+0.56%)" />
+          <AmountText tag="strong" :value="formatMoney(currentGoldPrice?.spotGold.price)" />
+          <AmountText
+            tag="em"
+            :value="formatDelta(currentGoldPrice?.spotGold.change, currentGoldPrice?.spotGold.changePercent)"
+          />
         </article>
         <article class="market-item">
           <p class="market-label">伦敦金 (USD/oz)</p>
-          <AmountText tag="strong" value="2,368.40" />
-          <AmountText tag="em" value="+8.25 (+0.35%)" />
+          <AmountText tag="strong" :value="formatMoney(currentGoldPrice?.londonGold.price)" />
+          <AmountText
+            tag="em"
+            :value="formatDelta(currentGoldPrice?.londonGold.change, currentGoldPrice?.londonGold.changePercent)"
+          />
         </article>
       </div>
-      <p class="market-foot">现货更新时间 14:32 · 伦敦时间 08:32</p>
+      <p class="market-foot">{{ marketFootText }}</p>
     </section>
 
     <section class="trend-tabs" aria-label="趋势范围">
@@ -190,6 +312,7 @@ onBeforeUnmount(() => {
         :key="item"
         type="button"
         :class="{ active: activeTrend === item }"
+        :disabled="isLoadingTrend"
         @click="activeTrend = item"
       >
         {{ item }}
@@ -199,6 +322,9 @@ onBeforeUnmount(() => {
     <section class="trend-card" aria-label="价格走势">
       <p class="card-title">价格走势</p>
       <div ref="chartRef" class="trend-chart" />
+      <p v-if="!isLoadingTrend && chartPoints.length === 0" class="gold-price-message">
+        暂无可靠走势数据
+      </p>
     </section>
 
     <section class="quote-card" aria-label="关键报价">
@@ -206,6 +332,7 @@ onBeforeUnmount(() => {
         <span>{{ item.label }}</span>
         <AmountText tag="strong" :value="item.value" />
       </div>
+      <p v-if="quoteRows.length === 0" class="gold-price-message">暂无报价数据</p>
     </section>
 
     <section class="jewelry-card" aria-label="首饰金价参考">
@@ -217,23 +344,11 @@ onBeforeUnmount(() => {
         <span>{{ item.brand }}</span>
         <AmountText tag="strong" :value="item.price" />
       </div>
+      <p v-if="!isLoadingGoldPrice && jewelryRows.length === 0" class="gold-price-message">
+        暂无可靠门店金价数据
+      </p>
     </section>
 
-    <section class="gold-account-card" aria-label="黄金账户列表">
-      <header class="card-head">
-        <p>黄金账户列表</p>
-      </header>
-      <article v-for="item in goldAccountRows" :key="item.name" class="gold-account-row">
-        <div class="gold-account-left">
-          <strong>{{ item.name }}</strong>
-          <span>{{ item.grams }}</span>
-        </div>
-        <div class="gold-account-right">
-          <AmountText tag="strong" :value="item.amount" />
-          <span class="gold-account-arrow">&gt;</span>
-        </div>
-      </article>
-    </section>
   </section>
 </template>
 

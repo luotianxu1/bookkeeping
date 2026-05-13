@@ -3,11 +3,45 @@
   gap: var(--space-6);
 }
 
+.gold-price-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  background: rgba(248, 250, 252, 0.72);
+  backdrop-filter: blur(2px);
+}
+
+.gold-price-loading-box {
+  min-width: 132px;
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  gap: var(--space-10);
+  padding: var(--space-16);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-13);
+  font-weight: 700;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+}
+
+.gold-price-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--color-bg-soft-2);
+  border-top-color: var(--color-brand);
+  border-radius: var(--radius-pill);
+  animation: gold-loading-spin 720ms linear infinite;
+}
+
 .spot-london-card,
 .trend-card,
 .quote-card,
-.jewelry-card,
-.gold-account-card {
+.jewelry-card {
   display: grid;
   gap: var(--space-6);
   padding: var(--space-12);
@@ -78,6 +112,19 @@
   font-weight: 500;
 }
 
+.gold-price-message {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.gold-price-message-error {
+  color: var(--color-danger);
+}
+
 .trend-tabs {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -102,6 +149,11 @@
   color: var(--color-brand);
   font-weight: 700;
   background: var(--color-white);
+}
+
+.trend-tabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
 }
 
 .card-title {
@@ -140,10 +192,16 @@
 }
 
 .jewelry-row {
+  min-height: var(--space-28);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
+  border-top: 1px solid var(--color-bg-soft-2);
+}
+
+.jewelry-row:first-of-type {
+  border-top: 0;
 }
 
 .jewelry-row span {
@@ -158,65 +216,27 @@
   font-weight: 600;
 }
 
-.gold-account-card {
-  padding-top: var(--space-10);
-  padding-bottom: var(--space-10);
-}
-
-.gold-account-row {
-  min-height: var(--space-50);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-  border-top: 1px solid var(--color-bg-soft-2);
-}
-
-.gold-account-row:first-of-type {
-  border-top: 0;
-}
-
-.gold-account-left {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.gold-account-left strong {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-12);
-  font-weight: 600;
-}
-
-.gold-account-left span {
-  color: var(--color-text-subtle);
-  font-size: var(--font-size-12);
-  font-weight: 500;
-}
-
-.gold-account-right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-}
-
-.gold-account-right strong {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-12);
-  font-weight: 600;
-}
-
-.gold-account-arrow {
-  color: var(--color-text-subtle);
-  font-size: var(--font-size-16);
+@keyframes gold-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (prefers-color-scheme: dark) {
+  .gold-price-loading {
+    background: rgba(2, 6, 23, 0.62);
+  }
+
+  .gold-price-loading-box {
+    border-color: var(--color-dark-card-border);
+    background: var(--color-dark-card-bg);
+    color: var(--color-dark-text-muted);
+  }
+
   .spot-london-card,
   .trend-card,
   .quote-card,
-  .jewelry-card,
-  .gold-account-card {
+  .jewelry-card {
     border-color: var(--color-dark-card-border);
     background: var(--color-dark-card-bg);
   }
@@ -226,24 +246,25 @@
   .market-item strong,
   .quote-row strong,
   .jewelry-row span,
-  .jewelry-row strong,
-  .gold-account-left strong,
-  .gold-account-right strong {
+  .jewelry-row strong {
     color: var(--color-bg-page);
   }
 
   .card-head span,
   .market-label,
   .market-foot,
-  .quote-row span,
-  .gold-account-left span,
-  .gold-account-arrow {
+  .gold-price-message,
+  .quote-row span {
     color: var(--color-dark-text-muted);
   }
 
   .market-item {
     border-color: var(--color-dark-card-border);
     background: var(--color-text-primary);
+  }
+
+  .jewelry-row {
+    border-top-color: var(--color-dark-card-border);
   }
 
   .trend-tabs {
@@ -257,9 +278,5 @@
   .trend-tabs button.active {
     color: var(--color-brand);
     background: var(--color-bg-dark-3);
-  }
-
-  .gold-account-row {
-    border-top-color: var(--color-dark-card-border);
   }
 }

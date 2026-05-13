@@ -67,6 +67,48 @@ export interface CategoryQuery {
   status?: string
 }
 
+export type GoldPriceRange = '1d' | '7d' | '30d' | '1y'
+
+export interface GoldMarketQuote {
+  name: string
+  unit: string
+  price: number
+  change: number
+  changePercent: number
+  updatedAt: string
+}
+
+export interface GoldMarketStats {
+  openPrice: number
+  highPrice: number
+  lowPrice: number
+  buyPrice: number
+  sellPrice: number
+  unit: string
+}
+
+export interface JewelryGoldPrice {
+  brandName: string
+  price: number
+  unit: string
+  updatedAt: string
+}
+
+export interface GoldChartPoint {
+  label: string
+  price: number
+}
+
+export interface GoldPrice {
+  spotGold: GoldMarketQuote
+  londonGold: GoldMarketQuote
+  stats: GoldMarketStats
+  jewelryPrices: JewelryGoldPrice[]
+  chartPoints: GoldChartPoint[]
+  updatedAt: string
+  source: string
+}
+
 export interface CreateAccountParams {
   userId: number
   accountTypeId: number
@@ -127,4 +169,10 @@ export function updateCategory(id: number, params: SaveCategoryParams) {
 
 export function deleteCategory(id: number) {
   return requestDelete<void>(financeRequest, `/api/finance/categories/${id}`)
+}
+
+export function getGoldPrices(range: GoldPriceRange = '1d') {
+  return requestGet<GoldPrice>(financeRequest, '/api/finance/gold-prices', {
+    params: { range },
+  })
 }
