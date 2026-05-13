@@ -9,6 +9,23 @@
   gap: var(--space-6);
 }
 
+.account-list-message {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.account-list-message-error {
+  color: var(--color-danger);
+}
+
 .account-fab {
   position: fixed;
   right: var(--space-24);

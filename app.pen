@@ -15886,7 +15886,7 @@
                       "type": "text",
                       "id": "t9pcz",
                       "fill": "#0F172A",
-                      "content": "新增现金资产",
+                      "content": "新增现金账户",
                       "fontFamily": "Inter",
                       "fontSize": 18,
                       "fontWeight": "700"
@@ -15904,7 +15904,7 @@
                       "type": "text",
                       "id": "vB52L",
                       "fill": "#64748B",
-                      "content": "资产名称",
+                      "content": "账户名称",
                       "fontFamily": "Inter",
                       "fontSize": 12,
                       "fontWeight": "500"
@@ -15930,7 +15930,7 @@
                           "type": "text",
                           "id": "qRWLw",
                           "fill": "#94A3B8",
-                          "content": "例如：应急现金",
+                          "content": "例如：日常钱包",
                           "fontFamily": "Inter",
                           "fontSize": 14,
                           "fontWeight": "500"
@@ -15941,23 +15941,26 @@
                 },
                 {
                   "type": "frame",
-                  "id": "dsswK",
+                  "id": "LErxi",
+                  "name": "remarkField",
                   "width": "fill_container",
                   "layout": "vertical",
                   "gap": 8,
                   "children": [
                     {
                       "type": "text",
-                      "id": "9Eqcu",
+                      "id": "BOks9",
+                      "name": "remarkLabel",
                       "fill": "#64748B",
-                      "content": "初始金额",
+                      "content": "备注",
                       "fontFamily": "Inter",
                       "fontSize": 12,
                       "fontWeight": "500"
                     },
                     {
                       "type": "frame",
-                      "id": "VEyYm",
+                      "id": "k2wTiq",
+                      "name": "remarkInput",
                       "width": "fill_container",
                       "height": 42,
                       "fill": "#F8FAFC",
@@ -15970,26 +15973,71 @@
                         0,
                         12
                       ],
-                      "justifyContent": "space_between",
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "text",
-                          "id": "WVkya",
-                          "fill": "#0F172A",
-                          "content": "¥ 0.00",
+                          "id": "AUsQK",
+                          "name": "remarkPlaceholder",
+                          "fill": "#94A3B8",
+                          "content": "例如：日常零用",
                           "fontFamily": "Inter",
                           "fontSize": 14,
-                          "fontWeight": "600"
-                        },
-                        {
-                          "type": "text",
-                          "id": "tvPTg",
-                          "fill": "#94A3B8",
-                          "content": "请输入",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
                           "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "VW4uo",
+                  "name": "switchRow",
+                  "width": "fill_container",
+                  "height": 42,
+                  "fill": "#F8FAFC",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#E2E8F0"
+                  },
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "TSaeL",
+                      "name": "switchLabel",
+                      "fill": "#334155",
+                      "content": "是否计入总资产",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "TyUEc",
+                      "name": "switchTrack",
+                      "width": 36,
+                      "height": 20,
+                      "fill": "#1D4ED8",
+                      "cornerRadius": 10,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "w6nKei",
+                          "x": 18,
+                          "y": 2,
+                          "name": "switchThumb",
+                          "width": 16,
+                          "height": 16,
+                          "fill": "#FFFFFF",
+                          "cornerRadius": 8
                         }
                       ]
                     }
@@ -24109,7 +24157,7 @@
                       "type": "text",
                       "id": "Z5Vlg",
                       "fill": "#F8FAFC",
-                      "content": "新增现金资产",
+                      "content": "新增现金账户",
                       "fontFamily": "Inter",
                       "fontSize": 18,
                       "fontWeight": "700"
@@ -24136,7 +24184,7 @@
                       "type": "text",
                       "id": "4eIly",
                       "fill": "#94A3B8",
-                      "content": "资产名称",
+                      "content": "账户名称",
                       "fontFamily": "Inter",
                       "fontSize": 12,
                       "fontWeight": "500"
@@ -24162,7 +24210,7 @@
                           "type": "text",
                           "id": "6hSlK",
                           "fill": "#94A3B8",
-                          "content": "例如：应急现金",
+                          "content": "例如：日常钱包",
                           "fontFamily": "Inter",
                           "fontSize": 14,
                           "fontWeight": "500"
@@ -24173,23 +24221,26 @@
                 },
                 {
                   "type": "frame",
-                  "id": "xPfbv",
+                  "id": "bUsim",
+                  "name": "darkRemarkField",
                   "width": "fill_container",
                   "layout": "vertical",
                   "gap": 8,
                   "children": [
                     {
                       "type": "text",
-                      "id": "3Jnz6",
+                      "id": "R9VFRj",
+                      "name": "darkRemarkLabel",
                       "fill": "#94A3B8",
-                      "content": "初始金额",
+                      "content": "备注",
                       "fontFamily": "Inter",
                       "fontSize": 12,
                       "fontWeight": "500"
                     },
                     {
                       "type": "frame",
-                      "id": "t6LjM",
+                      "id": "fKn5X",
+                      "name": "darkRemarkInput",
                       "width": "fill_container",
                       "height": 42,
                       "fill": "#182233",
@@ -24202,26 +24253,71 @@
                         0,
                         12
                       ],
-                      "justifyContent": "space_between",
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "text",
-                          "id": "bWFlm",
-                          "fill": "#F8FAFC",
-                          "content": "¥ 0.00",
+                          "id": "cjAJi",
+                          "name": "darkRemarkPlaceholder",
+                          "fill": "#94A3B8",
+                          "content": "例如：日常零用",
                           "fontFamily": "Inter",
                           "fontSize": 14,
-                          "fontWeight": "600"
-                        },
-                        {
-                          "type": "text",
-                          "id": "rNEVm",
-                          "fill": "#94A3B8",
-                          "content": "请输入",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
                           "fontWeight": "500"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "aABgu",
+                  "name": "darkSwitchRow",
+                  "width": "fill_container",
+                  "height": 42,
+                  "fill": "#182233",
+                  "cornerRadius": 12,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#253045"
+                  },
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "lAUuw",
+                      "name": "darkSwitchLabel",
+                      "fill": "#E2E8F0",
+                      "content": "是否计入总资产",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "OmeEX",
+                      "name": "darkSwitchTrack",
+                      "width": 36,
+                      "height": 20,
+                      "fill": "#4F7CFF",
+                      "cornerRadius": 10,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "M2OAEY",
+                          "x": 18,
+                          "y": 2,
+                          "name": "darkSwitchThumb",
+                          "width": 16,
+                          "height": 16,
+                          "fill": "#F8FAFC",
+                          "cornerRadius": 8
                         }
                       ]
                     }

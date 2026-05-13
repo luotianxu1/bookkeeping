@@ -1,36 +1,49 @@
 <script setup lang="ts">
 // 现金账户页：支持管理模式切换与新增账户弹窗。
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
-import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
-import { cashAccountItems, cashAccountOverview } from '@/data/account'
+import { createAccount, deleteAccount, getAccounts, getAccountTypes, updateAccount, type Account, type AccountType } from '@/api/modules/finance'
+import { getStoredCurrentUser } from '@/utils/current-user'
 
 const isManageMode = ref(false)
 const showCreateAccountModal = ref(false)
-const accountItems = ref([...cashAccountItems])
+const showDeleteConfirmModal = ref(false)
+const editingAccountId = ref<number | null>(null)
+const deletingAccount = ref<Account | null>(null)
+const accountItems = ref<Account[]>([])
+const cashAccountType = ref<AccountType | null>(null)
+const isLoadingAccounts = ref(false)
+const isSavingAccount = ref(false)
+const isDeletingAccount = ref(false)
+const accountListError = ref('')
+const accountFormError = ref('')
+const deleteError = ref('')
 const router = useRouter()
 
 const formName = ref('')
-const formType = ref('现金账户')
 const formAmount = ref('')
 const formRemark = ref('')
-const setAsCommon = ref(false)
+const setAsCommon = ref(true)
 
-const accountTypeOptions = ['现金账户', '银行卡', '第三方钱包', '备用金']
+const accountModalTitle = computed(() => (editingAccountId.value ? '修改现金账户' : '新增现金账户'))
+const accountAmountLabel = computed(() => (editingAccountId.value ? '当前余额' : '初始金额'))
 
 const computedOverviewAmount = computed(() => {
-  const total = accountItems.value.reduce((sum, item) => {
-    const numericAmount = Number(item.amount.replace(/[^\d.-]/g, '')) || 0
-    return sum + numericAmount
-  }, 0)
+  const total = accountItems.value
+    .filter((account) => account.includeInNetWorth)
+    .reduce((sum, account) => sum + Number(account.currentBalance), 0)
 
-  return `${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return formatAmount(total)
+})
+
+onMounted(() => {
+  loadCashAccounts()
 })
 
 function toggleManageMode() {
@@ -38,46 +51,212 @@ function toggleManageMode() {
 }
 
 function openCreateModal() {
+  editingAccountId.value = null
+  resetForm()
   showCreateAccountModal.value = true
 }
 
 function closeCreateModal() {
   showCreateAccountModal.value = false
+  editingAccountId.value = null
+  resetForm()
 }
 
 function resetForm() {
   formName.value = ''
-  formType.value = '现金账户'
   formAmount.value = ''
   formRemark.value = ''
-  setAsCommon.value = false
+  setAsCommon.value = true
+  accountFormError.value = ''
 }
 
-function createAccount() {
+function openEditModal(account: Account) {
+  editingAccountId.value = account.id
+  formName.value = account.name
+  formAmount.value = String(account.currentBalance ?? 0)
+  formRemark.value = account.remark ?? ''
+  setAsCommon.value = account.includeInNetWorth
+  accountFormError.value = ''
+  showCreateAccountModal.value = true
+}
+
+async function saveCashAccount() {
+  if (isSavingAccount.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
   const trimmedName = formName.value.trim()
-  if (!trimmedName) return
+  const trimmedRemark = formRemark.value.trim()
+
+  if (!currentUser) {
+    accountFormError.value = '请先登录后再新增账户'
+    return
+  }
+
+  if (!cashAccountType.value) {
+    accountFormError.value = '现金账户类型加载失败'
+    return
+  }
+
+  if (!trimmedName) {
+    accountFormError.value = '请输入账户名称'
+    return
+  }
 
   const numericAmount = Number(formAmount.value || '0')
-  const normalizedAmount = Number.isFinite(numericAmount) ? numericAmount : 0
+  const normalizedAmount = editingAccountId.value && Number.isFinite(numericAmount) ? numericAmount : 0
+  isSavingAccount.value = true
+  accountFormError.value = ''
 
-  accountItems.value.push({
-    icon: formType.value === '银行卡' ? '🏦' : formType.value === '第三方钱包' ? '💳' : formType.value === '备用金' ? '🧧' : '💵',
-    name: trimmedName,
-    subtitle: formRemark.value.trim() || (setAsCommon.value ? '常用账户' : '新建账户'),
-    amount: `${normalizedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-  })
+  try {
+    const payload = {
+      userId: currentUser.id,
+      accountTypeId: cashAccountType.value.id,
+      name: trimmedName,
+      icon: getCashIconCode(trimmedName),
+      currencyCode: 'CNY',
+      currentBalance: normalizedAmount,
+      includeInNetWorth: setAsCommon.value,
+      status: 'active',
+      remark: trimmedRemark || null,
+    }
 
-  closeCreateModal()
-  resetForm()
+    if (editingAccountId.value) {
+      await updateAccount(editingAccountId.value, payload)
+    } else {
+      await createAccount(payload)
+    }
+
+    closeCreateModal()
+    await loadCashAccounts()
+  } catch (error) {
+    accountFormError.value = error instanceof Error ? error.message : '账户保存失败'
+  } finally {
+    isSavingAccount.value = false
+  }
 }
 
-function removeAccount(name: string) {
-  accountItems.value = accountItems.value.filter((item) => item.name !== name)
+async function removeAccount(id: number) {
+  if (isDeletingAccount.value) {
+    return
+  }
+
+  try {
+    isDeletingAccount.value = true
+    deleteError.value = ''
+    await deleteAccount(id)
+    closeDeleteConfirmModal()
+    await loadCashAccounts()
+  } catch (error) {
+    deleteError.value = error instanceof Error ? error.message : '账户删除失败'
+  } finally {
+    isDeletingAccount.value = false
+  }
+}
+
+function openDeleteConfirmModal(account: Account) {
+  deletingAccount.value = account
+  deleteError.value = ''
+  showDeleteConfirmModal.value = true
+}
+
+function closeDeleteConfirmModal() {
+  showDeleteConfirmModal.value = false
+  deletingAccount.value = null
+  deleteError.value = ''
+}
+
+function confirmDeleteAccount() {
+  if (deletingAccount.value) {
+    removeAccount(deletingAccount.value.id)
+  }
+}
+
+function handleAccountClick(account: Account) {
+  if (isManageMode.value) return
+
+  openDetail(toAccountItem(account).path)
+}
+
+async function loadCashAccounts() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    accountListError.value = '请先登录后查看账户'
+    return
+  }
+
+  isLoadingAccounts.value = true
+  accountListError.value = ''
+
+  try {
+    const types = await getAccountTypes({ status: 'active' })
+    cashAccountType.value = types.find((type) => type.code === 'cash') ?? null
+
+    if (!cashAccountType.value) {
+      accountItems.value = []
+      accountListError.value = '现金账户类型不存在'
+      return
+    }
+
+    accountItems.value = await getAccounts({
+      userId: currentUser.id,
+      accountTypeId: cashAccountType.value.id,
+      status: 'active',
+    })
+  } catch (error) {
+    accountListError.value = error instanceof Error ? error.message : '现金账户加载失败'
+  } finally {
+    isLoadingAccounts.value = false
+  }
+}
+
+function toAccountItem(account: Account) {
+  return {
+    id: account.id,
+    icon: getCashIcon(account.icon),
+    name: account.name,
+    subtitle: account.remark || account.accountTypeName || '现金账户',
+    amount: formatAmount(Number(account.currentBalance)),
+    path: account.name === '钱包' ? '/finance/accounts/cash/detail' : undefined,
+  }
 }
 
 function openDetail(path?: string) {
   if (!path || isManageMode.value) return
   router.push(path)
+}
+
+function formatAmount(value: number) {
+  return value.toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function getCashIcon(icon?: string | null) {
+  const iconMap: Record<string, string> = {
+    wallet: '💵',
+    cash: '💵',
+    'bank-card': '🏦',
+    alipay: '💳',
+    'reserve-fund': '🧧',
+  }
+
+  return icon ? iconMap[icon] ?? icon : '💵'
+}
+
+function getCashIconCode(name: string) {
+  if (name.includes('银行') || name.includes('卡')) {
+    return 'bank-card'
+  }
+  if (name.includes('支付宝') || name.includes('微信')) {
+    return 'alipay'
+  }
+  if (name.includes('备用')) {
+    return 'reserve-fund'
+  }
+  return 'wallet'
 }
 </script>
 
@@ -91,63 +270,115 @@ function openDetail(path?: string) {
     </header>
 
     <section class="cash-overview-card" aria-label="现金账户总额">
-      <p>{{ cashAccountOverview.label }}</p>
-      <AmountText tag="strong" :value="computedOverviewAmount || cashAccountOverview.amount" />
+      <p>现金账户总额</p>
+      <AmountText tag="strong" :value="computedOverviewAmount" />
     </section>
 
     <section class="cash-list" aria-label="现金账户列表">
-      <article v-for="item in accountItems" :key="item.name" class="cash-list-row">
+      <p v-if="accountListError" class="cash-list-message cash-list-message-error">
+        {{ accountListError }}
+      </p>
+      <p v-else-if="isLoadingAccounts" class="cash-list-message">加载中...</p>
+      <p v-else-if="accountItems.length === 0" class="cash-list-message">暂无现金账户</p>
+
+      <template v-else>
+      <article v-for="account in accountItems" :key="account.id" class="cash-list-row">
         <button
           v-if="isManageMode"
           type="button"
           class="cash-remove-trigger"
-          :aria-label="`删除${item.name}`"
-          @click="removeAccount(item.name)"
+          :aria-label="`删除${account.name}`"
+          @click="openDeleteConfirmModal(account)"
         >
           <span class="cash-remove-dash"></span>
         </button>
 
         <button
+          v-if="isManageMode"
+          type="button"
+          class="cash-edit-trigger"
+          :aria-label="`修改${account.name}`"
+          @click="openEditModal(account)"
+        >
+          ✎
+        </button>
+
+        <button
           :class="['cash-list-item', { 'manage-shifted': isManageMode }]"
           type="button"
-          @click="openDetail(item.path)"
+          @click="handleAccountClick(account)"
         >
         <span class="cash-item-left">
-          <span class="cash-item-icon">{{ item.icon }}</span>
+          <span class="cash-item-icon">{{ toAccountItem(account).icon }}</span>
           <span class="cash-item-text">
-            <span class="cash-item-name">{{ item.name }}</span>
-            <span class="cash-item-subtitle">{{ item.subtitle }}</span>
+            <span class="cash-item-name">{{ account.name }}</span>
+            <span class="cash-item-subtitle">{{ toAccountItem(account).subtitle }}</span>
           </span>
         </span>
 
-        <AmountText tag="strong" class="cash-item-amount" :value="item.amount" />
+        <AmountText tag="strong" class="cash-item-amount" :value="toAccountItem(account).amount" />
         </button>
       </article>
+      </template>
     </section>
 
     <button class="cash-account-fab" type="button" aria-label="新增现金账户" @click="openCreateModal">
       +
     </button>
 
-    <CommonModal v-model="showCreateAccountModal" title="新增现金账户">
-      <form class="cash-create-form" @submit.prevent="createAccount">
+    <CommonModal v-model="showCreateAccountModal" :title="accountModalTitle">
+      <form class="cash-create-form" @submit.prevent="saveCashAccount">
         <CommonInput v-model="formName" label="账户名称" placeholder="例如：日常钱包" />
-        <CommonSelect v-model="formType" label="账户类型" :options="accountTypeOptions" />
         <CommonInput
+          v-if="editingAccountId"
           v-model="formAmount"
-          label="初始金额"
+          :label="accountAmountLabel"
           placeholder="0.00"
           input-type="number"
           input-mode="decimal"
         />
         <CommonInput v-model="formRemark" label="备注" placeholder="例如：日常零用" />
-        <CommonSwitch v-model="setAsCommon" label="设为常用账户" />
+        <CommonSwitch v-model="setAsCommon" label="是否计入总资产" />
+        <p v-if="accountFormError" class="cash-form-error">{{ accountFormError }}</p>
       </form>
 
       <template #footer>
         <div class="cash-create-actions">
-          <CommonButton variant="secondary" @click="closeCreateModal">取消</CommonButton>
-          <CommonButton variant="primary" @click="createAccount">保存</CommonButton>
+          <CommonButton variant="secondary" :disabled="isSavingAccount" @click="closeCreateModal">取消</CommonButton>
+          <CommonButton variant="primary" :disabled="isSavingAccount" @click="saveCashAccount">
+            {{ isSavingAccount ? '保存中...' : '保存' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+
+    <CommonModal
+      v-model="showDeleteConfirmModal"
+      title="确认删除"
+      size="compact"
+      :show-close="false"
+    >
+      <p class="cash-delete-message">
+        确认删除“{{ deletingAccount?.name }}”吗？
+      </p>
+      <p v-if="deleteError" class="cash-form-error">{{ deleteError }}</p>
+
+      <template #footer>
+        <div class="cash-create-actions">
+          <CommonButton
+            variant="secondary"
+            :disabled="isDeletingAccount"
+            @click="closeDeleteConfirmModal"
+          >
+            取消
+          </CommonButton>
+          <CommonButton
+            variant="primary"
+            :disabled="isDeletingAccount"
+            @click="confirmDeleteAccount"
+          >
+            {{ isDeletingAccount ? '删除中...' : '确认删除' }}
+          </CommonButton>
         </div>
       </template>
     </CommonModal>
