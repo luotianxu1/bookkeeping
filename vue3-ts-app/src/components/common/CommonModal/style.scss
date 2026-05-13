@@ -26,6 +26,12 @@
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
 }
 
+.common-modal-panel-compact {
+  width: min(100%, 313px);
+  border: 0;
+  border-radius: 18px;
+}
+
 .common-modal-header {
   min-height: var(--space-56);
   display: flex;
@@ -34,6 +40,12 @@
   gap: var(--space-6);
   padding: 10px 16px;
   border-bottom: 1px solid var(--color-border);
+}
+
+.common-modal-panel-compact .common-modal-header {
+  min-height: 26px;
+  padding: 16px 16px 0;
+  border-bottom: 0;
 }
 
 .common-modal-header h2 {
@@ -58,8 +70,16 @@
   padding: var(--space-16);
 }
 
+.common-modal-panel-compact .common-modal-body {
+  padding: 10px 16px 0;
+}
+
 .common-modal-footer {
   padding: 0 16px 16px;
+}
+
+.common-modal-panel-compact .common-modal-footer {
+  padding: 10px 16px 16px;
 }
 
 .modal-fade-enter-active,

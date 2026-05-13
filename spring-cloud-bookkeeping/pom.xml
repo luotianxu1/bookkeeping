@@ -14,6 +14,7 @@
     <modules>
         <module>common</module>
         <module>auth-service</module>
+        <module>finance-service</module>
     </modules>
 
     <properties>
@@ -57,6 +58,7 @@
                     <configuration>
                         <source>${java.version}</source>
                         <target>${java.version}</target>
+                        <parameters>true</parameters>
                     </configuration>
                 </plugin>
             </plugins>

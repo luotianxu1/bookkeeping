@@ -16578,7 +16578,7 @@
                   "id": "sU3zl",
                   "name": "switchModal",
                   "width": 313,
-                  "height": 344,
+                  "height": 316,
                   "fill": "#FFFFFF",
                   "cornerRadius": 18,
                   "layout": "vertical",
@@ -16704,15 +16704,6 @@
                               "fontWeight": "600"
                             }
                           ]
-                        },
-                        {
-                          "type": "text",
-                          "id": "2BWCF",
-                          "fill": "#94A3B8",
-                          "content": "可选：现金 / 投资 / 负债 / 人情 / 其他",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
-                          "fontWeight": "500"
                         }
                       ]
                     },
@@ -22761,7 +22752,7 @@
                   "id": "Io7fa",
                   "name": "switchModal",
                   "width": 313,
-                  "height": 342,
+                  "height": 314,
                   "fill": "#121A2B",
                   "cornerRadius": 18,
                   "layout": "vertical",
@@ -22896,15 +22887,6 @@
                               "fontWeight": "600"
                             }
                           ]
-                        },
-                        {
-                          "type": "text",
-                          "id": "9CEUA",
-                          "fill": "#94A3B8",
-                          "content": "可选：现金 / 投资 / 负债 / 人情 / 其他",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
-                          "fontWeight": "500"
                         }
                       ]
                     },

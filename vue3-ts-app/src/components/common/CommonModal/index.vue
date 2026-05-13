@@ -6,8 +6,12 @@ const props = withDefaults(defineProps<{
   modelValue: boolean
   title: string
   closeOnOverlay?: boolean
+  showClose?: boolean
+  size?: 'default' | 'compact'
 }>(), {
   closeOnOverlay: true,
+  showClose: true,
+  size: 'default',
 })
 
 const emit = defineEmits<{
@@ -67,10 +71,11 @@ onBeforeUnmount(() => {
         ></button>
 
         <Transition name="modal-pop">
-          <section v-if="isOpen" class="common-modal-panel">
+          <section v-if="isOpen" :class="['common-modal-panel', `common-modal-panel-${size}`]">
             <header class="common-modal-header">
               <h2>{{ title }}</h2>
               <button
+                v-if="showClose"
                 class="common-modal-close"
                 type="button"
                 aria-label="关闭"

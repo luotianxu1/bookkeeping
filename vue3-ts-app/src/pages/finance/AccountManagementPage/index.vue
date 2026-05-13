@@ -1,21 +1,52 @@
 <script setup lang="ts">
 // 账户管理页：还原 Pencil「账户管理」画板中的总览、账户分组和新增按钮。
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
+import { getAccountTypes, type AccountType } from '@/api/modules/finance'
 import { accountGroups, accountOverview } from '@/data/account'
 import AccountGroupCard from '../components/AccountGroupCard/index.vue'
 import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
 
 const showCreateAccountModal = ref(false)
 const accountName = ref('')
-const accountType = ref('现金账户')
-const initialAmount = ref('')
-const setAsDefault = ref(false)
+const accountType = ref('')
+const includeInNetWorth = ref(true)
+const accountTypes = ref<AccountType[]>([])
+const isLoadingAccountTypes = ref(false)
+const accountTypeError = ref('')
+
+const accountTypeOptions = computed(() => {
+  if (isLoadingAccountTypes.value) {
+    return [{ label: '加载中...', value: '', disabled: true }]
+  }
+
+  if (accountTypes.value.length === 0) {
+    return [{ label: '暂无可用账户类型', value: '', disabled: true }]
+  }
+
+  return accountTypes.value.map((type) => ({
+    label: type.name,
+    value: type.code,
+  }))
+})
+
+watch(showCreateAccountModal, (visible) => {
+  if (visible) {
+    loadAccountTypes()
+  }
+})
+
+watch(accountType, (nextType) => {
+  const selectedType = accountTypes.value.find((type) => type.code === nextType)
+  if (selectedType) {
+    includeInNetWorth.value = selectedType.includeInNetWorthDefault
+  }
+})
 
 function closeCreateAccountModal() {
   showCreateAccountModal.value = false
@@ -23,6 +54,29 @@ function closeCreateAccountModal() {
 
 function saveAccount() {
   showCreateAccountModal.value = false
+}
+
+async function loadAccountTypes() {
+  if (isLoadingAccountTypes.value) {
+    return
+  }
+
+  isLoadingAccountTypes.value = true
+  accountTypeError.value = ''
+
+  try {
+    const types = await getAccountTypes({ status: 'active' })
+    accountTypes.value = types
+
+    const hasSelectedType = types.some((type) => type.code === accountType.value)
+    if (!hasSelectedType) {
+      accountType.value = types[0]?.code ?? ''
+    }
+  } catch (error) {
+    accountTypeError.value = error instanceof Error ? error.message : '账户类型加载失败'
+  } finally {
+    isLoadingAccountTypes.value = false
+  }
 }
 </script>
 
@@ -45,22 +99,22 @@ function saveAccount() {
       +
     </button>
 
-    <CommonModal v-model="showCreateAccountModal" title="新增账户">
+    <CommonModal
+      v-model="showCreateAccountModal"
+      title="新增账户"
+      size="compact"
+      :show-close="false"
+    >
       <form class="create-account-form">
-        <CommonInput v-model="accountName" label="账户名称" placeholder="例如：日常钱包" />
+        <CommonInput v-model="accountName" label="账户名称" placeholder="例如：建设银行卡" />
         <CommonSelect
           v-model="accountType"
           label="账户类型"
-          :options="['现金账户', '投资账户', '储蓄账户']"
+          :options="accountTypeOptions"
+          :disabled="isLoadingAccountTypes || accountTypes.length === 0"
         />
-        <CommonInput
-          v-model="initialAmount"
-          label="初始金额"
-          placeholder="0.00"
-          input-type="number"
-          input-mode="decimal"
-        />
-        <CommonSwitch v-model="setAsDefault" label="设为默认账户" />
+        <p v-if="accountTypeError" class="create-account-error">{{ accountTypeError }}</p>
+        <CommonSwitch v-model="includeInNetWorth" label="是否计入总资产" />
       </form>
 
       <template #footer>
