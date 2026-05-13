@@ -46,6 +46,27 @@ export interface Account {
   updatedAt: string
 }
 
+export interface Category {
+  id: number
+  userId?: number | null
+  name: string
+  type: 'expense' | 'income'
+  icon: string
+  color?: string | null
+  system: boolean
+  sortOrder: number
+  status: string
+  remark?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CategoryQuery {
+  userId?: number
+  type?: 'expense' | 'income'
+  status?: string
+}
+
 export interface CreateAccountParams {
   userId: number
   accountTypeId: number
@@ -55,6 +76,18 @@ export interface CreateAccountParams {
   currencyCode?: string
   currentBalance?: number
   includeInNetWorth: boolean
+  sortOrder?: number
+  status?: string
+  remark?: string | null
+}
+
+export interface SaveCategoryParams {
+  userId?: number | null
+  name: string
+  type: 'expense' | 'income'
+  icon: string
+  color?: string | null
+  system?: boolean
   sortOrder?: number
   status?: string
   remark?: string | null
@@ -78,4 +111,20 @@ export function updateAccount(id: number, params: CreateAccountParams) {
 
 export function deleteAccount(id: number) {
   return requestDelete<void>(financeRequest, `/api/finance/accounts/${id}`)
+}
+
+export function getCategories(params: CategoryQuery = {}) {
+  return requestGet<Category[]>(financeRequest, '/api/finance/categories', { params })
+}
+
+export function createCategory(params: SaveCategoryParams) {
+  return requestPost<Category, SaveCategoryParams>(financeRequest, '/api/finance/categories', params)
+}
+
+export function updateCategory(id: number, params: SaveCategoryParams) {
+  return requestPut<Category, SaveCategoryParams>(financeRequest, `/api/finance/categories/${id}`, params)
+}
+
+export function deleteCategory(id: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/categories/${id}`)
 }
