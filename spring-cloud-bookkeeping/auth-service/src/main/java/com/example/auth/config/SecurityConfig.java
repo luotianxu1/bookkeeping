@@ -1,7 +1,7 @@
 package com.example.auth.config;
 
 import com.example.auth.security.JwtAuthenticationFilter;
-import com.example.auth.security.SecurityErrorWriter;
+import com.example.common.security.SecurityErrorWriter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

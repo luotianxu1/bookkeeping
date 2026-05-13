@@ -16578,7 +16578,7 @@
                   "id": "sU3zl",
                   "name": "switchModal",
                   "width": 313,
-                  "height": 450,
+                  "height": 344,
                   "fill": "#FFFFFF",
                   "cornerRadius": 18,
                   "layout": "vertical",
@@ -16761,62 +16761,6 @@
                               "height": 16,
                               "fill": "#FFFFFF",
                               "cornerRadius": 8
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "5bJsX",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "gap": 8,
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "9EeAe",
-                          "fill": "#64748B",
-                          "content": "初始余额",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
-                          "fontWeight": "500"
-                        },
-                        {
-                          "type": "frame",
-                          "id": "JZCWj",
-                          "width": "fill_container",
-                          "height": 42,
-                          "fill": "#F8FAFC",
-                          "cornerRadius": 10,
-                          "stroke": {
-                            "thickness": 1,
-                            "fill": "#E2E8F0"
-                          },
-                          "padding": [
-                            0,
-                            12
-                          ],
-                          "justifyContent": "space_between",
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "j7Ylb",
-                              "fill": "#0F172A",
-                              "content": "¥ 0.00",
-                              "fontFamily": "Inter",
-                              "fontSize": 14,
-                              "fontWeight": "600"
-                            },
-                            {
-                              "type": "text",
-                              "id": "9hQI9",
-                              "fill": "#94A3B8",
-                              "content": "请输入",
-                              "fontFamily": "Inter",
-                              "fontSize": 12,
-                              "fontWeight": "500"
                             }
                           ]
                         }
@@ -22817,7 +22761,7 @@
                   "id": "Io7fa",
                   "name": "switchModal",
                   "width": 313,
-                  "height": 450,
+                  "height": 342,
                   "fill": "#121A2B",
                   "cornerRadius": 18,
                   "layout": "vertical",
@@ -23009,62 +22953,6 @@
                               "height": 16,
                               "fill": "#121A2B",
                               "cornerRadius": 8
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "fBPOI",
-                      "width": "fill_container",
-                      "layout": "vertical",
-                      "gap": 8,
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "rVx77",
-                          "fill": "#94A3B8",
-                          "content": "初始余额",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
-                          "fontWeight": "500"
-                        },
-                        {
-                          "type": "frame",
-                          "id": "gCEK8",
-                          "width": "fill_container",
-                          "height": 42,
-                          "fill": "#182233",
-                          "cornerRadius": 10,
-                          "stroke": {
-                            "thickness": 1,
-                            "fill": "#253045"
-                          },
-                          "padding": [
-                            0,
-                            12
-                          ],
-                          "justifyContent": "space_between",
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "9Jkbm",
-                              "fill": "#F8FAFC",
-                              "content": "¥ 0.00",
-                              "fontFamily": "Inter",
-                              "fontSize": 14,
-                              "fontWeight": "600"
-                            },
-                            {
-                              "type": "text",
-                              "id": "j2Ay1",
-                              "fill": "#94A3B8",
-                              "content": "请输入",
-                              "fontFamily": "Inter",
-                              "fontSize": 12,
-                              "fontWeight": "500"
                             }
                           ]
                         }

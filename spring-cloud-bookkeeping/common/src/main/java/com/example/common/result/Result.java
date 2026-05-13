@@ -1,4 +1,4 @@
-package com.example.auth.common.result;
+package com.example.common.result;
 
 import lombok.Data;
 

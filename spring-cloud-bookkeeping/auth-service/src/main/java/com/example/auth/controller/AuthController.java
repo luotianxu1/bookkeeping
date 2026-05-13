@@ -1,12 +1,12 @@
 package com.example.auth.controller;
 
-import com.example.auth.common.result.Result;
 import com.example.auth.dto.CurrentUserResponse;
 import com.example.auth.dto.LoginRequest;
 import com.example.auth.dto.LoginResponse;
 import com.example.auth.model.UserAccount;
 import com.example.auth.security.JwtService;
 import com.example.auth.service.AuthService;
+import com.example.common.result.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;

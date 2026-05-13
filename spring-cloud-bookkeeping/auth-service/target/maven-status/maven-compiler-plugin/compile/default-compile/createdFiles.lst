@@ -1,10 +1,6 @@
 com/example/auth/dto/LoginRequest.class
 com/example/auth/config/OpenApiConfig.class
-com/example/auth/security/SecurityErrorWriter.class
-com/example/auth/common/result/Result.class
 com/example/auth/service/AuthService.class
-com/example/auth/config/GlobalExceptionHandler.class
-com/example/auth/common/result/ResultCodeEnum.class
 com/example/auth/controller/AuthController.class
 com/example/auth/dto/CurrentUserResponse.class
 com/example/auth/model/UserAccount.class

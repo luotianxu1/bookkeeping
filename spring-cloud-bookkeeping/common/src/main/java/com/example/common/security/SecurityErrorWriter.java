@@ -1,6 +1,6 @@
-package com.example.auth.security;
+package com.example.common.security;
 
-import com.example.auth.common.result.Result;
+import com.example.common.result.Result;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;

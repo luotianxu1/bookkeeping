@@ -1,7 +1,7 @@
-package com.example.auth.config;
+package com.example.common.exception;
 
-import com.example.auth.common.result.Result;
-import com.example.auth.common.result.ResultCodeEnum;
+import com.example.common.result.Result;
+import com.example.common.result.ResultCodeEnum;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
