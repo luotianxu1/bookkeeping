@@ -3,11 +3,13 @@ package com.example.finance.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.finance.dto.AccountRequest;
 import com.example.finance.dto.AccountResponse;
+import com.example.finance.dto.AccountSortOrderRequest;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -76,6 +78,18 @@ public class AccountService {
         accountMapper.updateById(entity);
 
         return Optional.of(toResponse(accountMapper.selectById(id), accountType));
+    }
+
+    @Transactional
+    public void updateSortOrders(AccountSortOrderRequest request) {
+        for (AccountSortOrderRequest.AccountSortOrderItem item : request.getItems()) {
+            AccountEntity account = accountMapper.selectById(item.getId());
+            if (account == null || !request.getUserId().equals(account.getUserId())) {
+                throw new IllegalArgumentException("账户不存在");
+            }
+            account.setSortOrder(item.getSortOrder());
+            accountMapper.updateById(account);
+        }
     }
 
     public boolean delete(Long id) {

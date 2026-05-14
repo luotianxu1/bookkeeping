@@ -1,5 +1,7 @@
 // 账户管理类型：描述账户分组、账户条目和账户管理页总览数据。
 export type AccountItem = {
+  /** 账户ID。 */
+  id?: number
   /** 账户图标文本，后续可替换为图标组件。 */
   icon: string
   /** 账户名称。 */
@@ -13,6 +15,8 @@ export type AccountItem = {
 }
 
 export type AccountGroup = {
+  /** 账户类型ID。 */
+  accountTypeId?: number
   /** 账户分组名称，如现金账户、投资账户。 */
   title: string
   /** 分组级可选跳转路径。 */

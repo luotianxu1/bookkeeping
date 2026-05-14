@@ -159,6 +159,21 @@ export interface CreateAccountParams {
   remark?: string | null
 }
 
+export interface SaveAccountSortOrdersParams {
+  userId: number
+  items: {
+    id: number
+    sortOrder: number
+  }[]
+}
+
+export interface SaveAccountTypeSortOrdersParams {
+  items: {
+    id: number
+    sortOrder: number
+  }[]
+}
+
 export interface SaveCategoryParams {
   userId?: number | null
   name: string
@@ -187,6 +202,10 @@ export function getAccountTypes(params: AccountTypeQuery = {}) {
   return requestGet<AccountType[]>(financeRequest, '/api/finance/account-types', { params })
 }
 
+export function updateAccountTypeSortOrders(params: SaveAccountTypeSortOrdersParams) {
+  return requestPut<void, SaveAccountTypeSortOrdersParams>(financeRequest, '/api/finance/account-types/actions/sort-orders', params)
+}
+
 export function getAccounts(params: AccountQuery = {}) {
   return requestGet<Account[]>(financeRequest, '/api/finance/accounts', { params })
 }
@@ -201,6 +220,10 @@ export function createAccount(params: CreateAccountParams) {
 
 export function updateAccount(id: number, params: CreateAccountParams) {
   return requestPut<Account, CreateAccountParams>(financeRequest, `/api/finance/accounts/${id}`, params)
+}
+
+export function updateAccountSortOrders(params: SaveAccountSortOrdersParams) {
+  return requestPut<void, SaveAccountSortOrdersParams>(financeRequest, '/api/finance/accounts/sort-orders', params)
 }
 
 export function deleteAccount(id: number) {

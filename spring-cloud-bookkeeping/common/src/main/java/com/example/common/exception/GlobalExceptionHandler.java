@@ -5,6 +5,7 @@ import com.example.common.result.ResultCodeEnum;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -24,6 +25,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Result<Void>> handleConstraintViolation(ConstraintViolationException ex) {
         return ResponseEntity.badRequest().body(Result.<Void>build(null, ResultCodeEnum.BAD_REQUEST).message(ex.getMessage()));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Result<Void>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return ResponseEntity.badRequest().body(Result.<Void>build(null, ResultCodeEnum.BAD_REQUEST).message("请求参数格式错误"));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

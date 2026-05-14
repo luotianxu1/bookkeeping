@@ -42,26 +42,39 @@ const accountOverview = computed<AccountOverview>(() => ({
 }))
 
 const accountGroups = computed<AccountGroup[]>(() => {
-  const groupedAccounts = new Map<string, Account[]>()
+  const groupedAccounts = new Map<number, Account[]>()
 
   accounts.value.forEach((account) => {
     if (account.status !== 'active') {
       return
     }
 
-    const groupTitle = account.accountTypeName ? `${account.accountTypeName}账户` : '其他账户'
-    const groupAccounts = groupedAccounts.get(groupTitle) ?? []
+    const groupAccounts = groupedAccounts.get(account.accountTypeId) ?? []
     groupAccounts.push(account)
-    groupedAccounts.set(groupTitle, groupAccounts)
+    groupedAccounts.set(account.accountTypeId, groupAccounts)
   })
 
-  return Array.from(groupedAccounts.entries()).map(([title, groupAccounts]) => {
+  const typeById = new Map(accountTypes.value.map((type) => [type.id, type]))
+  const groupTypeIds = Array.from(groupedAccounts.keys()).sort((leftId, rightId) => {
+    const leftType = typeById.get(leftId)
+    const rightType = typeById.get(rightId)
+    const leftSort = leftType?.sortOrder ?? 0
+    const rightSort = rightType?.sortOrder ?? 0
+    return (leftSort - rightSort) || (leftId - rightId)
+  })
+
+  return groupTypeIds.map((accountTypeId) => {
+    const groupAccounts = groupedAccounts.get(accountTypeId) ?? []
     const firstAccount = groupAccounts[0]
+    const accountType = typeById.get(accountTypeId)
+    const title = accountType?.name ? `${accountType.name}账户` : firstAccount?.accountTypeName ? `${firstAccount.accountTypeName}账户` : '其他账户'
 
     return {
+      accountTypeId,
       title,
-      path: firstAccount?.accountTypeCode === 'cash' ? '/finance/accounts/cash' : undefined,
+      path: accountType?.code === 'cash' || firstAccount?.accountTypeCode === 'cash' ? '/finance/accounts/cash' : undefined,
       items: groupAccounts.map((account) => ({
+        id: account.id,
         icon: getAccountIcon(account.icon, account.accountTypeCode),
         name: account.name,
         subtitle: account.remark ?? account.accountTypeName ?? '',
@@ -172,7 +185,12 @@ async function loadAccounts() {
   accountListError.value = ''
 
   try {
-    accounts.value = await getAccounts({ userId: currentUser.id, status: 'active' })
+    const [accountList, typeList] = await Promise.all([
+      getAccounts({ userId: currentUser.id, status: 'active' }),
+      getAccountTypes({ status: 'active' }),
+    ])
+    accounts.value = accountList
+    accountTypes.value = typeList
   } catch (error) {
     accountListError.value = error instanceof Error ? error.message : '账户列表加载失败'
   } finally {
@@ -276,7 +294,11 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
     </p>
 
     <div v-else class="account-groups">
-      <AccountGroupCard v-for="group in accountGroups" :key="group.title" :group="group" />
+      <AccountGroupCard
+        v-for="group in accountGroups"
+        :key="group.accountTypeId ?? group.title"
+        :group="group"
+      />
     </div>
 
     <FloatingAddButton aria-label="新增账户" storage-key="account-management" @click="showCreateAccountModal = true" />

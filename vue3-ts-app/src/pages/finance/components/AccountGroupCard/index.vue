@@ -18,7 +18,11 @@ defineProps<{
     <h2 v-else>{{ group.title }}</h2>
 
     <ul class="account-list">
-      <li v-for="item in group.items" :key="item.name" class="account-list-item">
+      <li
+        v-for="item in group.items"
+        :key="item.id ?? item.name"
+        class="account-list-item"
+      >
         <RouterLink v-if="item.path" class="account-item-link" :to="item.path">
           <span class="account-item-left">
             <span class="account-item-icon">{{ item.icon }}</span>

@@ -3,6 +3,7 @@ package com.example.finance.controller;
 import com.example.common.result.Result;
 import com.example.finance.dto.AccountTypeRequest;
 import com.example.finance.dto.AccountTypeResponse;
+import com.example.finance.dto.AccountTypeSortOrderRequest;
 import com.example.finance.service.AccountTypeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -65,6 +66,13 @@ public class AccountTypeController {
         return accountTypeService.update(id, request)
             .map(Result::ok)
             .orElseGet(() -> Result.<AccountTypeResponse>fail().code(404).message("账户类型不存在"));
+    }
+
+    @PutMapping("/actions/sort-orders")
+    @Operation(summary = "保存账户类型排序")
+    public Result<Void> updateSortOrders(@Valid @RequestBody AccountTypeSortOrderRequest request) {
+        accountTypeService.updateSortOrders(request);
+        return Result.ok();
     }
 
     @DeleteMapping("/{id}")

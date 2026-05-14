@@ -3,6 +3,7 @@ package com.example.finance.controller;
 import com.example.common.result.Result;
 import com.example.finance.dto.AccountRequest;
 import com.example.finance.dto.AccountResponse;
+import com.example.finance.dto.AccountSortOrderRequest;
 import com.example.finance.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -66,6 +67,13 @@ public class AccountController {
         return accountService.update(id, request)
             .map(Result::ok)
             .orElseGet(() -> Result.<AccountResponse>fail().code(404).message("账户不存在"));
+    }
+
+    @PutMapping("/sort-orders")
+    @Operation(summary = "保存账户排序")
+    public Result<Void> updateSortOrders(@Valid @RequestBody AccountSortOrderRequest request) {
+        accountService.updateSortOrders(request);
+        return Result.ok();
     }
 
     @DeleteMapping("/{id}")
