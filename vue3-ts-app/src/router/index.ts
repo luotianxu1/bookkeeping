@@ -1,6 +1,8 @@
 // 应用路由入口：聚合各业务模块路由并创建路由实例。
 import { createRouter, createWebHistory } from 'vue-router'
 import type { AppSection } from '@/types/navigation'
+import { getStoredToken } from '@/utils/auth-token'
+import { showAuthPrompt } from '@/utils/auth-prompt'
 import { financeRoutes } from './modules/finance'
 import { mainRoutes } from './modules/main'
 
@@ -21,4 +23,22 @@ export const router = createRouter({
     ...financeRoutes,
     ...mainRoutes,
   ],
+})
+
+router.beforeEach((to, from) => {
+  if (to.name === 'login' || getStoredToken()) {
+    return true
+  }
+
+  showAuthPrompt(to.fullPath)
+  if (from.name && from.name !== 'login') {
+    return from.fullPath
+  }
+
+  return {
+    path: '/login',
+    query: {
+      redirect: to.fullPath,
+    },
+  }
 })

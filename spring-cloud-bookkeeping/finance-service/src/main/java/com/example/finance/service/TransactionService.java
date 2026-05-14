@@ -53,10 +53,11 @@ public class TransactionService {
         this.categoryMapper = categoryMapper;
     }
 
-    public List<TransactionResponse> list(Long userId, String type) {
+    public List<TransactionResponse> list(Long userId, String type, Long accountId) {
         LambdaQueryWrapper<TransactionEntity> wrapper = new LambdaQueryWrapper<TransactionEntity>()
             .eq(userId != null, TransactionEntity::getUserId, userId)
             .eq(StringUtils.hasText(type), TransactionEntity::getType, type)
+            .eq(accountId != null, TransactionEntity::getAccountId, accountId)
             .eq(TransactionEntity::getStatus, DEFAULT_STATUS)
             .orderByDesc(TransactionEntity::getOccurredAt)
             .orderByDesc(TransactionEntity::getId);

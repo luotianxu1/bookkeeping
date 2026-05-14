@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,9 +34,20 @@ public class TransactionController {
     @Operation(summary = "查询收支流水列表")
     public Result<List<TransactionResponse>> list(
         @RequestParam(name = "userId", required = false) Long userId,
+        @RequestParam(name = "type", required = false) String type,
+        @RequestParam(name = "accountId", required = false) Long accountId
+    ) {
+        return Result.ok(transactionService.list(userId, type, accountId));
+    }
+
+    @GetMapping("/accounts/{accountId}")
+    @Operation(summary = "查询指定账户收支流水")
+    public Result<List<TransactionResponse>> listByAccount(
+        @PathVariable("accountId") Long accountId,
+        @RequestParam(name = "userId", required = false) Long userId,
         @RequestParam(name = "type", required = false) String type
     ) {
-        return Result.ok(transactionService.list(userId, type));
+        return Result.ok(transactionService.list(userId, type, accountId));
     }
 
     @PostMapping

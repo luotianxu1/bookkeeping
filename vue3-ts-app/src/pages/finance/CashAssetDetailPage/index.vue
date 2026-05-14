@@ -1,76 +1,83 @@
 <script setup lang="ts">
-// 现金资产详情页：还原 Pencil「现金资产-详情」画板中的总览与修改历史。
-import { computed, ref } from 'vue'
+// 现金资产详情页：展示单个现金账户的余额与收支记录。
+import { computed, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
-import { cashAssetDetailOverview, cashAssetHistory } from '@/data/account'
+import { getAccount, getAccountTransactions, type Account, type Transaction as ApiTransaction } from '@/api/modules/finance'
+import { getStoredCurrentUser } from '@/utils/current-user'
+import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
+import type { DayGroup } from '@/types/finance'
+import TransactionDayCard from '../components/TransactionDayCard/index.vue'
 
-type ChangeMode = 'increase' | 'decrease'
+const route = useRoute()
 
-const showEditModal = ref(false)
-const changeMode = ref<ChangeMode>('increase')
-const changeAmount = ref('0.00')
-const remark = ref('')
+const account = ref<Account | null>(null)
+const transactions = ref<ApiTransaction[]>([])
+const isLoading = ref(false)
+const pageError = ref('')
+let requestVersion = 0
 
-const detailOverview = ref({ ...cashAssetDetailOverview })
-const historyList = ref(
-  cashAssetHistory.map((entry) => ({
-    ...entry,
-    change: formatHistoryAmount(parseAmount(entry.change), entry.trend === 'up' ? 'increase' : 'decrease'),
-  })),
-)
+const accountId = computed(() => Number(route.params.accountId))
+const historyCountText = computed(() => `共 ${transactions.value.length} 条`)
+const accountName = computed(() => account.value?.name ?? '现金账户')
+const accountTypeName = computed(() => account.value?.accountTypeName ? `${account.value.accountTypeName}账户` : '现金账户')
+const accountAmount = computed(() => formatAmount(Number(account.value?.currentBalance ?? 0)))
+const dayGroups = computed<DayGroup[]>(() => buildTransactionDayGroups(transactions.value))
 
-const historyCountText = computed(() => `共 ${historyList.value.length} 条`)
+watch(accountId, () => {
+  loadDetail()
+}, { immediate: true })
 
-function parseAmount(amountText: string) {
-  return Number(amountText.replace(/[^\d.-]/g, '')) || 0
+async function loadDetail() {
+  const currentRequestVersion = ++requestVersion
+  account.value = null
+  transactions.value = []
+
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    pageError.value = '请先登录后查看资产详情'
+    return
+  }
+  if (!Number.isFinite(accountId.value) || accountId.value <= 0) {
+    pageError.value = '账户不存在'
+    return
+  }
+
+  isLoading.value = true
+  pageError.value = ''
+
+  try {
+    const [accountDetail, transactionList] = await Promise.all([
+      getAccount(accountId.value),
+      getAccountTransactions(accountId.value, {
+        userId: currentUser.id,
+      }),
+    ])
+    if (currentRequestVersion !== requestVersion) {
+      return
+    }
+    account.value = accountDetail
+    transactions.value = transactionList.filter((transaction) => transaction.accountId === accountId.value)
+  } catch (error) {
+    if (currentRequestVersion !== requestVersion) {
+      return
+    }
+    pageError.value = error instanceof Error ? error.message : '资产详情加载失败'
+  } finally {
+    if (currentRequestVersion === requestVersion) {
+      isLoading.value = false
+    }
+  }
 }
 
-function formatCurrency(amount: number) {
-  return `${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function formatHistoryAmount(amount: number, mode: ChangeMode) {
-  void mode
-  const abs = Math.abs(amount)
-  return `${abs.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function openEditModal() {
-  showEditModal.value = true
-}
-
-function closeEditModal() {
-  showEditModal.value = false
-}
-
-function resetEditForm() {
-  changeMode.value = 'increase'
-  changeAmount.value = '0.00'
-  remark.value = ''
-}
-
-function saveAssetChange() {
-  const amount = Number(changeAmount.value || '0')
-  if (!Number.isFinite(amount) || amount <= 0) return
-
-  const previousBalance = parseAmount(detailOverview.value.amount)
-  const nextBalance = changeMode.value === 'increase'
-    ? previousBalance + amount
-    : previousBalance - amount
-
-  detailOverview.value.amount = formatCurrency(nextBalance)
-  historyList.value.unshift({
-    title: remark.value.trim() || (changeMode.value === 'increase' ? '手动增加余额' : '手动减少余额'),
-    time: '刚刚',
-    change: formatHistoryAmount(amount, changeMode.value),
-    balance: `余额 ${formatCurrency(nextBalance)}`,
-    trend: changeMode.value === 'increase' ? 'up' : 'down',
+function formatAmount(value: number) {
+  return value.toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })
-
-  closeEditModal()
-  resetEditForm()
 }
+
 </script>
 
 <template>
@@ -79,111 +86,45 @@ function saveAssetChange() {
       <PageHeader title="资产详情" back-to="/finance/accounts/cash" back-label="返回现金账户" />
     </header>
 
-    <section class="cash-asset-overview-card" aria-label="现金资产总览">
-      <div class="cash-asset-overview-top">
-        <div class="cash-asset-overview-title">
-          <strong>{{ detailOverview.accountName }}</strong>
-          <span>{{ detailOverview.assetType }}</span>
+    <p v-if="pageError" class="cash-asset-message cash-asset-message-error">
+      {{ pageError }}
+    </p>
+    <p v-else-if="isLoading" class="cash-asset-message">
+      加载中...
+    </p>
+
+    <template v-else>
+      <section class="cash-asset-overview-card" aria-label="现金资产总览">
+        <div class="cash-asset-overview-top">
+          <div class="cash-asset-overview-title">
+            <strong>{{ accountName }}</strong>
+            <span>{{ accountTypeName }}</span>
+          </div>
         </div>
-        <button type="button" class="cash-asset-edit" @click="openEditModal">修改</button>
-      </div>
 
-      <AmountText tag="p" class="cash-asset-overview-amount" :value="detailOverview.amount" />
-    </section>
-
-    <section class="cash-asset-history-wrap" aria-label="修改历史">
-      <header class="cash-asset-history-head">
-        <strong>修改历史</strong>
-        <span>{{ historyCountText }}</span>
-      </header>
-
-      <section class="cash-asset-history-card">
-        <article v-for="entry in historyList" :key="`${entry.title}-${entry.time}`" class="cash-asset-history-item">
-          <div class="cash-asset-history-left">
-            <strong>{{ entry.title }}</strong>
-            <span>{{ entry.time }}</span>
-          </div>
-          <div class="cash-asset-history-right">
-            <AmountText
-              tag="strong"
-              :class="entry.trend === 'up' ? 'up' : 'down'"
-              :tone="entry.trend === 'up' ? 'positive' : 'negative'"
-              :value="entry.change"
-            />
-            <span>{{ entry.balance }}</span>
-          </div>
-        </article>
+        <AmountText tag="p" class="cash-asset-overview-amount" :value="accountAmount" />
       </section>
-    </section>
 
-    <Transition name="edit-fade">
-      <section
-        v-if="showEditModal"
-        class="asset-edit-overlay"
-        role="dialog"
-        aria-modal="true"
-      >
-        <button type="button" class="asset-edit-backdrop" aria-label="关闭弹窗" @click="closeEditModal"></button>
+      <section class="cash-asset-history-wrap" aria-label="收支记录">
+        <header class="cash-asset-history-head">
+          <strong>收支记录</strong>
+          <span>{{ historyCountText }}</span>
+        </header>
 
-        <section class="asset-edit-modal">
-          <h2>修改资产</h2>
+        <section class="cash-asset-history-groups">
+          <p v-if="transactions.length === 0" class="cash-asset-empty">暂无收支记录</p>
 
-          <div class="asset-edit-field">
-            <label>资产名称</label>
-            <div class="asset-edit-input static">{{ detailOverview.accountName }}</div>
-          </div>
-
-          <div class="asset-edit-field">
-            <label>金额变动</label>
-            <div class="asset-edit-segment">
-              <button
-                type="button"
-                :class="['asset-edit-segment-item', { active: changeMode === 'increase' }]"
-                @click="changeMode = 'increase'"
-              >
-                增加
-              </button>
-              <button
-                type="button"
-                :class="['asset-edit-segment-item', { active: changeMode === 'decrease' }]"
-                @click="changeMode = 'decrease'"
-              >
-                减少
-              </button>
-            </div>
-            <div class="asset-edit-input amount-wrap">
-              <span></span>
-              <input
-                v-model="changeAmount"
-                class="asset-edit-amount-input"
-                type="number"
-                inputmode="decimal"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
-
-          <div class="asset-edit-field">
-            <label>备注</label>
-            <input
-              v-model="remark"
-              class="asset-edit-input"
-              type="text"
-              placeholder="添加说明"
+          <template v-else>
+            <TransactionDayCard
+              v-for="group in dayGroups"
+              :key="group.date"
+              :group="group"
+              summary-mode="stacked"
             />
-          </div>
-
-          <div class="asset-edit-actions">
-            <button type="button" class="asset-edit-btn cancel" @click="closeEditModal">
-              取消
-            </button>
-            <button type="button" class="asset-edit-btn confirm" @click="saveAssetChange">
-              保存
-            </button>
-          </div>
+          </template>
         </section>
       </section>
-    </Transition>
+    </template>
   </section>
 </template>
 

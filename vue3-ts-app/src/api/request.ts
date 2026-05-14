@@ -1,5 +1,7 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
 import { clearStoredToken, getStoredToken } from '@/utils/auth-token'
+import { showAuthPrompt } from '@/utils/auth-prompt'
+import { clearStoredCurrentUser } from '@/utils/current-user'
 import { getApiBaseUrl, type ApiService } from './api-base-url'
 
 export interface ApiErrorPayload {
@@ -59,6 +61,10 @@ export function createRequest(options: RequestOptions = {}) {
             const status = error.response?.status
             if (status === 401) {
                 clearStoredToken()
+                clearStoredCurrentUser()
+                if (window.location.pathname !== '/login') {
+                    showAuthPrompt(window.location.pathname + window.location.search)
+                }
             }
 
             return Promise.reject(

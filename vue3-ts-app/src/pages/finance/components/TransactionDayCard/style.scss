@@ -7,7 +7,7 @@
 
 .day-header {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-8);
   padding: 12px 14px 8px;
 }
 
@@ -31,7 +31,7 @@
 .day-card-stacked .day-title {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-8);
 }
 
 .day-title strong {
@@ -61,6 +61,7 @@
 
 .day-summary {
   justify-items: end;
+  gap: var(--space-2);
 }
 
 .day-summary span {
@@ -94,7 +95,7 @@
 }
 
 .transaction-item {
-  min-height: var(--space-48);
+  min-height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -120,9 +121,8 @@
 
 .day-card-stacked .transaction-copy {
   min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
+  display: grid;
+  gap: var(--space-4);
 }
 
 .transaction-copy span {

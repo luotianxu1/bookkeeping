@@ -131,6 +131,12 @@ export interface Transaction {
   updatedAt: string
 }
 
+export interface TransactionQuery {
+  userId?: number
+  type?: TransactionType
+  accountId?: number
+}
+
 export interface CreateAccountParams {
   userId: number
   accountTypeId: number
@@ -177,6 +183,10 @@ export function getAccounts(params: AccountQuery = {}) {
   return requestGet<Account[]>(financeRequest, '/api/finance/accounts', { params })
 }
 
+export function getAccount(id: number) {
+  return requestGet<Account>(financeRequest, `/api/finance/accounts/${id}`)
+}
+
 export function createAccount(params: CreateAccountParams) {
   return requestPost<Account, CreateAccountParams>(financeRequest, '/api/finance/accounts', params)
 }
@@ -213,4 +223,12 @@ export function getGoldPrices(range: GoldPriceRange = '1d') {
 
 export function createTransaction(params: CreateTransactionParams) {
   return requestPost<Transaction, CreateTransactionParams>(financeRequest, '/api/finance/transactions', params)
+}
+
+export function getTransactions(params: TransactionQuery = {}) {
+  return requestGet<Transaction[]>(financeRequest, '/api/finance/transactions', { params })
+}
+
+export function getAccountTransactions(accountId: number, params: Omit<TransactionQuery, 'accountId'> = {}) {
+  return requestGet<Transaction[]>(financeRequest, `/api/finance/transactions/accounts/${accountId}`, { params })
 }

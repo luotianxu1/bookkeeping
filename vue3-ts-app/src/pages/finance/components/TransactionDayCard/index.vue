@@ -9,6 +9,23 @@ withDefaults(defineProps<{
 }>(), {
   summaryMode: 'inline',
 })
+
+function negativeAmount(value: string) {
+  const normalized = value.trim()
+  return normalized.startsWith('-') ? normalized : `-${normalized}`
+}
+
+function transactionAmount(transaction: DayGroup['transactions'][number]) {
+  if (transaction.type !== 'expense') {
+    return transaction.amount
+  }
+
+  return negativeAmount(transaction.amount)
+}
+
+function transactionTone(transaction: DayGroup['transactions'][number]) {
+  return transaction.type === 'expense' ? 'negative' : 'positive'
+}
 </script>
 
 <template>
@@ -26,7 +43,7 @@ withDefaults(defineProps<{
         </div>
         <div class="day-summary">
           <span>支出</span>
-          <AmountText tag="strong" :value="group.expense" />
+          <AmountText tag="strong" :value="negativeAmount(group.expense)" tone="negative" />
         </div>
         <div v-if="summaryMode === 'stacked'" class="day-summary">
           <span>盈余</span>
@@ -45,7 +62,12 @@ withDefaults(defineProps<{
           <strong>{{ transaction.name }}</strong>
           <span>{{ transaction.time }}</span>
         </span>
-        <AmountText tag="strong" :value="transaction.amount" class="amount" />
+        <AmountText
+          tag="strong"
+          :value="transactionAmount(transaction)"
+          :tone="transactionTone(transaction)"
+          class="amount"
+        />
       </li>
     </ul>
   </article>

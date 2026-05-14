@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getCurrentUser, login } from '@/api/modules/auth'
 import { ApiError } from '@/api/request'
 import { clearStoredToken, setStoredToken } from '@/utils/auth-token'
 import { clearStoredCurrentUser, setStoredCurrentUser } from '@/utils/current-user'
 
 const router = useRouter()
+const route = useRoute()
 const account = ref('')
 const password = ref('')
 const errorMessage = ref('')
@@ -35,7 +36,8 @@ async function submitLogin() {
     })
     const currentUser = await getCurrentUser()
     setStoredCurrentUser(currentUser)
-    await router.push('/finance')
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/finance'
+    await router.push(redirect)
   } catch (error) {
     clearStoredToken()
     clearStoredCurrentUser()

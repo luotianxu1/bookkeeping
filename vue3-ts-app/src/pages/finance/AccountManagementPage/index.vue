@@ -61,11 +61,12 @@ const accountGroups = computed<AccountGroup[]>(() => {
       title,
       path: firstAccount?.accountTypeCode === 'cash' ? '/finance/accounts/cash' : undefined,
       items: groupAccounts.map((account) => ({
-      icon: getAccountIcon(account.icon, account.accountTypeCode),
-      name: account.name,
-      subtitle: account.remark ?? account.accountTypeName ?? '',
-      amount: formatAmount(Number(account.currentBalance)),
-    })),
+        icon: getAccountIcon(account.icon, account.accountTypeCode),
+        name: account.name,
+        subtitle: account.remark ?? account.accountTypeName ?? '',
+        amount: formatAmount(Number(account.currentBalance)),
+        path: account.accountTypeCode === 'cash' ? `/finance/accounts/cash/${account.id}` : undefined,
+      })),
     }
   })
 })

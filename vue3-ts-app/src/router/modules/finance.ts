@@ -139,7 +139,7 @@ export const financeRoutes: RouteRecordRaw[] = [
     },
   },
   {
-    path: '/finance/accounts/cash/detail',
+    path: '/finance/accounts/cash/:accountId',
     name: 'finance-accounts-cash-detail',
     component: CashAssetDetailPage,
     meta: {

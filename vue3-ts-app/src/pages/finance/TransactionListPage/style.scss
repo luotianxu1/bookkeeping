@@ -7,3 +7,20 @@
   display: grid;
   gap: var(--space-6);
 }
+
+.transaction-list-message {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.transaction-list-message-error {
+  color: var(--color-danger);
+}

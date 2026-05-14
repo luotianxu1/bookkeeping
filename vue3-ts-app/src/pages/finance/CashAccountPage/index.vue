@@ -229,7 +229,7 @@ function toAccountItem(account: Account) {
     name: account.name,
     subtitle: account.remark || account.accountTypeName || '现金账户',
     amount: formatAmount(Number(account.currentBalance)),
-    path: account.name === '钱包' ? '/finance/accounts/cash/detail' : undefined,
+    path: `/finance/accounts/cash/${account.id}`,
   }
 }
 

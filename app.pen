@@ -13516,7 +13516,7 @@
                       "type": "text",
                       "id": "UH1VK",
                       "fill": "#0F172A",
-                      "content": "修改历史",
+                      "content": "收支记录",
                       "fontFamily": "Inter",
                       "fontSize": 16,
                       "fontWeight": "700"
@@ -13534,115 +13534,53 @@
                 },
                 {
                   "type": "frame",
-                  "id": "0aM6L",
+                  "id": "xkYvb",
+                  "name": "收支记录列表",
                   "width": "fill_container",
-                  "fill": "#FFFFFF",
-                  "cornerRadius": 18,
-                  "stroke": {
-                    "thickness": 1,
-                    "fill": "#E2E8F0"
-                  },
+                  "fill": "#FFFFFF00",
                   "layout": "vertical",
-                  "padding": 14,
+                  "gap": 14,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "dTtvU",
+                      "id": "yDxRz",
+                      "name": "day1",
                       "width": "fill_container",
-                      "height": 60,
-                      "justifyContent": "space_between",
-                      "alignItems": "center",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 16,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#E2E8F0"
+                      },
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": [
+                        12,
+                        14
+                      ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "Khgd9",
-                          "layout": "vertical",
-                          "gap": 4,
+                          "id": "DKypz",
+                          "name": "day1Header",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "HuXje",
-                              "fill": "#0F172A",
-                              "content": "手动修改余额",
-                              "fontFamily": "Inter",
-                              "fontSize": 14,
-                              "fontWeight": "600"
-                            },
-                            {
-                              "type": "text",
-                              "id": "B4B1H",
-                              "fill": "#94A3B8",
-                              "content": "今天 21:36",
-                              "fontFamily": "Inter",
-                              "fontSize": 12,
-                              "fontWeight": "500"
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "3G5C8",
-                          "layout": "vertical",
-                          "gap": 4,
-                          "alignItems": "end",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "Qmem5",
-                              "fill": "#DC2626",
-                              "content": "+ ¥300.00",
+                              "id": "WqzuN",
+                              "fill": "#334155",
+                              "content": "今天",
                               "fontFamily": "Inter",
                               "fontSize": 14,
                               "fontWeight": "700"
                             },
                             {
                               "type": "text",
-                              "id": "O8qif",
-                              "fill": "#64748B",
-                              "content": "余额 ¥2,300.00",
-                              "fontFamily": "Inter",
-                              "fontSize": 12,
-                              "fontWeight": "500"
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "ccfJp",
-                      "width": "fill_container",
-                      "height": 1,
-                      "fill": "#E2E8F0"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "oScTp",
-                      "width": "fill_container",
-                      "height": 60,
-                      "justifyContent": "space_between",
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "frame",
-                          "id": "ApSiI",
-                          "layout": "vertical",
-                          "gap": 4,
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "wMh4t",
-                              "fill": "#0F172A",
-                              "content": "买菜支出",
-                              "fontFamily": "Inter",
-                              "fontSize": 14,
-                              "fontWeight": "600"
-                            },
-                            {
-                              "type": "text",
-                              "id": "tzJb8",
-                              "fill": "#94A3B8",
-                              "content": "昨天 18:20",
+                              "id": "D0ZbYU",
+                              "fill": "#CBD5E1",
+                              "content": "共 2 笔",
                               "fontFamily": "Inter",
                               "fontSize": 12,
                               "fontWeight": "500"
@@ -13651,28 +13589,193 @@
                         },
                         {
                           "type": "frame",
-                          "id": "E1Lcw",
-                          "layout": "vertical",
-                          "gap": 4,
-                          "alignItems": "end",
+                          "id": "GExi9",
+                          "width": "fill_container",
+                          "justifyContent": "space_between",
                           "children": [
                             {
+                              "type": "frame",
+                              "id": "LbkLl",
+                              "layout": "vertical",
+                              "gap": 2,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "TyC4I",
+                                  "fill": "#94A3B8",
+                                  "content": "收入",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "OXwcM",
+                                  "fill": "#DC2626",
+                                  "content": "¥3,200.00",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "700"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "yhjjd",
+                              "layout": "vertical",
+                              "gap": 2,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "oTqZ0",
+                                  "fill": "#94A3B8",
+                                  "content": "支出",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "qVprD",
+                                  "fill": "#16A34A",
+                                  "content": "¥48.00",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "700"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "P3j2LP",
+                              "layout": "vertical",
+                              "gap": 2,
+                              "alignItems": "end",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "A3VPp",
+                                  "fill": "#94A3B8",
+                                  "content": "盈余",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "fSQKv",
+                                  "fill": "#DC2626",
+                                  "content": "¥3,152.00",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "700"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vdyWQ",
+                          "width": "fill_container",
+                          "height": 1,
+                          "fill": "#E2E8F0"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "O3bgAZ",
+                          "width": "fill_container",
+                          "height": 52,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "f9udxq",
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "XTBpt",
+                                  "fill": "#0F172A",
+                                  "content": "午餐",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "Z2xibO",
+                                  "fill": "#94A3B8",
+                                  "content": "钱包 · 餐饮 · 12:20",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            },
+                            {
                               "type": "text",
-                              "id": "XYQdl",
+                              "id": "Vj1VP",
                               "fill": "#16A34A",
-                              "content": "- ¥86.00",
+                              "content": "- ¥48.00",
                               "fontFamily": "Inter",
                               "fontSize": 14,
                               "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Uyhl5",
+                          "width": "fill_container",
+                          "height": 1,
+                          "fill": "#E2E8F0"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "UjC2I",
+                          "width": "fill_container",
+                          "height": 52,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "W85ssU",
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "SKiIX",
+                                  "fill": "#0F172A",
+                                  "content": "工资入账",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "AWJi0",
+                                  "fill": "#94A3B8",
+                                  "content": "招商银行卡 · 收入 · 09:00",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                }
+                              ]
                             },
                             {
                               "type": "text",
-                              "id": "1kWd7",
-                              "fill": "#64748B",
-                              "content": "余额 ¥2,000.00",
+                              "id": "vDouy",
+                              "fill": "#DC2626",
+                              "content": "+ ¥3,200.00",
                               "fontFamily": "Inter",
-                              "fontSize": 12,
-                              "fontWeight": "500"
+                              "fontSize": 14,
+                              "fontWeight": "700"
                             }
                           ]
                         }
@@ -13680,39 +13783,44 @@
                     },
                     {
                       "type": "frame",
-                      "id": "Nu8z6",
+                      "id": "N09x7",
+                      "name": "day2",
                       "width": "fill_container",
-                      "height": 1,
-                      "fill": "#E2E8F0"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "IhbFN",
-                      "width": "fill_container",
-                      "height": 60,
-                      "justifyContent": "space_between",
-                      "alignItems": "center",
+                      "fill": "#FFFFFF",
+                      "cornerRadius": 16,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#E2E8F0"
+                      },
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": [
+                        12,
+                        14
+                      ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "HZrd3",
-                          "layout": "vertical",
-                          "gap": 4,
+                          "id": "Hi0zL",
+                          "name": "day2Header",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "3DjyV",
-                              "fill": "#0F172A",
-                              "content": "转入备用金",
+                              "id": "MoXJL",
+                              "fill": "#334155",
+                              "content": "昨天",
                               "fontFamily": "Inter",
                               "fontSize": 14,
-                              "fontWeight": "600"
+                              "fontWeight": "700"
                             },
                             {
                               "type": "text",
-                              "id": "ZwKa0",
-                              "fill": "#94A3B8",
-                              "content": "03-20 09:12",
+                              "id": "O0ZV7",
+                              "fill": "#CBD5E1",
+                              "content": "共 2 笔",
                               "fontFamily": "Inter",
                               "fontSize": 12,
                               "fontWeight": "500"
@@ -13721,108 +13829,197 @@
                         },
                         {
                           "type": "frame",
-                          "id": "jy2NW",
-                          "layout": "vertical",
-                          "gap": 4,
-                          "alignItems": "end",
+                          "id": "RpfSs",
+                          "width": "fill_container",
+                          "justifyContent": "space_between",
                           "children": [
                             {
-                              "type": "text",
-                              "id": "WuK55",
-                              "fill": "#DC2626",
-                              "content": "+ ¥500.00",
-                              "fontFamily": "Inter",
-                              "fontSize": 14,
-                              "fontWeight": "700"
+                              "type": "frame",
+                              "id": "k46KW",
+                              "layout": "vertical",
+                              "gap": 2,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "qkvvg",
+                                  "fill": "#94A3B8",
+                                  "content": "收入",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "C1OQ9L",
+                                  "fill": "#DC2626",
+                                  "content": "¥86.00",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "700"
+                                }
+                              ]
                             },
                             {
-                              "type": "text",
-                              "id": "OesxI",
-                              "fill": "#64748B",
-                              "content": "余额 ¥2,086.00",
-                              "fontFamily": "Inter",
-                              "fontSize": 12,
-                              "fontWeight": "500"
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "GN41Y",
-                      "width": "fill_container",
-                      "height": 1,
-                      "fill": "#E2E8F0"
-                    },
-                    {
-                      "type": "frame",
-                      "id": "MoeT9",
-                      "width": "fill_container",
-                      "height": 60,
-                      "justifyContent": "space_between",
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "frame",
-                          "id": "atCKl",
-                          "layout": "vertical",
-                          "gap": 4,
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "QF014",
-                              "fill": "#0F172A",
-                              "content": "初始录入",
-                              "fontFamily": "Inter",
-                              "fontSize": 14,
-                              "fontWeight": "600"
+                              "type": "frame",
+                              "id": "J2oWf",
+                              "layout": "vertical",
+                              "gap": 2,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "T3ZkXB",
+                                  "fill": "#94A3B8",
+                                  "content": "支出",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "ph5VR",
+                                  "fill": "#16A34A",
+                                  "content": "¥126.50",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "700"
+                                }
+                              ]
                             },
                             {
-                              "type": "text",
-                              "id": "sWyjr",
-                              "fill": "#94A3B8",
-                              "content": "03-18 10:00",
-                              "fontFamily": "Inter",
-                              "fontSize": 12,
-                              "fontWeight": "500"
+                              "type": "frame",
+                              "id": "Ga6Xh",
+                              "layout": "vertical",
+                              "gap": 2,
+                              "alignItems": "end",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "YPRLu",
+                                  "fill": "#94A3B8",
+                                  "content": "盈余",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "mGYof",
+                                  "fill": "#16A34A",
+                                  "content": "-¥40.50",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "700"
+                                }
+                              ]
                             }
                           ]
                         },
                         {
                           "type": "frame",
-                          "id": "I2zDr",
-                          "layout": "vertical",
-                          "gap": 4,
-                          "alignItems": "end",
+                          "id": "bgNVA",
+                          "width": "fill_container",
+                          "height": 1,
+                          "fill": "#E2E8F0"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "BKXPx",
+                          "width": "fill_container",
+                          "height": 52,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
                           "children": [
                             {
-                              "type": "text",
-                              "id": "ekUoq",
-                              "fill": "#DC2626",
-                              "content": "+ ¥1,586.00",
-                              "fontFamily": "Inter",
-                              "fontSize": 14,
-                              "fontWeight": "700"
+                              "type": "frame",
+                              "id": "Tqyyd",
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "OpnT4",
+                                  "fill": "#0F172A",
+                                  "content": "超市购物",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "F1O49w",
+                                  "fill": "#94A3B8",
+                                  "content": "日用 · 18:42",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                }
+                              ]
                             },
                             {
                               "type": "text",
-                              "id": "plEDx",
-                              "fill": "#64748B",
-                              "content": "余额 ¥1,586.00",
+                              "id": "GAEiC",
+                              "fill": "#16A34A",
+                              "content": "- ¥126.50",
                               "fontFamily": "Inter",
-                              "fontSize": 12,
-                              "fontWeight": "500"
+                              "fontSize": 14,
+                              "fontWeight": "700"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "O2Smo",
+                          "width": "fill_container",
+                          "height": 1,
+                          "fill": "#E2E8F0"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "qR7ut",
+                          "width": "fill_container",
+                          "height": 52,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Q2eoYh",
+                              "layout": "vertical",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "i58U7x",
+                                  "fill": "#0F172A",
+                                  "content": "退款到账",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 14,
+                                  "fontWeight": "600"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "Kuhf7",
+                                  "fill": "#94A3B8",
+                                  "content": "收入 · 15:12",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 12,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "rImlU",
+                              "fill": "#DC2626",
+                              "content": "+ ¥86.00",
+                              "fontFamily": "Inter",
+                              "fontSize": 14,
+                              "fontWeight": "700"
                             }
                           ]
                         }
                       ]
-                    },
-                    {
-                      "type": "frame",
-                      "id": "XPXfV",
-                      "width": "fill_container",
-                      "height": "fill_container"
                     }
                   ]
                 }
