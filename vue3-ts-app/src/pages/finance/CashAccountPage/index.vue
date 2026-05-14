@@ -3,6 +3,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
@@ -24,6 +25,9 @@ const isDeletingAccount = ref(false)
 const accountListError = ref('')
 const accountFormError = ref('')
 const deleteError = ref('')
+const showFeedbackModal = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
 const router = useRouter()
 
 const formName = ref('')
@@ -124,14 +128,18 @@ async function saveCashAccount() {
 
     if (editingAccountId.value) {
       await updateAccount(editingAccountId.value, payload)
+      showFeedback('修改成功', 'success')
     } else {
       await createAccount(payload)
+      showFeedback('新增成功', 'success')
     }
 
     closeCreateModal()
     await loadCashAccounts()
   } catch (error) {
-    accountFormError.value = error instanceof Error ? error.message : '账户保存失败'
+    const message = error instanceof Error ? error.message : '账户保存失败'
+    accountFormError.value = message
+    showFeedback(message, 'error')
   } finally {
     isSavingAccount.value = false
   }
@@ -147,9 +155,12 @@ async function removeAccount(id: number) {
     deleteError.value = ''
     await deleteAccount(id)
     closeDeleteConfirmModal()
+    showFeedback('删除成功', 'success')
     await loadCashAccounts()
   } catch (error) {
-    deleteError.value = error instanceof Error ? error.message : '账户删除失败'
+    const message = error instanceof Error ? error.message : '账户删除失败'
+    deleteError.value = message
+    showFeedback(message, 'error')
   } finally {
     isDeletingAccount.value = false
   }
@@ -258,10 +269,22 @@ function getCashIconCode(name: string) {
   }
   return 'wallet'
 }
+
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  showFeedbackModal.value = true
+}
 </script>
 
 <template>
   <section class="cash-account-page" aria-label="现金账户">
+    <CommonFeedback
+      v-model="showFeedbackModal"
+      :message="feedbackMessage"
+      :type="feedbackType"
+    />
+
     <header class="cash-account-header">
       <PageHeader title="现金账户" back-to="/finance/accounts" back-label="返回账户管理" />
       <button class="cash-account-manage" type="button" @click="toggleManageMode">

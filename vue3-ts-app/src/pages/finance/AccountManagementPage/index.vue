@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 账户管理页：还原 Pencil「账户管理」画板中的总览、账户分组和新增按钮。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -26,8 +27,9 @@ const isSavingAccount = ref(false)
 const accountListError = ref('')
 const accountTypeError = ref('')
 const accountFormError = ref('')
-const successMessage = ref('')
-let successMessageTimer: number | undefined
+const showFeedbackModal = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
 
 const accountOverview = computed<AccountOverview>(() => ({
   label: '总资产',
@@ -100,10 +102,6 @@ onMounted(() => {
   loadAccounts()
 })
 
-onBeforeUnmount(() => {
-  window.clearTimeout(successMessageTimer)
-})
-
 function closeCreateAccountModal() {
   showCreateAccountModal.value = false
 }
@@ -150,10 +148,12 @@ async function saveAccount() {
     })
     resetCreateAccountForm()
     showCreateAccountModal.value = false
-    showSuccessMessage()
+    showFeedback('新增成功', 'success')
     await loadAccounts()
   } catch (error) {
-    accountFormError.value = error instanceof Error ? error.message : '账户保存失败'
+    const message = error instanceof Error ? error.message : '账户保存失败'
+    accountFormError.value = message
+    showFeedback(message, 'error')
   } finally {
     isSavingAccount.value = false
   }
@@ -207,12 +207,10 @@ function resetCreateAccountForm() {
   accountFormError.value = ''
 }
 
-function showSuccessMessage() {
-  successMessage.value = '新增成功'
-  window.clearTimeout(successMessageTimer)
-  successMessageTimer = window.setTimeout(() => {
-    successMessage.value = ''
-  }, 1800)
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  showFeedbackModal.value = true
 }
 
 function formatAmount(value: number) {
@@ -255,11 +253,11 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
 
 <template>
   <section class="account-management-page" aria-label="账户管理">
-    <Transition name="account-toast">
-      <div v-if="successMessage" class="account-toast" role="status">
-        {{ successMessage }}
-      </div>
-    </Transition>
+    <CommonFeedback
+      v-model="showFeedbackModal"
+      :message="feedbackMessage"
+      :type="feedbackType"
+    />
 
     <PageHeader title="账户管理" back-to="/finance" back-label="返回财务首页" />
 

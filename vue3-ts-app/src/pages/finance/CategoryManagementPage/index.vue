@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // 分类管理页：使用财务模块分类接口完成列表、新增、修改和删除。
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
+import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
@@ -33,8 +34,9 @@ const isDeletingCategory = ref(false)
 const categoryListError = ref('')
 const categoryFormError = ref('')
 const deleteError = ref('')
-const successMessage = ref('')
-let successMessageTimer: number | undefined
+const showFeedbackModal = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
 
 const formName = ref('')
 const formType = ref<'expense' | 'income'>('expense')
@@ -73,10 +75,6 @@ const incomeCategories = computed(() => categories.value.filter((item) => item.t
 
 onMounted(() => {
   loadCategories()
-})
-
-onBeforeUnmount(() => {
-  window.clearTimeout(successMessageTimer)
 })
 
 function toggleManageMode() {
@@ -178,16 +176,18 @@ async function saveCategory() {
 
     if (editingCategory.value) {
       await updateCategory(editingCategory.value.id, payload)
-      showSuccessMessage('修改成功')
+      showFeedback('修改成功', 'success')
     } else {
       await createCategory(payload)
-      showSuccessMessage('新增成功')
+      showFeedback('新增成功', 'success')
     }
 
     closeCategoryModal()
     await loadCategories()
   } catch (error) {
-    categoryFormError.value = error instanceof Error ? error.message : '分类保存失败'
+    const message = error instanceof Error ? error.message : '分类保存失败'
+    categoryFormError.value = message
+    showFeedback(message, 'error')
   } finally {
     isSavingCategory.value = false
   }
@@ -216,21 +216,21 @@ async function confirmDeleteCategory() {
   try {
     await deleteCategory(deletingCategory.value.id)
     closeDeleteConfirmModal()
-    showSuccessMessage('删除成功')
+    showFeedback('删除成功', 'success')
     await loadCategories()
   } catch (error) {
-    deleteError.value = error instanceof Error ? error.message : '分类删除失败'
+    const message = error instanceof Error ? error.message : '分类删除失败'
+    deleteError.value = message
+    showFeedback(message, 'error')
   } finally {
     isDeletingCategory.value = false
   }
 }
 
-function showSuccessMessage(message: string) {
-  successMessage.value = message
-  window.clearTimeout(successMessageTimer)
-  successMessageTimer = window.setTimeout(() => {
-    successMessage.value = ''
-  }, 1800)
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  showFeedbackModal.value = true
 }
 
 function getCategoryIcon(icon: string) {
@@ -251,11 +251,11 @@ function getCategoryIcon(icon: string) {
 
 <template>
   <section class="category-management-page" aria-label="分类管理">
-    <Transition name="category-toast">
-      <div v-if="successMessage" class="category-toast" role="status">
-        {{ successMessage }}
-      </div>
-    </Transition>
+    <CommonFeedback
+      v-model="showFeedbackModal"
+      :message="feedbackMessage"
+      :type="feedbackType"
+    />
 
     <header class="category-management-header">
       <PageHeader title="分类管理" back-to="/finance/entry/expense" back-label="返回记一笔" />

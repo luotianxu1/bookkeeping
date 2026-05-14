@@ -109,6 +109,28 @@ export interface GoldPrice {
   source: string
 }
 
+export type TransactionType = 'expense' | 'income'
+
+export interface Transaction {
+  id: number
+  transactionNo: string
+  userId: number
+  type: TransactionType
+  amount: number
+  currencyCode: string
+  accountId: number
+  accountName?: string | null
+  categoryId: number
+  categoryName?: string | null
+  categoryIcon?: string | null
+  title: string
+  remark?: string | null
+  occurredAt: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface CreateAccountParams {
   userId: number
   accountTypeId: number
@@ -133,6 +155,18 @@ export interface SaveCategoryParams {
   sortOrder?: number
   status?: string
   remark?: string | null
+}
+
+export interface CreateTransactionParams {
+  userId: number
+  type: TransactionType
+  amount: number
+  currencyCode?: string
+  accountId: number
+  categoryId: number
+  title?: string
+  remark?: string | null
+  occurredAt: string
 }
 
 export function getAccountTypes(params: AccountTypeQuery = {}) {
@@ -175,4 +209,8 @@ export function getGoldPrices(range: GoldPriceRange = '1d') {
   return requestGet<GoldPrice>(financeRequest, '/api/finance/gold-prices', {
     params: { range },
   })
+}
+
+export function createTransaction(params: CreateTransactionParams) {
+  return requestPost<Transaction, CreateTransactionParams>(financeRequest, '/api/finance/transactions', params)
 }
