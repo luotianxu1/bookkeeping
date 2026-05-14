@@ -2,12 +2,15 @@
 // 现金资产详情页：展示单个现金账户的余额与收支记录。
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
-import { getAccount, getAccountTransactions, type Account, type Transaction as ApiTransaction } from '@/api/modules/finance'
+import { deleteTransaction, getAccount, getAccountTransactions, type Account, type Transaction as ApiTransaction } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
-import type { DayGroup } from '@/types/finance'
+import type { DayGroup, Transaction } from '@/types/finance'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
 
 const route = useRoute()
@@ -16,6 +19,13 @@ const account = ref<Account | null>(null)
 const transactions = ref<ApiTransaction[]>([])
 const isLoading = ref(false)
 const pageError = ref('')
+const deletingId = ref<number | null>(null)
+const pendingDeleteTransaction = ref<Transaction | null>(null)
+const showDeleteConfirmModal = ref(false)
+const deleteError = ref('')
+const showFeedbackModal = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
 let requestVersion = 0
 
 const accountId = computed(() => Number(route.params.accountId))
@@ -71,6 +81,54 @@ async function loadDetail() {
   }
 }
 
+function openDeleteConfirm(transaction: Transaction) {
+  pendingDeleteTransaction.value = transaction
+  deleteError.value = ''
+  showDeleteConfirmModal.value = true
+}
+
+function closeDeleteConfirm() {
+  if (deletingId.value) {
+    return
+  }
+
+  showDeleteConfirmModal.value = false
+  pendingDeleteTransaction.value = null
+  deleteError.value = ''
+}
+
+async function confirmDeleteTransaction() {
+  const transactionId = pendingDeleteTransaction.value?.id
+  const currentUser = getStoredCurrentUser()
+  if (!transactionId || !currentUser) {
+    deleteError.value = '请选择要删除的收支记录'
+    return
+  }
+
+  deletingId.value = transactionId
+  deleteError.value = ''
+
+  try {
+    await deleteTransaction(transactionId, currentUser.id)
+    showDeleteConfirmModal.value = false
+    pendingDeleteTransaction.value = null
+    showFeedback('删除成功', 'success')
+    await loadDetail()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '删除失败'
+    deleteError.value = message
+    showFeedback(message, 'error')
+  } finally {
+    deletingId.value = null
+  }
+}
+
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  showFeedbackModal.value = true
+}
+
 function formatAmount(value: number) {
   return value.toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
@@ -82,6 +140,12 @@ function formatAmount(value: number) {
 
 <template>
   <section class="cash-asset-detail-page" aria-label="现金资产详情">
+    <CommonFeedback
+      v-model="showFeedbackModal"
+      :message="feedbackMessage"
+      :type="feedbackType"
+    />
+
     <header class="cash-asset-detail-header">
       <PageHeader title="资产详情" back-to="/finance/accounts/cash" back-label="返回现金账户" />
     </header>
@@ -120,11 +184,38 @@ function formatAmount(value: number) {
               :key="group.date"
               :group="group"
               summary-mode="stacked"
+              show-delete
+              :deleting-id="deletingId"
+              @delete="openDeleteConfirm"
             />
           </template>
         </section>
       </section>
     </template>
+
+    <CommonModal
+      v-model="showDeleteConfirmModal"
+      title="确认删除"
+      size="compact"
+      :close-on-overlay="!deletingId"
+      @close="closeDeleteConfirm"
+    >
+      <p class="cash-delete-confirm-text">
+        删除后会同步恢复账户余额，确认删除这条收支记录吗？
+      </p>
+      <p v-if="deleteError" class="cash-delete-error">{{ deleteError }}</p>
+
+      <template #footer>
+        <div class="cash-delete-actions">
+          <CommonButton variant="secondary" :disabled="Boolean(deletingId)" @click="closeDeleteConfirm">
+            取消
+          </CommonButton>
+          <CommonButton variant="primary" :disabled="Boolean(deletingId)" @click="confirmDeleteTransaction">
+            {{ deletingId ? '删除中...' : '确认删除' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
   </section>
 </template>
 

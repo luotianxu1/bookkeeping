@@ -3,9 +3,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { financeOverview } from '@/data/finance'
-import { getAccounts, getAccountTypes, getTransactions, type Transaction } from '@/api/modules/finance'
+import { deleteTransaction, getAccounts, getAccountTypes, getTransactions, type Transaction } from '@/api/modules/finance'
+import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonModal from '@/components/common/CommonModal/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
+import type { Transaction as DayTransaction } from '@/types/finance'
 import AssetOverviewCard from '../components/AssetOverviewCard/index.vue'
 import StatsEntry from '../components/StatsEntry/index.vue'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
@@ -15,6 +19,13 @@ const router = useRouter()
 const transactions = ref<Transaction[]>([])
 const isLoadingTransactions = ref(false)
 const transactionListError = ref('')
+const deletingId = ref<number | null>(null)
+const pendingDeleteTransaction = ref<DayTransaction | null>(null)
+const showDeleteConfirmModal = ref(false)
+const deleteError = ref('')
+const showFeedbackModal = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
 const dayGroups = computed(() => buildTransactionDayGroups(transactions.value))
 
 onMounted(() => {
@@ -62,9 +73,63 @@ async function loadCashTransactions() {
     isLoadingTransactions.value = false
   }
 }
+
+function openDeleteConfirm(transaction: DayTransaction) {
+  pendingDeleteTransaction.value = transaction
+  deleteError.value = ''
+  showDeleteConfirmModal.value = true
+}
+
+function closeDeleteConfirm() {
+  if (deletingId.value) {
+    return
+  }
+
+  showDeleteConfirmModal.value = false
+  pendingDeleteTransaction.value = null
+  deleteError.value = ''
+}
+
+async function confirmDeleteTransaction() {
+  const transactionId = pendingDeleteTransaction.value?.id
+  const currentUser = getStoredCurrentUser()
+  if (!transactionId || !currentUser) {
+    deleteError.value = '请选择要删除的收支记录'
+    return
+  }
+
+  deletingId.value = transactionId
+  deleteError.value = ''
+
+  try {
+    await deleteTransaction(transactionId, currentUser.id)
+    showDeleteConfirmModal.value = false
+    pendingDeleteTransaction.value = null
+    showFeedback('删除成功', 'success')
+    await loadCashTransactions()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '删除失败'
+    deleteError.value = message
+    showFeedback(message, 'error')
+  } finally {
+    deletingId.value = null
+  }
+}
+
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  showFeedbackModal.value = true
+}
 </script>
 
 <template>
+  <CommonFeedback
+    v-model="showFeedbackModal"
+    :message="feedbackMessage"
+    :type="feedbackType"
+  />
+
   <AssetOverviewCard :overview="financeOverview" />
   <section class="feature-block" aria-label="更多功能">
     <header class="feature-header">
@@ -93,11 +158,38 @@ async function loadCashTransactions() {
         :key="group.date"
         :group="group"
         summary-mode="stacked"
+        show-delete
+        :deleting-id="deletingId"
+        @delete="openDeleteConfirm"
       />
     </template>
   </section>
 
   <FloatingAddButton aria-label="新增记账" @click="openExpenseEntryPage" />
+
+  <CommonModal
+    v-model="showDeleteConfirmModal"
+    title="确认删除"
+    size="compact"
+    :close-on-overlay="!deletingId"
+    @close="closeDeleteConfirm"
+  >
+    <p class="transaction-delete-confirm-text">
+      删除后会同步恢复账户余额，确认删除这条收支记录吗？
+    </p>
+    <p v-if="deleteError" class="transaction-delete-error">{{ deleteError }}</p>
+
+    <template #footer>
+      <div class="transaction-delete-actions">
+        <CommonButton variant="secondary" :disabled="Boolean(deletingId)" @click="closeDeleteConfirm">
+          取消
+        </CommonButton>
+        <CommonButton variant="primary" :disabled="Boolean(deletingId)" @click="confirmDeleteTransaction">
+          {{ deletingId ? '删除中...' : '确认删除' }}
+        </CommonButton>
+      </div>
+    </template>
+  </CommonModal>
 </template>
 
 <style scoped lang="scss" src="./style.scss"></style>

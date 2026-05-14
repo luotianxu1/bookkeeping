@@ -2,6 +2,8 @@
 export type TransactionType = 'income' | 'expense'
 
 export type Transaction = {
+  /** 流水 ID。 */
+  id?: number
   /** 交易名称。 */
   name: string
   /** 交易发生时间。 */

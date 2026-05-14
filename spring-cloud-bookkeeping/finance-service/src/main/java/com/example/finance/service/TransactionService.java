@@ -34,6 +34,7 @@ public class TransactionService {
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_STATUS = "normal";
+    private static final String VOIDED_STATUS = "voided";
     private static final DateTimeFormatter TRANSACTION_NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private final TransactionMapper transactionMapper;
@@ -92,6 +93,24 @@ public class TransactionService {
         return toResponse(transactionMapper.selectById(entity.getId()), account, category);
     }
 
+    @Transactional
+    public boolean delete(Long id, Long userId) {
+        TransactionEntity transaction = transactionMapper.selectById(id);
+        if (transaction == null || !DEFAULT_STATUS.equals(transaction.getStatus()) || !userId.equals(transaction.getUserId())) {
+            return false;
+        }
+
+        AccountEntity account = accountMapper.selectById(transaction.getAccountId());
+        if (account == null || !userId.equals(account.getUserId())) {
+            return false;
+        }
+
+        rollbackAccountBalance(account, transaction.getType(), transaction.getAmount());
+        transaction.setStatus(VOIDED_STATUS);
+        transactionMapper.updateById(transaction);
+        return true;
+    }
+
     private String requireIncomeOrExpense(String type) {
         if (!TYPE_EXPENSE.equals(type) && !TYPE_INCOME.equals(type)) {
             throw new IllegalArgumentException("当前只支持支出和收入");
@@ -143,6 +162,18 @@ public class TransactionService {
             : currentBalance.subtract(amount);
         if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("账户余额不足");
+        }
+        account.setCurrentBalance(nextBalance);
+        accountMapper.updateById(account);
+    }
+
+    private void rollbackAccountBalance(AccountEntity account, String type, BigDecimal amount) {
+        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
+        BigDecimal nextBalance = TYPE_INCOME.equals(type)
+            ? currentBalance.subtract(amount)
+            : currentBalance.add(amount);
+        if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("删除后账户余额不足");
         }
         account.setCurrentBalance(nextBalance);
         accountMapper.updateById(account);

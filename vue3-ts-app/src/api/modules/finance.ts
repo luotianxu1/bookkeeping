@@ -246,3 +246,9 @@ export function getTransactions(params: TransactionQuery = {}) {
 export function getAccountTransactions(accountId: number, params: Omit<TransactionQuery, 'accountId'> = {}) {
   return requestGet<Transaction[]>(financeRequest, `/api/finance/transactions/accounts/${accountId}`, { params })
 }
+
+export function deleteTransaction(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/transactions/${id}`, {
+    params: { userId },
+  })
+}

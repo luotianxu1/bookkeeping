@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -54,5 +55,17 @@ public class TransactionController {
     @Operation(summary = "新增支出或收入")
     public Result<TransactionResponse> create(@Valid @RequestBody TransactionRequest request) {
         return Result.ok(transactionService.create(request));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除收支流水")
+    public Result<Void> delete(
+        @PathVariable("id") Long id,
+        @RequestParam(name = "userId") Long userId
+    ) {
+        if (!transactionService.delete(id, userId)) {
+            return Result.<Void>fail().code(404).message("收支记录不存在");
+        }
+        return Result.ok();
     }
 }

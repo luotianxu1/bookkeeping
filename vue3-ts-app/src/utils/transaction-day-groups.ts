@@ -25,6 +25,7 @@ export function buildTransactionDayGroups(source: ApiTransaction[]): DayGroup[] 
       expense: plainAmount(expense),
       surplus: `${surplus < 0 ? '-' : ''}${plainAmount(Math.abs(surplus))}`,
       transactions: groupTransactions.map((transaction) => ({
+        id: transaction.id,
         name: transaction.title,
         time: transactionSubtitle(transaction),
         category: transaction.categoryName ?? '',

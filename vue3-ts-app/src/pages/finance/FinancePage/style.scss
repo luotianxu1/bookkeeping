@@ -54,3 +54,25 @@
 .records-message-error {
   color: var(--color-danger);
 }
+
+.transaction-delete-confirm-text {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-14);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.transaction-delete-error {
+  margin: 8px 0 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  text-align: center;
+}
+
+.transaction-delete-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
