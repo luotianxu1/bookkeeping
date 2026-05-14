@@ -2,6 +2,7 @@ com/example/finance/dto/CategoryResponse.class
 com/example/finance/mapper/AccountMapper.class
 com/example/finance/service/AccountTypeService.class
 com/example/finance/dto/GoldPriceResponse.class
+com/example/finance/service/GoldPriceService$CngoldJewelryCode.class
 com/example/finance/dto/AccountTypeResponse.class
 com/example/finance/dto/GoldPriceResponse$JewelryGoldPrice.class
 com/example/finance/service/GoldPriceService$CachedChartPoints.class

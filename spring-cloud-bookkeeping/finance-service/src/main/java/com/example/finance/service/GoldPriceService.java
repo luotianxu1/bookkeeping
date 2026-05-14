@@ -10,12 +10,9 @@ import org.springframework.web.client.RestClient;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,9 +27,8 @@ public class GoldPriceService {
 
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
-    private final String goldApiUrl;
     private final String exchangeRateApiUrl;
-    private final String jewelryGoldApiUrl;
+    private final String cngoldRealtimeApiUrl;
     private final String goldChartApiUrl;
 
     private CachedGoldPrice cachedCurrentPrice;
@@ -40,16 +36,14 @@ public class GoldPriceService {
 
     public GoldPriceService(
         ObjectMapper objectMapper,
-        @Value("${finance.gold-price.gold-api-url:https://api.gold-api.com/price/XAU}") String goldApiUrl,
         @Value("${finance.gold-price.exchange-rate-api-url:https://open.er-api.com/v6/latest/USD}") String exchangeRateApiUrl,
-        @Value("${finance.gold-price.jewelry-gold-api-url:https://api.iyuns.com/api/goldprice}") String jewelryGoldApiUrl,
+        @Value("${finance.gold-price.cngold-realtime-api-url:https://api.jijinhao.com/quoteCenter/realTime.htm}") String cngoldRealtimeApiUrl,
         @Value("${finance.gold-price.gold-chart-api-url:https://query1.finance.yahoo.com/v8/finance/chart/GC=F}") String goldChartApiUrl
     ) {
         this.objectMapper = objectMapper;
         this.restClient = RestClient.builder().build();
-        this.goldApiUrl = goldApiUrl;
         this.exchangeRateApiUrl = exchangeRateApiUrl;
-        this.jewelryGoldApiUrl = jewelryGoldApiUrl;
+        this.cngoldRealtimeApiUrl = cngoldRealtimeApiUrl;
         this.goldChartApiUrl = goldChartApiUrl;
     }
 
@@ -71,26 +65,46 @@ public class GoldPriceService {
             return copyResponseWithoutChart(cachedCurrentPrice.response());
         }
 
+        JsonNode quotes = fetchCngoldQuotes(cngoldCodes());
         GoldPriceResponse response = buildCurrentResponse(
-            fetchJson(goldApiUrl),
             fetchUsdCny(),
-            fetchJewelryPrices()
+            quotes
         );
         cachedCurrentPrice = new CachedGoldPrice(response, now);
         return copyResponseWithoutChart(response);
     }
 
     private GoldPriceResponse buildCurrentResponse(
-        JsonNode goldNode,
         BigDecimal usdCny,
-        List<GoldPriceResponse.JewelryGoldPrice> jewelryPrices
+        JsonNode quotes
     ) {
+        JsonNode goldNode = quotes.path("JO_92233");
         BigDecimal londonPrice = firstDecimal(goldNode, "price", "last", "last_price", "close", "ask");
+        if (londonPrice == null) {
+            londonPrice = firstDecimal(goldNode, "q63");
+        }
         BigDecimal londonOpen = firstDecimal(goldNode, "open_price", "open", "openPrice");
+        if (londonOpen == null) {
+            londonOpen = firstDecimal(goldNode, "q1");
+        }
         BigDecimal londonHigh = firstDecimal(goldNode, "high_price", "high", "highPrice");
+        if (londonHigh == null) {
+            londonHigh = firstDecimal(goldNode, "q3");
+        }
         BigDecimal londonLow = firstDecimal(goldNode, "low_price", "low", "lowPrice");
+        if (londonLow == null) {
+            londonLow = firstDecimal(goldNode, "q4");
+        }
+        BigDecimal londonBuy = firstDecimal(goldNode, "q5");
+        BigDecimal londonSell = firstDecimal(goldNode, "q6");
         BigDecimal londonChange = firstDecimal(goldNode, "change", "ch", "change_price", "changePrice");
+        if (londonChange == null) {
+            londonChange = firstDecimal(goldNode, "q70");
+        }
         BigDecimal londonChangePercent = firstDecimal(goldNode, "change_percent", "chp", "change_margin", "changePercent");
+        if (londonChangePercent == null) {
+            londonChangePercent = firstDecimal(goldNode, "q80");
+        }
 
         if (londonPrice == null || londonPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("金价数据缺少价格字段");
@@ -119,15 +133,17 @@ public class GoldPriceService {
         BigDecimal spotOpen = usdOzToCnyGram(londonOpen, usdCny);
         BigDecimal spotHigh = usdOzToCnyGram(londonHigh, usdCny);
         BigDecimal spotLow = usdOzToCnyGram(londonLow, usdCny);
+        BigDecimal spotBuy = londonBuy == null ? spotPrice.add(new BigDecimal("0.15")) : usdOzToCnyGram(londonBuy, usdCny);
+        BigDecimal spotSell = londonSell == null ? spotPrice.subtract(new BigDecimal("0.15")) : usdOzToCnyGram(londonSell, usdCny);
 
         GoldPriceResponse response = new GoldPriceResponse();
         response.setSpotGold(marketQuote("现货金", "CNY/g", spotPrice, spotChange, scalePercent(londonChangePercent), updatedAt));
         response.setLondonGold(marketQuote("伦敦金", "USD/oz", scaleMoney(londonPrice), scaleMoney(londonChange), scalePercent(londonChangePercent), updatedAt));
-        response.setStats(stats(spotOpen, spotHigh, spotLow, spotPrice));
-        response.setJewelryPrices(filterReliableJewelryPrices(jewelryPrices, spotPrice));
+        response.setStats(stats(spotOpen, spotHigh, spotLow, spotBuy, spotSell));
+        response.setJewelryPrices(fetchJewelryPrices(quotes));
         response.setChartPoints(List.of());
         response.setUpdatedAt(updatedAt);
-        response.setSource("Gold API + open.er-api 汇率换算 + 爱云API门店金价");
+        response.setSource("金投网实时行情 + open.er-api 汇率换算");
         return response;
     }
 
@@ -137,6 +153,32 @@ public class GoldPriceService {
             .retrieve()
             .body(String.class);
         return objectMapper.readTree(body);
+    }
+
+    private JsonNode fetchCngoldQuotes(String codes) throws Exception {
+        String body = restClient.get()
+            .uri(cngoldRealtimeApiUrl + "?codes=" + codes)
+            .header("Referer", "https://quote.cngold.org/gjs/gjhj_xhhj.html?key=au")
+            .header("User-Agent", "Mozilla/5.0")
+            .retrieve()
+            .body(String.class);
+        int start = body == null ? -1 : body.indexOf('{');
+        int end = body == null ? -1 : body.lastIndexOf('}');
+        if (start < 0 || end <= start) {
+            throw new IllegalStateException("金投网行情数据格式错误");
+        }
+        JsonNode root = objectMapper.readTree(body.substring(start, end + 1));
+        if (root.has("quote_json") && root.path("quote_json").isObject()) {
+            return root.path("quote_json");
+        }
+        if (root.has("JO_92233")) {
+            return root;
+        }
+        throw new IllegalStateException("金投网行情缺少黄金报价数据");
+    }
+
+    private String cngoldCodes() {
+        return "JO_92233,JO_42657,JO_42660,JO_42625,JO_42634,JO_42653,JO_42646,JO_52678,JO_42638";
     }
 
     private BigDecimal fetchUsdCny() {
@@ -171,45 +213,40 @@ public class GoldPriceService {
         BigDecimal openPrice,
         BigDecimal highPrice,
         BigDecimal lowPrice,
-        BigDecimal spotPrice
+        BigDecimal buyPrice,
+        BigDecimal sellPrice
     ) {
         GoldPriceResponse.GoldMarketStats stats = new GoldPriceResponse.GoldMarketStats();
         stats.setOpenPrice(openPrice);
         stats.setHighPrice(highPrice);
         stats.setLowPrice(lowPrice);
-        stats.setBuyPrice(spotPrice.add(new BigDecimal("0.15")).setScale(2, RoundingMode.HALF_UP));
-        stats.setSellPrice(spotPrice.subtract(new BigDecimal("0.15")).setScale(2, RoundingMode.HALF_UP));
+        stats.setBuyPrice(buyPrice.setScale(2, RoundingMode.HALF_UP));
+        stats.setSellPrice(sellPrice.setScale(2, RoundingMode.HALF_UP));
         stats.setUnit("CNY/g");
         return stats;
     }
 
-    private List<GoldPriceResponse.JewelryGoldPrice> fetchJewelryPrices() {
-        try {
-            JsonNode root = fetchJson(jewelryGoldApiUrl);
-            JsonNode pricesNode = root.path("data").path("precious_metal_price");
-            if (!pricesNode.isArray()) {
-                return List.of();
+    private List<GoldPriceResponse.JewelryGoldPrice> fetchJewelryPrices(JsonNode quotes) {
+        List<CngoldJewelryCode> codes = List.of(
+            new CngoldJewelryCode("老凤祥", "JO_42657"),
+            new CngoldJewelryCode("周大福", "JO_42660"),
+            new CngoldJewelryCode("周生生", "JO_42625"),
+            new CngoldJewelryCode("老庙黄金", "JO_42634"),
+            new CngoldJewelryCode("周六福", "JO_42653"),
+            new CngoldJewelryCode("六福珠宝", "JO_42646"),
+            new CngoldJewelryCode("周大生", "JO_52678"),
+            new CngoldJewelryCode("菜百", "JO_42638")
+        );
+
+        List<GoldPriceResponse.JewelryGoldPrice> prices = new ArrayList<>();
+        for (CngoldJewelryCode code : codes) {
+            JsonNode quote = quotes.path(code.code());
+            BigDecimal price = firstDecimal(quote, "q63", "q1");
+            if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
+                prices.add(jewelryPrice(code.brandName(), price, extractUpdatedAt(quote)));
             }
-
-            List<GoldPriceResponse.JewelryGoldPrice> prices = new ArrayList<>();
-            for (JsonNode item : pricesNode) {
-                String brandName = item.path("brand").asText("");
-                BigDecimal goldPrice = decimalAt(item, "gold_price");
-                if (brandName.isBlank() || goldPrice == null || goldPrice.compareTo(BigDecimal.ZERO) <= 0) {
-                    continue;
-                }
-
-                prices.add(jewelryPrice(
-                    brandName,
-                    goldPrice,
-                    parseUpdatedDate(item.path("updated_date").asText(""))
-                ));
-            }
-
-            return prioritizeJewelryBrands(prices);
-        } catch (Exception ex) {
-            return List.of();
         }
+        return prices;
     }
 
     private GoldPriceResponse.JewelryGoldPrice jewelryPrice(String brandName, BigDecimal price, LocalDateTime updatedAt) {
@@ -219,56 +256,6 @@ public class GoldPriceService {
         item.setUnit("CNY/g");
         item.setUpdatedAt(updatedAt);
         return item;
-    }
-
-    private List<GoldPriceResponse.JewelryGoldPrice> filterReliableJewelryPrices(
-        List<GoldPriceResponse.JewelryGoldPrice> prices,
-        BigDecimal spotPrice
-    ) {
-        if (prices.isEmpty() || spotPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            return List.of();
-        }
-
-        BigDecimal maxReasonablePrice = spotPrice.multiply(new BigDecimal("1.60"));
-        return prices.stream()
-            .filter(item -> item.getPrice().compareTo(spotPrice) >= 0)
-            .filter(item -> item.getPrice().compareTo(maxReasonablePrice) <= 0)
-            .toList();
-    }
-
-    private List<GoldPriceResponse.JewelryGoldPrice> prioritizeJewelryBrands(List<GoldPriceResponse.JewelryGoldPrice> prices) {
-        List<String> preferredBrands = List.of(
-            "周大福",
-            "老凤祥",
-            "六福珠宝",
-            "周生生",
-            "老庙黄金",
-            "中国黄金",
-            "潮宏基",
-            "金至尊",
-            "谢瑞麟",
-            "周六福"
-        );
-
-        return prices.stream()
-            .sorted(Comparator.comparingInt(item -> {
-                int index = preferredBrands.indexOf(item.getBrandName());
-                return index >= 0 ? index : preferredBrands.size();
-            }))
-            .limit(10)
-            .toList();
-    }
-
-    private LocalDateTime parseUpdatedDate(String updatedDate) {
-        if (updatedDate == null || updatedDate.isBlank()) {
-            return LocalDateTime.now(DEFAULT_ZONE);
-        }
-
-        try {
-            return LocalDate.parse(updatedDate).atStartOfDay();
-        } catch (DateTimeParseException ex) {
-            return LocalDateTime.now(DEFAULT_ZONE);
-        }
     }
 
     private List<GoldPriceResponse.GoldChartPoint> getChartPoints(
@@ -461,6 +448,9 @@ public class GoldPriceService {
             return range;
         }
         return "1d";
+    }
+
+    private record CngoldJewelryCode(String brandName, String code) {
     }
 
     private record CachedGoldPrice(GoldPriceResponse response, long cachedAt) {
