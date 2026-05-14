@@ -5,6 +5,7 @@ import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
+import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
@@ -278,14 +279,7 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
       <AccountGroupCard v-for="group in accountGroups" :key="group.title" :group="group" />
     </div>
 
-    <button
-      class="account-fab"
-      type="button"
-      aria-label="新增账户"
-      @click="showCreateAccountModal = true"
-    >
-      +
-    </button>
+    <FloatingAddButton aria-label="新增账户" storage-key="account-management" @click="showCreateAccountModal = true" />
 
     <CommonModal
       v-model="showCreateAccountModal"

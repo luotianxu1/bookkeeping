@@ -10,6 +10,7 @@ import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
+import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import {
   investmentHoldings,
   investmentMetrics,
@@ -141,9 +142,7 @@ function openInvestmentDetail() {
       </article>
     </section>
 
-    <button class="investment-fab" type="button" aria-label="新增投资资产" @click="openAddModal">
-      +
-    </button>
+    <FloatingAddButton aria-label="新增投资资产" storage-key="investment-account" @click="openAddModal" />
 
     <CommonModal v-model="showAddModal" title="添加资产">
       <div class="investment-add-modal-form">

@@ -1,8 +1,6 @@
 .floating-add-button {
   position: fixed;
   z-index: 20;
-  right: var(--space-24);
-  bottom: 124px;
   width: var(--space-52);
   height: var(--space-52);
   display: inline-grid;
@@ -14,4 +12,11 @@
   line-height: 1;
   font-weight: 700;
   box-shadow: 0 12px 30px rgba(29, 78, 216, 0.32);
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.floating-add-button:active {
+  cursor: grabbing;
 }

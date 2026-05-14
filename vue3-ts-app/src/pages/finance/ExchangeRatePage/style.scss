@@ -89,3 +89,15 @@
   font-size: var(--font-size-12);
   font-weight: 700;
 }
+
+.exchange-message {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  text-align: center;
+}
+
+.exchange-message-error {
+  color: var(--color-danger);
+}

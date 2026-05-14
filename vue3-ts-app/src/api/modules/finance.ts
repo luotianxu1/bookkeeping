@@ -109,6 +109,14 @@ export interface GoldPrice {
   source: string
 }
 
+export interface ExchangeRate {
+  fromCurrency: string
+  toCurrency: string
+  rate: number
+  updatedAt: string
+  source: string
+}
+
 export type TransactionType = 'expense' | 'income'
 
 export interface Transaction {
@@ -218,6 +226,12 @@ export function deleteCategory(id: number) {
 export function getGoldPrices(range: GoldPriceRange = '1d') {
   return requestGet<GoldPrice>(financeRequest, '/api/finance/gold-prices', {
     params: { range },
+  })
+}
+
+export function getExchangeRate(from: string, to: string) {
+  return requestGet<ExchangeRate>(financeRequest, '/api/finance/exchange-rates', {
+    params: { from, to },
   })
 }
 

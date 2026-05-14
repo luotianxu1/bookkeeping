@@ -1,18 +1,32 @@
 <script setup lang="ts">
 // 汇率换算页：输入支付金额并进行币种换算展示。
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { getExchangeRate } from '@/api/modules/finance'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 
-const fromCurrency = ref('USD 美元')
-const toCurrency = ref('CNY 人民币')
+const currencyOptions = [
+  { code: 'USD', label: 'USD 美元' },
+  { code: 'CNY', label: 'CNY 人民币' },
+  { code: 'EUR', label: 'EUR 欧元' },
+  { code: 'JPY', label: 'JPY 日元' },
+  { code: 'HKD', label: 'HKD 港币' },
+  { code: 'GBP', label: 'GBP 英镑' },
+  { code: 'AUD', label: 'AUD 澳元' },
+  { code: 'CAD', label: 'CAD 加元' },
+  { code: 'SGD', label: 'SGD 新加坡元' },
+]
+
+const fromCurrency = ref('USD')
+const toCurrency = ref('CNY')
 const fromAmount = ref('100.00')
-const rate = ref(7.21)
+const rate = ref(0)
+const exchangeRateError = ref('')
+const isLoadingRate = ref(false)
+const updatedAt = ref('')
+let requestId = 0
 
-const fromOptions = ['USD 美元', 'CNY 人民币', 'EUR 欧元', 'JPY 日元', 'HKD 港币']
-const toOptions = ['CNY 人民币', 'USD 美元', 'EUR 欧元', 'JPY 日元', 'HKD 港币']
-
-const fromCode = computed(() => fromCurrency.value.split(' ')[0] ?? 'USD')
-const toCode = computed(() => toCurrency.value.split(' ')[0] ?? 'CNY')
+const fromCode = computed(() => fromCurrency.value)
+const toCode = computed(() => toCurrency.value)
 
 const parsedAmount = computed(() => {
   const numeric = Number(fromAmount.value)
@@ -24,13 +38,59 @@ const convertedAmount = computed(() => {
   return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 })
 
-const rateText = computed(() => `1 ${fromCode.value} = ${rate.value.toFixed(4)} ${toCode.value}`)
+const rateText = computed(() => {
+  if (isLoadingRate.value && !rate.value) {
+    return '汇率加载中...'
+  }
+  return `1 ${fromCode.value} = ${rate.value.toFixed(4)} ${toCode.value}`
+})
+
+const updatedAtText = computed(() => {
+  if (!updatedAt.value) return ''
+  const date = new Date(updatedAt.value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `更新时间 ${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+})
+
+onMounted(() => {
+  loadExchangeRate()
+})
+
+watch([fromCurrency, toCurrency], () => {
+  loadExchangeRate()
+})
 
 function swapCurrencies() {
   const previousFrom = fromCurrency.value
   fromCurrency.value = toCurrency.value
   toCurrency.value = previousFrom
-  rate.value = rate.value === 7.21 ? 0.1387 : 7.21
+}
+
+async function loadExchangeRate() {
+  const currentRequestId = ++requestId
+  isLoadingRate.value = true
+  exchangeRateError.value = ''
+
+  try {
+    const result = await getExchangeRate(fromCode.value, toCode.value)
+    if (currentRequestId !== requestId) {
+      return
+    }
+    rate.value = Number(result.rate)
+    updatedAt.value = result.updatedAt
+  } catch (error) {
+    if (currentRequestId !== requestId) {
+      return
+    }
+    exchangeRateError.value = error instanceof Error ? error.message : '汇率加载失败'
+    rate.value = 0
+    updatedAt.value = ''
+  } finally {
+    if (currentRequestId === requestId) {
+      isLoadingRate.value = false
+    }
+  }
 }
 </script>
 
@@ -43,8 +103,8 @@ function swapCurrencies() {
         <p>支付币种</p>
         <div class="currency-row">
           <select v-model="fromCurrency" aria-label="支付币种">
-            <option v-for="option in fromOptions" :key="option" :value="option">
-              {{ option }}
+            <option v-for="option in currencyOptions" :key="option.code" :value="option.code">
+              {{ option.label }}
             </option>
           </select>
           <input v-model="fromAmount" type="text" inputmode="decimal" aria-label="支付金额" />
@@ -60,13 +120,23 @@ function swapCurrencies() {
         <p>到账币种</p>
         <div class="currency-row">
           <select v-model="toCurrency" aria-label="到账币种">
-            <option v-for="option in toOptions" :key="option" :value="option">
-              {{ option }}
+            <option v-for="option in currencyOptions" :key="option.code" :value="option.code">
+              {{ option.label }}
             </option>
           </select>
           <strong>{{ convertedAmount }}</strong>
         </div>
       </section>
+
+      <p v-if="exchangeRateError" class="exchange-message exchange-message-error">
+        {{ exchangeRateError }}
+      </p>
+      <p v-else-if="isLoadingRate" class="exchange-message">
+        汇率加载中...
+      </p>
+      <p v-else-if="updatedAtText" class="exchange-message">
+        {{ updatedAtText }}
+      </p>
     </section>
   </section>
 </template>

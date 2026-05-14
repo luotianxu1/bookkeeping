@@ -7,6 +7,7 @@ import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
+import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import { createAccount, deleteAccount, getAccounts, getAccountTypes, updateAccount, type Account, type AccountType } from '@/api/modules/finance'
@@ -345,9 +346,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
       </template>
     </section>
 
-    <button class="cash-account-fab" type="button" aria-label="新增现金账户" @click="openCreateModal">
-      +
-    </button>
+    <FloatingAddButton aria-label="新增现金账户" storage-key="cash-account" @click="openCreateModal" />
 
     <CommonModal v-model="showCreateAccountModal" :title="accountModalTitle">
       <form class="cash-create-form" @submit.prevent="saveCashAccount">
