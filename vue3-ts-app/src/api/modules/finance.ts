@@ -145,6 +145,26 @@ export interface TransactionQuery {
   accountId?: number
 }
 
+export interface MonthlyBudget {
+  id: number
+  userId: number
+  budgetMonth: string
+  amount: number
+  currencyCode: string
+  usedAmount: number
+  remainingAmount: number
+  usagePercent: number
+  status: string
+  remark?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MonthlyBudgetQuery {
+  userId: number
+  limit?: number
+}
+
 export interface CreateAccountParams {
   userId: number
   accountTypeId: number
@@ -196,6 +216,14 @@ export interface CreateTransactionParams {
   title?: string
   remark?: string | null
   occurredAt: string
+}
+
+export interface SaveMonthlyBudgetParams {
+  userId: number
+  budgetMonth: string
+  amount: number
+  currencyCode?: string
+  remark?: string | null
 }
 
 export function getAccountTypes(params: AccountTypeQuery = {}) {
@@ -272,6 +300,30 @@ export function getAccountTransactions(accountId: number, params: Omit<Transacti
 
 export function deleteTransaction(id: number, userId: number) {
   return requestDelete<void>(financeRequest, `/api/finance/transactions/${id}`, {
+    params: { userId },
+  })
+}
+
+export function getMonthlyBudgets(params: MonthlyBudgetQuery) {
+  return requestGet<MonthlyBudget[]>(financeRequest, '/api/finance/monthly-budgets', { params })
+}
+
+export function getCurrentMonthlyBudget(userId: number, budgetMonth: string) {
+  return requestGet<MonthlyBudget | null>(financeRequest, '/api/finance/monthly-budgets/current', {
+    params: { userId, budgetMonth },
+  })
+}
+
+export function createMonthlyBudget(params: SaveMonthlyBudgetParams) {
+  return requestPost<MonthlyBudget, SaveMonthlyBudgetParams>(financeRequest, '/api/finance/monthly-budgets', params)
+}
+
+export function updateMonthlyBudget(id: number, params: SaveMonthlyBudgetParams) {
+  return requestPut<MonthlyBudget, SaveMonthlyBudgetParams>(financeRequest, `/api/finance/monthly-budgets/${id}`, params)
+}
+
+export function deleteMonthlyBudget(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/monthly-budgets/${id}`, {
     params: { userId },
   })
 }

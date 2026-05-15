@@ -1,0 +1,191 @@
+.budget-management-page {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.budget-summary-card,
+.budget-history-item {
+  border: 1px solid var(--color-bg-soft-2);
+  background: var(--color-white);
+}
+
+.budget-summary-card {
+  display: grid;
+  gap: var(--space-10);
+  padding: var(--space-12);
+  border-radius: var(--radius-12);
+}
+
+.budget-summary-top,
+.budget-history-top,
+.budget-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.budget-summary-top span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.budget-summary-top strong {
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.budget-amount {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-24);
+  line-height: 1;
+}
+
+.budget-meta,
+.budget-rule-tip,
+.budget-history-item p,
+.budget-message,
+.budget-delete-message {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.budget-rule-tip {
+  color: var(--color-text-subtle);
+}
+
+.budget-progress {
+  height: var(--space-8);
+  overflow: hidden;
+  border-radius: var(--radius-8);
+  background: var(--color-bg-soft-2);
+}
+
+.budget-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-brand);
+  transition: width 180ms ease;
+}
+
+.budget-actions button {
+  min-height: 36px;
+  flex: 1;
+  border-radius: var(--radius-10);
+  font-size: var(--font-size-13);
+  font-weight: 700;
+}
+
+.budget-action-primary {
+  border: 1px solid var(--color-brand);
+  background: var(--color-brand);
+  color: var(--color-white);
+}
+
+.budget-action-danger {
+  border: 1px solid #fca5a5;
+  background: var(--color-white);
+  color: #dc2626;
+}
+
+.budget-action-danger:disabled {
+  opacity: 0.45;
+}
+
+.budget-section-title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.budget-history-list {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.budget-history-item {
+  display: grid;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border-radius: var(--radius-12);
+}
+
+.budget-history-top strong,
+.budget-history-top span {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.budget-history-item p.over,
+.budget-message-error,
+.budget-form-error {
+  color: #dc2626;
+}
+
+.budget-form {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.budget-form-error {
+  margin: 0;
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.budget-modal-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .budget-summary-card,
+  .budget-history-item {
+    border-color: var(--color-dark-card-border);
+    background: var(--color-dark-card-bg);
+  }
+
+  .budget-amount,
+  .budget-section-title,
+  .budget-history-top strong,
+  .budget-history-top span {
+    color: var(--color-bg-page);
+  }
+
+  .budget-summary-top span,
+  .budget-meta,
+  .budget-history-item p,
+  .budget-message,
+  .budget-delete-message {
+    color: var(--color-dark-text-muted);
+  }
+
+  .budget-progress {
+    background: var(--color-dark-card-border);
+  }
+
+  .budget-action-danger {
+    border-color: #7f1d1d;
+    background: var(--color-dark-card-bg);
+    color: #f87171;
+  }
+
+  .budget-rule-tip {
+    color: var(--color-dark-text-muted);
+  }
+
+  .budget-history-item p.over,
+  .budget-message-error,
+  .budget-form-error {
+    color: #f87171;
+  }
+}

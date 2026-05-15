@@ -72429,6 +72429,46 @@
                   "fontWeight": "600"
                 }
               ]
+            },
+            {
+              "type": "frame",
+              "id": "a5kUj",
+              "name": "budgetCard",
+              "width": 82,
+              "height": 82,
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#E2E8F0"
+              },
+              "layout": "vertical",
+              "gap": 6,
+              "padding": 12,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "b0jK2E",
+                  "name": "budgetCardLightIcon",
+                  "fill": "#1D4ED8",
+                  "content": "💰",
+                  "fontFamily": "Inter",
+                  "fontSize": 16,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "ogjzr",
+                  "name": "budgetCardLightText",
+                  "fill": "#0F172A",
+                  "content": "预算管理",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                }
+              ]
             }
           ]
         },
@@ -72931,6 +72971,46 @@
                   "name": "stockText",
                   "fill": "#F8FAFC",
                   "content": "攒股收息",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "HSzlo",
+              "name": "budgetCard",
+              "width": 82,
+              "height": 82,
+              "fill": "#121A2B",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#253045"
+              },
+              "layout": "vertical",
+              "gap": 6,
+              "padding": 12,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "yxKsT",
+                  "name": "budgetCardDarkIcon",
+                  "fill": "#1D4ED8",
+                  "content": "💰",
+                  "fontFamily": "Inter",
+                  "fontSize": 16,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "u6bKZW",
+                  "name": "budgetCardDarkText",
+                  "fill": "#F8FAFC",
+                  "content": "预算管理",
                   "fontFamily": "Inter",
                   "fontSize": 12,
                   "fontWeight": "600"
@@ -78589,6 +78669,846 @@
           "fontFamily": "Inter",
           "fontSize": 26,
           "fontWeight": "700"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "irhnm",
+      "x": 14092,
+      "y": -662,
+      "name": "财务-预算管理",
+      "width": 393,
+      "height": 852,
+      "fill": "#F8FAFC",
+      "layout": "vertical",
+      "gap": 10,
+      "padding": [
+        10,
+        16,
+        16,
+        16
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "m3Qcpq",
+          "name": "budgetHeader",
+          "width": "fill_container",
+          "height": 32,
+          "gap": 6,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "PIx83",
+              "name": "budgetBackWrap",
+              "width": 24,
+              "height": 24,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "knVkL",
+                  "name": "budgetBack",
+                  "fill": "#0F172A",
+                  "content": "<",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "bZ766",
+              "name": "budgetTitle",
+              "fill": "#0F172A",
+              "content": "预算管理",
+              "fontFamily": "Inter",
+              "fontSize": 18,
+              "fontWeight": "700"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "A7UfnC",
+          "name": "budgetSummary",
+          "width": "fill_container",
+          "height": 178,
+          "fill": "#FFFFFF",
+          "cornerRadius": 16,
+          "stroke": {
+            "thickness": 1,
+            "fill": "#E2E8F0"
+          },
+          "layout": "vertical",
+          "gap": 12,
+          "padding": 14,
+          "children": [
+            {
+              "type": "frame",
+              "id": "MeSDB",
+              "name": "budgetSummaryTop",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "HVS6z",
+                  "name": "budgetSummaryTitle",
+                  "fill": "#64748B",
+                  "content": "2026年5月预算",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "LCzp2",
+                  "name": "budgetSummaryTag",
+                  "fill": "#2563EB",
+                  "content": "当前月份",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "yLzlL",
+              "name": "budgetAmount",
+              "fill": "#0F172A",
+              "content": "¥8,000.00",
+              "fontFamily": "Inter",
+              "fontSize": 24,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "tWqmx",
+              "name": "budgetMeta",
+              "fill": "#64748B",
+              "content": "已使用 ¥4,260.00，剩余 ¥3,740.00",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "MBXoH",
+              "name": "budgetTrack",
+              "width": "fill_container",
+              "height": 8,
+              "fill": "#E2E8F0",
+              "cornerRadius": 4,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 4,
+                  "id": "KlkzZ",
+                  "x": 0,
+                  "y": 0,
+                  "name": "budgetTrackFill",
+                  "fill": "#1D4ED8",
+                  "width": 191,
+                  "height": 8
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fK9oZ",
+              "name": "budgetActions",
+              "width": "fill_container",
+              "height": 36,
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "zysCM",
+                  "name": "budgetEditButton",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#2563EB",
+                  "cornerRadius": 10,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "JMmDg",
+                      "name": "budgetEditText",
+                      "fill": "#FFFFFF",
+                      "content": "修改预算",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "V3OUj",
+                  "name": "budgetDeleteButton",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#FFFFFF",
+                  "cornerRadius": 10,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#FCA5A5"
+                  },
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cgH2z",
+                      "name": "budgetDeleteText",
+                      "fill": "#DC2626",
+                      "content": "删除预算",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "P1QIzM",
+          "name": "budgetRuleTip",
+          "fill": "#94A3B8",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "每个月只能设置一个预算，可修改或删除当前月份预算。",
+          "lineHeight": 1.4,
+          "fontFamily": "Inter",
+          "fontSize": 12,
+          "fontWeight": "500"
+        },
+        {
+          "type": "text",
+          "id": "qBi2f",
+          "name": "budgetHistoryTitle",
+          "fill": "#0F172A",
+          "content": "历史预算",
+          "fontFamily": "Inter",
+          "fontSize": 14,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "JOj7L",
+          "name": "budgetHistoryList",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 10,
+          "children": [
+            {
+              "type": "frame",
+              "id": "pQt3a",
+              "name": "budgetHistoryItem1",
+              "width": "fill_container",
+              "height": 76,
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#E2E8F0"
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "J0LwMg",
+                  "name": "budgetHistoryItem1Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ATM6J",
+                      "name": "budgetHistoryItem1Month",
+                      "fill": "#0F172A",
+                      "content": "2026年4月",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "YouHO",
+                      "name": "budgetHistoryItem1Amount",
+                      "fill": "#0F172A",
+                      "content": "¥7,500.00",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "swX5P",
+                  "name": "budgetHistoryItem1Meta",
+                  "fill": "#64748B",
+                  "content": "已使用 ¥6,820.00，剩余 ¥680.00",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "bqAvS",
+              "name": "budgetHistoryItem2",
+              "width": "fill_container",
+              "height": 76,
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#E2E8F0"
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "uWbD0",
+                  "name": "budgetHistoryItem2Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "AGb35",
+                      "name": "budgetHistoryItem2Month",
+                      "fill": "#0F172A",
+                      "content": "2026年3月",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "PwHl1",
+                      "name": "budgetHistoryItem2Amount",
+                      "fill": "#0F172A",
+                      "content": "¥7,500.00",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "CLF5O",
+                  "name": "budgetHistoryItem2Meta",
+                  "fill": "#DC2626",
+                  "content": "已使用 ¥7,920.00，超出 ¥420.00",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "P8SS0x",
+              "name": "budgetHistoryItem3",
+              "width": "fill_container",
+              "height": 76,
+              "fill": "#FFFFFF",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#E2E8F0"
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "XAjdZ",
+                  "name": "budgetHistoryItem3Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "aP5pY",
+                      "name": "budgetHistoryItem3Month",
+                      "fill": "#0F172A",
+                      "content": "2026年2月",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "MB3cz",
+                      "name": "budgetHistoryItem3Amount",
+                      "fill": "#0F172A",
+                      "content": "¥6,800.00",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "OCeuF",
+                  "name": "budgetHistoryItem3Meta",
+                  "fill": "#64748B",
+                  "content": "已使用 ¥5,360.00，剩余 ¥1,440.00",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "kBxxx",
+      "x": 14092,
+      "y": 907,
+      "name": "财务-预算管理-暗黑",
+      "width": 393,
+      "height": 852,
+      "fill": "#0F172A",
+      "layout": "vertical",
+      "gap": 10,
+      "padding": [
+        10,
+        16,
+        16,
+        16
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "FdoCS",
+          "name": "budgetHeader",
+          "width": "fill_container",
+          "height": 32,
+          "gap": 6,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "A1L88",
+              "name": "budgetBackWrap",
+              "width": 24,
+              "height": 24,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "UqTDP",
+                  "name": "budgetBack",
+                  "fill": "#E5EEF8",
+                  "content": "<",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "vxFoW",
+              "name": "budgetTitle",
+              "fill": "#E5EEF8",
+              "content": "预算管理",
+              "fontFamily": "Inter",
+              "fontSize": 18,
+              "fontWeight": "700"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "vkgy1",
+          "name": "budgetSummary",
+          "width": "fill_container",
+          "height": 178,
+          "fill": "#121A2B",
+          "cornerRadius": 16,
+          "stroke": {
+            "thickness": 1,
+            "fill": "#253045"
+          },
+          "layout": "vertical",
+          "gap": 12,
+          "padding": 14,
+          "children": [
+            {
+              "type": "frame",
+              "id": "D9CNEf",
+              "name": "budgetSummaryTop",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "pht8Y",
+                  "name": "budgetSummaryTitle",
+                  "fill": "#8FA3C7",
+                  "content": "2026年5月预算",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "g2iL0e",
+                  "name": "budgetSummaryTag",
+                  "fill": "#3B82F6",
+                  "content": "当前月份",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "L2yQOH",
+              "name": "budgetAmount",
+              "fill": "#E5EEF8",
+              "content": "¥8,000.00",
+              "fontFamily": "Inter",
+              "fontSize": 24,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "e86CbX",
+              "name": "budgetMeta",
+              "fill": "#8FA3C7",
+              "content": "已使用 ¥4,260.00，剩余 ¥3,740.00",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "500"
+            },
+            {
+              "type": "frame",
+              "id": "lLBYV",
+              "name": "budgetTrack",
+              "width": "fill_container",
+              "height": 8,
+              "fill": "#253045",
+              "cornerRadius": 4,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "cornerRadius": 4,
+                  "id": "L4NRZ",
+                  "x": 0,
+                  "y": 0,
+                  "name": "budgetTrackFill",
+                  "fill": "#3B82F6",
+                  "width": 191,
+                  "height": 8
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "rZ10N",
+              "name": "budgetActions",
+              "width": "fill_container",
+              "height": 36,
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ulAgW",
+                  "name": "budgetEditButton",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#3B82F6",
+                  "cornerRadius": 10,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "T1hHMW",
+                      "name": "budgetEditText",
+                      "fill": "#FFFFFF",
+                      "content": "修改预算",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "J5pAW",
+                  "name": "budgetDeleteButton",
+                  "width": "fill_container",
+                  "height": "fill_container",
+                  "fill": "#121A2B",
+                  "cornerRadius": 10,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#7F1D1D"
+                  },
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Kl8ak",
+                      "name": "budgetDeleteText",
+                      "fill": "#F87171",
+                      "content": "删除预算",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "t3AlAN",
+          "name": "budgetRuleTip",
+          "fill": "#6F86A9",
+          "textGrowth": "fixed-width",
+          "width": "fill_container",
+          "content": "每个月只能设置一个预算，可修改或删除当前月份预算。",
+          "lineHeight": 1.4,
+          "fontFamily": "Inter",
+          "fontSize": 12,
+          "fontWeight": "500"
+        },
+        {
+          "type": "text",
+          "id": "poJKO",
+          "name": "budgetHistoryTitle",
+          "fill": "#E5EEF8",
+          "content": "历史预算",
+          "fontFamily": "Inter",
+          "fontSize": 14,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "qh0b1",
+          "name": "budgetHistoryList",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 10,
+          "children": [
+            {
+              "type": "frame",
+              "id": "XSkt7",
+              "name": "budgetHistoryItem1",
+              "width": "fill_container",
+              "height": 76,
+              "fill": "#121A2B",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#253045"
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "G1wwo6",
+                  "name": "budgetHistoryItem1Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "EMmDL",
+                      "name": "budgetHistoryItem1Month",
+                      "fill": "#E5EEF8",
+                      "content": "2026年4月",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Apmc8",
+                      "name": "budgetHistoryItem1Amount",
+                      "fill": "#E5EEF8",
+                      "content": "¥7,500.00",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "kDN2S",
+                  "name": "budgetHistoryItem1Meta",
+                  "fill": "#8FA3C7",
+                  "content": "已使用 ¥6,820.00，剩余 ¥680.00",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "I8XRu",
+              "name": "budgetHistoryItem2",
+              "width": "fill_container",
+              "height": 76,
+              "fill": "#121A2B",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#253045"
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "R5W0t",
+                  "name": "budgetHistoryItem2Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "GbFXb",
+                      "name": "budgetHistoryItem2Month",
+                      "fill": "#E5EEF8",
+                      "content": "2026年3月",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "xShyw",
+                      "name": "budgetHistoryItem2Amount",
+                      "fill": "#E5EEF8",
+                      "content": "¥7,500.00",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "id46N",
+                  "name": "budgetHistoryItem2Meta",
+                  "fill": "#F87171",
+                  "content": "已使用 ¥7,920.00，超出 ¥420.00",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qN2Od",
+              "name": "budgetHistoryItem3",
+              "width": "fill_container",
+              "height": 76,
+              "fill": "#121A2B",
+              "cornerRadius": 12,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#253045"
+              },
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "VpDs3",
+                  "name": "budgetHistoryItem3Top",
+                  "width": "fill_container",
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "QpkVq",
+                      "name": "budgetHistoryItem3Month",
+                      "fill": "#E5EEF8",
+                      "content": "2026年2月",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    },
+                    {
+                      "type": "text",
+                      "id": "g3V9RX",
+                      "name": "budgetHistoryItem3Amount",
+                      "fill": "#E5EEF8",
+                      "content": "¥6,800.00",
+                      "fontFamily": "Inter",
+                      "fontSize": 13,
+                      "fontWeight": "700"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "F8h4m",
+                  "name": "budgetHistoryItem3Meta",
+                  "fill": "#8FA3C7",
+                  "content": "已使用 ¥5,360.00，剩余 ¥1,440.00",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            }
+          ]
         }
       ]
     }

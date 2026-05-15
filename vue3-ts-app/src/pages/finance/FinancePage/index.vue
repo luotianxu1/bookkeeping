@@ -3,7 +3,14 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { financeOverview } from '@/data/finance'
-import { deleteTransaction, getAccounts, getAccountTypes, getTransactions, type Transaction } from '@/api/modules/finance'
+import {
+  deleteTransaction,
+  getAccounts,
+  getAccountTypes,
+  getCurrentMonthlyBudget,
+  getTransactions,
+  type Transaction,
+} from '@/api/modules/finance'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
@@ -16,6 +23,7 @@ import TransactionDayCard from '../components/TransactionDayCard/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 
 const router = useRouter()
+const overview = ref({ ...financeOverview })
 const transactions = ref<Transaction[]>([])
 const isLoadingTransactions = ref(false)
 const transactionListError = ref('')
@@ -47,15 +55,18 @@ async function loadCashTransactions() {
   transactionListError.value = ''
 
   try {
+    const currentMonth = getCurrentMonthKey()
+    const currentMonthDate = `${currentMonth}-01`
     const accountTypes = await getAccountTypes({ status: 'active' })
     const cashType = accountTypes.find((type) => type.code === 'cash')
     if (!cashType) {
       transactions.value = []
+      updateOverview([], 0)
       transactionListError.value = '现金账户类型不存在'
       return
     }
 
-    const [cashAccounts, transactionList] = await Promise.all([
+    const [cashAccounts, transactionList, currentBudget] = await Promise.all([
       getAccounts({
         userId: currentUser.id,
         accountTypeId: cashType.id,
@@ -64,14 +75,91 @@ async function loadCashTransactions() {
       getTransactions({
         userId: currentUser.id,
       }),
+      getCurrentMonthlyBudget(currentUser.id, currentMonthDate),
     ])
-    const cashAccountIds = new Set(cashAccounts.map((account) => account.id))
-    transactions.value = transactionList.filter((transaction) => cashAccountIds.has(transaction.accountId))
+    const cashAccountIds = new Set(cashAccounts.map((account) => String(account.id)))
+    transactions.value = transactionList.filter((transaction) => cashAccountIds.has(String(transaction.accountId)))
+    const currentMonthTransactions = transactions.value.filter((transaction) =>
+      isSameMonth(transaction.occurredAt, currentMonth),
+    )
+    updateOverview(
+      currentMonthTransactions,
+      toNumber(currentBudget?.amount),
+      currentBudget ? toNumber(currentBudget.usedAmount) : undefined,
+    )
   } catch (error) {
     transactionListError.value = error instanceof Error ? error.message : '收支记录加载失败'
   } finally {
     isLoadingTransactions.value = false
   }
+}
+
+function getCurrentMonthKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function updateOverview(
+  currentMonthTransactions: Transaction[],
+  budgetAmount: number,
+  budgetUsedAmount?: number,
+) {
+  const monthlyIncome = sumTransactions(currentMonthTransactions, 'income')
+  const transactionExpense = sumTransactions(currentMonthTransactions, 'expense')
+  const monthlyExpense = budgetUsedAmount ?? transactionExpense
+  const monthlyBalance = monthlyIncome - monthlyExpense
+  const budgetUsagePercent = budgetAmount > 0
+    ? (monthlyExpense / budgetAmount) * 100
+    : 0
+
+  overview.value = {
+    ...overview.value,
+    monthlyBalance: `当月结余 ${formatAmount(monthlyBalance)}`,
+    monthlyIncome: `收入 ${formatAmount(monthlyIncome)}`,
+    monthlyExpense: `支出 ${formatAmount(monthlyExpense)}`,
+    budget: budgetAmount > 0 ? `月预算 ${formatAmount(budgetAmount)}` : '月预算 未设置',
+    budgetUsageLabel: budgetAmount > 0 ? `已用 ${formatPercent(budgetUsagePercent)}` : '已用 0%',
+    budgetUsagePercent: budgetAmount > 0 ? Math.min(Math.max(budgetUsagePercent, 0), 100) : 0,
+  }
+}
+
+function sumTransactions(list: Transaction[], type: Transaction['type']) {
+  return list
+    .filter((transaction) => transaction.type === type)
+    .reduce((sum, transaction) => sum + toNumber(transaction.amount), 0)
+}
+
+function toNumber(value: unknown) {
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function isSameMonth(value: string, monthKey: string) {
+  if (value.startsWith(monthKey)) {
+    return true
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return false
+  }
+
+  const dateMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  return dateMonthKey === monthKey
+}
+
+function formatAmount(value: number) {
+  return new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
+}
+
+function formatPercent(value: number) {
+  return `${new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  }).format(value)}%`
 }
 
 function openDeleteConfirm(transaction: DayTransaction) {
@@ -130,7 +218,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     :type="feedbackType"
   />
 
-  <AssetOverviewCard :overview="financeOverview" />
+  <AssetOverviewCard :overview="overview" />
   <section class="feature-block" aria-label="更多功能">
     <header class="feature-header">
       <strong>更多功能</strong>

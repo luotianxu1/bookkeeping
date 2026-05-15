@@ -23,6 +23,7 @@ const featureGroups: FeatureGroup[] = [
       { icon: '🏦', label: '账户管理', to: '/finance/accounts' },
       { icon: '📈', label: '收益预测', to: '/finance/profit-forecast' },
       { icon: '🪙', label: '攒股收息', to: '/finance/dividend-income' },
+      { icon: '💰', label: '预算管理', to: '/finance/budgets' },
     ],
   },
   {

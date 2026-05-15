@@ -11,6 +11,7 @@ import GoldAccountPositionPage from '@/pages/finance/GoldAccountPositionPage/ind
 import GoldLiquidationPage from '@/pages/finance/GoldLiquidationPage/index.vue'
 import ProfitForecastPage from '@/pages/finance/ProfitForecastPage/index.vue'
 import DividendIncomePage from '@/pages/finance/DividendIncomePage/index.vue'
+import BudgetManagementPage from '@/pages/finance/BudgetManagementPage/index.vue'
 import ExpenseEntryPage from '@/pages/finance/ExpenseEntryPage/index.vue'
 import CategoryManagementPage from '@/pages/finance/CategoryManagementPage/index.vue'
 import AccountManagementPage from '@/pages/finance/AccountManagementPage/index.vue'
@@ -91,6 +92,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '攒股收息',
+    },
+  },
+  {
+    path: '/finance/budgets',
+    name: 'finance-budgets',
+    component: BudgetManagementPage,
+    meta: {
+      section: 'finance',
+      title: '预算管理',
     },
   },
   {
