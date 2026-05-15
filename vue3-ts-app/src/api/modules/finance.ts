@@ -226,6 +226,107 @@ export interface SaveMonthlyBudgetParams {
   remark?: string | null
 }
 
+export type InvestmentProductType = 'stock' | 'fund' | 'bond' | 'gold' | 'other'
+
+export interface InvestmentProduct {
+  id: number
+  productType: InvestmentProductType
+  market?: string | null
+  exchangeCode?: string | null
+  symbol: string
+  name: string
+  shortName?: string | null
+  currencyCode: string
+  unitName: string
+  pricePrecision: number
+  latestPrice?: number | null
+  status: string
+  remark?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaveInvestmentProductParams {
+  productType: InvestmentProductType
+  market?: string | null
+  exchangeCode?: string | null
+  symbol: string
+  name: string
+  shortName?: string | null
+  currencyCode?: string
+  unitName?: string
+  pricePrecision?: number
+  status?: string
+  remark?: string | null
+}
+
+export interface InvestmentSummary {
+  userId: number
+  totalMarketValue: number
+  dayProfit: number
+  dayProfitRate: number
+  holdingProfit: number
+  holdingProfitRate: number
+  cumulativeProfit: number
+  cumulativeProfitRate: number
+  lastSyncedAt?: string | null
+}
+
+export interface InvestmentPosition {
+  id: number
+  userId: number
+  accountId: number
+  accountName?: string | null
+  productId: number
+  productType?: InvestmentProductType | null
+  productName?: string | null
+  productSymbol?: string | null
+  market?: string | null
+  unitName?: string | null
+  currencyCode?: string | null
+  holdingQuantity: number
+  availableQuantity: number
+  frozenQuantity: number
+  costAmount: number
+  avgCostPrice: number
+  currentPrice: number
+  marketValue: number
+  dayProfit: number
+  dayProfitRate: number
+  holdingProfit: number
+  holdingProfitRate: number
+  cumulativeProfit: number
+  cumulativeProfitRate: number
+  includeInNetWorth: boolean
+  status: string
+  lastSyncedAt?: string | null
+  remark?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface InvestmentPositionQuery {
+  userId: number
+  accountId?: number
+  productType?: InvestmentProductType
+  status?: string
+}
+
+export interface SaveInvestmentPositionParams {
+  userId: number
+  accountId: number
+  productId?: number
+  product?: SaveInvestmentProductParams
+  holdingQuantity: number
+  availableQuantity?: number
+  frozenQuantity?: number
+  costAmount: number
+  currentPrice?: number
+  includeInNetWorth?: boolean
+  status?: string
+  remark?: string | null
+}
+
 export function getAccountTypes(params: AccountTypeQuery = {}) {
   return requestGet<AccountType[]>(financeRequest, '/api/finance/account-types', { params })
 }
@@ -324,6 +425,40 @@ export function updateMonthlyBudget(id: number, params: SaveMonthlyBudgetParams)
 
 export function deleteMonthlyBudget(id: number, userId: number) {
   return requestDelete<void>(financeRequest, `/api/finance/monthly-budgets/${id}`, {
+    params: { userId },
+  })
+}
+
+export function getInvestmentProducts(params: { productType?: InvestmentProductType; keyword?: string } = {}) {
+  return requestGet<InvestmentProduct[]>(financeRequest, '/api/finance/investments/products', { params })
+}
+
+export function createInvestmentProduct(params: SaveInvestmentProductParams) {
+  return requestPost<InvestmentProduct, SaveInvestmentProductParams>(financeRequest, '/api/finance/investments/products', params)
+}
+
+export function getInvestmentSummary(params: { userId: number; accountId?: number }) {
+  return requestGet<InvestmentSummary>(financeRequest, '/api/finance/investments/summary', { params })
+}
+
+export function getInvestmentPositions(params: InvestmentPositionQuery) {
+  return requestGet<InvestmentPosition[]>(financeRequest, '/api/finance/investments/positions', { params })
+}
+
+export function getInvestmentPosition(id: number) {
+  return requestGet<InvestmentPosition>(financeRequest, `/api/finance/investments/positions/${id}`)
+}
+
+export function createInvestmentPosition(params: SaveInvestmentPositionParams) {
+  return requestPost<InvestmentPosition, SaveInvestmentPositionParams>(financeRequest, '/api/finance/investments/positions', params)
+}
+
+export function updateInvestmentPosition(id: number, params: SaveInvestmentPositionParams) {
+  return requestPut<InvestmentPosition, SaveInvestmentPositionParams>(financeRequest, `/api/finance/investments/positions/${id}`, params)
+}
+
+export function deleteInvestmentPosition(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/investments/positions/${id}`, {
     params: { userId },
   })
 }

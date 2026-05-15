@@ -79511,6 +79511,15 @@
           ]
         }
       ]
+    },
+    {
+      "type": "ellipse",
+      "id": "Y27Fnv",
+      "x": 5839,
+      "y": -689,
+      "fill": "#CCCCCC",
+      "width": 1,
+      "height": 1
     }
   ]
 }
