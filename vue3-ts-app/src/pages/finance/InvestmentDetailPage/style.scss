@@ -72,6 +72,23 @@
   font-weight: 500;
 }
 
+.investment-detail-message {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-18);
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.investment-detail-message-error {
+  color: var(--color-danger);
+}
+
 .investment-detail-card {
   display: grid;
   gap: var(--space-6);
@@ -86,6 +103,40 @@
   color: var(--color-text-primary);
   font-size: var(--font-size-16);
   font-weight: 700;
+}
+
+.investment-detail-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.investment-detail-card-head h2 {
+  margin: 0;
+}
+
+.investment-detail-card-head span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-detail-chart {
+  width: 100%;
+  min-width: 0;
+  min-height: 260px;
+  height: 300px;
+}
+
+.investment-detail-empty {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 600;
 }
 
 .investment-detail-grid {
@@ -116,11 +167,11 @@
 }
 
 .investment-detail-grid-item strong.tone-positive {
-  color: var(--color-success);
+  color: var(--color-danger);
 }
 
 .investment-detail-grid-item strong.tone-negative {
-  color: var(--color-danger);
+  color: var(--color-success);
 }
 
 .investment-detail-description {
@@ -156,14 +207,14 @@
 
 .investment-detail-transactions-card {
   display: grid;
-  padding: var(--space-14);
+  padding: 10px 14px;
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-18);
   background: var(--color-white);
 }
 
 .investment-detail-transaction-item {
-  min-height: 66px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -176,7 +227,7 @@
 
 .investment-detail-transaction-left {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-2);
 }
 
 .investment-detail-transaction-left strong {
@@ -194,7 +245,7 @@
 .investment-detail-transaction-right {
   display: grid;
   justify-items: end;
-  gap: var(--space-6);
+  gap: var(--space-2);
 }
 
 .investment-detail-transaction-right span {

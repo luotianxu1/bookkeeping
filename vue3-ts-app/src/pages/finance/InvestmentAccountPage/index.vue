@@ -27,8 +27,8 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 const router = useRouter()
 const route = useRoute()
 
-const investmentTabs = ['全部', 'A股', '基金', '其他']
-const activeTab = ref(investmentTabs[0])
+const investmentTabs = ['A股', '基金']
+const activeTab = ref('A股')
 const showAddModal = ref(false)
 const isLoading = ref(false)
 const isSaving = ref(false)
@@ -75,19 +75,11 @@ const fundingAccountOptions = computed(() =>
 )
 
 const holdings = computed(() => {
-  if (activeTab.value === '全部') {
-    return positions.value
-  }
-
   if (activeTab.value === 'A股') {
     return positions.value.filter((item) => item.productType === 'stock')
   }
 
-  if (activeTab.value === '基金') {
-    return positions.value.filter((item) => item.productType === 'fund')
-  }
-
-  return positions.value.filter((item) => !item.productType || item.productType === 'other' || item.productType === 'gold' || item.productType === 'bond')
+  return positions.value.filter((item) => item.productType === 'fund')
 })
 
 const summaryMetrics = computed(() => [
@@ -167,6 +159,7 @@ async function loadInvestmentData() {
 
     summary.value = summaryData
     positions.value = positionList
+    syncActiveInvestmentTab()
     if (!addAssetFundingAccount.value || !fundingAccounts.value.some((account) => String(account.id) === addAssetFundingAccount.value)) {
       addAssetFundingAccount.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
     }
@@ -174,6 +167,24 @@ async function loadInvestmentData() {
     pageError.value = error instanceof Error ? error.message : '投资账户加载失败'
   } finally {
     isLoading.value = false
+  }
+}
+
+function syncActiveInvestmentTab() {
+  const hasStocks = positions.value.some((item) => item.productType === 'stock')
+  const hasFunds = positions.value.some((item) => item.productType === 'fund')
+
+  if (!investmentTabs.includes(activeTab.value)) {
+    activeTab.value = 'A股'
+  }
+
+  if (!hasStocks && hasFunds) {
+    activeTab.value = '基金'
+    return
+  }
+
+  if (hasStocks) {
+    activeTab.value = 'A股'
   }
 }
 

@@ -2,6 +2,9 @@ package com.example.finance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.finance.dto.InvestmentDividendResponse;
+import com.example.finance.dto.InvestmentAssetDetailResponse;
+import com.example.finance.dto.InvestmentChartPointResponse;
+import com.example.finance.dto.InvestmentDetailStatResponse;
 import com.example.finance.dto.InvestmentPositionRequest;
 import com.example.finance.dto.InvestmentPositionResponse;
 import com.example.finance.dto.InvestmentProductRequest;
@@ -42,6 +45,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -142,6 +146,43 @@ public class InvestmentService {
         ));
     }
 
+    public Optional<InvestmentAssetDetailResponse> getPositionDetail(Long id) {
+        InvestmentPositionEntity position = positionMapper.selectById(id);
+        if (position == null) {
+            return Optional.empty();
+        }
+
+        InvestmentProductEntity product = productMapper.selectById(position.getProductId());
+        AccountEntity account = accountMapper.selectById(position.getAccountId());
+        InvestmentPositionResponse positionResponse = toPositionResponse(position, product, account);
+        InvestmentAssetDetailResponse response = new InvestmentAssetDetailResponse();
+        response.setPosition(positionResponse);
+        response.setProductType(product == null ? null : product.getProductType());
+        response.setName(product == null ? null : product.getName());
+        response.setSymbol(product == null ? null : product.getSymbol());
+        response.setMarket(product == null ? null : product.getMarket());
+        response.setUnitName(product == null ? null : product.getUnitName());
+        response.setSource("本地持仓");
+        response.setDescription(position.getRemark());
+        response.setHoldingStats(buildHoldingStats(positionResponse));
+        response.setMarketStats(new ArrayList<>());
+        response.setChartPoints(Collections.emptyList());
+
+        response.setLatestPrice(positionResponse.getCurrentPrice());
+        response.setUpdatedAt(positionResponse.getLastSyncedAt() == null ? null : positionResponse.getLastSyncedAt().toString());
+        response.setChartType(product != null && "stock".equals(product.getProductType()) ? "candlestick" : "line");
+        response.setSource("本地持仓");
+        response.setDescription("页面先展示本地持仓数据，行情和走势由前端直接从公开接口加载。");
+        response.setMarketStats(List.of(
+            stat("资产类型", product == null ? "-" : productTypeName(product.getProductType()), null),
+            stat("资产代码", product == null ? "-" : blankToDash(product.getSymbol()), null),
+            stat("市场", product == null ? "-" : blankToDash(product.getMarket()), null),
+            stat("当前净值", moneyText(positionResponse.getCurrentPrice(), "stock".equals(product == null ? null : product.getProductType()) ? 2 : 4), null),
+            stat("最新同步", response.getUpdatedAt() == null ? "-" : response.getUpdatedAt(), null)
+        ));
+        return Optional.of(response);
+    }
+
     @Transactional
     public InvestmentPositionResponse createPosition(InvestmentPositionRequest request) {
         AccountEntity account = requireInvestmentAccount(request.getUserId(), request.getAccountId());
@@ -154,6 +195,8 @@ public class InvestmentService {
         fillPosition(entity, request, product.getId());
         deductFundingAccount(fundingAccount, entity.getCostAmount());
         positionMapper.insert(entity);
+        createInitialBuyTransaction(entity);
+        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
         return toPositionResponse(positionMapper.selectById(entity.getId()), product, account);
     }
 
@@ -163,21 +206,31 @@ public class InvestmentService {
         if (entity == null) {
             return Optional.empty();
         }
+        Long oldAccountId = entity.getAccountId();
         AccountEntity account = requireInvestmentAccount(request.getUserId(), request.getAccountId());
         InvestmentProductEntity product = request.getProductId() != null
             ? requireProduct(request.getProductId())
             : createOrLoadProduct(request.getProduct());
         fillPosition(entity, request, product.getId());
         positionMapper.updateById(entity);
+        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
+        if (!request.getAccountId().equals(oldAccountId)) {
+            syncInvestmentAccountBalance(request.getUserId(), oldAccountId);
+        }
         return Optional.of(toPositionResponse(positionMapper.selectById(id), product, account));
     }
 
+    @Transactional
     public boolean deletePosition(Long id, Long userId) {
         InvestmentPositionEntity entity = positionMapper.selectById(id);
         if (entity == null || !userId.equals(entity.getUserId())) {
             return false;
         }
-        return positionMapper.deleteById(id) > 0;
+        boolean deleted = positionMapper.deleteById(id) > 0;
+        if (deleted) {
+            syncInvestmentAccountBalance(userId, entity.getAccountId());
+        }
+        return deleted;
     }
 
     public InvestmentSummaryResponse summary(Long userId, Long accountId) {
@@ -215,6 +268,9 @@ public class InvestmentService {
             .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
             .orderByDesc(InvestmentTransactionEntity::getTradeAt)
             .orderByDesc(InvestmentTransactionEntity::getId));
+        if (transactions.isEmpty() && positionId != null) {
+            return inferInitialTransaction(userId, accountId, positionId);
+        }
         return toTransactionResponses(transactions);
     }
 
@@ -346,6 +402,26 @@ public class InvestmentService {
         entity.setRemark(request.getRemark());
     }
 
+    private void createInitialBuyTransaction(InvestmentPositionEntity position) {
+        InvestmentTransactionEntity transaction = new InvestmentTransactionEntity();
+        transaction.setTransactionNo(generateTransactionNo());
+        transaction.setUserId(position.getUserId());
+        transaction.setAccountId(position.getAccountId());
+        transaction.setPositionId(position.getId());
+        transaction.setProductId(position.getProductId());
+        transaction.setTradeType("buy");
+        transaction.setQuantity(position.getHoldingQuantity());
+        transaction.setPrice(position.getAvgCostPrice());
+        transaction.setAmount(position.getCostAmount());
+        transaction.setFeeAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        transaction.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        transaction.setCurrencyCode(DEFAULT_CURRENCY_CODE);
+        transaction.setTradeAt(LocalDateTime.now());
+        transaction.setStatus(NORMAL_STATUS);
+        transaction.setRemark("新增资产买入");
+        transactionMapper.insert(transaction);
+    }
+
     private AccountEntity requireInvestmentAccount(Long userId, Long accountId) {
         AccountEntity account = accountMapper.selectById(accountId);
         if (account == null || !userId.equals(account.getUserId())) {
@@ -380,6 +456,31 @@ public class InvestmentService {
             throw new IllegalArgumentException("资金账户余额不足");
         }
         account.setCurrentBalance(nextBalance);
+        accountMapper.updateById(account);
+    }
+
+    private void syncInvestmentAccountBalance(Long userId, Long accountId) {
+        if (accountId == null) {
+            return;
+        }
+        AccountEntity account = accountMapper.selectById(accountId);
+        if (account == null || !userId.equals(account.getUserId())) {
+            return;
+        }
+        AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
+        if (accountType == null || !INVESTMENT_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
+            return;
+        }
+        BigDecimal marketValue = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+                .eq(InvestmentPositionEntity::getUserId, userId)
+                .eq(InvestmentPositionEntity::getAccountId, accountId)
+                .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS))
+            .stream()
+            .map(InvestmentPositionEntity::getMarketValue)
+            .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+        account.setCurrentBalance(marketValue);
         accountMapper.updateById(account);
     }
 
@@ -448,6 +549,38 @@ public class InvestmentService {
         return transactions.stream().map(item -> toTransactionResponse(item, products.get(item.getProductId()), accounts.get(item.getAccountId()))).toList();
     }
 
+    private List<InvestmentTransactionResponse> inferInitialTransaction(Long userId, Long accountId, Long positionId) {
+        InvestmentPositionEntity position = positionMapper.selectById(positionId);
+        if (position == null || (userId != null && !userId.equals(position.getUserId())) || (accountId != null && !accountId.equals(position.getAccountId()))) {
+            return Collections.emptyList();
+        }
+        InvestmentTransactionResponse response = new InvestmentTransactionResponse();
+        response.setId(-position.getId());
+        response.setTransactionNo("INIT-" + position.getId());
+        response.setUserId(position.getUserId());
+        response.setAccountId(position.getAccountId());
+        AccountEntity account = accountMapper.selectById(position.getAccountId());
+        response.setAccountName(account == null ? null : account.getName());
+        response.setPositionId(position.getId());
+        response.setProductId(position.getProductId());
+        InvestmentProductEntity product = productMapper.selectById(position.getProductId());
+        response.setProductName(product == null ? null : product.getName());
+        response.setProductSymbol(product == null ? null : product.getSymbol());
+        response.setTradeType("buy");
+        response.setQuantity(position.getHoldingQuantity());
+        response.setPrice(position.getAvgCostPrice());
+        response.setAmount(position.getCostAmount());
+        response.setFeeAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        response.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
+        response.setTradeAt(position.getCreatedAt());
+        response.setStatus(NORMAL_STATUS);
+        response.setRemark("初始买入");
+        response.setCreatedAt(position.getCreatedAt());
+        response.setUpdatedAt(position.getUpdatedAt());
+        return List.of(response);
+    }
+
     private InvestmentTransactionResponse toTransactionResponse(InvestmentTransactionEntity entity, InvestmentProductEntity product, AccountEntity account) {
         InvestmentTransactionResponse response = new InvestmentTransactionResponse();
         response.setId(entity.getId());
@@ -491,6 +624,239 @@ public class InvestmentService {
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
         return response;
+    }
+
+    private List<InvestmentDetailStatResponse> buildHoldingStats(InvestmentPositionResponse position) {
+        return List.of(
+            stat("所属账户", blankToDash(position.getAccountName()), null),
+            stat("持仓数量", moneyText(position.getHoldingQuantity(), 2) + " " + blankToDefault(position.getUnitName(), DEFAULT_UNIT_NAME), null),
+            stat("持仓成本", currencyText(position.getCostAmount(), 2), null),
+            stat("当前市值", currencyText(position.getMarketValue(), 2), null),
+            stat("持仓收益", currencyText(position.getHoldingProfit(), 2), tone(position.getHoldingProfit())),
+            stat("收益率", percentText(position.getHoldingProfitRate()), tone(position.getHoldingProfitRate()))
+        );
+    }
+
+    private void fillFundDetail(InvestmentAssetDetailResponse response, InvestmentProductEntity product) {
+        JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
+        JsonNode estimateInfo = fetchFundEstimateInfo(product.getSymbol());
+        BigDecimal estimatePrice = safeDecimal(estimateInfo.path("gsz").asText(null));
+        BigDecimal officialPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
+        BigDecimal latestPrice = estimatePrice != null ? estimatePrice : officialPrice;
+        BigDecimal changePercent = estimatePrice != null
+            ? safeDecimal(estimateInfo.path("gszzl").asText(null))
+            : safeDecimal(baseInfo.path("RZDF").asText(null));
+        String updatedAt = estimatePrice != null
+            ? estimateInfo.path("gztime").asText(null)
+            : baseInfo.path("FSRQ").asText(null);
+
+        response.setProductType("fund");
+        response.setName(blankToDefault(baseInfo.path("SHORTNAME").asText(null), product.getName()));
+        response.setSymbol(blankToDefault(baseInfo.path("FCODE").asText(null), product.getSymbol()));
+        response.setLatestPrice(latestPrice);
+        response.setChangePercent(changePercent);
+        response.setUpdatedAt(updatedAt);
+        response.setChartType("line");
+        response.setSource("东方财富");
+        response.setDescription("基金详情、估算净值和近一年走势来自东方财富公开接口。");
+        response.setMarketStats(List.of(
+            stat("资产类型", "基金", null),
+            stat("基金代码", product.getSymbol(), null),
+            stat("基金类型", blankToDash(baseInfo.path("FTYPE").asText(null)), null),
+            stat(estimatePrice != null ? "当前净值（估算）" : "当前净值（单位净值）", latestPrice == null ? "-" : moneyText(latestPrice, 4), tone(changePercent)),
+            stat("累计净值", blankToDash(baseInfo.path("LJJZ").asText(null)), null),
+            stat("当日涨跌幅", percentText(changePercent), tone(changePercent)),
+            stat(estimatePrice != null ? "估值时间" : "净值日期", blankToDash(updatedAt), null),
+            stat("最新官方净值", blankToDash(blankToDefault(estimateInfo.path("dwjz").asText(null), baseInfo.path("DWJZ").asText(null))), null),
+            stat("基金公司", blankToDash(baseInfo.path("JJGS").asText(null)), null),
+            stat("申购状态", blankToDash(baseInfo.path("SGZT").asText(null)), null),
+            stat("赎回状态", blankToDash(baseInfo.path("SHZT").asText(null)), null)
+        ));
+        response.setChartPoints(fetchFundTrendPoints(product.getSymbol()));
+    }
+
+    private void fillStockDetail(InvestmentAssetDetailResponse response, InvestmentProductEntity product) {
+        String symbol = toTencentSymbol(product.getSymbol(), product.getExchangeCode());
+        JsonNode quote = fetchTencentQuoteFields(symbol);
+        BigDecimal latestPrice = safeDecimal(quote.path("price").asText(null));
+        BigDecimal change = safeDecimal(quote.path("change").asText(null));
+        BigDecimal changePercent = safeDecimal(quote.path("changePercent").asText(null));
+
+        response.setProductType("stock");
+        response.setName(blankToDefault(quote.path("name").asText(null), product.getName()));
+        response.setSymbol(blankToDefault(quote.path("code").asText(null), product.getSymbol()));
+        response.setLatestPrice(latestPrice);
+        response.setChange(change);
+        response.setChangePercent(changePercent);
+        response.setUpdatedAt(formatTencentTime(quote.path("timeRaw").asText(null)));
+        response.setChartType("candlestick");
+        response.setSource("腾讯行情");
+        response.setDescription("股票实时行情和日 K 走势来自腾讯公开行情接口。");
+        response.setMarketStats(List.of(
+            stat("资产类型", "股票", null),
+            stat("股票代码", product.getSymbol(), null),
+            stat("市场", blankToDash(product.getExchangeCode()), null),
+            stat("当前净值（当前价）", latestPrice == null ? "-" : moneyText(latestPrice, 2), tone(change)),
+            stat("涨跌额", moneyText(change, 2), tone(change)),
+            stat("涨跌幅", percentText(changePercent), tone(changePercent)),
+            stat("今开", moneyText(safeDecimal(quote.path("open").asText(null)), 2), null),
+            stat("昨收", moneyText(safeDecimal(quote.path("prevClose").asText(null)), 2), null),
+            stat("最高", moneyText(safeDecimal(quote.path("high").asText(null)), 2), null),
+            stat("最低", moneyText(safeDecimal(quote.path("low").asText(null)), 2), null),
+            stat("成交量（手）", blankToDash(quote.path("volume").asText(null)), null),
+            stat("换手率", percentText(safeDecimal(quote.path("turnoverRate").asText(null))), null),
+            stat("市盈率", blankToDash(quote.path("pe").asText(null)), null),
+            stat("更新时间", blankToDash(response.getUpdatedAt()), null)
+        ));
+        response.setChartPoints(fetchStockKlinePoints(symbol));
+    }
+
+    private JsonNode fetchFundBaseInfo(String code) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(
+                    "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=" + URLEncoder.encode(code, StandardCharsets.UTF_8)
+                        + "&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0"
+                ))
+                .timeout(Duration.ofSeconds(8))
+                .header("User-Agent", "Mozilla/5.0")
+                .GET()
+                .build();
+            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            return objectMapper.readTree(new String(httpResponse.body(), StandardCharsets.UTF_8));
+        } catch (Exception ex) {
+            return objectMapper.createObjectNode();
+        }
+    }
+
+    private JsonNode fetchFundEstimateInfo(String code) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(
+                    "https://fund.eastmoney.com/data/funddataforgznew.aspx?fc=" + URLEncoder.encode(code, StandardCharsets.UTF_8) + "&t=basewap"
+                ))
+                .timeout(Duration.ofSeconds(8))
+                .header("User-Agent", "Mozilla/5.0")
+                .GET()
+                .build();
+            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            return objectMapper.readTree(extractJsonpObject(new String(httpResponse.body(), StandardCharsets.UTF_8)));
+        } catch (Exception ex) {
+            return objectMapper.createObjectNode();
+        }
+    }
+
+    private List<InvestmentChartPointResponse> fetchFundTrendPoints(String code) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(
+                    "https://fund.eastmoney.com/pingzhongdata/" + URLEncoder.encode(code, StandardCharsets.UTF_8) + ".js?v=" + System.currentTimeMillis()
+                ))
+                .timeout(Duration.ofSeconds(10))
+                .header("User-Agent", "Mozilla/5.0")
+                .GET()
+                .build();
+            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
+            JsonNode rows = objectMapper.readTree(extractJsArray(body, "Data_netWorthTrend"));
+            if (!rows.isArray()) {
+                return Collections.emptyList();
+            }
+            List<InvestmentChartPointResponse> points = new ArrayList<>();
+            long cutoff = System.currentTimeMillis() - 365L * 24L * 60L * 60L * 1000L;
+            for (JsonNode row : rows) {
+                long timestamp = row.path("x").asLong(0);
+                if (timestamp < cutoff) {
+                    continue;
+                }
+                BigDecimal value = safeDecimal(row.path("y").asText(null));
+                if (value == null) {
+                    continue;
+                }
+                InvestmentChartPointResponse point = new InvestmentChartPointResponse();
+                point.setLabel(java.time.Instant.ofEpochMilli(timestamp).atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDate().toString());
+                point.setValue(value);
+                points.add(point);
+            }
+            return points;
+        } catch (Exception ex) {
+            return Collections.emptyList();
+        }
+    }
+
+    private JsonNode fetchTencentQuoteFields(String symbol) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create("https://qt.gtimg.cn/q=" + symbol))
+                .timeout(Duration.ofSeconds(8))
+                .header("User-Agent", "Mozilla/5.0")
+                .GET()
+                .build();
+            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            String body = new String(httpResponse.body(), Charset.forName("GBK"));
+            int start = body.indexOf('"');
+            int end = body.lastIndexOf('"');
+            if (start < 0 || end <= start) {
+                return objectMapper.createObjectNode();
+            }
+            String[] fields = body.substring(start + 1, end).split("~");
+            com.fasterxml.jackson.databind.node.ObjectNode node = objectMapper.createObjectNode();
+            node.put("name", field(fields, 1));
+            node.put("code", field(fields, 2));
+            node.put("price", field(fields, 3));
+            node.put("prevClose", field(fields, 4));
+            node.put("open", field(fields, 5));
+            node.put("volume", field(fields, 6));
+            node.put("timeRaw", field(fields, 30));
+            node.put("change", field(fields, 31));
+            node.put("changePercent", field(fields, 32));
+            node.put("high", field(fields, 33));
+            node.put("low", field(fields, 34));
+            node.put("turnoverRate", field(fields, 38));
+            node.put("pe", field(fields, 39));
+            return node;
+        } catch (Exception ex) {
+            return objectMapper.createObjectNode();
+        }
+    }
+
+    private List<InvestmentChartPointResponse> fetchStockKlinePoints(String symbol) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(
+                    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=" + URLEncoder.encode(symbol + ",day,,,260,qfq", StandardCharsets.UTF_8)
+                ))
+                .timeout(Duration.ofSeconds(10))
+                .header("User-Agent", "Mozilla/5.0")
+                .GET()
+                .build();
+            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            JsonNode root = objectMapper.readTree(new String(httpResponse.body(), StandardCharsets.UTF_8));
+            JsonNode rows = root.path("data").path(symbol).path("qfqday");
+            if (!rows.isArray() || rows.isEmpty()) {
+                rows = root.path("data").path(symbol).path("day");
+            }
+            if (!rows.isArray()) {
+                return Collections.emptyList();
+            }
+            List<InvestmentChartPointResponse> points = new ArrayList<>();
+            for (JsonNode row : rows) {
+                if (!row.isArray() || row.size() < 6) {
+                    continue;
+                }
+                InvestmentChartPointResponse point = new InvestmentChartPointResponse();
+                point.setLabel(row.get(0).asText());
+                point.setOpen(safeDecimal(row.get(1).asText(null)));
+                point.setClose(safeDecimal(row.get(2).asText(null)));
+                point.setHigh(safeDecimal(row.get(3).asText(null)));
+                point.setLow(safeDecimal(row.get(4).asText(null)));
+                point.setVolume(safeDecimal(row.get(5).asText(null)));
+                point.setValue(point.getClose());
+                points.add(point);
+            }
+            return points;
+        } catch (Exception ex) {
+            return Collections.emptyList();
+        }
+    }
+
+    private InvestmentDetailStatResponse stat(String label, String value, String tone) {
+        return new InvestmentDetailStatResponse(label, value, tone);
     }
 
     private List<InvestmentProductResponse> fetchExternalProducts(String keyword, String productType) {
@@ -744,6 +1110,16 @@ public class InvestmentService {
         return List.of("sz" + code, "sh" + code);
     }
 
+    private String toTencentSymbol(String code, String exchangeCode) {
+        if ("SSE".equals(exchangeCode)) {
+            return "sh" + code;
+        }
+        if ("SZSE".equals(exchangeCode)) {
+            return "sz" + code;
+        }
+        return code.startsWith("6") ? "sh" + code : "sz" + code;
+    }
+
     private String extractJsonpObject(String body) {
         int start = body == null ? -1 : body.indexOf('{');
         int end = body == null ? -1 : body.lastIndexOf('}');
@@ -753,12 +1129,98 @@ public class InvestmentService {
         return body.substring(start, end + 1);
     }
 
+    private String extractJsArray(String body, String variableName) {
+        String marker = "var " + variableName + " = ";
+        int start = body == null ? -1 : body.indexOf(marker);
+        if (start < 0) {
+            marker = variableName + " = ";
+            start = body == null ? -1 : body.indexOf(marker);
+        }
+        if (start < 0) {
+            throw new IllegalArgumentException("外部走势数据格式错误");
+        }
+        int arrayStart = body.indexOf('[', start + marker.length());
+        int semicolon = body.indexOf(';', arrayStart);
+        if (arrayStart < 0 || semicolon <= arrayStart) {
+            throw new IllegalArgumentException("外部走势数据格式错误");
+        }
+        return body.substring(arrayStart, semicolon);
+    }
+
     private BigDecimal decimalText(String first, String second) {
         String value = StringUtils.hasText(first) && !"--".equals(first) ? first : second;
         if (!StringUtils.hasText(value) || "--".equals(value)) {
             return null;
         }
         return new BigDecimal(value);
+    }
+
+    private BigDecimal safeDecimal(String value) {
+        if (!StringUtils.hasText(value) || "--".equals(value) || "-".equals(value)) {
+            return null;
+        }
+        try {
+            return new BigDecimal(value.trim().replace(",", ""));
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String field(String[] fields, int index) {
+        return fields.length > index ? fields[index] : "";
+    }
+
+    private String blankToDash(String value) {
+        return StringUtils.hasText(value) ? value : "-";
+    }
+
+    private String blankToDefault(String value, String defaultValue) {
+        return StringUtils.hasText(value) ? value : defaultValue;
+    }
+
+    private String moneyText(BigDecimal value, int scale) {
+        if (value == null) {
+            return "-";
+        }
+        return value.setScale(scale, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
+    }
+
+    private String currencyText(BigDecimal value, int scale) {
+        String text = moneyText(value == null ? null : value.abs(), scale);
+        if ("-".equals(text)) {
+            return "-";
+        }
+        return (value.compareTo(BigDecimal.ZERO) < 0 ? "-¥" : "¥") + text;
+    }
+
+    private String percentText(BigDecimal value) {
+        if (value == null) {
+            return "-";
+        }
+        return value.setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + "%";
+    }
+
+    private String tone(BigDecimal value) {
+        if (value == null || value.compareTo(BigDecimal.ZERO) == 0) {
+            return "neutral";
+        }
+        return value.compareTo(BigDecimal.ZERO) > 0 ? "positive" : "negative";
+    }
+
+    private String productTypeName(String productType) {
+        if ("stock".equals(productType)) return "股票";
+        if ("fund".equals(productType)) return "基金";
+        if ("bond".equals(productType)) return "债券";
+        if ("gold".equals(productType)) return "黄金";
+        return "其他";
+    }
+
+    private String formatTencentTime(String raw) {
+        if (!StringUtils.hasText(raw) || raw.length() != 14) {
+            return null;
+        }
+        return raw.substring(0, 4) + "-" + raw.substring(4, 6) + "-" + raw.substring(6, 8)
+            + " " + raw.substring(8, 10) + ":" + raw.substring(10, 12) + ":" + raw.substring(12, 14);
     }
 
     private InvestmentDividendResponse toDividendRecordResponse(InvestmentDividendRecordEntity entity) {

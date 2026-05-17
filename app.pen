@@ -10321,15 +10321,6 @@
                           "fontFamily": "Inter",
                           "fontSize": 14,
                           "fontWeight": "700"
-                        },
-                        {
-                          "type": "text",
-                          "id": "Ixt2H",
-                          "fill": "#64748B",
-                          "content": "金额 ¥382.89",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
-                          "fontWeight": "500"
                         }
                       ]
                     }
@@ -10400,15 +10391,6 @@
                           "fontFamily": "Inter",
                           "fontSize": 14,
                           "fontWeight": "700"
-                        },
-                        {
-                          "type": "text",
-                          "id": "cZfrq",
-                          "fill": "#64748B",
-                          "content": "金额 ¥36.50",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
-                          "fontWeight": "500"
                         }
                       ]
                     }
@@ -10479,15 +10461,6 @@
                           "fontFamily": "Inter",
                           "fontSize": 14,
                           "fontWeight": "700"
-                        },
-                        {
-                          "type": "text",
-                          "id": "R2PyZU",
-                          "fill": "#64748B",
-                          "content": "金额 ¥128.01",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
-                          "fontWeight": "500"
                         }
                       ]
                     }
@@ -10558,15 +10531,6 @@
                           "fontFamily": "Inter",
                           "fontSize": 14,
                           "fontWeight": "700"
-                        },
-                        {
-                          "type": "text",
-                          "id": "y3oA0Y",
-                          "fill": "#64748B",
-                          "content": "金额 ¥9,322.60",
-                          "fontFamily": "Inter",
-                          "fontSize": 12,
-                          "fontWeight": "500"
                         }
                       ]
                     }

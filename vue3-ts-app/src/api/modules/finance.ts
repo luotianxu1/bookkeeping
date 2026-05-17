@@ -305,6 +305,65 @@ export interface InvestmentPosition {
   updatedAt: string
 }
 
+export interface InvestmentDetailStat {
+  label: string
+  value: string
+  tone?: 'positive' | 'negative' | 'neutral' | string | null
+}
+
+export interface InvestmentChartPoint {
+  label: string
+  value?: number | null
+  open?: number | null
+  close?: number | null
+  high?: number | null
+  low?: number | null
+  volume?: number | null
+}
+
+export interface InvestmentAssetDetail {
+  position: InvestmentPosition
+  productType?: InvestmentProductType | string | null
+  name?: string | null
+  symbol?: string | null
+  market?: string | null
+  unitName?: string | null
+  latestPrice?: number | null
+  change?: number | null
+  changePercent?: number | null
+  updatedAt?: string | null
+  marketStats: InvestmentDetailStat[]
+  holdingStats: InvestmentDetailStat[]
+  chartPoints: InvestmentChartPoint[]
+  chartType?: 'line' | 'candlestick' | string | null
+  source?: string | null
+  description?: string | null
+}
+
+export interface InvestmentTransaction {
+  id: number
+  transactionNo: string
+  userId: number
+  accountId: number
+  accountName?: string | null
+  positionId?: number | null
+  productId: number
+  productName?: string | null
+  productSymbol?: string | null
+  tradeType: string
+  quantity: number
+  price?: number | null
+  amount: number
+  feeAmount: number
+  taxAmount: number
+  currencyCode: string
+  tradeAt: string
+  status: string
+  remark?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface InvestmentPositionQuery {
   userId: number
   accountId?: number
@@ -450,6 +509,10 @@ export function getInvestmentPosition(id: number) {
   return requestGet<InvestmentPosition>(financeRequest, `/api/finance/investments/positions/${id}`)
 }
 
+export function getInvestmentPositionDetail(id: number) {
+  return requestGet<InvestmentAssetDetail>(financeRequest, `/api/finance/investments/positions/${id}/detail`)
+}
+
 export function createInvestmentPosition(params: SaveInvestmentPositionParams) {
   return requestPost<InvestmentPosition, SaveInvestmentPositionParams>(financeRequest, '/api/finance/investments/positions', params)
 }
@@ -462,4 +525,8 @@ export function deleteInvestmentPosition(id: number, userId: number) {
   return requestDelete<void>(financeRequest, `/api/finance/investments/positions/${id}`, {
     params: { userId },
   })
+}
+
+export function getInvestmentTransactions(params: { userId: number; accountId?: number; positionId?: number }) {
+  return requestGet<InvestmentTransaction[]>(financeRequest, '/api/finance/investments/transactions', { params })
 }

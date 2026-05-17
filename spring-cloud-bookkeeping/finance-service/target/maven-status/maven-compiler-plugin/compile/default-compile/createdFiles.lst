@@ -4,6 +4,7 @@ com/example/finance/service/AccountTypeService.class
 com/example/finance/dto/GoldPriceResponse.class
 com/example/finance/dto/MonthlyBudgetResponse.class
 com/example/finance/service/GoldPriceService$CngoldJewelryCode.class
+com/example/finance/dto/InvestmentAssetDetailResponse.class
 com/example/finance/dto/GoldPriceResponse$JewelryGoldPrice.class
 com/example/finance/dto/InvestmentProductRequest.class
 com/example/finance/service/GoldPriceService$CachedChartPoints.class
@@ -15,6 +16,7 @@ com/example/finance/dto/AccountTypeSortOrderRequest.class
 com/example/finance/mapper/MonthlyBudgetMapper.class
 com/example/finance/service/ExchangeRateService.class
 com/example/finance/dto/AccountResponse.class
+com/example/finance/dto/InvestmentDetailStatResponse.class
 com/example/finance/service/InvestmentService.class
 com/example/finance/dto/GoldPriceResponse$GoldChartPoint.class
 com/example/finance/config/OpenApiConfig.class
@@ -51,6 +53,7 @@ com/example/finance/entity/AccountEntity.class
 com/example/finance/entity/CategoryEntity.class
 com/example/finance/service/AccountService.class
 com/example/finance/controller/AccountController.class
+com/example/finance/dto/InvestmentChartPointResponse.class
 com/example/finance/entity/InvestmentTransactionEntity.class
 com/example/finance/dto/CategoryRequest.class
 com/example/finance/controller/TransactionController.class

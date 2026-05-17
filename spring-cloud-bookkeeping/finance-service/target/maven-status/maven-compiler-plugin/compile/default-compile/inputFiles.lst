@@ -18,6 +18,9 @@
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/CategoryResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/ExchangeRateResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/GoldPriceResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/InvestmentAssetDetailResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/InvestmentChartPointResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/InvestmentDetailStatResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/InvestmentDividendResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/InvestmentPositionRequest.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/InvestmentPositionResponse.java

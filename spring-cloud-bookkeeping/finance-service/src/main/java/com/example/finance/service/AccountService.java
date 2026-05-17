@@ -6,13 +6,16 @@ import com.example.finance.dto.AccountResponse;
 import com.example.finance.dto.AccountSortOrderRequest;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
+import com.example.finance.entity.InvestmentPositionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
+import com.example.finance.mapper.InvestmentPositionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -29,10 +32,12 @@ public class AccountService {
 
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
+    private final InvestmentPositionMapper investmentPositionMapper;
 
-    public AccountService(AccountMapper accountMapper, AccountTypeMapper accountTypeMapper) {
+    public AccountService(AccountMapper accountMapper, AccountTypeMapper accountTypeMapper, InvestmentPositionMapper investmentPositionMapper) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
+        this.investmentPositionMapper = investmentPositionMapper;
     }
 
     public List<AccountResponse> list(Long userId, Long accountTypeId, String status) {
@@ -162,7 +167,7 @@ public class AccountService {
         response.setIcon(entity.getIcon());
         response.setColor(entity.getColor());
         response.setCurrencyCode(entity.getCurrencyCode());
-        response.setCurrentBalance(entity.getCurrentBalance());
+        response.setCurrentBalance(resolveCurrentBalance(entity, accountType));
         response.setIncludeInNetWorth(entity.getIncludeInNetWorth());
         response.setSortOrder(entity.getSortOrder());
         response.setStatus(entity.getStatus());
@@ -170,5 +175,19 @@ public class AccountService {
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
         return response;
+    }
+
+    private BigDecimal resolveCurrentBalance(AccountEntity entity, AccountTypeEntity accountType) {
+        if (accountType == null || entity == null || !"investment".equals(accountType.getCode())) {
+            return entity == null || entity.getCurrentBalance() == null ? BigDecimal.ZERO : entity.getCurrentBalance();
+        }
+        BigDecimal marketValue = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+                .eq(InvestmentPositionEntity::getAccountId, entity.getId())
+                .eq(InvestmentPositionEntity::getStatus, "active"))
+            .stream()
+            .map(InvestmentPositionEntity::getMarketValue)
+            .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return marketValue.setScale(2, RoundingMode.HALF_UP);
     }
 }

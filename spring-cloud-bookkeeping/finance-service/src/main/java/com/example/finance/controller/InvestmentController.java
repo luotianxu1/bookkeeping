@@ -1,6 +1,7 @@
 package com.example.finance.controller;
 
 import com.example.common.result.Result;
+import com.example.finance.dto.InvestmentAssetDetailResponse;
 import com.example.finance.dto.InvestmentDividendResponse;
 import com.example.finance.dto.InvestmentPositionRequest;
 import com.example.finance.dto.InvestmentPositionResponse;
@@ -80,6 +81,14 @@ public class InvestmentController {
         return investmentService.getPosition(id)
             .map(Result::ok)
             .orElseGet(() -> Result.<InvestmentPositionResponse>fail().code(404).message("投资持仓不存在"));
+    }
+
+    @GetMapping("/positions/{id}/detail")
+    @Operation(summary = "查询投资资产行情详情")
+    public Result<InvestmentAssetDetailResponse> assetDetail(@PathVariable("id") @NotNull Long id) {
+        return investmentService.getPositionDetail(id)
+            .map(Result::ok)
+            .orElseGet(() -> Result.<InvestmentAssetDetailResponse>fail().code(404).message("投资持仓不存在"));
     }
 
     @PostMapping("/positions")
