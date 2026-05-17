@@ -10,12 +10,14 @@ import com.example.finance.dto.InvestmentSummaryResponse;
 import com.example.finance.dto.InvestmentTransactionRequest;
 import com.example.finance.dto.InvestmentTransactionResponse;
 import com.example.finance.entity.AccountEntity;
+import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.InvestmentDividendPlanEntity;
 import com.example.finance.entity.InvestmentDividendRecordEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
 import com.example.finance.entity.InvestmentProductEntity;
 import com.example.finance.entity.InvestmentTransactionEntity;
 import com.example.finance.mapper.AccountMapper;
+import com.example.finance.mapper.AccountTypeMapper;
 import com.example.finance.mapper.InvestmentDividendPlanMapper;
 import com.example.finance.mapper.InvestmentDividendRecordMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
@@ -31,9 +33,11 @@ import org.springframework.web.client.RestClient;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -44,7 +48,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -56,6 +59,8 @@ public class InvestmentService {
     private static final String ACTIVE_STATUS = "active";
     private static final String NORMAL_STATUS = "normal";
     private static final String VOIDED_STATUS = "voided";
+    private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
+    private static final String INVESTMENT_ACCOUNT_TYPE_CODE = "investment";
     private static final DateTimeFormatter NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private final InvestmentProductMapper productMapper;
@@ -64,10 +69,10 @@ public class InvestmentService {
     private final InvestmentDividendPlanMapper dividendPlanMapper;
     private final InvestmentDividendRecordMapper dividendRecordMapper;
     private final AccountMapper accountMapper;
+    private final AccountTypeMapper accountTypeMapper;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final HttpClient httpClient;
-    private final Map<String, InvestmentProductResponse> externalProductCache = new ConcurrentHashMap<>();
 
     public InvestmentService(
         InvestmentProductMapper productMapper,
@@ -76,6 +81,7 @@ public class InvestmentService {
         InvestmentDividendPlanMapper dividendPlanMapper,
         InvestmentDividendRecordMapper dividendRecordMapper,
         AccountMapper accountMapper,
+        AccountTypeMapper accountTypeMapper,
         ObjectMapper objectMapper
     ) {
         this.productMapper = productMapper;
@@ -84,6 +90,7 @@ public class InvestmentService {
         this.dividendPlanMapper = dividendPlanMapper;
         this.dividendRecordMapper = dividendRecordMapper;
         this.accountMapper = accountMapper;
+        this.accountTypeMapper = accountTypeMapper;
         this.objectMapper = objectMapper;
         this.restClient = RestClient.builder().build();
         this.httpClient = HttpClient.newBuilder()
@@ -137,13 +144,15 @@ public class InvestmentService {
 
     @Transactional
     public InvestmentPositionResponse createPosition(InvestmentPositionRequest request) {
-        AccountEntity account = requireAccount(request.getUserId(), request.getAccountId());
+        AccountEntity account = requireInvestmentAccount(request.getUserId(), request.getAccountId());
+        AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
         InvestmentProductEntity product = request.getProductId() != null
             ? requireProduct(request.getProductId())
             : createOrLoadProduct(request.getProduct());
 
         InvestmentPositionEntity entity = new InvestmentPositionEntity();
         fillPosition(entity, request, product.getId());
+        deductFundingAccount(fundingAccount, entity.getCostAmount());
         positionMapper.insert(entity);
         return toPositionResponse(positionMapper.selectById(entity.getId()), product, account);
     }
@@ -154,7 +163,7 @@ public class InvestmentService {
         if (entity == null) {
             return Optional.empty();
         }
-        AccountEntity account = requireAccount(request.getUserId(), request.getAccountId());
+        AccountEntity account = requireInvestmentAccount(request.getUserId(), request.getAccountId());
         InvestmentProductEntity product = request.getProductId() != null
             ? requireProduct(request.getProductId())
             : createOrLoadProduct(request.getProduct());
@@ -211,7 +220,7 @@ public class InvestmentService {
 
     @Transactional
     public InvestmentTransactionResponse createTransaction(InvestmentTransactionRequest request) {
-        requireAccount(request.getUserId(), request.getAccountId());
+        requireInvestmentAccount(request.getUserId(), request.getAccountId());
         InvestmentProductEntity product = requireProduct(request.getProductId());
         InvestmentTransactionEntity entity = new InvestmentTransactionEntity();
         entity.setTransactionNo(generateTransactionNo());
@@ -337,12 +346,41 @@ public class InvestmentService {
         entity.setRemark(request.getRemark());
     }
 
-    private AccountEntity requireAccount(Long userId, Long accountId) {
+    private AccountEntity requireInvestmentAccount(Long userId, Long accountId) {
         AccountEntity account = accountMapper.selectById(accountId);
         if (account == null || !userId.equals(account.getUserId())) {
             throw new IllegalArgumentException("投资账户不存在");
         }
+        AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
+        if (accountType == null || !INVESTMENT_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
+            throw new IllegalArgumentException("请选择投资账户");
+        }
         return account;
+    }
+
+    private AccountEntity requireCashFundingAccount(Long userId, Long accountId) {
+        if (accountId == null) {
+            throw new IllegalArgumentException("请选择资金账户");
+        }
+        AccountEntity account = accountMapper.selectById(accountId);
+        if (account == null || !userId.equals(account.getUserId())) {
+            throw new IllegalArgumentException("资金账户不存在");
+        }
+        AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
+        if (accountType == null || !CASH_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
+            throw new IllegalArgumentException("资金账户必须为现金账户");
+        }
+        return account;
+    }
+
+    private void deductFundingAccount(AccountEntity account, BigDecimal amount) {
+        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
+        BigDecimal nextBalance = currentBalance.subtract(defaultZero(amount).setScale(2, RoundingMode.HALF_UP));
+        if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("资金账户余额不足");
+        }
+        account.setCurrentBalance(nextBalance);
+        accountMapper.updateById(account);
     }
 
     private InvestmentProductEntity requireProduct(Long productId) {
@@ -456,46 +494,21 @@ public class InvestmentService {
     }
 
     private List<InvestmentProductResponse> fetchExternalProducts(String keyword, String productType) {
-        if (!keyword.matches("\\d{6}")) {
-            return Collections.emptyList();
-        }
-
-        Optional<InvestmentProductResponse> cached = getCachedExternalProduct(keyword, productType);
-        if (cached.isPresent()) {
-            return List.of(cached.get());
-        }
-
-        if (!StringUtils.hasText(productType) || "fund".equals(productType)) {
+        if (keyword.matches("\\d{6}") && (!StringUtils.hasText(productType) || "fund".equals(productType))) {
             Optional<InvestmentProductResponse> fund = fetchFundProduct(keyword);
             if (fund.isPresent()) {
-                return List.of(cacheExternalProduct(keyword, fund.get()));
+                return List.of(fund.get());
             }
         }
 
-        if (!StringUtils.hasText(productType) || "stock".equals(productType)) {
+        if (keyword.matches("\\d{6}") && (!StringUtils.hasText(productType) || "stock".equals(productType))) {
             Optional<InvestmentProductResponse> stock = fetchStockProduct(keyword);
-            return stock.map(product -> List.of(cacheExternalProduct(keyword, product))).orElseGet(Collections::emptyList);
+            if (stock.isPresent()) {
+                return List.of(stock.get());
+            }
         }
 
-        return Collections.emptyList();
-    }
-
-    private Optional<InvestmentProductResponse> getCachedExternalProduct(String keyword, String productType) {
-        if (StringUtils.hasText(productType)) {
-            return Optional.ofNullable(externalProductCache.get(externalProductCacheKey(productType, keyword)));
-        }
-        return Optional.ofNullable(externalProductCache.get(externalProductCacheKey("fund", keyword)))
-            .or(() -> Optional.ofNullable(externalProductCache.get(externalProductCacheKey("stock", keyword))));
-    }
-
-    private InvestmentProductResponse cacheExternalProduct(String keyword, InvestmentProductResponse product) {
-        externalProductCache.put(externalProductCacheKey(product.getProductType(), keyword), product);
-        externalProductCache.put(externalProductCacheKey(product.getProductType(), product.getSymbol()), product);
-        return product;
-    }
-
-    private String externalProductCacheKey(String productType, String keyword) {
-        return productType + ":" + keyword;
+        return fetchEastMoneyProducts(keyword, productType);
     }
 
     private Optional<InvestmentProductResponse> fetchFundProduct(String code) {
@@ -535,14 +548,161 @@ public class InvestmentService {
         }
     }
 
+    private List<InvestmentProductResponse> fetchEastMoneyProducts(String keyword, String productType) {
+        try {
+            String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
+            HttpRequest request = HttpRequest.newBuilder(URI.create(
+                    "https://searchapi.eastmoney.com/api/suggest/get?input=" + encodedKeyword + "&type=14&count=20&cb=searchResult"
+                ))
+                .timeout(Duration.ofSeconds(8))
+                .header("User-Agent", "Mozilla/5.0")
+                .GET()
+                .build();
+            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+                return Collections.emptyList();
+            }
+
+            String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
+            JsonNode rows = objectMapper.readTree(extractJsonpObject(body)).path("QuotationCodeTable").path("Data");
+            if (!rows.isArray()) {
+                return Collections.emptyList();
+            }
+
+            return java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                .map(row -> toExternalProductFromSuggestion(row, productType))
+                .flatMap(Optional::stream)
+                .limit(8)
+                .toList();
+        } catch (Exception ex) {
+            return Collections.emptyList();
+        }
+    }
+
+    private Optional<InvestmentProductResponse> toExternalProductFromSuggestion(JsonNode row, String productType) {
+        String code = row.path("Code").asText("");
+        String classify = row.path("Classify").asText("");
+        String securityTypeName = row.path("SecurityTypeName").asText("");
+        String resolvedType = resolveProductType(classify, securityTypeName);
+        if (!StringUtils.hasText(code) || !StringUtils.hasText(resolvedType)) {
+            return Optional.empty();
+        }
+        if (StringUtils.hasText(productType) && !productType.equals(resolvedType)) {
+            return Optional.empty();
+        }
+
+        if ("fund".equals(resolvedType)) {
+            return fetchFundProduct(code).or(() -> Optional.of(toBasicExternalProduct(row, "fund", "FUND", null, "份", 4)));
+        }
+        if ("stock".equals(resolvedType)) {
+            return fetchStockProduct(code)
+                .or(() -> fetchTencentStockProduct(code))
+                .or(() -> Optional.of(toBasicExternalProduct(row, "stock", "CN", resolveExchangeCode(row), "股", 2)));
+        }
+        if ("bond".equals(resolvedType)) {
+            return Optional.of(toBasicExternalProduct(row, "bond", "CN", resolveExchangeCode(row), "张", 4));
+        }
+        return fetchTencentStockProduct(code);
+    }
+
+    private Optional<InvestmentProductResponse> fetchTencentStockProduct(String code) {
+        for (String symbol : tencentStockSymbols(code)) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder(URI.create("https://qt.gtimg.cn/q=" + symbol))
+                    .timeout(Duration.ofSeconds(8))
+                    .header("User-Agent", "Mozilla/5.0")
+                    .GET()
+                    .build();
+                HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+                    continue;
+                }
+
+                String body = new String(httpResponse.body(), Charset.forName("GBK"));
+                int start = body.indexOf('"');
+                int end = body.lastIndexOf('"');
+                if (start < 0 || end <= start) {
+                    continue;
+                }
+                String[] fields = body.substring(start + 1, end).split("~");
+                if (fields.length < 4 || !StringUtils.hasText(fields[1])) {
+                    continue;
+                }
+
+                InvestmentProductResponse response = new InvestmentProductResponse();
+                response.setProductType("stock");
+                response.setMarket("CN");
+                response.setExchangeCode(symbol.startsWith("sh") ? "SSE" : "SZSE");
+                response.setSymbol(fields[2]);
+                response.setName(fields[1]);
+                response.setShortName(fields[1]);
+                response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
+                response.setUnitName("股");
+                response.setPricePrecision(2);
+                response.setLatestPrice(decimalText(fields[3], null));
+                response.setStatus(ACTIVE_STATUS);
+                return Optional.of(response);
+            } catch (Exception ex) {
+                // Try next market prefix.
+            }
+        }
+        return Optional.empty();
+    }
+
+    private String resolveProductType(String classify, String securityTypeName) {
+        if ("OTCFUND".equals(classify) || securityTypeName.contains("基金")) {
+            return "fund";
+        }
+        if ("AStock".equals(classify) || securityTypeName.contains("A")) {
+            return "stock";
+        }
+        if ("Bond".equals(classify) || securityTypeName.contains("债券")) {
+            return "bond";
+        }
+        return null;
+    }
+
+    private InvestmentProductResponse toBasicExternalProduct(JsonNode row, String productType, String market, String exchangeCode, String unitName, int pricePrecision) {
+        InvestmentProductResponse response = new InvestmentProductResponse();
+        response.setProductType(productType);
+        response.setMarket(market);
+        response.setExchangeCode(exchangeCode);
+        response.setSymbol(row.path("Code").asText(""));
+        response.setName(row.path("Name").asText(""));
+        response.setShortName(row.path("Name").asText(""));
+        response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
+        response.setUnitName(unitName);
+        response.setPricePrecision(pricePrecision);
+        response.setStatus(ACTIVE_STATUS);
+        return response;
+    }
+
+    private String resolveExchangeCode(JsonNode row) {
+        String quoteId = row.path("QuoteID").asText("");
+        if (quoteId.startsWith("1.")) {
+            return "SSE";
+        }
+        if (quoteId.startsWith("0.")) {
+            return "SZSE";
+        }
+        return null;
+    }
+
     private Optional<InvestmentProductResponse> fetchStockProduct(String code) {
         for (String secid : stockSecids(code)) {
             try {
-                String body = restClient.get()
-                    .uri("https://push2.eastmoney.com/api/qt/stock/get?secid=" + secid + "&fields=f57,f58,f43")
+                HttpRequest request = HttpRequest.newBuilder(URI.create("http://push2.eastmoney.com/api/qt/stock/get?secid=" + secid + "&fields=f57,f58,f43"))
+                    .timeout(Duration.ofSeconds(8))
                     .header("User-Agent", "Mozilla/5.0")
-                    .retrieve()
-                    .body(String.class);
+                    .header("Accept-Encoding", "identity")
+                    .GET()
+                    .build();
+                HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+                if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+                    continue;
+                }
+
+                String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
                 JsonNode data = objectMapper.readTree(body).path("data");
                 String name = data.path("f58").asText("");
                 if (!StringUtils.hasText(name)) {
@@ -559,7 +719,7 @@ public class InvestmentService {
                 response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
                 response.setUnitName("股");
                 response.setPricePrecision(2);
-                BigDecimal rawPrice = data.path("f43").isNumber() ? data.path("f43").decimalValue() : null;
+                BigDecimal rawPrice = decimalText(data.path("f43").asText(null), null);
                 response.setLatestPrice(rawPrice == null ? null : rawPrice.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
                 response.setStatus(ACTIVE_STATUS);
                 return Optional.of(response);
@@ -575,6 +735,13 @@ public class InvestmentService {
             return List.of("1." + code, "0." + code);
         }
         return List.of("0." + code, "1." + code);
+    }
+
+    private List<String> tencentStockSymbols(String code) {
+        if (code.startsWith("6")) {
+            return List.of("sh" + code, "sz" + code);
+        }
+        return List.of("sz" + code, "sh" + code);
     }
 
     private String extractJsonpObject(String body) {

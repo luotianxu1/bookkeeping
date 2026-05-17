@@ -4,46 +4,38 @@
   z-index: 100;
   display: grid;
   place-items: center;
-  padding: var(--space-16);
+  padding: var(--space-24);
 }
 
 .common-modal-overlay {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(15, 23, 42, 0.52);
+  background: rgba(15, 23, 42, 0.4);
 }
 
 .common-modal-panel {
   position: relative;
   z-index: 1;
-  width: min(100%, 460px);
+  width: min(100%, 312px);
   max-height: min(80dvh, 680px);
   overflow: auto;
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-16);
+  border: 0;
+  border-radius: var(--radius-18);
   background: var(--color-white);
-  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.28);
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.24);
 }
 
 .common-modal-panel-compact {
-  width: min(100%, 313px);
-  border: 0;
-  border-radius: 18px;
+  width: min(100%, 312px);
 }
 
 .common-modal-header {
-  min-height: var(--space-56);
+  min-height: 26px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.common-modal-panel-compact .common-modal-header {
-  min-height: 26px;
   padding: 16px 16px 0;
   border-bottom: 0;
 }
@@ -56,30 +48,22 @@
 }
 
 .common-modal-close {
-  width: var(--space-36);
-  height: var(--space-36);
+  width: var(--space-28);
+  height: var(--space-28);
   display: inline-grid;
   place-items: center;
   border-radius: var(--radius-8);
   color: var(--color-text-muted);
-  font-size: var(--font-size-24);
+  font-size: var(--font-size-20);
   line-height: 1;
 }
 
 .common-modal-body {
-  padding: var(--space-16);
-}
-
-.common-modal-panel-compact .common-modal-body {
-  padding: 10px 16px 0;
+  padding: 12px 16px 0;
 }
 
 .common-modal-footer {
-  padding: 0 16px 16px;
-}
-
-.common-modal-panel-compact .common-modal-footer {
-  padding: 10px 16px 16px;
+  padding: 12px 16px 16px;
 }
 
 .modal-fade-enter-active,
@@ -103,4 +87,15 @@
 .modal-pop-leave-to {
   opacity: 0;
   transform: translateY(16px) scale(0.98);
+}
+
+@media (prefers-color-scheme: dark) {
+  .common-modal-overlay {
+    background: rgba(2, 6, 23, 0.7);
+  }
+
+  .common-modal-panel {
+    border-color: var(--color-dark-card-border);
+    background: var(--color-dark-card-bg);
+  }
 }

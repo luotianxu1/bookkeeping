@@ -6,20 +6,6 @@
   padding-bottom: var(--space-72);
 }
 
-.category-management-page :deep(.common-modal-panel) {
-  width: min(100%, 312px);
-  border-radius: var(--radius-18);
-}
-
-.category-management-page :deep(.common-modal-header) {
-  border-bottom: 0;
-  padding-bottom: 6px;
-}
-
-.category-management-page :deep(.common-modal-body) {
-  padding-top: 6px;
-}
-
 .category-management-header {
   display: flex;
   align-items: center;

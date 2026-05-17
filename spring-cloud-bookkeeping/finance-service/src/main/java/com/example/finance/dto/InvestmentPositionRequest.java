@@ -16,6 +16,8 @@ public class InvestmentPositionRequest {
     @NotNull(message = "投资账户ID不能为空")
     private Long accountId;
 
+    private Long fundingAccountId;
+
     private Long productId;
     private InvestmentProductRequest product;
 

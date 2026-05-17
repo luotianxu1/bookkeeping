@@ -315,6 +315,7 @@ export interface InvestmentPositionQuery {
 export interface SaveInvestmentPositionParams {
   userId: number
   accountId: number
+  fundingAccountId?: number
   productId?: number
   product?: SaveInvestmentProductParams
   holdingQuantity: number

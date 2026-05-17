@@ -5,10 +5,6 @@ import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
-import CommonInput from '@/components/common/CommonInput/index.vue'
-import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
-import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
-import CommonButton from '@/components/common/CommonButton/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
@@ -22,6 +18,7 @@ import {
   type Account,
   type AccountType,
   type InvestmentPosition,
+  type InvestmentProduct,
   type InvestmentProductType,
   type InvestmentSummary,
 } from '@/api/modules/finance'
@@ -41,6 +38,7 @@ const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const investmentAccounts = ref<Account[]>([])
+const fundingAccounts = ref<Account[]>([])
 const accountTypes = ref<AccountType[]>([])
 const summary = ref<InvestmentSummary>({
   userId: 0,
@@ -56,30 +54,22 @@ const summary = ref<InvestmentSummary>({
 const positions = ref<InvestmentPosition[]>([])
 const selectedAccountId = ref<number | null>(null)
 
+const addAssetKeyword = ref('')
 const addAssetName = ref('')
 const addAssetSymbol = ref('')
 const addAssetMarket = ref('')
-const addAssetCategoryOptions: CommonSelectOption[] = [
-  { label: 'A股', value: 'stock' },
-  { label: '基金', value: 'fund' },
-  { label: '债券', value: 'bond' },
-  { label: '黄金', value: 'gold' },
-  { label: '其他', value: 'other' },
-]
 const addAssetCategory = ref<InvestmentProductType>('fund')
-const addAssetAccount = ref('')
-const addAssetCost = ref('')
-const addAssetQuantity = ref('')
+const addAssetFundingAccount = ref('')
+const addAssetAmount = ref('')
 const addAssetCurrentPrice = ref('')
-const addAssetIncludeInNetWorth = ref(true)
-const addAssetRemark = ref('')
 const isLookingUpProduct = ref(false)
 const productLookupMessage = ref('')
 let productLookupTimer: number | undefined
+let isFillingProduct = false
 
-const accountOptions = computed<CommonSelectOption[]>(() =>
-  investmentAccounts.value.map((account) => ({
-    label: account.name,
+const fundingAccountOptions = computed(() =>
+  fundingAccounts.value.map((account) => ({
+    label: `${account.name}（余额 ${formatAmount(account.currentBalance)}）`,
     value: String(account.id),
   })),
 )
@@ -112,17 +102,26 @@ onMounted(() => {
   loadInvestmentData()
 })
 
-watch(addAssetSymbol, (nextSymbol) => {
+watch(addAssetKeyword, (nextKeyword) => {
+  if (isFillingProduct) {
+    return
+  }
+
   window.clearTimeout(productLookupTimer)
-  const keyword = nextSymbol.trim()
+  const keyword = nextKeyword.trim()
   productLookupMessage.value = ''
 
+  if (keyword === `${addAssetSymbol.value} ${addAssetName.value}`.trim()) {
+    return
+  }
+
   if (keyword.length < 2) {
+    clearProductFields()
     return
   }
 
   productLookupTimer = window.setTimeout(() => {
-    lookupProductByCode(keyword)
+    lookupProductByKeyword(keyword)
   }, 400)
 })
 
@@ -153,6 +152,7 @@ async function loadInvestmentData() {
     ])
     accountTypes.value = typeList
     investmentAccounts.value = accountList.filter((account) => account.accountTypeCode === 'investment')
+    fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
 
     const selectedExists = investmentAccounts.value.some((account) => account.id === selectedAccountId.value)
     if (!selectedAccountId.value || !selectedExists) {
@@ -167,11 +167,8 @@ async function loadInvestmentData() {
 
     summary.value = summaryData
     positions.value = positionList
-
-    if (investmentAccounts.value.length > 0) {
-      addAssetAccount.value = selectedAccountId.value
-        ? String(selectedAccountId.value)
-        : String(investmentAccounts.value[0].id)
+    if (!addAssetFundingAccount.value || !fundingAccounts.value.some((account) => String(account.id) === addAssetFundingAccount.value)) {
+      addAssetFundingAccount.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
     }
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : '投资账户加载失败'
@@ -191,21 +188,22 @@ async function saveAsset() {
     return
   }
 
-  const accountId = Number(addAssetAccount.value)
+  const accountId = selectedAccountId.value
+  const fundingAccountId = Number(addAssetFundingAccount.value)
   const currentPrice = Number(addAssetCurrentPrice.value)
-  const quantity = Number(addAssetQuantity.value)
-  const costAmount = Number(addAssetCost.value)
+  const costAmount = Number(addAssetAmount.value)
+  const quantity = currentPrice > 0 ? costAmount / currentPrice : 0
 
   if (!addAssetName.value.trim() || !addAssetSymbol.value.trim()) {
-    formError.value = '请输入资产名称和代码'
+    formError.value = '请先搜索并选择有效资产'
     return
   }
-  if (!Number.isFinite(accountId)) {
-    formError.value = '请选择投资账户'
+  if (!accountId) {
+    formError.value = '当前投资账户不存在'
     return
   }
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    formError.value = '请输入持仓数量'
+  if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
+    formError.value = '请选择资金账户'
     return
   }
   if (!Number.isFinite(costAmount) || costAmount <= 0) {
@@ -213,7 +211,11 @@ async function saveAsset() {
     return
   }
   if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
-    formError.value = '请输入当前价格'
+    formError.value = '未获取到当前价格，请重新搜索资产'
+    return
+  }
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    formError.value = '买入金额或当前价格不正确'
     return
   }
 
@@ -224,24 +226,25 @@ async function saveAsset() {
     await createInvestmentPosition({
       userId: currentUser.id,
       accountId,
+      fundingAccountId,
       product: {
         productType: addAssetCategory.value as InvestmentProductType,
         market: addAssetMarket.value.trim() || null,
         symbol: addAssetSymbol.value.trim(),
         name: addAssetName.value.trim(),
         currencyCode: 'CNY',
-        unitName: addAssetCategory.value === 'gold' ? '克' : '份',
+        unitName: addAssetCategory.value === 'stock' ? '股' : addAssetCategory.value === 'gold' ? '克' : '份',
         status: 'active',
-        remark: addAssetRemark.value.trim() || null,
+        remark: null,
       },
-      holdingQuantity: quantity,
-      availableQuantity: quantity,
+      holdingQuantity: Number(quantity.toFixed(6)),
+      availableQuantity: Number(quantity.toFixed(6)),
       frozenQuantity: 0,
-      costAmount,
+      costAmount: Number(costAmount.toFixed(2)),
       currentPrice,
-      includeInNetWorth: addAssetIncludeInNetWorth.value,
+      includeInNetWorth: true,
       status: 'active',
-      remark: addAssetRemark.value.trim() || null,
+      remark: null,
     })
     closeAddModal()
     showFeedback('新增成功', 'success')
@@ -255,32 +258,35 @@ async function saveAsset() {
   }
 }
 
-async function lookupProductByCode(keyword: string) {
+async function lookupProductByKeyword(keyword = addAssetKeyword.value) {
   if (isLookingUpProduct.value) {
     return
   }
 
+  const searchKeyword = keyword.trim()
+  if (!searchKeyword) {
+    formError.value = '请输入代码或名称'
+    return
+  }
+
   isLookingUpProduct.value = true
-  productLookupMessage.value = '正在识别代码...'
+  productLookupMessage.value = '正在搜索资产...'
+  formError.value = ''
 
   try {
-    const products = await getInvestmentProducts({ keyword })
-    const normalizedKeyword = keyword.toUpperCase()
+    const products = await getInvestmentProducts({ keyword: searchKeyword })
+    const normalizedKeyword = searchKeyword.toUpperCase()
     const matchedProduct = products.find((product) => product.symbol.toUpperCase() === normalizedKeyword)
+      ?? products.find((product) => product.name.includes(searchKeyword))
       ?? products[0]
 
     if (!matchedProduct) {
-      productLookupMessage.value = '未找到该代码，可手动填写资产信息'
+      clearProductFields()
+      productLookupMessage.value = '未找到该资产，请确认代码或名称'
       return
     }
 
-    addAssetName.value = matchedProduct.name
-    addAssetSymbol.value = matchedProduct.symbol
-    addAssetMarket.value = matchedProduct.market || ''
-    addAssetCategory.value = matchedProduct.productType
-    if (matchedProduct.latestPrice && matchedProduct.latestPrice > 0) {
-      addAssetCurrentPrice.value = String(matchedProduct.latestPrice)
-    }
+    fillProductFields(matchedProduct)
     productLookupMessage.value = `已识别：${matchedProduct.name}`
   } catch (error) {
     productLookupMessage.value = error instanceof Error ? error.message : '代码识别失败'
@@ -289,12 +295,46 @@ async function lookupProductByCode(keyword: string) {
   }
 }
 
+function fillProductFields(product: InvestmentProduct) {
+  isFillingProduct = true
+  addAssetName.value = product.name
+  addAssetSymbol.value = product.symbol
+  addAssetKeyword.value = `${product.symbol} ${product.name}`
+  isFillingProduct = false
+  addAssetMarket.value = product.market || ''
+  addAssetCategory.value = product.productType
+  if (product.latestPrice && product.latestPrice > 0) {
+    addAssetCurrentPrice.value = String(product.latestPrice)
+  }
+}
+
+function clearProductFields() {
+  addAssetName.value = ''
+  addAssetSymbol.value = ''
+  addAssetMarket.value = ''
+  addAssetCurrentPrice.value = ''
+}
+
 function openAddModal() {
+  resetAddForm()
   showAddModal.value = true
 }
 
 function closeAddModal() {
   showAddModal.value = false
+  formError.value = ''
+}
+
+function resetAddForm() {
+  addAssetKeyword.value = ''
+  addAssetName.value = ''
+  addAssetSymbol.value = ''
+  addAssetMarket.value = ''
+  addAssetCategory.value = 'fund'
+  addAssetFundingAccount.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
+  addAssetAmount.value = ''
+  addAssetCurrentPrice.value = ''
+  productLookupMessage.value = ''
   formError.value = ''
 }
 
@@ -311,6 +351,51 @@ function getProductTag(position: InvestmentPosition) {
     other: '其他',
   }
   return map[position.productType || 'other'] ?? '其他'
+}
+
+function formatCurrency(value: number, digits = 2) {
+  const numeric = Number(value)
+  const sign = numeric < 0 ? '-' : ''
+  return `${sign}¥${new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Math.abs(numeric))}`
+}
+
+function formatQuantity(value: number, unitName?: string | null) {
+  return `x ${new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value)} ${unitName || '份'}`
+}
+
+function formatPrice(value: number) {
+  return formatCurrency(value, 4)
+}
+
+function formatSyncDate(value?: string | null) {
+  if (!value) {
+    return '--'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '--'
+  }
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${month}-${day}`
+}
+
+function getAllocationPercent(position: InvestmentPosition) {
+  const total = Number(summary.value.totalMarketValue)
+  if (!Number.isFinite(total) || total <= 0) {
+    return 0
+  }
+  const percent = (Number(position.marketValue) / total) * 100
+  if (!Number.isFinite(percent)) {
+    return 0
+  }
+  return Math.min(Math.max(percent, 0), 100)
 }
 
 function formatAmount(value: number) {
@@ -382,27 +467,27 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <div class="holding-left">
               <div class="holding-title">
                 <strong>{{ holding.productName }}</strong>
-                <span>{{ holding.productSymbol }}</span>
+                <span>{{ formatQuantity(holding.holdingQuantity, holding.unitName) }}</span>
               </div>
               <div class="holding-tags">
                 <span class="holding-tag">{{ getProductTag(holding) }}</span>
-                <span class="holding-market-value">{{ holding.accountName }}</span>
+                <span class="holding-market-value">{{ formatCurrency(holding.marketValue, 0) }}</span>
               </div>
             </div>
             <div class="holding-right">
               <span>今日盈亏</span>
-              <AmountText tag="strong" :value="formatAmount(holding.dayProfit)" />
+              <AmountText tag="strong" :value="holding.dayProfit === 0 ? '--' : formatAmount(holding.dayProfit)" />
             </div>
           </div>
 
           <div class="holding-row middle">
-            <div class="holding-left compact">
-              <AmountText tag="strong" :value="formatAmount(holding.marketValue)" />
-              <span>市值</span>
+            <div class="holding-price-line">
+              <AmountText tag="strong" tone="inherit" :value="formatPrice(holding.currentPrice)" />
+              <span>最新净值 {{ formatSyncDate(holding.lastSyncedAt) }}</span>
             </div>
             <div class="holding-right compact">
-              <span>成本</span>
-              <AmountText tag="strong" :value="formatAmount(holding.costAmount)" />
+              <span>成本价</span>
+              <AmountText tag="strong" tone="inherit" :value="formatPrice(holding.avgCostPrice)" />
             </div>
           </div>
 
@@ -410,19 +495,19 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
           <div class="holding-row bottom">
             <div class="holding-left compact">
-              <span>持仓盈亏</span>
+              <span>累计盈亏</span>
               <div class="holding-pnl-line">
-                <AmountText tag="strong" :value="formatAmount(holding.holdingProfit)" />
-                <AmountText tag="span" class="holding-pnl-rate" :value="`${formatAmount(holding.holdingProfitRate)}%`" />
+                <AmountText tag="strong" :value="formatCurrency(holding.cumulativeProfit, 0)" />
+                <AmountText tag="span" class="holding-pnl-rate" :value="`${formatAmount(holding.cumulativeProfitRate)}%`" />
               </div>
             </div>
             <div class="holding-right compact">
-              <span>持仓数量</span>
+              <span>仓位占比</span>
               <div class="holding-allocation">
                 <div class="holding-allocation-track">
-                  <span :style="{ width: `${Math.min(Math.max(Number(holding.cumulativeProfitRate) || 0, 0), 100)}%` }"></span>
+                  <span :style="{ width: `${getAllocationPercent(holding)}%` }"></span>
                 </div>
-                <AmountText tag="strong" :value="`${formatAmount(holding.holdingQuantity)} ${holding.unitName || '份'}`" />
+                <AmountText tag="strong" tone="inherit" :value="`${formatAmount(getAllocationPercent(holding))}%`" />
               </div>
             </div>
           </div>
@@ -436,30 +521,56 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
     <FloatingAddButton aria-label="新增投资资产" storage-key="investment-account" @click="openAddModal" />
 
-    <CommonModal v-model="showAddModal" title="添加资产">
+    <CommonModal v-model="showAddModal" title="添加资产" size="compact" :show-close="false">
       <div class="investment-add-modal-form">
-        <CommonInput v-model="addAssetSymbol" label="基金/股票代码" placeholder="输入代码后自动识别" />
+        <label class="investment-search-field" aria-label="输入代码或名称">
+          <input
+            v-model="addAssetKeyword"
+            type="search"
+            inputmode="search"
+            placeholder="输入代码或名称"
+            @keydown.enter.prevent="lookupProductByKeyword()"
+          />
+          <button type="button" :disabled="isLookingUpProduct" @click="lookupProductByKeyword()">
+            <span aria-hidden="true">⌕</span>
+            {{ isLookingUpProduct ? '搜索中' : '搜索' }}
+          </button>
+        </label>
         <p v-if="productLookupMessage" class="investment-lookup-message">
           {{ productLookupMessage }}
         </p>
-        <CommonInput v-model="addAssetName" label="资产名称" placeholder="自动填入或手动输入" />
-        <CommonInput v-model="addAssetMarket" label="市场" placeholder="例如：CN / HK / US" />
-        <CommonSelect v-model="addAssetCategory" label="资产分类" :options="addAssetCategoryOptions" />
-        <CommonSelect v-model="addAssetAccount" label="所属账户" :options="accountOptions" />
-        <CommonInput v-model="addAssetQuantity" label="持仓数量" input-mode="decimal" placeholder="请输入数量" />
-        <CommonInput v-model="addAssetCost" label="买入金额" input-mode="decimal" placeholder="请输入金额" />
-        <CommonInput v-model="addAssetCurrentPrice" label="当前价格" input-mode="decimal" placeholder="请输入价格" />
-        <CommonSwitch v-model="addAssetIncludeInNetWorth" label="是否计入总资产" />
-        <CommonInput v-model="addAssetRemark" label="备注" placeholder="可选，添加说明" />
+
+        <label class="investment-add-modal-field">
+          <span>资金账户</span>
+          <select v-model="addAssetFundingAccount" class="investment-field-control">
+            <option v-for="option in fundingAccountOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="investment-add-modal-field">
+          <span>买入金额</span>
+          <input
+            v-model="addAssetAmount"
+            class="investment-field-control"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            placeholder="0.00"
+            aria-label="买入金额"
+          />
+        </label>
         <p v-if="formError" class="investment-add-error">{{ formError }}</p>
       </div>
 
       <template #footer>
         <div class="investment-add-modal-actions">
-          <CommonButton variant="secondary" :disabled="isSaving" @click="closeAddModal">取消</CommonButton>
-          <CommonButton variant="primary" :disabled="isSaving" @click="saveAsset">
-            {{ isSaving ? '保存中...' : '保存' }}
-          </CommonButton>
+          <button class="investment-modal-button secondary" type="button" :disabled="isSaving" @click="closeAddModal">取消</button>
+          <button class="investment-modal-button primary" type="button" :disabled="isSaving" @click="saveAsset">
+            {{ isSaving ? '保存中...' : '确认添加' }}
+          </button>
         </div>
       </template>
     </CommonModal>
