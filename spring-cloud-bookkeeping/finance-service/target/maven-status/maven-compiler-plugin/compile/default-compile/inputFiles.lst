@@ -4,6 +4,7 @@
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/controller/AccountTypeController.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/controller/CategoryController.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/controller/ExchangeRateController.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/controller/GoldAccountController.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/controller/GoldPriceController.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/controller/InvestmentController.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/controller/MonthlyBudgetController.java
@@ -17,6 +18,10 @@
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/CategoryRequest.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/CategoryResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/ExchangeRateResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/GoldAccountHoldingResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/GoldAccountSummaryResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/GoldLiquidationRecordResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/GoldLiquidationResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/GoldPriceResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/InvestmentAssetDetailResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/InvestmentChartPointResponse.java
@@ -59,6 +64,7 @@
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/service/AccountTypeService.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/service/CategoryService.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/service/ExchangeRateService.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/service/GoldAccountService.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/service/GoldPriceService.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/service/InvestmentService.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/service/MonthlyBudgetService.java

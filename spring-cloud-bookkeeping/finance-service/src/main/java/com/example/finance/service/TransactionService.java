@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -201,17 +202,17 @@ public class TransactionService {
             .collect(Collectors.toSet());
 
         Map<Long, AccountEntity> accounts = accountIds.isEmpty()
-            ? Map.of()
+            ? Collections.emptyMap()
             : accountMapper.selectBatchIds(accountIds).stream().collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
         Map<Long, CategoryEntity> categories = categoryIds.isEmpty()
-            ? Map.of()
+            ? Collections.emptyMap()
             : categoryMapper.selectBatchIds(categoryIds).stream().collect(Collectors.toMap(CategoryEntity::getId, Function.identity()));
 
         return transactions.stream()
             .map(transaction -> toResponse(
                 transaction,
-                accounts.get(transaction.getAccountId()),
-                categories.get(transaction.getCategoryId())
+                transaction.getAccountId() == null ? null : accounts.get(transaction.getAccountId()),
+                transaction.getCategoryId() == null ? null : categories.get(transaction.getCategoryId())
             ))
             .toList();
     }

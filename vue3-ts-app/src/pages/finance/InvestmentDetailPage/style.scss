@@ -72,6 +72,37 @@
   font-weight: 500;
 }
 
+.investment-detail-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.investment-detail-action-button {
+  min-height: 42px;
+  border-radius: var(--radius-14);
+  border: 1px solid var(--color-bg-soft-2);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(148, 163, 184, 0.08);
+}
+
+.investment-detail-action-button.buy {
+  color: var(--color-brand);
+  border-color: #bfdbfe;
+}
+
+.investment-detail-action-button.sell {
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.investment-detail-action-button.edit {
+  color: var(--color-text-secondary);
+}
+
 .investment-detail-message {
   min-height: 120px;
   display: grid;
@@ -257,6 +288,114 @@
 .investment-detail-transaction-right strong {
   font-size: var(--font-size-14);
   font-weight: 700;
+}
+
+.investment-detail-modal-form {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.investment-detail-modal-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.investment-detail-modal-field {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.investment-detail-modal-field > span,
+.investment-detail-switch-field > span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-detail-field-control,
+.investment-detail-textarea-control {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-10);
+  background: var(--color-bg-soft);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+  outline: 0;
+}
+
+.investment-detail-field-control {
+  height: var(--space-40);
+  padding: 0 12px;
+}
+
+.investment-detail-textarea-control {
+  resize: none;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+
+.investment-detail-field-control:read-only,
+.investment-detail-textarea-control:read-only {
+  color: var(--color-text-subtle);
+  font-weight: 500;
+}
+
+.investment-detail-number-control {
+  font-size: var(--font-size-18);
+}
+
+.investment-detail-switch-field {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-10);
+  padding: 0 2px;
+}
+
+.investment-detail-switch {
+  width: 48px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background 180ms ease;
+}
+
+.investment-detail-switch span {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-white);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.16);
+  transition: transform 180ms ease;
+}
+
+.investment-detail-switch.active {
+  background: var(--color-brand);
+}
+
+.investment-detail-switch.active span {
+  transform: translateX(20px);
+}
+
+.investment-detail-modal-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-detail-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .investment-detail-transaction-right .trend-up {

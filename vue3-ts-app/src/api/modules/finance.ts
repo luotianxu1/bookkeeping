@@ -364,6 +364,23 @@ export interface InvestmentTransaction {
   updatedAt: string
 }
 
+export interface SaveInvestmentTransactionParams {
+  userId: number
+  accountId: number
+  positionId: number
+  productId: number
+  tradeType: 'buy' | 'sell'
+  quantity: number
+  price?: number | null
+  amount: number
+  feeAmount?: number
+  taxAmount?: number
+  currencyCode?: string
+  tradeAt: string
+  fundingAccountId?: number
+  remark?: string | null
+}
+
 export interface InvestmentPositionQuery {
   userId: number
   accountId?: number
@@ -529,4 +546,75 @@ export function deleteInvestmentPosition(id: number, userId: number) {
 
 export function getInvestmentTransactions(params: { userId: number; accountId?: number; positionId?: number }) {
   return requestGet<InvestmentTransaction[]>(financeRequest, '/api/finance/investments/transactions', { params })
+}
+
+export function createInvestmentTransaction(params: SaveInvestmentTransactionParams) {
+  return requestPost<InvestmentTransaction, SaveInvestmentTransactionParams>(financeRequest, '/api/finance/investments/transactions', params)
+}
+
+export interface GoldAccountSummary {
+  totalWeight: number
+  averagePrice: number
+  purchaseTotal: number
+  estimatedValue: number
+  estimatedProfit: number
+  profitRate: number
+  cumulativeProfit: number
+}
+
+export interface GoldAccountHolding {
+  id: number
+  accountId: number
+  accountName?: string | null
+  positionId: number
+  productId: number
+  productName?: string | null
+  productSymbol?: string | null
+  currentPrice: number
+  purchaseAmount: number
+  weight: number
+  holdingProfit: number
+  marketValue: number
+  avgCostPrice: number
+  createdAt: string
+}
+
+export interface GoldLiquidationRecord {
+  id: number
+  accountId: number
+  accountName?: string | null
+  positionId: number
+  productId: number
+  productName?: string | null
+  productSymbol?: string | null
+  tradeAt: string
+  profit: number
+  weight: number
+  buyPrice: number
+  sellPrice: number
+  fee: number
+}
+
+export interface GoldLiquidation {
+  cumulativeWeight: number
+  cumulativeProfit: number
+  records: GoldLiquidationRecord[]
+}
+
+export function getGoldAccountSummary(userId: number) {
+  return requestGet<GoldAccountSummary>(financeRequest, '/api/finance/gold-accounts/summary', {
+    params: { userId },
+  })
+}
+
+export function getGoldAccountHoldings(userId: number) {
+  return requestGet<GoldAccountHolding[]>(financeRequest, '/api/finance/gold-accounts/holdings', {
+    params: { userId },
+  })
+}
+
+export function getGoldLiquidations(userId: number) {
+  return requestGet<GoldLiquidation>(financeRequest, '/api/finance/gold-accounts/liquidations', {
+    params: { userId },
+  })
 }

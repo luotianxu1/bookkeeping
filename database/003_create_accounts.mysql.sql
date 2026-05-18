@@ -64,7 +64,7 @@ JOIN (
   UNION ALL
   SELECT 'investment', '基金账户', 'fund', 72100.00, 50, '基金持仓账户'
   UNION ALL
-  SELECT 'investment', '黄金账户', 'gold', 5088.60, 60, '黄金持仓账户'
+  SELECT 'gold', '黄金账户', 'gold', 5088.60, 60, '黄金持仓账户'
   UNION ALL
   SELECT 'investment', '股票账户', 'stock', 35800.00, 70, '股票持仓账户'
 ) seed

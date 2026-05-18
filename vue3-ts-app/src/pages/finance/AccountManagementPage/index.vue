@@ -69,22 +69,26 @@ const accountGroups = computed<AccountGroup[]>(() => {
     const accountType = typeById.get(accountTypeId)
     const title = accountType?.name ? `${accountType.name}账户` : firstAccount?.accountTypeName ? `${firstAccount.accountTypeName}账户` : '其他账户'
 
-    return {
-      accountTypeId,
-      title,
-      path: accountType?.code === 'cash' || firstAccount?.accountTypeCode === 'cash'
+      return {
+        accountTypeId,
+        title,
+        path: accountType?.code === 'cash' || firstAccount?.accountTypeCode === 'cash'
         ? '/finance/accounts/cash'
+        : accountType?.code === 'gold' || firstAccount?.accountTypeCode === 'gold'
+          ? '/finance/accounts/gold'
         : accountType?.code === 'investment' || firstAccount?.accountTypeCode === 'investment'
           ? '/finance/accounts/investment'
           : undefined,
-      items: groupAccounts.map((account) => ({
-        id: account.id,
+        items: groupAccounts.map((account) => ({
+          id: account.id,
         icon: getAccountIcon(account.icon, account.accountTypeCode),
         name: account.name,
         subtitle: account.remark ?? account.accountTypeName ?? '',
         amount: formatAmount(Number(account.currentBalance)),
         path: account.accountTypeCode === 'cash'
           ? `/finance/accounts/cash/${account.id}`
+          : account.accountTypeCode === 'gold'
+            ? '/finance/accounts/gold/position'
           : account.accountTypeCode === 'investment'
             ? `/finance/accounts/investment?accountId=${account.id}`
             : undefined,

@@ -36,6 +36,7 @@ public class InvestmentTransactionRequest {
     private String currencyCode;
     @NotNull(message = "交易时间不能为空")
     private LocalDateTime tradeAt;
+    private Long fundingAccountId;
     @Size(max = 500, message = "备注不能超过500个字符")
     private String remark;
 }

@@ -277,7 +277,31 @@ public class InvestmentService {
     @Transactional
     public InvestmentTransactionResponse createTransaction(InvestmentTransactionRequest request) {
         requireInvestmentAccount(request.getUserId(), request.getAccountId());
+        InvestmentPositionEntity position = requirePosition(request);
         InvestmentProductEntity product = requireProduct(request.getProductId());
+        BigDecimal quantity = defaultZero(request.getQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal price = defaultZero(request.getPrice()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal feeAmount = defaultZero(request.getFeeAmount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxAmount = defaultZero(request.getTaxAmount()).setScale(2, RoundingMode.HALF_UP);
+
+        if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("交易数量必须大于0");
+        }
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("交易金额必须大于0");
+        }
+
+        if ("buy".equals(request.getTradeType())) {
+            AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
+            deductFundingAccount(fundingAccount, amount.add(feeAmount).add(taxAmount));
+            applyBuyTransaction(position, quantity, price, amount, feeAmount, taxAmount);
+        } else if ("sell".equals(request.getTradeType())) {
+            AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
+            creditFundingAccount(fundingAccount, amount.subtract(feeAmount).subtract(taxAmount));
+            applySellTransaction(position, quantity, price, amount, feeAmount, taxAmount);
+        }
+
         InvestmentTransactionEntity entity = new InvestmentTransactionEntity();
         entity.setTransactionNo(generateTransactionNo());
         entity.setUserId(request.getUserId());
@@ -285,16 +309,18 @@ public class InvestmentService {
         entity.setPositionId(request.getPositionId());
         entity.setProductId(request.getProductId());
         entity.setTradeType(request.getTradeType());
-        entity.setQuantity(defaultZero(request.getQuantity()).setScale(6, RoundingMode.HALF_UP));
-        entity.setPrice(defaultZero(request.getPrice()).setScale(6, RoundingMode.HALF_UP));
-        entity.setAmount(request.getAmount().setScale(2, RoundingMode.HALF_UP));
-        entity.setFeeAmount(defaultZero(request.getFeeAmount()).setScale(2, RoundingMode.HALF_UP));
-        entity.setTaxAmount(defaultZero(request.getTaxAmount()).setScale(2, RoundingMode.HALF_UP));
+        entity.setQuantity(quantity);
+        entity.setPrice(price);
+        entity.setAmount(amount);
+        entity.setFeeAmount(feeAmount);
+        entity.setTaxAmount(taxAmount);
         entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
         entity.setTradeAt(request.getTradeAt());
         entity.setStatus(NORMAL_STATUS);
         entity.setRemark(request.getRemark());
         transactionMapper.insert(entity);
+        positionMapper.updateById(position);
+        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
         return toTransactionResponse(entity, product, accountMapper.selectById(entity.getAccountId()));
     }
 
@@ -457,6 +483,112 @@ public class InvestmentService {
         }
         account.setCurrentBalance(nextBalance);
         accountMapper.updateById(account);
+    }
+
+    private void creditFundingAccount(AccountEntity account, BigDecimal amount) {
+        BigDecimal netAmount = defaultZero(amount).setScale(2, RoundingMode.HALF_UP);
+        if (netAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("到账金额不能小于0");
+        }
+        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
+        account.setCurrentBalance(currentBalance.add(netAmount).setScale(2, RoundingMode.HALF_UP));
+        accountMapper.updateById(account);
+    }
+
+    private InvestmentPositionEntity requirePosition(InvestmentTransactionRequest request) {
+        if (request.getPositionId() == null) {
+            throw new IllegalArgumentException("请选择投资持仓");
+        }
+        InvestmentPositionEntity position = positionMapper.selectById(request.getPositionId());
+        if (position == null || !request.getUserId().equals(position.getUserId())) {
+            throw new IllegalArgumentException("投资持仓不存在");
+        }
+        if (!request.getAccountId().equals(position.getAccountId())) {
+            throw new IllegalArgumentException("投资账户不匹配");
+        }
+        if (!request.getProductId().equals(position.getProductId())) {
+            throw new IllegalArgumentException("投资产品不匹配");
+        }
+        return position;
+    }
+
+    private void applyBuyTransaction(
+        InvestmentPositionEntity position,
+        BigDecimal quantity,
+        BigDecimal price,
+        BigDecimal amount,
+        BigDecimal feeAmount,
+        BigDecimal taxAmount
+    ) {
+        BigDecimal nextHoldingQuantity = defaultZero(position.getHoldingQuantity()).add(quantity).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal nextAvailableQuantity = defaultZero(position.getAvailableQuantity()).add(quantity).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal nextCostAmount = defaultZero(position.getCostAmount()).add(amount).add(feeAmount).add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+        position.setHoldingQuantity(nextHoldingQuantity);
+        position.setAvailableQuantity(nextAvailableQuantity);
+        position.setCostAmount(nextCostAmount);
+        if (price.compareTo(BigDecimal.ZERO) > 0) {
+            position.setCurrentPrice(price);
+        }
+        recalculatePositionMetrics(position, ACTIVE_STATUS);
+    }
+
+    private void applySellTransaction(
+        InvestmentPositionEntity position,
+        BigDecimal quantity,
+        BigDecimal price,
+        BigDecimal amount,
+        BigDecimal feeAmount,
+        BigDecimal taxAmount
+    ) {
+        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal availableQuantity = defaultZero(position.getAvailableQuantity()).setScale(6, RoundingMode.HALF_UP);
+        if (quantity.compareTo(holdingQuantity) > 0 || quantity.compareTo(availableQuantity) > 0) {
+            throw new IllegalArgumentException("卖出数量不能超过当前持仓");
+        }
+
+        BigDecimal nextHoldingQuantity = holdingQuantity.subtract(quantity).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal nextAvailableQuantity = availableQuantity.subtract(quantity).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal avgCostPrice = defaultZero(position.getAvgCostPrice()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal soldCostAmount = avgCostPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal nextCostAmount = defaultZero(position.getCostAmount()).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
+        if (nextCostAmount.compareTo(BigDecimal.ZERO) < 0) {
+            nextCostAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        position.setHoldingQuantity(nextHoldingQuantity);
+        position.setAvailableQuantity(nextAvailableQuantity);
+        position.setCostAmount(nextCostAmount);
+        if (price.compareTo(BigDecimal.ZERO) > 0) {
+            position.setCurrentPrice(price);
+        }
+        recalculatePositionMetrics(position, nextHoldingQuantity.compareTo(BigDecimal.ZERO) == 0 ? "closed" : ACTIVE_STATUS);
+
+        BigDecimal realizedProfit = amount.subtract(feeAmount).subtract(taxAmount).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
+        position.setCumulativeProfit(defaultZero(position.getHoldingProfit()).add(realizedProfit).setScale(2, RoundingMode.HALF_UP));
+        position.setCumulativeProfitRate(rate(position.getCumulativeProfit(), position.getMarketValue().add(soldCostAmount)));
+    }
+
+    private void recalculatePositionMetrics(InvestmentPositionEntity position, String status) {
+        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal currentPrice = defaultZero(position.getCurrentPrice()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal marketValue = holdingQuantity.multiply(currentPrice).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal avgCostPrice = holdingQuantity.compareTo(BigDecimal.ZERO) > 0
+            ? costAmount.divide(holdingQuantity, 6, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+        BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
+
+        position.setHoldingQuantity(holdingQuantity);
+        position.setAvailableQuantity(defaultZero(position.getAvailableQuantity()).setScale(6, RoundingMode.HALF_UP));
+        position.setCostAmount(costAmount);
+        position.setAvgCostPrice(avgCostPrice);
+        position.setMarketValue(marketValue);
+        position.setHoldingProfit(holdingProfit);
+        position.setHoldingProfitRate(rate(holdingProfit, costAmount));
+        position.setCumulativeProfit(holdingProfit);
+        position.setCumulativeProfitRate(rate(holdingProfit, costAmount));
+        position.setStatus(status);
+        position.setLastSyncedAt(LocalDateTime.now());
     }
 
     private void syncInvestmentAccountBalance(Long userId, Long accountId) {

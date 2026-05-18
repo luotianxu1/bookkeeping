@@ -1,6 +1,36 @@
 .gold-account-page {
   display: grid;
   gap: var(--space-8);
+  padding-bottom: var(--space-72);
+}
+
+.gold-account-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gold-account-header :deep(.page-header) {
+  flex: 1;
+}
+
+.gold-account-manage {
+  flex: 0 0 auto;
+  min-height: var(--space-28);
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.gold-account-message {
+  margin: 0;
+  padding: var(--space-10) 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-13);
+}
+
+.gold-account-message-error {
+  color: #dc2626;
 }
 
 .gold-account-summary {
@@ -57,9 +87,50 @@
   color: #e11d48;
 }
 
+.summary-grid .negative,
+.gold-holding-card .negative {
+  color: #16a34a;
+}
+
 .gold-holding-list {
   display: grid;
   gap: var(--space-6);
+}
+
+.gold-account-row {
+  min-height: var(--space-60);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.gold-remove-trigger,
+.gold-edit-trigger {
+  width: var(--space-20);
+  height: var(--space-20);
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 20px;
+  border-radius: var(--radius-10);
+}
+
+.gold-remove-trigger {
+  background: var(--color-danger);
+}
+
+.gold-edit-trigger {
+  background: var(--color-brand);
+  color: var(--color-white);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.gold-remove-dash {
+  width: var(--space-8);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-white);
 }
 
 .gold-holding-card {
@@ -69,6 +140,12 @@
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-12);
   background: var(--color-white);
+  flex: 1;
+  text-align: left;
+}
+
+.gold-holding-card.manage-shifted {
+  min-width: 0;
 }
 
 .price-tag {
@@ -116,4 +193,67 @@
   font-size: var(--font-size-12);
   font-style: normal;
   font-weight: 700;
+}
+
+.gold-account-empty {
+  margin: 0;
+  padding: var(--space-12) 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-13);
+  text-align: center;
+}
+
+.gold-account-form {
+  display: grid;
+  gap: 10px;
+}
+
+.gold-account-form :deep(.common-switch-row) {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-10);
+  background: var(--color-bg-page);
+}
+
+.gold-account-form :deep(.common-switch-row > span) {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-14);
+  font-weight: 500;
+}
+
+.gold-account-form :deep(.common-switch) {
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+}
+
+.gold-account-form :deep(.common-switch-thumb) {
+  width: 16px;
+  height: 16px;
+}
+
+.gold-account-form :deep(.common-switch.active .common-switch-thumb) {
+  transform: translateX(16px);
+}
+
+.gold-account-form-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-12);
+  line-height: 1.4;
+}
+
+.gold-delete-message {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.gold-account-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
 }

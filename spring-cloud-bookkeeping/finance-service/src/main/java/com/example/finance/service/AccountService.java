@@ -29,6 +29,7 @@ public class AccountService {
 
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_STATUS = "active";
+    private static final Set<String> POSITION_BALANCE_ACCOUNT_TYPES = Set.of("investment", "gold");
 
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
@@ -178,7 +179,7 @@ public class AccountService {
     }
 
     private BigDecimal resolveCurrentBalance(AccountEntity entity, AccountTypeEntity accountType) {
-        if (accountType == null || entity == null || !"investment".equals(accountType.getCode())) {
+        if (accountType == null || entity == null || !POSITION_BALANCE_ACCOUNT_TYPES.contains(accountType.getCode())) {
             return entity == null || entity.getCurrentBalance() == null ? BigDecimal.ZERO : entity.getCurrentBalance();
         }
         BigDecimal marketValue = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()

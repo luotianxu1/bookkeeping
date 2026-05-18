@@ -3,6 +3,17 @@
   gap: var(--space-8);
 }
 
+.gold-position-message {
+  margin: 0;
+  padding: var(--space-10) 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-13);
+}
+
+.gold-position-message-error {
+  color: #dc2626;
+}
+
 .gold-position-summary {
   display: grid;
   gap: var(--space-8);
@@ -70,6 +81,11 @@
   color: #e11d48;
 }
 
+.summary-grid .negative,
+.position-top .negative {
+  color: #16a34a;
+}
+
 .position-list {
   display: grid;
   gap: var(--space-6);
@@ -127,4 +143,12 @@
   color: var(--color-text-subtle);
   font-size: 11px;
   font-weight: 500;
+}
+
+.gold-position-empty {
+  margin: 0;
+  padding: var(--space-12) 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-13);
+  text-align: center;
 }

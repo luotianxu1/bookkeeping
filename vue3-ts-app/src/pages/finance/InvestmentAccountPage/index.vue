@@ -185,6 +185,11 @@ function syncActiveInvestmentTab() {
 
   if (hasStocks) {
     activeTab.value = 'A股'
+    return
+  }
+
+  if (hasFunds) {
+    activeTab.value = '基金'
   }
 }
 

@@ -6,7 +6,7 @@ USE bookkeeping_app;
 
 CREATE TABLE IF NOT EXISTS account_types (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '账户类型ID',
-  code VARCHAR(64) NOT NULL COMMENT '账户类型编码，程序中使用，例如 cash、investment',
+  code VARCHAR(64) NOT NULL COMMENT '账户类型编码，程序中使用，例如 cash、investment、gold',
   name VARCHAR(64) NOT NULL COMMENT '账户类型名称，页面展示使用',
   category ENUM('asset', 'liability', 'relation', 'other') NOT NULL DEFAULT 'asset' COMMENT '账户大类：资产、负债、人情、其他',
   balance_direction ENUM('debit', 'credit') NOT NULL DEFAULT 'debit' COMMENT '余额方向：debit资产增加，credit负债增加',
@@ -36,14 +36,15 @@ INSERT INTO account_types (
   remark
 ) VALUES
   ('cash', '现金', 'asset', 'debit', 1, 0, 1, 10, '钱包、现金、储蓄卡、第三方钱包等流动资产'),
-  ('investment', '投资', 'asset', 'debit', 1, 0, 1, 20, '基金、股票、黄金等投资账户'),
-  ('credit_card', '信用卡', 'liability', 'credit', 1, 1, 1, 30, '信用卡、花呗等可透支账户'),
-  ('loan_receivable', '应收借款', 'asset', 'debit', 1, 0, 1, 40, '别人欠我的钱'),
-  ('loan_payable', '应付借款', 'liability', 'credit', 1, 0, 1, 50, '我欠别人的钱'),
-  ('human_relation', '人情', 'relation', 'debit', 0, 0, 1, 60, '红包、礼金、人情往来'),
-  ('other_asset', '其他资产', 'asset', 'debit', 1, 0, 1, 70, '不属于现金或投资的其他资产'),
-  ('other_liability', '其他负债', 'liability', 'credit', 1, 0, 1, 80, '不属于借款或信用卡的其他负债'),
-  ('other', '其他', 'other', 'debit', 0, 0, 1, 90, '无法归类的账户类型')
+  ('investment', '投资', 'asset', 'debit', 1, 0, 1, 20, '基金、股票等投资账户'),
+  ('gold', '黄金', 'asset', 'debit', 1, 0, 1, 30, '实物黄金、积存金、纸黄金等黄金账户'),
+  ('credit_card', '信用卡', 'liability', 'credit', 1, 1, 1, 40, '信用卡、花呗等可透支账户'),
+  ('loan_receivable', '应收借款', 'asset', 'debit', 1, 0, 1, 50, '别人欠我的钱'),
+  ('loan_payable', '应付借款', 'liability', 'credit', 1, 0, 1, 60, '我欠别人的钱'),
+  ('human_relation', '人情', 'relation', 'debit', 0, 0, 1, 70, '红包、礼金、人情往来'),
+  ('other_asset', '其他资产', 'asset', 'debit', 1, 0, 1, 80, '不属于现金、投资或黄金的其他资产'),
+  ('other_liability', '其他负债', 'liability', 'credit', 1, 0, 1, 90, '不属于借款或信用卡的其他负债'),
+  ('other', '其他', 'other', 'debit', 0, 0, 1, 100, '无法归类的账户类型')
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),
   category = VALUES(category),

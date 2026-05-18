@@ -1,16 +1,25 @@
 <script setup lang="ts">
-// 投资详情页：通过后端聚合接口展示持仓、实时行情和走势。
+// 投资详情页：通过后端聚合接口展示持仓、实时行情和走势，并支持加仓、减仓、修改。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { ECharts } from 'echarts'
+import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonModal from '@/components/common/CommonModal/index.vue'
+import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import {
+  createInvestmentTransaction,
+  getAccounts,
   getInvestmentPositionDetail,
   getInvestmentTransactions,
+  updateInvestmentPosition,
+  type Account,
   type InvestmentAssetDetail,
   type InvestmentChartPoint,
   type InvestmentDetailStat,
+  type InvestmentPosition,
   type InvestmentTransaction,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -20,8 +29,27 @@ const isLoading = ref(false)
 const pageError = ref('')
 const detail = ref<InvestmentAssetDetail | null>(null)
 const transactions = ref<InvestmentTransaction[]>([])
+const fundingAccounts = ref<Account[]>([])
 const externalStatus = ref('')
 const chartRef = ref<HTMLDivElement | null>(null)
+const showFeedbackModal = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
+const showTradeModal = ref(false)
+const currentTradeAction = ref<'buy' | 'sell'>('buy')
+const tradeInputMode = ref<'amount' | 'quantity'>('amount')
+const tradeFundingAccountId = ref('')
+const tradeAmount = ref('')
+const tradeQuantity = ref('')
+const tradePrice = ref('')
+const tradeRemark = ref('')
+const tradeError = ref('')
+const showEditModal = ref(false)
+const editPrice = ref('')
+const editIncludeInNetWorth = ref(true)
+const editRemark = ref('')
+const editError = ref('')
+const isSubmitting = ref(false)
 let chart: ECharts | null = null
 
 const positionId = computed(() => {
@@ -45,6 +73,74 @@ const todayValue = computed(() => {
 })
 const displayUpdatedAt = computed(() => detail.value?.updatedAt ? `同步于 ${detail.value.updatedAt}` : '同步于 --')
 const transactionCountText = computed(() => `共 ${transactions.value.length} 条`)
+const currentPosition = computed<InvestmentPosition | null>(() => detail.value?.position ?? null)
+const currentUnitName = computed(() => detail.value?.unitName || detail.value?.position.unitName || '份')
+const tradeModalTitle = computed(() => currentTradeAction.value === 'buy' ? '加仓' : '减仓')
+const tradeAmountLabel = computed(() => currentTradeAction.value === 'buy' ? '加仓金额' : '减仓金额')
+const tradeAccountLabel = computed(() => currentTradeAction.value === 'buy' ? '资金账户' : '回款账户')
+const showTradeInputMode = computed(() => currentTradeAction.value === 'buy')
+const tradePrimaryLabel = computed(() => {
+  if (currentTradeAction.value === 'buy') {
+    return tradeInputMode.value === 'amount' ? '加仓金额' : '加仓份额'
+  }
+  return '减仓金额'
+})
+const tradePrimaryPlaceholder = computed(() => {
+  if (currentTradeAction.value === 'buy') {
+    return tradeInputMode.value === 'amount' ? '请输入金额' : '请输入份额'
+  }
+  return '请输入金额'
+})
+const tradeModeOptions = ['按金额', '按份额和净值']
+const tradeModeValue = computed({
+  get: () => tradeInputMode.value === 'quantity' ? '按份额和净值' : '按金额',
+  set: (value: string) => {
+    tradeInputMode.value = value === '按份额和净值' ? 'quantity' : 'amount'
+  },
+})
+const tradeQuantityPreview = computed(() => {
+  const amount = getTradeAmountValue()
+  const quantity = getTradeQuantityValue()
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return '--'
+  }
+  if (currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity') {
+    return `${formatNumber(quantity, 2)} ${currentUnitName.value}`
+  }
+  const price = Number(tradePrice.value)
+  if (!Number.isFinite(amount) || !Number.isFinite(price) || amount <= 0 || price <= 0) {
+    return '--'
+  }
+  return `${formatNumber(quantity, 2)} ${currentUnitName.value}`
+})
+const tradeAmountPreview = computed(() => {
+  const amount = getTradeAmountValue()
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return '--'
+  }
+  return formatCurrency(amount)
+})
+
+function getTradeAmountValue() {
+  if (currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity') {
+    const quantity = Number(tradeQuantity.value)
+    const price = Number(tradePrice.value)
+    return quantity > 0 && price > 0 ? quantity * price : NaN
+  }
+  return Number(tradeAmount.value)
+}
+
+function getTradeQuantityValue() {
+  if (currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity') {
+    return Number(tradeQuantity.value)
+  }
+  const amount = Number(tradeAmount.value)
+  const price = Number(tradePrice.value)
+  if (!Number.isFinite(amount) || !Number.isFinite(price) || amount <= 0 || price <= 0) {
+    return NaN
+  }
+  return amount / price
+}
 
 onMounted(() => {
   loadDetail()
@@ -73,14 +169,18 @@ async function loadDetail() {
   pageError.value = ''
   try {
     const currentUser = getStoredCurrentUser()
-    const [detailData, transactionList] = await Promise.all([
+    const [detailData, transactionList, accountList] = await Promise.all([
       getInvestmentPositionDetail(positionId.value),
       currentUser
         ? getInvestmentTransactions({ userId: currentUser.id, positionId: positionId.value })
         : Promise.resolve([]),
+      currentUser
+        ? getAccounts({ userId: currentUser.id, status: 'active' })
+        : Promise.resolve([]),
     ])
     detail.value = detailData
     transactions.value = transactionList
+    fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
     loadExternalMarketData(detailData)
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : '投资详情加载失败'
@@ -297,6 +397,171 @@ function disposeChart() {
 
 function resizeChart() {
   chart?.resize()
+}
+
+function openTradeModal(action: 'buy' | 'sell') {
+  const position = currentPosition.value
+  if (!position) {
+    return
+  }
+  currentTradeAction.value = action
+  tradeInputMode.value = 'amount'
+  tradeFundingAccountId.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
+  tradeAmount.value = ''
+  tradeQuantity.value = ''
+  tradePrice.value = String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
+  tradeRemark.value = ''
+  tradeError.value = ''
+  showTradeModal.value = true
+}
+
+function closeTradeModal() {
+  if (isSubmitting.value) {
+    return
+  }
+  showTradeModal.value = false
+  tradeError.value = ''
+}
+
+function openEditModal() {
+  const position = currentPosition.value
+  if (!position) {
+    return
+  }
+  editPrice.value = String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
+  editIncludeInNetWorth.value = Boolean(position.includeInNetWorth)
+  editRemark.value = position.remark || ''
+  editError.value = ''
+  showEditModal.value = true
+}
+
+function closeEditModal() {
+  if (isSubmitting.value) {
+    return
+  }
+  showEditModal.value = false
+  editError.value = ''
+}
+
+async function submitTrade() {
+  if (isSubmitting.value || !currentPosition.value || !detail.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    tradeError.value = '请先登录后再操作'
+    return
+  }
+
+  const fundingAccountId = Number(tradeFundingAccountId.value)
+  const amount = getTradeAmountValue()
+  const price = Number(tradePrice.value)
+  const quantity = getTradeQuantityValue()
+
+  if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
+    tradeError.value = '请选择资金账户'
+    return
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    tradeError.value = currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity'
+      ? '请输入有效的加仓份额'
+      : `请输入有效的${tradeAmountLabel.value}`
+    return
+  }
+  if (!Number.isFinite(price) || price <= 0) {
+    tradeError.value = '请输入有效的成交价格'
+    return
+  }
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    tradeError.value = '金额或价格不正确'
+    return
+  }
+  if (currentTradeAction.value === 'sell' && quantity > Number(currentPosition.value.availableQuantity)) {
+    tradeError.value = '减仓数量不能超过可用持仓'
+    return
+  }
+
+  isSubmitting.value = true
+  tradeError.value = ''
+
+  try {
+    await createInvestmentTransaction({
+      userId: currentUser.id,
+      accountId: currentPosition.value.accountId,
+      positionId: currentPosition.value.id,
+      productId: currentPosition.value.productId,
+      tradeType: currentTradeAction.value,
+      quantity: Number(quantity.toFixed(6)),
+      price,
+      amount: Number(amount.toFixed(2)),
+      feeAmount: 0,
+      taxAmount: 0,
+      currencyCode: currentPosition.value.currencyCode || 'CNY',
+      tradeAt: toApiDateTime(new Date()),
+      fundingAccountId,
+      remark: tradeRemark.value.trim() || null,
+    })
+    closeTradeModal()
+    showFeedback(currentTradeAction.value === 'buy' ? '加仓成功' : '减仓成功', 'success')
+    await loadDetail()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `${tradeModalTitle.value}失败`
+    tradeError.value = message
+    showFeedback(message, 'error')
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+async function submitEdit() {
+  if (isSubmitting.value || !currentPosition.value) {
+    return
+  }
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    editError.value = '请先登录后再操作'
+    return
+  }
+  const price = Number(editPrice.value)
+  if (!Number.isFinite(price) || price <= 0) {
+    editError.value = '请输入有效的当前价格'
+    return
+  }
+
+  isSubmitting.value = true
+  editError.value = ''
+
+  try {
+    await updateInvestmentPosition(currentPosition.value.id, {
+      userId: currentUser.id,
+      accountId: currentPosition.value.accountId,
+      productId: currentPosition.value.productId,
+      holdingQuantity: Number(currentPosition.value.holdingQuantity),
+      availableQuantity: Number(currentPosition.value.availableQuantity),
+      frozenQuantity: Number(currentPosition.value.frozenQuantity),
+      costAmount: Number(currentPosition.value.costAmount),
+      currentPrice: price,
+      includeInNetWorth: editIncludeInNetWorth.value,
+      status: currentPosition.value.status,
+      remark: editRemark.value.trim() || null,
+    })
+    closeEditModal()
+    showFeedback('修改成功', 'success')
+    await loadDetail()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '修改失败'
+    editError.value = message
+    showFeedback(message, 'error')
+  } finally {
+    isSubmitting.value = false
+  }
+}
+
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  showFeedbackModal.value = true
 }
 
 function statClass(entry: InvestmentDetailStat) {
@@ -522,6 +787,16 @@ function formatTencentTime(raw?: string) {
   return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)} ${raw.slice(8, 10)}:${raw.slice(10, 12)}:${raw.slice(12, 14)}`
 }
 
+function toApiDateTime(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  const second = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`
+}
+
 function formatNumber(value: number, digits = 2) {
   if (!Number.isFinite(value)) return '--'
   return new Intl.NumberFormat('zh-CN', {
@@ -543,6 +818,12 @@ function formatAmountLabel(value: number) {
 
 <template>
   <section class="investment-detail-page" aria-label="投资详情">
+    <CommonFeedback
+      v-model="showFeedbackModal"
+      :message="feedbackMessage"
+      :type="feedbackType"
+    />
+
     <PageHeader title="投资详情" :back-to="backTo" back-label="返回投资账户" />
 
     <p v-if="pageError" class="investment-detail-message investment-detail-message-error">{{ pageError }}</p>
@@ -562,6 +843,12 @@ function formatAmountLabel(value: number) {
         </div>
         <AmountText tag="p" class="investment-detail-summary-amount" tone="inherit" :value="summaryAmount" />
         <p class="investment-detail-summary-updated">{{ displayUpdatedAt }}</p>
+      </section>
+
+      <section class="investment-detail-actions" aria-label="持仓操作">
+        <button class="investment-detail-action-button buy" type="button" @click="openTradeModal('buy')">加仓</button>
+        <button class="investment-detail-action-button sell" type="button" @click="openTradeModal('sell')">减仓</button>
+        <button class="investment-detail-action-button edit" type="button" @click="openEditModal">修改</button>
       </section>
 
       <section class="investment-detail-card" aria-label="行情走势">
@@ -628,6 +915,176 @@ function formatAmountLabel(value: number) {
         </section>
       </section>
     </template>
+
+    <CommonModal
+      v-model="showTradeModal"
+      :title="tradeModalTitle"
+      size="compact"
+      :close-on-overlay="!isSubmitting"
+      @close="closeTradeModal"
+    >
+      <div class="investment-detail-modal-form">
+        <label class="investment-detail-modal-field">
+          <span>资产名称</span>
+          <input
+            class="investment-detail-field-control"
+            :value="detail?.name || detail?.position.productName || ''"
+            type="text"
+            readonly
+          />
+        </label>
+
+        <SegmentedControl
+          v-if="showTradeInputMode"
+          v-model="tradeModeValue"
+          :options="tradeModeOptions"
+          label="加仓方式切换"
+        />
+
+        <div class="investment-detail-modal-row">
+          <label class="investment-detail-modal-field">
+            <span>{{ tradePrimaryLabel }}</span>
+            <input
+              v-if="currentTradeAction !== 'buy' || tradeInputMode === 'amount'"
+              v-model="tradeAmount"
+              class="investment-detail-field-control investment-detail-number-control"
+              type="number"
+              inputmode="decimal"
+              :placeholder="tradePrimaryPlaceholder"
+            />
+            <input
+              v-else
+              v-model="tradeQuantity"
+              class="investment-detail-field-control investment-detail-number-control"
+              type="number"
+              inputmode="decimal"
+              :placeholder="tradePrimaryPlaceholder"
+            />
+          </label>
+
+          <label class="investment-detail-modal-field">
+            <span>成交价格</span>
+            <input
+              v-model="tradePrice"
+              class="investment-detail-field-control"
+              type="number"
+              inputmode="decimal"
+              placeholder="请输入价格"
+            />
+          </label>
+        </div>
+
+        <label class="investment-detail-modal-field">
+          <span>{{ tradeAccountLabel }}</span>
+          <select v-model="tradeFundingAccountId" class="investment-detail-field-control">
+            <option value="" disabled>请选择账户</option>
+            <option v-for="account in fundingAccounts" :key="account.id" :value="String(account.id)">
+              {{ account.name }}（余额 {{ formatCurrency(Number(account.currentBalance)) }}）
+            </option>
+          </select>
+        </label>
+
+        <label class="investment-detail-modal-field">
+          <span>预计数量</span>
+          <input class="investment-detail-field-control" :value="tradeQuantityPreview" type="text" readonly />
+        </label>
+
+        <label v-if="currentTradeAction === 'buy' && tradeInputMode === 'quantity'" class="investment-detail-modal-field">
+          <span>预计金额</span>
+          <input class="investment-detail-field-control" :value="tradeAmountPreview" type="text" readonly />
+        </label>
+
+        <label class="investment-detail-modal-field">
+          <span>备注</span>
+          <textarea
+            v-model="tradeRemark"
+            class="investment-detail-textarea-control"
+            rows="3"
+            maxlength="200"
+            placeholder="选填"
+          ></textarea>
+        </label>
+
+        <p v-if="tradeError" class="investment-detail-modal-error">{{ tradeError }}</p>
+      </div>
+
+      <template #footer>
+        <div class="investment-detail-modal-actions">
+          <CommonButton variant="secondary" :disabled="isSubmitting" @click="closeTradeModal">
+            取消
+          </CommonButton>
+          <CommonButton variant="primary" :disabled="isSubmitting" @click="submitTrade">
+            {{ isSubmitting ? '提交中...' : tradeModalTitle }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+
+    <CommonModal
+      v-model="showEditModal"
+      title="修改持仓"
+      size="compact"
+      :close-on-overlay="!isSubmitting"
+      @close="closeEditModal"
+    >
+      <div class="investment-detail-modal-form">
+        <label class="investment-detail-modal-field">
+          <span>资产名称</span>
+          <input
+            class="investment-detail-field-control"
+            :value="detail?.name || detail?.position.productName || ''"
+            type="text"
+            readonly
+          />
+        </label>
+
+        <label class="investment-detail-modal-field">
+          <span>当前价格</span>
+          <input
+            v-model="editPrice"
+            class="investment-detail-field-control investment-detail-number-control"
+            type="number"
+            inputmode="decimal"
+            placeholder="请输入当前价格"
+          />
+        </label>
+
+        <label class="investment-detail-switch-field">
+          <span>计入总资产</span>
+          <button
+            type="button"
+            :class="['investment-detail-switch', { active: editIncludeInNetWorth }]"
+            @click="editIncludeInNetWorth = !editIncludeInNetWorth"
+          >
+            <span></span>
+          </button>
+        </label>
+
+        <label class="investment-detail-modal-field">
+          <span>备注</span>
+          <textarea
+            v-model="editRemark"
+            class="investment-detail-textarea-control"
+            rows="3"
+            maxlength="200"
+            placeholder="选填"
+          ></textarea>
+        </label>
+
+        <p v-if="editError" class="investment-detail-modal-error">{{ editError }}</p>
+      </div>
+
+      <template #footer>
+        <div class="investment-detail-modal-actions">
+          <CommonButton variant="secondary" :disabled="isSubmitting" @click="closeEditModal">
+            取消
+          </CommonButton>
+          <CommonButton variant="primary" :disabled="isSubmitting" @click="submitEdit">
+            {{ isSubmitting ? '保存中...' : '保存修改' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
   </section>
 </template>
 
