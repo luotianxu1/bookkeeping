@@ -5,6 +5,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
@@ -274,9 +275,7 @@ function getCategoryIcon(icon: string) {
     <p v-if="categoryListError" class="category-list-message category-list-message-error">
       {{ categoryListError }}
     </p>
-    <p v-else-if="isLoadingCategories" class="category-list-message">
-      加载中...
-    </p>
+    <CommonLoading v-else-if="isLoadingCategories" />
     <p v-else-if="categories.length === 0" class="category-list-message">
       暂无分类
     </p>

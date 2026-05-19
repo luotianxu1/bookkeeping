@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS investment_positions (
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
   PRIMARY KEY (id),
-  UNIQUE KEY uk_investment_positions_account_product_status (account_id, product_id, status),
+  KEY idx_investment_positions_account_product_status (account_id, product_id, status),
   KEY idx_investment_positions_user_account (user_id, account_id, status),
   KEY idx_investment_positions_product (product_id),
   CONSTRAINT fk_investment_positions_user
@@ -195,4 +195,3 @@ CREATE TABLE IF NOT EXISTS investment_dividend_records (
   CONSTRAINT chk_investment_dividend_records_quantity_nonnegative
     CHECK (holding_quantity >= 0 AND reinvest_quantity >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='投资分红记录表：记录现金分红和分红再投，支撑累计收息统计';
-

@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import type { ECharts } from 'echarts'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -827,7 +828,7 @@ function formatAmountLabel(value: number) {
     <PageHeader title="投资详情" :back-to="backTo" back-label="返回投资账户" />
 
     <p v-if="pageError" class="investment-detail-message investment-detail-message-error">{{ pageError }}</p>
-    <p v-else-if="isLoading" class="investment-detail-message">加载中...</p>
+    <CommonLoading v-else-if="isLoading" />
 
     <template v-else-if="detail">
       <section class="investment-detail-summary-card" aria-label="投资详情总览">

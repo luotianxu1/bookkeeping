@@ -14,12 +14,59 @@
   flex: 1;
 }
 
+.gold-account-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
 .gold-account-manage {
-  flex: 0 0 auto;
-  min-height: var(--space-28);
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.gold-account-manage.active {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(219, 234, 254, 0.96);
+}
+
+.gold-account-manage-icon {
   color: var(--color-brand-strong);
-  font-size: var(--font-size-14);
-  font-weight: 600;
+  font-size: var(--font-size-16);
+  line-height: 1;
+  font-weight: 700;
+}
+
+.gold-account-refresh {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.gold-account-refresh:disabled {
+  opacity: 0.72;
+}
+
+.gold-account-refresh-icon {
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-16);
+  line-height: 1;
+}
+
+.gold-account-refresh-icon.spinning {
+  animation: gold-account-refresh-spin 720ms linear infinite;
 }
 
 .gold-account-message {
@@ -94,13 +141,12 @@
 
 .gold-holding-list {
   display: grid;
-  gap: var(--space-6);
+  gap: 10px;
 }
 
 .gold-account-row {
-  min-height: var(--space-60);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: var(--space-6);
 }
 
@@ -111,6 +157,7 @@
   display: inline-grid;
   place-items: center;
   flex: 0 0 20px;
+  align-self: center;
   border-radius: var(--radius-10);
 }
 
@@ -135,12 +182,13 @@
 
 .gold-holding-card {
   display: grid;
-  gap: var(--space-6);
-  padding: var(--space-10) var(--space-12);
-  border: 1px solid var(--color-bg-soft-2);
-  border-radius: var(--radius-12);
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
   background: var(--color-white);
   flex: 1;
+  width: 100%;
   text-align: left;
 }
 
@@ -152,13 +200,14 @@
   width: fit-content;
   height: 22px;
   padding: 0 var(--space-8);
-  border-radius: var(--radius-10);
+  border-radius: 9px;
   display: inline-grid;
   place-items: center;
   color: #d97706;
   background: #fef3c7;
-  font-size: var(--font-size-12);
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1;
 }
 
 .holding-top,
@@ -166,33 +215,55 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-6);
+  gap: 12px;
 }
 
 .holding-top strong {
   color: var(--color-text-primary);
-  font-size: var(--font-size-14);
+  font-size: 14px;
   font-weight: 700;
+  line-height: 1.2;
 }
 
-.holding-top p {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: var(--font-size-14);
+.holding-profit-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-danger);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.holding-profit-inline.negative {
+  color: var(--color-success);
+}
+
+.holding-profit-inline > span {
+  color: inherit;
+}
+
+.holding-profit-inline :deep(.amount-text) {
+  color: inherit;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .holding-bottom span {
-  color: var(--color-text-subtle);
-  font-size: var(--font-size-12);
-  font-weight: 500;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
-.holding-bottom em {
-  color: #e11d48;
-  font-size: var(--font-size-12);
-  font-style: normal;
-  font-weight: 700;
+.holding-meta {
+  color: #334155 !important;
+}
+
+.holding-meta::before {
+  content: '●';
+  color: #facc15;
+  margin-right: 4px;
 }
 
 .gold-account-empty {
@@ -256,4 +327,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-6);
+}
+
+@keyframes gold-account-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

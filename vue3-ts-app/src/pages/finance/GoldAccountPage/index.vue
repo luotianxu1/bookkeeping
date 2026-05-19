@@ -2,9 +2,11 @@
 // 黄金账户页：展示黄金账户汇总，并支持黄金账户列表增删改查。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import AmountText from '@/components/common/AmountText/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -15,13 +17,16 @@ import {
   getAccounts,
   getAccountTypes,
   getGoldAccountHoldings,
+  getGoldLiquidations,
   getGoldAccountSummary,
   updateAccount,
   type Account,
   type AccountType,
   type GoldAccountHolding,
+  type GoldLiquidation,
   type GoldAccountSummary,
 } from '@/api/modules/finance'
+import { refreshGoldPriceCache, useGoldPriceCache } from '@/utils/gold-price-cache'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const router = useRouter()
@@ -37,6 +42,7 @@ const isDeletingAccount = ref(false)
 const pageError = ref('')
 const accountFormError = ref('')
 const deleteError = ref('')
+const isRefreshingGold = ref(false)
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
@@ -49,32 +55,50 @@ const summary = ref<GoldAccountSummary>({
   profitRate: 0,
   cumulativeProfit: 0,
 })
+const liquidation = ref<GoldLiquidation>({
+  cumulativeWeight: 0,
+  cumulativeProfit: 0,
+  records: [],
+})
 const goldAccountType = ref<AccountType | null>(null)
 const goldAccounts = ref<Account[]>([])
 const holdings = ref<GoldAccountHolding[]>([])
+const goldPrice = useGoldPriceCache('1d')
 const formName = ref('')
 const formRemark = ref('')
 const includeInNetWorth = ref(true)
 let requestVersion = 0
 
 const accountModalTitle = computed(() => (editingAccountId.value ? '修改黄金账户' : '新增黄金账户'))
+const realtimeGoldPrice = computed(() => Number(goldPrice.value?.spotGold?.price ?? 0))
 const holdingsByAccountId = computed(() =>
-  holdings.value.reduce<Record<number, GoldAccountHolding>>((result, item) => {
-    result[item.accountId] = item
+  displayHoldings.value.reduce<Record<number, GoldAccountHolding>>((result, item) => {
+    result[item.accountId] = mergeAccountHolding(result[item.accountId], item)
     return result
   }, {}),
 )
+const displayHoldings = computed(() => holdings.value.map((item) => decorateHolding(item, realtimeGoldPrice.value)))
+const displaySummary = computed(() => (
+  realtimeGoldPrice.value > 0
+    ? buildSummary(displayHoldings.value, liquidation.value.cumulativeProfit || summary.value.cumulativeProfit)
+    : {
+      ...summary.value,
+      cumulativeProfit: liquidation.value.cumulativeProfit || summary.value.cumulativeProfit,
+    }
+))
 const accountRows = computed(() =>
   goldAccounts.value.map((account) => {
     const accountHolding = holdingsByAccountId.value[account.id]
 
     return {
       id: account.id,
+      account,
       name: account.name,
-      amount: Number(account.currentBalance ?? 0),
-      currentPrice: Number(accountHolding?.currentPrice ?? 0),
+      avgCostPrice: Number(accountHolding?.avgCostPrice ?? 0),
+      purchaseAmount: Number(accountHolding?.purchaseAmount ?? 0),
       weight: Number(accountHolding?.weight ?? 0),
       holdingProfit: Number(accountHolding?.holdingProfit ?? 0),
+      createdAt: accountHolding?.createdAt ?? null,
       remark: account.remark ?? '',
     }
   }),
@@ -127,8 +151,8 @@ function openDeleteConfirmModal(account: Account) {
   showDeleteConfirmModal.value = true
 }
 
-function closeDeleteConfirmModal() {
-  if (isDeletingAccount.value) {
+function closeDeleteConfirmModal(force = false) {
+  if (isDeletingAccount.value && !force) {
     return
   }
 
@@ -167,10 +191,11 @@ async function loadGoldAccount() {
   pageError.value = ''
 
   try {
-    const [typeList, summaryData, holdingList] = await Promise.all([
+    const [typeList, summaryData, holdingList, liquidationData] = await Promise.all([
       getAccountTypes({ status: 'active' }),
       getGoldAccountSummary(currentUser.id),
       getGoldAccountHoldings(currentUser.id),
+      getGoldLiquidations(currentUser.id),
     ])
 
     if (currentRequestVersion !== requestVersion) {
@@ -198,6 +223,7 @@ async function loadGoldAccount() {
     summary.value = summaryData
     goldAccounts.value = accountList
     holdings.value = holdingList
+    liquidation.value = liquidationData
   } catch (error) {
     if (currentRequestVersion !== requestVersion) {
       return
@@ -207,6 +233,24 @@ async function loadGoldAccount() {
     if (currentRequestVersion === requestVersion) {
       isLoading.value = false
     }
+  }
+}
+
+async function refreshGoldData() {
+  if (isRefreshingGold.value) {
+    return
+  }
+
+  isRefreshingGold.value = true
+
+  try {
+    await refreshGoldPriceCache('1d')
+    showFeedback('黄金信息已刷新', 'success')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '黄金信息刷新失败'
+    showFeedback(message, 'error')
+  } finally {
+    isRefreshingGold.value = false
   }
 }
 
@@ -283,7 +327,7 @@ async function removeAccount(id: number) {
 
   try {
     await deleteAccount(id)
-    closeDeleteConfirmModal()
+    closeDeleteConfirmModal(true)
     showFeedback('删除成功', 'success')
     await loadGoldAccount()
   } catch (error) {
@@ -301,6 +345,84 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
+function decorateHolding(item: GoldAccountHolding, price: number) {
+  if (!Number.isFinite(price) || price <= 0) {
+    return item
+  }
+
+  const weight = Number(item.weight ?? 0)
+  const purchaseAmount = Number(item.purchaseAmount ?? 0)
+  const marketValue = Number((weight * price).toFixed(2))
+  const holdingProfit = Number((marketValue - purchaseAmount).toFixed(2))
+
+  return {
+    ...item,
+    currentPrice: price,
+    marketValue,
+    holdingProfit,
+  }
+}
+
+function mergeAccountHolding(
+  previous: GoldAccountHolding | undefined,
+  current: GoldAccountHolding,
+): GoldAccountHolding {
+  if (!previous) {
+    return current
+  }
+
+  const previousWeight = Number(previous.weight ?? 0)
+  const currentWeight = Number(current.weight ?? 0)
+  const totalWeight = Number((previousWeight + currentWeight).toFixed(6))
+  const purchaseAmount = Number(((previous.purchaseAmount ?? 0) + (current.purchaseAmount ?? 0)).toFixed(2))
+  const marketValue = Number(((previous.marketValue ?? 0) + (current.marketValue ?? 0)).toFixed(2))
+  const holdingProfit = Number(((previous.holdingProfit ?? 0) + (current.holdingProfit ?? 0)).toFixed(2))
+  const avgCostPrice = totalWeight > 0 ? Number((purchaseAmount / totalWeight).toFixed(2)) : 0
+
+  return {
+    ...previous,
+    currentPrice: Number(current.currentPrice ?? previous.currentPrice ?? 0),
+    purchaseAmount,
+    weight: totalWeight,
+    holdingProfit,
+    marketValue,
+    avgCostPrice,
+    createdAt: pickLatestCreatedAt(previous.createdAt, current.createdAt),
+  }
+}
+
+function pickLatestCreatedAt(previous: string | undefined, current: string) {
+  if (!previous) {
+    return current
+  }
+
+  const previousTime = new Date(previous).getTime()
+  const currentTime = new Date(current).getTime()
+
+  if (Number.isNaN(previousTime)) {
+    return current
+  }
+
+  return currentTime >= previousTime ? current : previous
+}
+
+function buildSummary(items: GoldAccountHolding[], cumulativeProfit: number): GoldAccountSummary {
+  const totalWeight = items.reduce((total, item) => total + Number(item.weight ?? 0), 0)
+  const purchaseTotal = items.reduce((total, item) => total + Number(item.purchaseAmount ?? 0), 0)
+  const estimatedValue = items.reduce((total, item) => total + Number(item.marketValue ?? 0), 0)
+  const estimatedProfit = items.reduce((total, item) => total + Number(item.holdingProfit ?? 0), 0)
+
+  return {
+    totalWeight,
+    averagePrice: totalWeight > 0 ? purchaseTotal / totalWeight : 0,
+    purchaseTotal,
+    estimatedValue,
+    estimatedProfit,
+    profitRate: purchaseTotal > 0 ? (estimatedProfit / purchaseTotal) * 100 : 0,
+    cumulativeProfit: Number(cumulativeProfit ?? 0),
+  }
+}
+
 function formatAmount(value: number | null | undefined) {
   return Number(value ?? 0).toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
@@ -308,10 +430,42 @@ function formatAmount(value: number | null | undefined) {
   })
 }
 
-function formatWeight(value: number | null | undefined) {
+function formatCompactWeight(value: number | null | undefined) {
   return Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
+}
+
+function formatHoldingMeta(weight: number | null | undefined, amount: number | null | undefined) {
+  return `${formatCompactWeight(weight)}克 ${formatAmount(amount)}元`
+}
+
+function formatCreatedDate(value: string | null | undefined) {
+  if (!value) {
+    return '--'
+  }
+
+  const matched = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (matched) {
+    return `${matched[1]}.${matched[2]}.${matched[3]}`
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}.${month}.${day}`
+}
+
+function formatSummaryWeight(value: number | null | undefined) {
+  return Number(value ?? 0).toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })
 }
 
@@ -338,54 +492,68 @@ function formatSignedAmount(value: number | null | undefined) {
 
     <header class="gold-account-header">
       <PageHeader title="黄金账户" back-label="返回账户管理" />
-      <button class="gold-account-manage" type="button" @click="toggleManageMode">
-        管理
-      </button>
+      <div class="gold-account-header-actions">
+        <button
+          :class="['gold-account-manage', { active: isManageMode }]"
+          type="button"
+          :aria-label="isManageMode ? '退出管理模式' : '进入管理模式'"
+          @click="toggleManageMode"
+        >
+          <span class="gold-account-manage-icon">{{ isManageMode ? '✓' : '≡' }}</span>
+        </button>
+        <button
+          class="gold-account-refresh"
+          type="button"
+          :disabled="isRefreshingGold"
+          aria-label="刷新黄金信息"
+          @click="refreshGoldData"
+        >
+          <span :class="['gold-account-refresh-icon', { spinning: isRefreshingGold }]">↻</span>
+        </button>
+      </div>
     </header>
 
     <p v-if="pageError" class="gold-account-message gold-account-message-error">
       {{ pageError }}
     </p>
-    <p v-else-if="isLoading" class="gold-account-message">
-      加载中...
-    </p>
+    <CommonLoading v-else-if="isLoading" />
 
     <template v-else>
       <section class="gold-account-summary">
         <div class="summary-head">
           <span>总重量(克)</span>
-          <strong>{{ formatWeight(summary.totalWeight) }}</strong>
+          <strong>{{ formatSummaryWeight(displaySummary.totalWeight) }}</strong>
         </div>
 
         <div class="summary-grid">
           <article>
             <span>平均克价(元)</span>
-            <strong>{{ formatAmount(summary.averagePrice) }}</strong>
+            <strong>{{ formatAmount(displaySummary.averagePrice) }}</strong>
           </article>
           <article>
             <span>购入总价(元)</span>
-            <strong>{{ formatAmount(summary.purchaseTotal) }}</strong>
+            <strong>{{ formatAmount(displaySummary.purchaseTotal) }}</strong>
           </article>
           <article>
             <span>预估价值(元)</span>
-            <strong>{{ formatAmount(summary.estimatedValue) }}</strong>
+            <strong>{{ formatAmount(displaySummary.estimatedValue) }}</strong>
           </article>
           <article>
             <span>预估收益(元)</span>
-            <strong :class="{ up: summary.estimatedProfit >= 0, negative: summary.estimatedProfit < 0 }">
-              {{ formatSignedAmount(summary.estimatedProfit) }}
+            <strong :class="{ up: displaySummary.estimatedProfit >= 0, negative: displaySummary.estimatedProfit < 0 }">
+              {{ formatSignedAmount(displaySummary.estimatedProfit) }}
             </strong>
           </article>
           <article>
             <span>收益率(%)</span>
-            <strong :class="{ up: summary.profitRate >= 0, negative: summary.profitRate < 0 }">
-              {{ formatRate(summary.profitRate) }}
+            <strong :class="{ up: displaySummary.profitRate >= 0, negative: displaySummary.profitRate < 0 }">
+              {{ formatRate(displaySummary.profitRate) }}
             </strong>
           </article>
           <article>
             <span>累计收益(元)</span>
-            <strong :class="{ up: summary.cumulativeProfit >= 0, negative: summary.cumulativeProfit < 0 }">
-              {{ formatSignedAmount(summary.cumulativeProfit) }}
+            <strong :class="{ up: displaySummary.cumulativeProfit >= 0, negative: displaySummary.cumulativeProfit < 0 }">
+              {{ formatSignedAmount(displaySummary.cumulativeProfit) }}
             </strong>
           </article>
         </div>
@@ -394,16 +562,16 @@ function formatSignedAmount(value: number | null | undefined) {
       <section class="gold-holding-list">
         <template v-if="hasAccounts">
           <article
-            v-for="account in goldAccounts"
-            :key="account.id"
+            v-for="row in accountRows"
+            :key="row.id"
             class="gold-account-row"
           >
             <button
               v-if="isManageMode"
               type="button"
               class="gold-remove-trigger"
-              :aria-label="`删除${account.name}`"
-              @click="openDeleteConfirmModal(account)"
+              :aria-label="`删除${row.name}`"
+              @click="openDeleteConfirmModal(row.account)"
             >
               <span class="gold-remove-dash"></span>
             </button>
@@ -412,8 +580,8 @@ function formatSignedAmount(value: number | null | undefined) {
               v-if="isManageMode"
               type="button"
               class="gold-edit-trigger"
-              :aria-label="`修改${account.name}`"
-              @click="openEditModal(account)"
+              :aria-label="`修改${row.name}`"
+              @click="openEditModal(row.account)"
             >
               ✎
             </button>
@@ -421,30 +589,25 @@ function formatSignedAmount(value: number | null | undefined) {
             <button
               type="button"
               :class="['gold-holding-card', { 'manage-shifted': isManageMode }]"
-              @click="handleAccountClick(account.id)"
+              @click="handleAccountClick(row.id)"
             >
               <span class="price-tag">
                 {{
-                  (holdingsByAccountId[account.id]?.currentPrice ?? 0) > 0
-                    ? `${formatAmount(holdingsByAccountId[account.id]?.currentPrice)}/克`
+                  row.avgCostPrice > 0
+                    ? `${formatAmount(row.avgCostPrice)}元/克`
                     : '暂无持仓'
                 }}
               </span>
               <div class="holding-top">
-                <strong>{{ account.name }}</strong>
-                <p>{{ formatAmount(account.currentBalance) }}</p>
+                <strong>{{ row.name }}</strong>
+                <span class="holding-profit-inline" :class="{ negative: row.holdingProfit < 0 }">
+                  <span>收益:</span>
+                  <AmountText tag="strong" tone="inherit" show-sign :value="formatAmount(row.holdingProfit)" />
+                </span>
               </div>
               <div class="holding-bottom">
-                <span>
-                  {{
-                    (holdingsByAccountId[account.id]?.weight ?? 0) > 0
-                      ? `${formatWeight(holdingsByAccountId[account.id]?.weight)}g`
-                      : '0.000g'
-                  }}
-                </span>
-                <em :class="{ negative: (holdingsByAccountId[account.id]?.holdingProfit ?? 0) < 0 }">
-                  {{ formatSignedAmount(holdingsByAccountId[account.id]?.holdingProfit) }}
-                </em>
+                <span class="holding-meta">{{ formatHoldingMeta(row.weight, row.purchaseAmount) }}</span>
+                <span>{{ formatCreatedDate(row.createdAt) }}</span>
               </div>
             </button>
           </article>

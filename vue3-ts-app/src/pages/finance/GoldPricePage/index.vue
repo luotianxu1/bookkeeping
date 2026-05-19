@@ -4,7 +4,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
-import { getGoldPrices, type GoldPrice, type GoldPriceRange } from '@/api/modules/finance'
+import type { GoldPriceRange } from '@/api/modules/finance'
+import { ensureGoldPriceCache, getCachedGoldPrice, goldPriceCacheState, refreshGoldPriceCache } from '@/utils/gold-price-cache'
 
 type TrendKey = '1日' | '7日' | '30日' | '1年'
 
@@ -13,13 +14,9 @@ const trendOptions: TrendKey[] = ['1日', '7日', '30日', '1年']
 
 const isDark = ref(false)
 const chartRef = ref<HTMLDivElement | null>(null)
-const currentGoldPrice = ref<GoldPrice | null>(null)
-const chartPoints = ref<GoldPrice['chartPoints']>([])
-const isLoadingGoldPrice = ref(false)
+const isRefreshingPrice = ref(false)
 const isLoadingTrend = ref(false)
 const goldPriceError = ref('')
-let requestSequence = 0
-let trendRequestSequence = 0
 let mediaQuery: MediaQueryList | null = null
 let echartsLib: (typeof import('echarts')) | null = null
 let chartIns: ECharts | null = null
@@ -30,6 +27,17 @@ const trendRangeMap: Record<TrendKey, GoldPriceRange> = {
   '30日': '30d',
   '1年': '1y',
 }
+
+const activeRange = computed(() => trendRangeMap[activeTrend.value])
+const currentGoldPrice = computed(() => (
+  getCachedGoldPrice(activeRange.value) ?? getCachedGoldPrice('1d')
+))
+const chartPoints = computed(() => (
+  getCachedGoldPrice(activeRange.value)?.chartPoints ?? []
+))
+const isLoadingGoldPrice = computed(() => (
+  activeRange.value === '1d' && !currentGoldPrice.value && goldPriceCacheState.isBootstrapping
+))
 
 const trendData = computed(() => ({
   x: chartPoints.value.map((item) => item.label),
@@ -148,63 +156,55 @@ function onResize() {
 }
 
 async function loadGoldPrice() {
-  const currentRequest = ++requestSequence
-  isLoadingGoldPrice.value = true
   goldPriceError.value = ''
 
   try {
-    const data = await getGoldPrices(trendRangeMap[activeTrend.value])
-    if (currentRequest !== requestSequence) {
-      return
-    }
-
-    currentGoldPrice.value = {
-      ...data,
-      chartPoints: [],
-    }
-    chartPoints.value = data.chartPoints
-    renderChart()
+    await ensureGoldPriceCache('1d')
   } catch (error) {
-    if (currentRequest !== requestSequence) {
-      return
-    }
-
     goldPriceError.value = error instanceof Error ? error.message : '金价加载失败'
-  } finally {
-    if (currentRequest === requestSequence) {
-      isLoadingGoldPrice.value = false
-    }
   }
 }
 
 async function loadTrendData() {
-  if (!currentGoldPrice.value) {
+  if (activeRange.value === '1d') {
     await loadGoldPrice()
     return
   }
 
-  const currentRequest = ++trendRequestSequence
   isLoadingTrend.value = true
   goldPriceError.value = ''
 
   try {
-    const data = await getGoldPrices(trendRangeMap[activeTrend.value])
-    if (currentRequest !== trendRequestSequence) {
-      return
-    }
-
-    chartPoints.value = data.chartPoints
-    renderChart()
+    await ensureGoldPriceCache(activeRange.value)
   } catch (error) {
-    if (currentRequest !== trendRequestSequence) {
-      return
-    }
-
     goldPriceError.value = error instanceof Error ? error.message : '走势加载失败'
   } finally {
-    if (currentRequest === trendRequestSequence) {
-      isLoadingTrend.value = false
+    isLoadingTrend.value = false
+  }
+}
+
+async function refreshCurrentGoldPrice() {
+  if (isRefreshingPrice.value) {
+    return
+  }
+
+  isRefreshingPrice.value = true
+  goldPriceError.value = ''
+
+  try {
+    if (activeRange.value === '1d') {
+      await refreshGoldPriceCache('1d')
+      return
     }
+
+    await Promise.all([
+      refreshGoldPriceCache(activeRange.value),
+      refreshGoldPriceCache('1d'),
+    ])
+  } catch (error) {
+    goldPriceError.value = error instanceof Error ? error.message : '金价刷新失败'
+  } finally {
+    isRefreshingPrice.value = false
   }
 }
 
@@ -248,7 +248,7 @@ onMounted(async () => {
 })
 
 watch(activeTrend, () => {
-  loadTrendData()
+  void loadTrendData()
 })
 
 watch([chartPoints, isDark], () => {
@@ -265,19 +265,23 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="gold-price-page" aria-label="金价">
-    <PageHeader title="金价" back-label="返回更多功能" />
-
-    <div v-if="isLoadingGoldPrice || isLoadingTrend" class="gold-price-loading" role="status">
-      <div class="gold-price-loading-box">
-        <span class="gold-price-loading-spinner"></span>
-        <span>{{ isLoadingGoldPrice ? '金价加载中...' : '走势加载中...' }}</span>
-      </div>
-    </div>
+    <header class="gold-price-header">
+      <PageHeader title="金价" back-label="返回更多功能" />
+      <button
+        class="gold-price-refresh"
+        type="button"
+        :disabled="isRefreshingPrice"
+        aria-label="刷新金价"
+        @click="refreshCurrentGoldPrice"
+      >
+        <span :class="['gold-price-refresh-icon', { spinning: isRefreshingPrice }]">↻</span>
+      </button>
+    </header>
 
     <section class="spot-london-card" aria-label="现货与伦敦金价">
       <header class="card-head">
         <p>现货 / 伦敦金价</p>
-        <span>{{ isLoadingGoldPrice ? '更新中...' : '实时更新' }}</span>
+        <span>{{ goldPriceCacheState.isRefreshingPrimary ? '更新中...' : '实时更新' }}</span>
       </header>
       <p v-if="isLoadingGoldPrice && !currentGoldPrice" class="gold-price-message">
         正在获取实时行情

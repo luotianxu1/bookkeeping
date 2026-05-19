@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
@@ -153,9 +154,7 @@ function formatAmount(value: number) {
     <p v-if="pageError" class="cash-asset-message cash-asset-message-error">
       {{ pageError }}
     </p>
-    <p v-else-if="isLoading" class="cash-asset-message">
-      加载中...
-    </p>
+    <CommonLoading v-else-if="isLoading" />
 
     <template v-else>
       <section class="cash-asset-overview-card" aria-label="现金资产总览">

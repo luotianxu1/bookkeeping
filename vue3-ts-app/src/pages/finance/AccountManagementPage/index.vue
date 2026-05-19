@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -88,7 +89,7 @@ const accountGroups = computed<AccountGroup[]>(() => {
         path: account.accountTypeCode === 'cash'
           ? `/finance/accounts/cash/${account.id}`
           : account.accountTypeCode === 'gold'
-            ? '/finance/accounts/gold/position'
+            ? `/finance/accounts/gold/position?accountId=${account.id}`
           : account.accountTypeCode === 'investment'
             ? `/finance/accounts/investment?accountId=${account.id}`
             : undefined,
@@ -298,9 +299,7 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
     <p v-if="accountListError" class="account-list-message account-list-message-error">
       {{ accountListError }}
     </p>
-    <p v-else-if="isLoadingAccounts" class="account-list-message">
-      加载中...
-    </p>
+    <CommonLoading v-else-if="isLoadingAccounts" />
     <p v-else-if="accountGroups.length === 0" class="account-list-message">
       暂无账户
     </p>

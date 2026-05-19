@@ -3,39 +3,41 @@
   gap: var(--space-6);
 }
 
-.gold-price-loading {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
-  display: grid;
-  place-items: center;
-  background: rgba(248, 250, 252, 0.72);
-  backdrop-filter: blur(2px);
+.gold-price-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
 }
 
-.gold-price-loading-box {
-  min-width: 132px;
-  min-height: 96px;
-  display: grid;
-  place-items: center;
-  gap: var(--space-10);
-  padding: var(--space-16);
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-16);
-  background: var(--color-white);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-13);
-  font-weight: 700;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+.gold-price-header :deep(.page-header) {
+  flex: 1;
 }
 
-.gold-price-loading-spinner {
+.gold-price-refresh {
   width: 28px;
   height: 28px;
-  border: 3px solid var(--color-bg-soft-2);
-  border-top-color: var(--color-brand);
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-pill);
-  animation: gold-loading-spin 720ms linear infinite;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.gold-price-refresh:disabled {
+  opacity: 0.72;
+}
+
+.gold-price-refresh-icon {
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-16);
+  line-height: 1;
+}
+
+.gold-price-refresh-icon.spinning {
+  animation: gold-price-refresh-spin 720ms linear infinite;
 }
 
 .spot-london-card,
@@ -216,23 +218,13 @@
   font-weight: 600;
 }
 
-@keyframes gold-loading-spin {
+@keyframes gold-price-refresh-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
 @media (prefers-color-scheme: dark) {
-  .gold-price-loading {
-    background: rgba(2, 6, 23, 0.62);
-  }
-
-  .gold-price-loading-box {
-    border-color: var(--color-dark-card-border);
-    background: var(--color-dark-card-bg);
-    color: var(--color-dark-text-muted);
-  }
-
   .spot-london-card,
   .trend-card,
   .quote-card,

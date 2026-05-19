@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import {
@@ -259,7 +260,7 @@ function displayIcon(icon: string) {
     </section>
 
     <section v-if="entryType !== '转账'" class="expense-detail-card" aria-label="分类与详情">
-      <p v-if="loading" class="expense-loading">加载中...</p>
+      <CommonLoading v-if="loading" />
       <div class="category-grid">
         <button
           v-for="item in categoryOptions"

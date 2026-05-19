@@ -2,6 +2,7 @@
 // 汇率换算页：输入支付金额并进行币种换算展示。
 import { computed, onMounted, ref, watch } from 'vue'
 import { getExchangeRate } from '@/api/modules/finance'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 
 const currencyOptions = [
@@ -131,9 +132,7 @@ async function loadExchangeRate() {
       <p v-if="exchangeRateError" class="exchange-message exchange-message-error">
         {{ exchangeRateError }}
       </p>
-      <p v-else-if="isLoadingRate" class="exchange-message">
-        汇率加载中...
-      </p>
+      <CommonLoading v-else-if="isLoadingRate" text="汇率加载中..." />
       <p v-else-if="updatedAtText" class="exchange-message">
         {{ updatedAtText }}
       </p>

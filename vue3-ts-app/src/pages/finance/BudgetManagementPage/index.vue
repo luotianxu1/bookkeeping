@@ -3,6 +3,7 @@
 import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
@@ -222,7 +223,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <PageHeader title="预算管理" back-to="/finance/more-features" back-label="返回更多功能" />
 
     <p v-if="pageError" class="budget-message budget-message-error">{{ pageError }}</p>
-    <p v-else-if="isLoading" class="budget-message">加载中...</p>
+    <CommonLoading v-else-if="isLoading" />
 
     <template v-else>
       <section class="budget-summary-card" aria-label="本月预算">

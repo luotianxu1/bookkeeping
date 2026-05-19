@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import { deleteTransaction, getAccounts, getAccountTypes, getTransactions, type Transaction } from '@/api/modules/finance'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
@@ -149,9 +150,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
       <p v-if="transactionListError" class="transaction-list-message transaction-list-message-error">
         {{ transactionListError }}
       </p>
-      <p v-else-if="isLoadingTransactions" class="transaction-list-message">
-        加载中...
-      </p>
+      <CommonLoading v-else-if="isLoadingTransactions" />
       <p v-else-if="dayGroups.length === 0" class="transaction-list-message">
         暂无收支记录
       </p>

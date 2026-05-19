@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // 黄金清仓记录页：通过后端接口展示累计收益和清仓明细。
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   getGoldLiquidations,
@@ -9,6 +11,7 @@ import {
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
+const route = useRoute()
 const isLoading = ref(false)
 const pageError = ref('')
 const liquidation = ref<GoldLiquidation>({
@@ -18,11 +21,36 @@ const liquidation = ref<GoldLiquidation>({
 })
 let requestVersion = 0
 
-const records = computed<GoldLiquidationRecord[]>(() => liquidation.value.records ?? [])
+const selectedAccountId = computed(() => parseAccountId(route.query.accountId))
+const records = computed<GoldLiquidationRecord[]>(() => {
+  const allRecords = liquidation.value.records ?? []
+  if (!selectedAccountId.value) {
+    return allRecords
+  }
+
+  return allRecords.filter((record) => record.accountId === selectedAccountId.value)
+})
+const visibleCumulativeWeight = computed(() => (
+  Number(records.value.reduce((total, record) => total + Number(record.weight ?? 0), 0).toFixed(6))
+))
+const visibleCumulativeProfit = computed(() => (
+  Number(records.value.reduce((total, record) => total + Number(record.profit ?? 0), 0).toFixed(2))
+))
+const backTo = computed(() => (
+  selectedAccountId.value
+    ? `/finance/accounts/gold/position?accountId=${selectedAccountId.value}`
+    : '/finance/accounts/gold/position'
+))
 
 onMounted(() => {
   void loadLiquidations()
 })
+
+function parseAccountId(value: unknown) {
+  const raw = Array.isArray(value) ? value[0] : value
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
 
 async function loadLiquidations() {
   const currentRequestVersion = ++requestVersion
@@ -97,25 +125,23 @@ function formatDateTime(value: string | null | undefined) {
 
 <template>
   <section class="gold-liquidation-page" aria-label="清仓记录">
-    <PageHeader title="清仓记录" back-label="返回黄金账户持仓" />
+    <PageHeader title="清仓记录" back-label="返回黄金账户持仓" :back-to="backTo" />
 
     <p v-if="pageError" class="gold-liquidation-message gold-liquidation-message-error">
       {{ pageError }}
     </p>
-    <p v-else-if="isLoading" class="gold-liquidation-message">
-      加载中...
-    </p>
+    <CommonLoading v-else-if="isLoading" />
 
     <template v-else>
       <section class="liquidation-summary">
         <div class="summary-row">
           <span>累计克重</span>
-          <strong class="weight">{{ formatWeight(liquidation.cumulativeWeight) }}</strong>
+          <strong class="weight">{{ formatWeight(visibleCumulativeWeight) }}</strong>
         </div>
         <div class="summary-row">
           <span>累计收益</span>
-          <strong class="profit" :class="{ negative: liquidation.cumulativeProfit < 0 }">
-            {{ formatSignedAmount(liquidation.cumulativeProfit) }}
+          <strong class="profit" :class="{ negative: visibleCumulativeProfit < 0 }">
+            {{ formatSignedAmount(visibleCumulativeProfit) }}
           </strong>
         </div>
       </section>
@@ -139,10 +165,6 @@ function formatDateTime(value: string | null | undefined) {
             <div>
               <span>卖出价</span>
               <strong>{{ formatAmount(record.sellPrice) }}</strong>
-            </div>
-            <div>
-              <span>手续费</span>
-              <strong>{{ formatAmount(record.fee) }}</strong>
             </div>
           </div>
         </article>

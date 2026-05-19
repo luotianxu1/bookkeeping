@@ -6,10 +6,16 @@ import com.example.finance.dto.AccountResponse;
 import com.example.finance.dto.AccountSortOrderRequest;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
+import com.example.finance.entity.InvestmentDividendRecordEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
+import com.example.finance.entity.InvestmentTransactionEntity;
+import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
+import com.example.finance.mapper.InvestmentDividendRecordMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
+import com.example.finance.mapper.InvestmentTransactionMapper;
+import com.example.finance.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -29,16 +35,35 @@ public class AccountService {
 
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_STATUS = "active";
+    private static final String ACTIVE_POSITION_STATUS = "active";
+    private static final String GOLD_ACCOUNT_TYPE_CODE = "gold";
+    private static final String INVESTMENT_ACCOUNT_TYPE_CODE = "investment";
     private static final Set<String> POSITION_BALANCE_ACCOUNT_TYPES = Set.of("investment", "gold");
 
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
     private final InvestmentPositionMapper investmentPositionMapper;
+    private final InvestmentTransactionMapper investmentTransactionMapper;
+    private final InvestmentDividendRecordMapper investmentDividendRecordMapper;
+    private final TransactionMapper transactionMapper;
+    private final GoldPriceService goldPriceService;
 
-    public AccountService(AccountMapper accountMapper, AccountTypeMapper accountTypeMapper, InvestmentPositionMapper investmentPositionMapper) {
+    public AccountService(
+        AccountMapper accountMapper,
+        AccountTypeMapper accountTypeMapper,
+        InvestmentPositionMapper investmentPositionMapper,
+        InvestmentTransactionMapper investmentTransactionMapper,
+        InvestmentDividendRecordMapper investmentDividendRecordMapper,
+        TransactionMapper transactionMapper,
+        GoldPriceService goldPriceService
+    ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.investmentPositionMapper = investmentPositionMapper;
+        this.investmentTransactionMapper = investmentTransactionMapper;
+        this.investmentDividendRecordMapper = investmentDividendRecordMapper;
+        this.transactionMapper = transactionMapper;
+        this.goldPriceService = goldPriceService;
     }
 
     public List<AccountResponse> list(Long userId, Long accountTypeId, String status) {
@@ -98,7 +123,25 @@ public class AccountService {
         }
     }
 
+    @Transactional
     public boolean delete(Long id) {
+        AccountEntity account = accountMapper.selectById(id);
+        if (account == null) {
+            return false;
+        }
+
+        transactionMapper.delete(new LambdaQueryWrapper<TransactionEntity>()
+            .eq(TransactionEntity::getAccountId, id)
+            .or()
+            .eq(TransactionEntity::getFromAccountId, id)
+            .or()
+            .eq(TransactionEntity::getToAccountId, id));
+        investmentTransactionMapper.delete(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+            .eq(InvestmentTransactionEntity::getAccountId, id));
+        investmentDividendRecordMapper.delete(new LambdaQueryWrapper<InvestmentDividendRecordEntity>()
+            .eq(InvestmentDividendRecordEntity::getAccountId, id));
+        investmentPositionMapper.delete(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .eq(InvestmentPositionEntity::getAccountId, id));
         return accountMapper.deleteById(id) > 0;
     }
 
@@ -182,13 +225,46 @@ public class AccountService {
         if (accountType == null || entity == null || !POSITION_BALANCE_ACCOUNT_TYPES.contains(accountType.getCode())) {
             return entity == null || entity.getCurrentBalance() == null ? BigDecimal.ZERO : entity.getCurrentBalance();
         }
-        BigDecimal marketValue = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+        List<InvestmentPositionEntity> positions = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
                 .eq(InvestmentPositionEntity::getAccountId, entity.getId())
-                .eq(InvestmentPositionEntity::getStatus, "active"))
-            .stream()
-            .map(InvestmentPositionEntity::getMarketValue)
-            .filter(value -> value != null)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return marketValue.setScale(2, RoundingMode.HALF_UP);
+                .eq(InvestmentPositionEntity::getStatus, ACTIVE_POSITION_STATUS));
+
+        if (GOLD_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
+            BigDecimal realtimePrice = resolveRealtimeGoldPrice(positions);
+            BigDecimal marketValue = positions.stream()
+                .map(InvestmentPositionEntity::getHoldingQuantity)
+                .filter(value -> value != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .multiply(realtimePrice);
+            return marketValue.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (INVESTMENT_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
+            BigDecimal marketValue = positions.stream()
+                .map(InvestmentPositionEntity::getMarketValue)
+                .filter(value -> value != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            return marketValue.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return entity.getCurrentBalance() == null ? BigDecimal.ZERO : entity.getCurrentBalance();
+    }
+
+    private BigDecimal resolveRealtimeGoldPrice(List<InvestmentPositionEntity> positions) {
+        try {
+            BigDecimal price = goldPriceService.getGoldPrice("1d").getSpotGold().getPrice();
+            if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
+                return price.setScale(2, RoundingMode.HALF_UP);
+            }
+        } catch (Exception ignored) {
+            // Fall back to stored price when realtime gold quote is temporarily unavailable.
+        }
+
+        return positions.stream()
+            .map(InvestmentPositionEntity::getCurrentPrice)
+            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
+            .findFirst()
+            .map(value -> value.setScale(2, RoundingMode.HALF_UP))
+            .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
     }
 }

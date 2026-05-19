@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
@@ -439,7 +440,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <PageHeader title="投资账户" back-to="/finance/accounts" back-label="返回账户管理" />
 
     <p v-if="pageError" class="investment-message investment-message-error">{{ pageError }}</p>
-    <p v-else-if="isLoading" class="investment-message">加载中...</p>
+    <CommonLoading v-else-if="isLoading" />
 
     <template v-else>
       <section class="investment-summary-card" aria-label="投资总览">

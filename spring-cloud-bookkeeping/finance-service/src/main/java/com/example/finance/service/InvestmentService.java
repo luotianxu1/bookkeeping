@@ -64,7 +64,7 @@ public class InvestmentService {
     private static final String NORMAL_STATUS = "normal";
     private static final String VOIDED_STATUS = "voided";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
-    private static final String INVESTMENT_ACCOUNT_TYPE_CODE = "investment";
+    private static final Set<String> POSITION_ACCOUNT_TYPE_CODES = Set.of("investment", "gold");
     private static final DateTimeFormatter NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private final InvestmentProductMapper productMapper;
@@ -186,16 +186,24 @@ public class InvestmentService {
     @Transactional
     public InvestmentPositionResponse createPosition(InvestmentPositionRequest request) {
         AccountEntity account = requireInvestmentAccount(request.getUserId(), request.getAccountId());
-        AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
+        AccountEntity fundingAccount = resolveFundingAccountForCreate(request, account);
         InvestmentProductEntity product = request.getProductId() != null
             ? requireProduct(request.getProductId())
             : createOrLoadProduct(request.getProduct());
 
         InvestmentPositionEntity entity = new InvestmentPositionEntity();
         fillPosition(entity, request, product.getId());
-        deductFundingAccount(fundingAccount, entity.getCostAmount());
+        if (fundingAccount != null) {
+            deductFundingAccount(fundingAccount, entity.getCostAmount());
+        }
         positionMapper.insert(entity);
-        createInitialBuyTransaction(entity);
+        createBuyTransaction(
+            entity,
+            entity.getHoldingQuantity(),
+            entity.getAvgCostPrice(),
+            entity.getCostAmount(),
+            "新增资产买入"
+        );
         syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
         return toPositionResponse(positionMapper.selectById(entity.getId()), product, account);
     }
@@ -226,6 +234,12 @@ public class InvestmentService {
         if (entity == null || !userId.equals(entity.getUserId())) {
             return false;
         }
+        transactionMapper.delete(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+            .eq(InvestmentTransactionEntity::getUserId, userId)
+            .eq(InvestmentTransactionEntity::getPositionId, id));
+        dividendRecordMapper.delete(new LambdaQueryWrapper<InvestmentDividendRecordEntity>()
+            .eq(InvestmentDividendRecordEntity::getUserId, userId)
+            .eq(InvestmentDividendRecordEntity::getPositionId, id));
         boolean deleted = positionMapper.deleteById(id) > 0;
         if (deleted) {
             syncInvestmentAccountBalance(userId, entity.getAccountId());
@@ -251,7 +265,7 @@ public class InvestmentService {
         response.setHoldingProfit(holdingProfit);
         response.setHoldingProfitRate(rate(holdingProfit, totalMarketValue.subtract(holdingProfit)));
         response.setCumulativeProfit(cumulativeProfit);
-        response.setCumulativeProfitRate(rate(cumulativeProfit, totalMarketValue.subtract(cumulativeProfit)));
+        response.setCumulativeProfitRate(rate(cumulativeProfit, totalMarketValue.subtract(holdingProfit)));
         response.setLastSyncedAt(positions.stream()
             .map(InvestmentPositionEntity::getLastSyncedAt)
             .filter(item -> item != null)
@@ -276,7 +290,7 @@ public class InvestmentService {
 
     @Transactional
     public InvestmentTransactionResponse createTransaction(InvestmentTransactionRequest request) {
-        requireInvestmentAccount(request.getUserId(), request.getAccountId());
+        AccountEntity investmentAccount = requireInvestmentAccount(request.getUserId(), request.getAccountId());
         InvestmentPositionEntity position = requirePosition(request);
         InvestmentProductEntity product = requireProduct(request.getProductId());
         BigDecimal quantity = defaultZero(request.getQuantity()).setScale(6, RoundingMode.HALF_UP);
@@ -297,8 +311,10 @@ public class InvestmentService {
             deductFundingAccount(fundingAccount, amount.add(feeAmount).add(taxAmount));
             applyBuyTransaction(position, quantity, price, amount, feeAmount, taxAmount);
         } else if ("sell".equals(request.getTradeType())) {
-            AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
-            creditFundingAccount(fundingAccount, amount.subtract(feeAmount).subtract(taxAmount));
+            AccountEntity fundingAccount = resolveFundingAccountForSell(request, investmentAccount);
+            if (fundingAccount != null) {
+                creditFundingAccount(fundingAccount, amount.subtract(feeAmount).subtract(taxAmount));
+            }
             applySellTransaction(position, quantity, price, amount, feeAmount, taxAmount);
         }
 
@@ -405,6 +421,7 @@ public class InvestmentService {
             ? costAmount.divide(quantity, 6, RoundingMode.HALF_UP)
             : BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
         BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal cumulativeProfit = defaultZero(entity.getCumulativeProfit()).setScale(2, RoundingMode.HALF_UP);
 
         entity.setUserId(request.getUserId());
         entity.setAccountId(request.getAccountId());
@@ -418,8 +435,8 @@ public class InvestmentService {
         entity.setMarketValue(marketValue);
         entity.setHoldingProfit(holdingProfit);
         entity.setHoldingProfitRate(rate(holdingProfit, costAmount));
-        entity.setCumulativeProfit(holdingProfit);
-        entity.setCumulativeProfitRate(rate(holdingProfit, costAmount));
+        entity.setCumulativeProfit(cumulativeProfit);
+        entity.setCumulativeProfitRate(rate(cumulativeProfit, costAmount));
         entity.setDayProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         entity.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
         entity.setIncludeInNetWorth(request.getIncludeInNetWorth() == null ? Boolean.TRUE : request.getIncludeInNetWorth());
@@ -428,7 +445,13 @@ public class InvestmentService {
         entity.setRemark(request.getRemark());
     }
 
-    private void createInitialBuyTransaction(InvestmentPositionEntity position) {
+    private void createBuyTransaction(
+        InvestmentPositionEntity position,
+        BigDecimal quantity,
+        BigDecimal price,
+        BigDecimal amount,
+        String remark
+    ) {
         InvestmentTransactionEntity transaction = new InvestmentTransactionEntity();
         transaction.setTransactionNo(generateTransactionNo());
         transaction.setUserId(position.getUserId());
@@ -436,15 +459,15 @@ public class InvestmentService {
         transaction.setPositionId(position.getId());
         transaction.setProductId(position.getProductId());
         transaction.setTradeType("buy");
-        transaction.setQuantity(position.getHoldingQuantity());
-        transaction.setPrice(position.getAvgCostPrice());
-        transaction.setAmount(position.getCostAmount());
+        transaction.setQuantity(defaultZero(quantity).setScale(6, RoundingMode.HALF_UP));
+        transaction.setPrice(defaultZero(price).setScale(6, RoundingMode.HALF_UP));
+        transaction.setAmount(defaultZero(amount).setScale(2, RoundingMode.HALF_UP));
         transaction.setFeeAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         transaction.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         transaction.setCurrencyCode(DEFAULT_CURRENCY_CODE);
         transaction.setTradeAt(LocalDateTime.now());
         transaction.setStatus(NORMAL_STATUS);
-        transaction.setRemark("新增资产买入");
+        transaction.setRemark(remark);
         transactionMapper.insert(transaction);
     }
 
@@ -454,8 +477,8 @@ public class InvestmentService {
             throw new IllegalArgumentException("投资账户不存在");
         }
         AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
-        if (accountType == null || !INVESTMENT_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
-            throw new IllegalArgumentException("请选择投资账户");
+        if (accountType == null || !POSITION_ACCOUNT_TYPE_CODES.contains(accountType.getCode())) {
+            throw new IllegalArgumentException("请选择投资或黄金账户");
         }
         return account;
     }
@@ -473,6 +496,32 @@ public class InvestmentService {
             throw new IllegalArgumentException("资金账户必须为现金账户");
         }
         return account;
+    }
+
+    private AccountEntity resolveFundingAccountForCreate(InvestmentPositionRequest request, AccountEntity account) {
+        if (request.getFundingAccountId() != null) {
+            return requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
+        }
+
+        AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
+        if (accountType != null && "gold".equals(accountType.getCode())) {
+            return null;
+        }
+
+        throw new IllegalArgumentException("请选择资金账户");
+    }
+
+    private AccountEntity resolveFundingAccountForSell(InvestmentTransactionRequest request, AccountEntity account) {
+        if (request.getFundingAccountId() != null) {
+            return requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
+        }
+
+        AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
+        if (accountType != null && "gold".equals(accountType.getCode())) {
+            return null;
+        }
+
+        throw new IllegalArgumentException("请选择资金账户");
     }
 
     private void deductFundingAccount(AccountEntity account, BigDecimal amount) {
@@ -551,6 +600,7 @@ public class InvestmentService {
         BigDecimal avgCostPrice = defaultZero(position.getAvgCostPrice()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal soldCostAmount = avgCostPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
         BigDecimal nextCostAmount = defaultZero(position.getCostAmount()).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal previousCumulativeProfit = defaultZero(position.getCumulativeProfit()).setScale(2, RoundingMode.HALF_UP);
         if (nextCostAmount.compareTo(BigDecimal.ZERO) < 0) {
             nextCostAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
@@ -564,8 +614,8 @@ public class InvestmentService {
         recalculatePositionMetrics(position, nextHoldingQuantity.compareTo(BigDecimal.ZERO) == 0 ? "closed" : ACTIVE_STATUS);
 
         BigDecimal realizedProfit = amount.subtract(feeAmount).subtract(taxAmount).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
-        position.setCumulativeProfit(defaultZero(position.getHoldingProfit()).add(realizedProfit).setScale(2, RoundingMode.HALF_UP));
-        position.setCumulativeProfitRate(rate(position.getCumulativeProfit(), position.getMarketValue().add(soldCostAmount)));
+        position.setCumulativeProfit(previousCumulativeProfit.add(realizedProfit).setScale(2, RoundingMode.HALF_UP));
+        position.setCumulativeProfitRate(rate(position.getCumulativeProfit(), position.getCostAmount()));
     }
 
     private void recalculatePositionMetrics(InvestmentPositionEntity position, String status) {
@@ -577,6 +627,7 @@ public class InvestmentService {
             ? costAmount.divide(holdingQuantity, 6, RoundingMode.HALF_UP)
             : BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
         BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal cumulativeProfit = defaultZero(position.getCumulativeProfit()).setScale(2, RoundingMode.HALF_UP);
 
         position.setHoldingQuantity(holdingQuantity);
         position.setAvailableQuantity(defaultZero(position.getAvailableQuantity()).setScale(6, RoundingMode.HALF_UP));
@@ -585,8 +636,8 @@ public class InvestmentService {
         position.setMarketValue(marketValue);
         position.setHoldingProfit(holdingProfit);
         position.setHoldingProfitRate(rate(holdingProfit, costAmount));
-        position.setCumulativeProfit(holdingProfit);
-        position.setCumulativeProfitRate(rate(holdingProfit, costAmount));
+        position.setCumulativeProfit(cumulativeProfit);
+        position.setCumulativeProfitRate(rate(cumulativeProfit, costAmount));
         position.setStatus(status);
         position.setLastSyncedAt(LocalDateTime.now());
     }
@@ -600,7 +651,7 @@ public class InvestmentService {
             return;
         }
         AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
-        if (accountType == null || !INVESTMENT_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
+        if (accountType == null || !POSITION_ACCOUNT_TYPE_CODES.contains(accountType.getCode())) {
             return;
         }
         BigDecimal marketValue = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()

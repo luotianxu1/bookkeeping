@@ -13,6 +13,7 @@ import {
 } from '@/api/modules/finance'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
@@ -233,9 +234,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <p v-if="transactionListError" class="records-message records-message-error">
       {{ transactionListError }}
     </p>
-    <p v-else-if="isLoadingTransactions" class="records-message">
-      加载中...
-    </p>
+    <CommonLoading v-else-if="isLoadingTransactions" />
     <p v-else-if="dayGroups.length === 0" class="records-message">
       暂无收支记录
     </p>

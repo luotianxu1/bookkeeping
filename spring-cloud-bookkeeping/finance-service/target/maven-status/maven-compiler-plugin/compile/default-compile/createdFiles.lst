@@ -75,6 +75,7 @@ com/example/finance/entity/InvestmentDividendRecordEntity.class
 com/example/finance/mapper/TransactionMapper.class
 com/example/finance/dto/MonthlyBudgetRequest.class
 com/example/finance/dto/GoldPriceResponse$GoldMarketStats.class
+com/example/finance/service/GoldAccountService$PositionCostState.class
 com/example/finance/controller/CategoryController.class
 com/example/finance/dto/GoldLiquidationResponse.class
 com/example/finance/entity/InvestmentPositionEntity.class
