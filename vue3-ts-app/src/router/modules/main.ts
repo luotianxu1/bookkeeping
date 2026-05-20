@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import LoginPage from '@/pages/login/LoginPage/index.vue'
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage/index.vue'
 import ProfilePage from '@/pages/profile/ProfilePage/index.vue'
+import ContactsPage from '@/pages/tools/ContactsPage/index.vue'
 import ToolsPage from '@/pages/tools/ToolsPage/index.vue'
 
 export const mainRoutes: RouteRecordRaw[] = [
@@ -31,6 +32,15 @@ export const mainRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'tools',
       title: '工具',
+    },
+  },
+  {
+    path: '/tools/contacts',
+    name: 'tools-contacts',
+    component: ContactsPage,
+    meta: {
+      section: 'tools',
+      title: '联系人管理',
     },
   },
   {

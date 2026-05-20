@@ -15,6 +15,7 @@
         <module>common</module>
         <module>auth-service</module>
         <module>finance-service</module>
+        <module>tool-service</module>
     </modules>
 
     <properties>

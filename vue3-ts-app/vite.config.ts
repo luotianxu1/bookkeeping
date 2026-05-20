@@ -19,6 +19,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/finance-api/, ''),
       },
+      '/tool-api': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/tool-api/, ''),
+      },
       '/api-proxy': {
         target: 'http://localhost:8081',
         changeOrigin: true,
