@@ -27,6 +27,11 @@ export interface AccountQuery {
   status?: string
 }
 
+export interface DebtAccountSummary {
+  totalAmount: number
+  accountCount: number
+}
+
 export interface Account {
   id: number
   userId: number
@@ -434,6 +439,12 @@ export function updateAccountSortOrders(params: SaveAccountSortOrdersParams) {
 
 export function deleteAccount(id: number) {
   return requestDelete<void>(financeRequest, `/api/finance/accounts/${id}`)
+}
+
+export function getDebtAccountSummary(userId: number) {
+  return requestGet<DebtAccountSummary>(financeRequest, '/api/finance/debt-accounts/summary', {
+    params: { userId },
+  })
 }
 
 export function getCategories(params: CategoryQuery = {}) {

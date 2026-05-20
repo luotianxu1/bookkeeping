@@ -16,6 +16,8 @@ import type { AccountGroup, AccountOverview } from '@/types/account'
 import AccountGroupCard from '../components/AccountGroupCard/index.vue'
 import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
 
+const DEBT_ACCOUNT_CODES = new Set(['debt', 'loan_receivable', 'loan_payable'])
+
 const showCreateAccountModal = ref(false)
 const accountName = ref('')
 const accountRemark = ref('')
@@ -38,7 +40,7 @@ const accountOverview = computed<AccountOverview>(() => ({
   amount: formatAmount(
     accounts.value
       .filter((account) => account.includeInNetWorth && account.status === 'active')
-      .reduce((total, account) => total + Number(account.currentBalance), 0),
+      .reduce((total, account) => total + getSignedBalance(account), 0),
   ),
 }))
 
@@ -68,31 +70,42 @@ const accountGroups = computed<AccountGroup[]>(() => {
     const groupAccounts = groupedAccounts.get(accountTypeId) ?? []
     const firstAccount = groupAccounts[0]
     const accountType = typeById.get(accountTypeId)
-    const title = accountType?.name ? `${accountType.name}账户` : firstAccount?.accountTypeName ? `${firstAccount.accountTypeName}账户` : '其他账户'
+    const groupCode = accountType?.code ?? firstAccount?.accountTypeCode
+    const title = DEBT_ACCOUNT_CODES.has(groupCode ?? '')
+      ? '债务账户'
+      : accountType?.name
+        ? `${accountType.name}账户`
+        : firstAccount?.accountTypeName
+          ? `${firstAccount.accountTypeName}账户`
+          : '其他账户'
 
-      return {
-        accountTypeId,
-        title,
-        path: accountType?.code === 'cash' || firstAccount?.accountTypeCode === 'cash'
+    return {
+      accountTypeId,
+      title,
+      path: groupCode === 'cash'
         ? '/finance/accounts/cash'
-        : accountType?.code === 'gold' || firstAccount?.accountTypeCode === 'gold'
+        : DEBT_ACCOUNT_CODES.has(groupCode ?? '')
+          ? '/finance/accounts/debt'
+        : groupCode === 'gold'
           ? '/finance/accounts/gold'
-        : accountType?.code === 'investment' || firstAccount?.accountTypeCode === 'investment'
+        : groupCode === 'investment'
           ? '/finance/accounts/investment'
-          : undefined,
-        items: groupAccounts.map((account) => ({
+        : undefined,
+      items: groupAccounts.map((account) => ({
           id: account.id,
-        icon: getAccountIcon(account.icon, account.accountTypeCode),
-        name: account.name,
-        subtitle: account.remark ?? account.accountTypeName ?? '',
-        amount: formatAmount(Number(account.currentBalance)),
-        path: account.accountTypeCode === 'cash'
-          ? `/finance/accounts/cash/${account.id}`
-          : account.accountTypeCode === 'gold'
-            ? `/finance/accounts/gold/position?accountId=${account.id}`
-          : account.accountTypeCode === 'investment'
-            ? `/finance/accounts/investment?accountId=${account.id}`
-            : undefined,
+          icon: getAccountIcon(account.icon, account.accountTypeCode),
+          name: account.name,
+          subtitle: account.remark ?? account.accountTypeName ?? '',
+          amount: formatAmount(getSignedBalance(account)),
+          path: account.accountTypeCode === 'cash'
+            ? `/finance/accounts/cash/${account.id}`
+            : DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
+              ? '/finance/accounts/debt'
+            : account.accountTypeCode === 'gold'
+              ? `/finance/accounts/gold/position?accountId=${account.id}`
+            : account.accountTypeCode === 'investment'
+              ? `/finance/accounts/investment?accountId=${account.id}`
+              : undefined,
       })),
     }
   })
@@ -253,6 +266,12 @@ function formatAmount(value: number) {
   }).format(value)
 }
 
+function getSignedBalance(account: Account) {
+  const rawBalance = Number(account.currentBalance ?? 0)
+  const accountType = accountTypes.value.find((type) => type.id === account.accountTypeId)
+  return accountType?.balanceDirection === 'credit' ? rawBalance * -1 : rawBalance
+}
+
 function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
   const iconMap: Record<string, string> = {
     wallet: '💵',
@@ -265,8 +284,9 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
     gold: '🥇',
     stock: '◉',
     credit_card: '💳',
-    loan_receivable: '↙',
-    loan_payable: '↗',
+    debt: '债',
+    loan_receivable: '债',
+    loan_payable: '债',
     human_relation: '礼',
     other_asset: '资',
     other_liability: '债',

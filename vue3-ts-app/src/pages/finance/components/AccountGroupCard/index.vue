@@ -31,7 +31,7 @@ defineProps<{
             </span>
           </span>
           <span class="account-item-right">
-            <AmountText tag="strong" :value="item.amount" show-unit />
+            <AmountText tag="strong" :value="item.amount" show-unit show-sign />
             <span>&gt;</span>
           </span>
         </RouterLink>
@@ -44,7 +44,7 @@ defineProps<{
             </span>
           </span>
           <span class="account-item-right">
-            <AmountText tag="strong" :value="item.amount" show-unit />
+            <AmountText tag="strong" :value="item.amount" show-unit show-sign />
             <span>&gt;</span>
           </span>
         </template>

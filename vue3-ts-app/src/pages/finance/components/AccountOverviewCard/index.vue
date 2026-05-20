@@ -11,7 +11,7 @@ defineProps<{
 <template>
   <section class="account-overview-card" aria-label="总资产">
     <p>{{ overview.label }}</p>
-    <AmountText tag="strong" :value="overview.amount" show-unit />
+    <AmountText tag="strong" :value="overview.amount" show-unit show-sign />
   </section>
 </template>
 
