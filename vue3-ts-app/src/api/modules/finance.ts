@@ -28,14 +28,38 @@ export interface AccountQuery {
 }
 
 export interface DebtAccountSummary {
-  totalAmount: number
+  netAmount: number
+  payableTotal: number
+  receivableTotal: number
   accountCount: number
+  recordCount: number
+}
+
+export type DebtDirection = 'payable' | 'receivable'
+
+export interface DebtRecord {
+  id: number
+  userId: number
+  accountId: number
+  contactId?: number | null
+  accountName?: string | null
+  fundingAccountId?: number | null
+  fundingAccountName?: string | null
+  direction: DebtDirection
+  amount: number
+  currencyCode: string
+  remark?: string | null
+  occurredAt: string
+  status: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Account {
   id: number
   userId: number
   accountTypeId: number
+  contactId?: number | null
   accountTypeCode?: string | null
   accountTypeName?: string | null
   name: string
@@ -126,6 +150,8 @@ export type TransactionType = 'expense' | 'income'
 
 export interface Transaction {
   id: number
+  sourceId?: number | null
+  sourceType?: 'transaction' | 'debt_record' | null
   transactionNo: string
   userId: number
   type: TransactionType
@@ -173,6 +199,7 @@ export interface MonthlyBudgetQuery {
 export interface CreateAccountParams {
   userId: number
   accountTypeId: number
+  contactId?: number | null
   name: string
   icon?: string | null
   color?: string | null
@@ -182,6 +209,22 @@ export interface CreateAccountParams {
   sortOrder?: number
   status?: string
   remark?: string | null
+}
+
+export interface DebtRecordQuery {
+  userId: number
+  accountId?: number
+}
+
+export interface SaveDebtRecordParams {
+  userId: number
+  accountId: number
+  fundingAccountId: number
+  direction: DebtDirection
+  amount: number
+  currencyCode?: string
+  remark?: string | null
+  occurredAt?: string
 }
 
 export interface SaveAccountSortOrdersParams {
@@ -441,8 +484,29 @@ export function deleteAccount(id: number) {
   return requestDelete<void>(financeRequest, `/api/finance/accounts/${id}`)
 }
 
-export function getDebtAccountSummary(userId: number) {
+export function getDebtAccountSummary(userId: number, accountId?: number) {
   return requestGet<DebtAccountSummary>(financeRequest, '/api/finance/debt-accounts/summary', {
+    params: {
+      userId,
+      accountId,
+    },
+  })
+}
+
+export function getDebtRecords(params: DebtRecordQuery) {
+  return requestGet<DebtRecord[]>(financeRequest, '/api/finance/debt-accounts/records', { params })
+}
+
+export function createDebtRecord(params: SaveDebtRecordParams) {
+  return requestPost<DebtRecord, SaveDebtRecordParams>(financeRequest, '/api/finance/debt-accounts/records', params)
+}
+
+export function updateDebtRecord(id: number, params: SaveDebtRecordParams) {
+  return requestPut<DebtRecord, SaveDebtRecordParams>(financeRequest, `/api/finance/debt-accounts/records/${id}`, params)
+}
+
+export function deleteDebtRecord(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/debt-accounts/records/${id}`, {
     params: { userId },
   })
 }

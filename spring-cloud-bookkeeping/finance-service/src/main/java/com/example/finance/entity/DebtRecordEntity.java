@@ -10,8 +10,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("accounts")
-public class AccountEntity {
+@TableName("debt_records")
+public class DebtRecordEntity {
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -19,30 +19,24 @@ public class AccountEntity {
     @TableField("user_id")
     private Long userId;
 
-    @TableField("account_type_id")
-    private Long accountTypeId;
+    @TableField("account_id")
+    private Long accountId;
 
-    @TableField("contact_id")
-    private Long contactId;
+    @TableField("funding_account_id")
+    private Long fundingAccountId;
 
-    private String name;
-    private String icon;
-    private String color;
+    private String direction;
+    private BigDecimal amount;
 
     @TableField("currency_code")
     private String currencyCode;
 
-    @TableField("current_balance")
-    private BigDecimal currentBalance;
+    private String remark;
 
-    @TableField("include_in_net_worth")
-    private Boolean includeInNetWorth;
-
-    @TableField("sort_order")
-    private Integer sortOrder;
+    @TableField("occurred_at")
+    private LocalDateTime occurredAt;
 
     private String status;
-    private String remark;
 
     @TableField("created_at")
     private LocalDateTime createdAt;

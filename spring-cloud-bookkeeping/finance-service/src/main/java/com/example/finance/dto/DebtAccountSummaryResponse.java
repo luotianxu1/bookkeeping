@@ -7,6 +7,9 @@ import java.math.BigDecimal;
 @Data
 public class DebtAccountSummaryResponse {
 
-    private BigDecimal totalAmount;
+    private BigDecimal netAmount;
+    private BigDecimal payableTotal;
+    private BigDecimal receivableTotal;
     private Integer accountCount;
+    private Integer recordCount;
 }

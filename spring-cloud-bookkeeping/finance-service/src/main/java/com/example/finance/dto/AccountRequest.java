@@ -17,6 +17,8 @@ public class AccountRequest {
     @NotNull(message = "账户类型ID不能为空")
     private Long accountTypeId;
 
+    private Long contactId;
+
     @NotBlank(message = "账户名称不能为空")
     @Size(max = 80, message = "账户名称不能超过80个字符")
     private String name;

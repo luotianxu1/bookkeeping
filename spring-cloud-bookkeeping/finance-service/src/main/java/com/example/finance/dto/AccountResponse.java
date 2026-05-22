@@ -11,6 +11,7 @@ public class AccountResponse {
     private Long id;
     private Long userId;
     private Long accountTypeId;
+    private Long contactId;
     private String accountTypeCode;
     private String accountTypeName;
     private String name;

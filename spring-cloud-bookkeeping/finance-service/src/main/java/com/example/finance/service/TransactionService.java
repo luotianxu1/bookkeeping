@@ -6,10 +6,12 @@ import com.example.finance.dto.TransactionResponse;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.CategoryEntity;
+import com.example.finance.entity.DebtRecordEntity;
 import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
 import com.example.finance.mapper.CategoryMapper;
+import com.example.finance.mapper.DebtRecordMapper;
 import com.example.finance.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,7 +35,12 @@ public class TransactionService {
 
     private static final String TYPE_EXPENSE = "expense";
     private static final String TYPE_INCOME = "income";
+    private static final String SOURCE_TRANSACTION = "transaction";
+    private static final String SOURCE_DEBT_RECORD = "debt_record";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
+    private static final String DEBT_DIRECTION_PAYABLE = "payable";
+    private static final String DEBT_DIRECTION_RECEIVABLE = "receivable";
+    private static final String DEBT_RECORD_ACTIVE_STATUS = "active";
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_STATUS = "normal";
     private static final String VOIDED_STATUS = "voided";
@@ -42,17 +50,20 @@ public class TransactionService {
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
     private final CategoryMapper categoryMapper;
+    private final DebtRecordMapper debtRecordMapper;
 
     public TransactionService(
         TransactionMapper transactionMapper,
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
-        CategoryMapper categoryMapper
+        CategoryMapper categoryMapper,
+        DebtRecordMapper debtRecordMapper
     ) {
         this.transactionMapper = transactionMapper;
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.categoryMapper = categoryMapper;
+        this.debtRecordMapper = debtRecordMapper;
     }
 
     public List<TransactionResponse> list(Long userId, String type, Long accountId) {
@@ -65,7 +76,8 @@ public class TransactionService {
             .orderByDesc(TransactionEntity::getId);
 
         List<TransactionEntity> transactions = transactionMapper.selectList(wrapper);
-        return toResponses(transactions);
+        List<DebtRecordEntity> debtRecords = loadDebtRecords(userId, type, accountId);
+        return mergeResponses(transactions, debtRecords);
     }
 
     @Transactional
@@ -91,7 +103,7 @@ public class TransactionService {
 
         updateAccountBalance(account, type, amount);
 
-        return toResponse(transactionMapper.selectById(entity.getId()), account, category);
+        return toTransactionResponse(transactionMapper.selectById(entity.getId()), account, category);
     }
 
     @Transactional
@@ -187,8 +199,8 @@ public class TransactionService {
         return prefix + timePart + randomPart;
     }
 
-    private List<TransactionResponse> toResponses(List<TransactionEntity> transactions) {
-        if (transactions.isEmpty()) {
+    private List<TransactionResponse> mergeResponses(List<TransactionEntity> transactions, List<DebtRecordEntity> debtRecords) {
+        if (transactions.isEmpty() && debtRecords.isEmpty()) {
             return List.of();
         }
 
@@ -196,6 +208,14 @@ public class TransactionService {
             .map(TransactionEntity::getAccountId)
             .filter(id -> id != null)
             .collect(Collectors.toSet());
+        accountIds.addAll(debtRecords.stream()
+            .map(DebtRecordEntity::getAccountId)
+            .filter(id -> id != null)
+            .collect(Collectors.toSet()));
+        accountIds.addAll(debtRecords.stream()
+            .map(DebtRecordEntity::getFundingAccountId)
+            .filter(id -> id != null)
+            .collect(Collectors.toSet()));
         Set<Long> categoryIds = transactions.stream()
             .map(TransactionEntity::getCategoryId)
             .filter(id -> id != null)
@@ -208,18 +228,56 @@ public class TransactionService {
             ? Collections.emptyMap()
             : categoryMapper.selectBatchIds(categoryIds).stream().collect(Collectors.toMap(CategoryEntity::getId, Function.identity()));
 
-        return transactions.stream()
-            .map(transaction -> toResponse(
+        List<TransactionResponse> expenseIncomeResponses = transactions.stream()
+            .map(transaction -> toTransactionResponse(
                 transaction,
                 transaction.getAccountId() == null ? null : accounts.get(transaction.getAccountId()),
                 transaction.getCategoryId() == null ? null : categories.get(transaction.getCategoryId())
             ))
             .toList();
+        List<TransactionResponse> debtResponses = debtRecords.stream()
+            .map(record -> toDebtRecordResponse(
+                record,
+                accounts.get(record.getAccountId()),
+                accounts.get(record.getFundingAccountId())
+            ))
+            .toList();
+
+        return java.util.stream.Stream.concat(expenseIncomeResponses.stream(), debtResponses.stream())
+            .sorted(Comparator
+                .comparing(TransactionResponse::getOccurredAt, Comparator.nullsLast(LocalDateTime::compareTo))
+                .reversed()
+                .thenComparing(TransactionResponse::getSourceId, Comparator.nullsLast(Long::compareTo))
+                .reversed())
+            .toList();
     }
 
-    private TransactionResponse toResponse(TransactionEntity entity, AccountEntity account, CategoryEntity category) {
+    private List<DebtRecordEntity> loadDebtRecords(Long userId, String type, Long accountId) {
+        if (StringUtils.hasText(type) && !TYPE_EXPENSE.equals(type) && !TYPE_INCOME.equals(type)) {
+            return List.of();
+        }
+
+        LambdaQueryWrapper<DebtRecordEntity> wrapper = new LambdaQueryWrapper<DebtRecordEntity>()
+            .eq(userId != null, DebtRecordEntity::getUserId, userId)
+            .eq(accountId != null, DebtRecordEntity::getFundingAccountId, accountId)
+            .eq(DebtRecordEntity::getStatus, DEBT_RECORD_ACTIVE_STATUS)
+            .orderByDesc(DebtRecordEntity::getOccurredAt)
+            .orderByDesc(DebtRecordEntity::getId);
+
+        if (TYPE_INCOME.equals(type)) {
+            wrapper.eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_RECEIVABLE);
+        } else if (TYPE_EXPENSE.equals(type)) {
+            wrapper.eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_PAYABLE);
+        }
+
+        return debtRecordMapper.selectList(wrapper);
+    }
+
+    private TransactionResponse toTransactionResponse(TransactionEntity entity, AccountEntity account, CategoryEntity category) {
         TransactionResponse response = new TransactionResponse();
         response.setId(entity.getId());
+        response.setSourceId(entity.getId());
+        response.setSourceType(SOURCE_TRANSACTION);
         response.setTransactionNo(entity.getTransactionNo());
         response.setUserId(entity.getUserId());
         response.setType(entity.getType());
@@ -237,5 +295,39 @@ public class TransactionService {
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
         return response;
+    }
+
+    private TransactionResponse toDebtRecordResponse(
+        DebtRecordEntity entity,
+        AccountEntity debtAccount,
+        AccountEntity fundingAccount
+    ) {
+        TransactionResponse response = new TransactionResponse();
+        response.setId(entity.getId() == null ? null : -entity.getId());
+        response.setSourceId(entity.getId());
+        response.setSourceType(SOURCE_DEBT_RECORD);
+        response.setTransactionNo("DEBT-" + entity.getId());
+        response.setUserId(entity.getUserId());
+        response.setType(DEBT_DIRECTION_RECEIVABLE.equals(entity.getDirection()) ? TYPE_INCOME : TYPE_EXPENSE);
+        response.setAmount(entity.getAmount());
+        response.setCurrencyCode(entity.getCurrencyCode());
+        response.setAccountId(fundingAccount == null ? entity.getAccountId() : fundingAccount.getId());
+        response.setAccountName(fundingAccount == null ? (debtAccount == null ? null : debtAccount.getName()) : fundingAccount.getName());
+        response.setCategoryId(null);
+        response.setCategoryName(DEBT_DIRECTION_RECEIVABLE.equals(entity.getDirection()) ? "债务借出" : "债务借入");
+        response.setCategoryIcon("债");
+        response.setTitle(buildDebtRecordTitle(debtAccount, entity));
+        response.setRemark(entity.getRemark());
+        response.setOccurredAt(entity.getOccurredAt());
+        response.setStatus(entity.getStatus());
+        response.setCreatedAt(entity.getCreatedAt());
+        response.setUpdatedAt(entity.getUpdatedAt());
+        return response;
+    }
+
+    private String buildDebtRecordTitle(AccountEntity account, DebtRecordEntity entity) {
+        String accountName = account == null ? "债务账户" : account.getName();
+        String directionLabel = DEBT_DIRECTION_RECEIVABLE.equals(entity.getDirection()) ? "借出" : "借入";
+        return accountName + " · " + directionLabel;
     }
 }

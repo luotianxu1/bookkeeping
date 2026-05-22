@@ -15,6 +15,7 @@ import java.util.Optional;
 public class ContactService {
 
     private static final String DEFAULT_STATUS = "active";
+    private static final String ALL_STATUS = "all";
 
     private final ContactMapper contactMapper;
 
@@ -25,7 +26,7 @@ public class ContactService {
     public List<ContactResponse> list(Long userId, String status, String keyword) {
         LambdaQueryWrapper<ContactEntity> wrapper = new LambdaQueryWrapper<ContactEntity>()
             .eq(userId != null, ContactEntity::getUserId, userId)
-            .eq(StringUtils.hasText(status), ContactEntity::getStatus, status)
+            .eq(shouldFilterByStatus(status), ContactEntity::getStatus, status)
             .and(StringUtils.hasText(keyword), query -> query
                 .like(ContactEntity::getName, keyword)
                 .or()
@@ -38,6 +39,10 @@ public class ContactService {
         return contactMapper.selectList(wrapper).stream()
             .map(this::toResponse)
             .toList();
+    }
+
+    private boolean shouldFilterByStatus(String status) {
+        return StringUtils.hasText(status) && !ALL_STATUS.equalsIgnoreCase(status.trim());
     }
 
     public Optional<ContactResponse> getById(Long id) {

@@ -8,6 +8,10 @@
   overflow: hidden;
 }
 
+.segmented-control--surface {
+  background: var(--color-bg-soft-2);
+}
+
 .segmented-control-indicator {
   position: absolute;
   top: var(--space-4);
@@ -18,6 +22,10 @@
   background: var(--color-brand);
   transform: translateX(calc(var(--index) * 100%));
   transition: transform 220ms ease;
+}
+
+.segmented-control--surface .segmented-control-indicator {
+  background: var(--color-white);
 }
 
 .segmented-control-item {
@@ -38,6 +46,10 @@
 
 .segmented-control-item.active {
   color: var(--color-white);
+}
+
+.segmented-control--surface .segmented-control-item.active {
+  color: var(--color-text-primary);
 }
 
 .segmented-control-item:focus-visible {

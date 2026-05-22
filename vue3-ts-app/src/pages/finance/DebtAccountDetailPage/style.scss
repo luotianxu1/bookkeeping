@@ -1,0 +1,270 @@
+.debt-account-detail-page {
+  display: grid;
+  gap: var(--space-6);
+  padding-bottom: var(--space-72);
+}
+
+.debt-detail-message {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.debt-detail-message-error,
+.debt-record-form-error,
+.debt-record-delete-error {
+  color: var(--color-danger);
+}
+
+.debt-detail-summary-card {
+  display: grid;
+  gap: var(--space-8);
+  padding: var(--space-16);
+  border: 1px solid var(--color-border-blue);
+  border-radius: var(--radius-20);
+  background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
+  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+}
+
+.debt-detail-summary-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.debt-detail-summary-title {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.debt-detail-summary-title strong {
+  color: var(--color-finance-title);
+  font-size: var(--font-size-20);
+  font-weight: 700;
+}
+
+.debt-detail-summary-title span,
+.debt-detail-summary-sub,
+.debt-detail-summary-note {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.debt-detail-summary-badge {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.debt-detail-summary-amount {
+  margin: 0;
+  color: var(--color-finance-title);
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.debt-detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.debt-detail-metric {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-14);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.debt-detail-metric span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.debt-detail-metric strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.debt-record-history {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.debt-record-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.debt-record-history-head strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-16);
+  font-weight: 700;
+}
+
+.debt-record-history-head span,
+.debt-record-date {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.debt-record-history-list {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.debt-record-empty {
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.debt-record-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-10);
+  padding: 14px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+}
+
+.debt-record-card-main,
+.debt-record-card-side {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.debt-record-card-main {
+  flex: 1;
+}
+
+.debt-record-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.debt-record-chip {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.debt-record-chip.is-receivable {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.debt-record-chip.is-payable {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.debt-record-remark {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-13);
+  line-height: 1.5;
+}
+
+.debt-record-funding-account {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.debt-record-card-side {
+  flex: 0 0 auto;
+  justify-items: end;
+}
+
+.debt-record-amount {
+  font-size: var(--font-size-18);
+  line-height: 1;
+  font-weight: 700;
+}
+
+.debt-record-amount.is-positive {
+  color: var(--color-success);
+}
+
+.debt-record-amount.is-negative {
+  color: #b45309;
+}
+
+.debt-record-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.debt-record-action {
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-blue-soft);
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.debt-record-action.is-danger {
+  background: #fee2e2;
+  color: var(--color-danger);
+}
+
+.debt-record-form {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.debt-record-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.debt-record-delete-message {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-14);
+  line-height: 1.6;
+  text-align: center;
+}

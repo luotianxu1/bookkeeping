@@ -10,7 +10,14 @@ import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
-import { createAccount, getAccounts, getAccountTypes, type Account, type AccountType } from '@/api/modules/finance'
+import {
+  createAccount,
+  getAccounts,
+  getAccountTypes,
+  type Account,
+  type AccountType,
+} from '@/api/modules/finance'
+import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import type { AccountGroup, AccountOverview } from '@/types/account'
 import AccountGroupCard from '../components/AccountGroupCard/index.vue'
@@ -22,11 +29,14 @@ const showCreateAccountModal = ref(false)
 const accountName = ref('')
 const accountRemark = ref('')
 const accountType = ref('')
+const accountContactId = ref('')
 const includeInNetWorth = ref(true)
 const accountTypes = ref<AccountType[]>([])
 const accounts = ref<Account[]>([])
+const contacts = ref<Contact[]>([])
 const isLoadingAccounts = ref(false)
 const isLoadingAccountTypes = ref(false)
+const isLoadingContacts = ref(false)
 const isSavingAccount = ref(false)
 const accountListError = ref('')
 const accountTypeError = ref('')
@@ -34,6 +44,19 @@ const accountFormError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
+const isDebtAccountTypeSelected = computed(() => DEBT_ACCOUNT_CODES.has(accountType.value))
+const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
+const contactOptions = computed(() => [
+  {
+    label: contacts.value.length > 0 ? '请选择联系人' : '暂无可选联系人，请先新增联系人',
+    value: '',
+    disabled: true,
+  },
+  ...contacts.value.map((contact) => ({
+    label: contact.phone?.trim() ? `${contact.name} · ${contact.phone}` : contact.name,
+    value: String(contact.id),
+  })),
+])
 
 const accountOverview = computed<AccountOverview>(() => ({
   label: '总资产',
@@ -91,7 +114,7 @@ const accountGroups = computed<AccountGroup[]>(() => {
         : groupCode === 'investment'
           ? '/finance/accounts/investment'
         : undefined,
-      items: groupAccounts.map((account) => ({
+          items: groupAccounts.map((account) => ({
           id: account.id,
           icon: getAccountIcon(account.icon, account.accountTypeCode),
           name: account.name,
@@ -100,9 +123,9 @@ const accountGroups = computed<AccountGroup[]>(() => {
           path: account.accountTypeCode === 'cash'
             ? `/finance/accounts/cash/${account.id}`
             : DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
-              ? '/finance/accounts/debt'
-            : account.accountTypeCode === 'gold'
-              ? `/finance/accounts/gold/position?accountId=${account.id}`
+              ? `/finance/accounts/debt/${account.id}`
+              : account.accountTypeCode === 'gold'
+                ? `/finance/accounts/gold/position?accountId=${account.id}`
             : account.accountTypeCode === 'investment'
               ? `/finance/accounts/investment?accountId=${account.id}`
               : undefined,
@@ -129,6 +152,7 @@ const accountTypeOptions = computed(() => {
 watch(showCreateAccountModal, (visible) => {
   if (visible) {
     loadAccountTypes()
+    loadContactsForForm()
   }
 })
 
@@ -137,13 +161,24 @@ watch(accountType, (nextType) => {
   if (selectedType) {
     includeInNetWorth.value = selectedType.includeInNetWorthDefault
   }
+  if (DEBT_ACCOUNT_CODES.has(nextType)) {
+    return
+  }
+  accountContactId.value = ''
+  accountName.value = ''
 })
 
 onMounted(() => {
   loadAccounts()
 })
 
+function openCreateAccountModal() {
+  resetCreateAccountForm()
+  showCreateAccountModal.value = true
+}
+
 function closeCreateAccountModal() {
+  resetCreateAccountForm()
   showCreateAccountModal.value = false
 }
 
@@ -156,19 +191,34 @@ async function saveAccount() {
   const selectedAccountType = accountTypes.value.find((type) => type.code === accountType.value)
   const trimmedName = accountName.value.trim()
   const trimmedRemark = accountRemark.value.trim()
+  const normalizedContactId = accountContactId.value ? Number(accountContactId.value) : null
+  const debtContactName = normalizedContactId ? contactMap.value.get(normalizedContactId)?.name?.trim() ?? '' : ''
+  const resolvedName = DEBT_ACCOUNT_CODES.has(selectedAccountType?.code ?? '')
+    ? debtContactName
+    : trimmedName
 
   if (!currentUser) {
     accountFormError.value = '请先登录后再新增账户'
     return
   }
 
-  if (!trimmedName) {
+  if (!resolvedName) {
     accountFormError.value = '请输入账户名称'
     return
   }
 
   if (!selectedAccountType) {
     accountFormError.value = '请选择账户类型'
+    return
+  }
+
+  if (DEBT_ACCOUNT_CODES.has(selectedAccountType.code) && normalizedContactId === null) {
+    accountFormError.value = '请选择联系人'
+    return
+  }
+
+  if (normalizedContactId !== null && !Number.isInteger(normalizedContactId)) {
+    accountFormError.value = '请选择有效的联系人'
     return
   }
 
@@ -179,7 +229,8 @@ async function saveAccount() {
     await createAccount({
       userId: currentUser.id,
       accountTypeId: selectedAccountType.id,
-      name: trimmedName,
+      contactId: DEBT_ACCOUNT_CODES.has(selectedAccountType.code) ? normalizedContactId : null,
+      name: resolvedName,
       icon: selectedAccountType.code,
       currencyCode: 'CNY',
       currentBalance: 0,
@@ -247,10 +298,37 @@ async function loadAccountTypes() {
   }
 }
 
+async function loadContactsForForm() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser || isLoadingContacts.value) {
+    return
+  }
+
+  isLoadingContacts.value = true
+
+  try {
+    contacts.value = await getContacts({
+      userId: currentUser.id,
+      status: 'active',
+    })
+  } catch (error) {
+    accountFormError.value = error instanceof Error ? error.message : '联系人加载失败'
+  } finally {
+    isLoadingContacts.value = false
+  }
+}
+
 function resetCreateAccountForm() {
   accountName.value = ''
   accountRemark.value = ''
+  accountContactId.value = ''
   accountFormError.value = ''
+}
+
+function handleDebtContactChange(value: string) {
+  accountContactId.value = value
+  const contact = value ? contactMap.value.get(Number(value)) ?? null : null
+  accountName.value = contact?.name?.trim() ?? ''
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {
@@ -268,6 +346,9 @@ function formatAmount(value: number) {
 
 function getSignedBalance(account: Account) {
   const rawBalance = Number(account.currentBalance ?? 0)
+  if (DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? '')) {
+    return rawBalance
+  }
   const accountType = accountTypes.value.find((type) => type.id === account.accountTypeId)
   return accountType?.balanceDirection === 'credit' ? rawBalance * -1 : rawBalance
 }
@@ -332,7 +413,7 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
       />
     </div>
 
-    <FloatingAddButton aria-label="新增账户" storage-key="account-management" @click="showCreateAccountModal = true" />
+    <FloatingAddButton aria-label="新增账户" storage-key="account-management" @click="openCreateAccountModal" />
 
     <CommonModal
       v-model="showCreateAccountModal"
@@ -340,13 +421,29 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
       :show-close="false"
     >
       <form class="create-account-form" @submit.prevent="saveAccount">
-        <CommonInput v-model="accountName" label="账户名称" placeholder="例如：建设银行卡" />
+        <CommonInput
+          v-if="!isDebtAccountTypeSelected"
+          v-model="accountName"
+          label="账户名称"
+          placeholder="例如：建设银行卡"
+        />
         <CommonSelect
           v-model="accountType"
           label="账户类型"
           :options="accountTypeOptions"
           :disabled="isLoadingAccountTypes || accountTypes.length === 0"
         />
+        <CommonSelect
+          v-if="isDebtAccountTypeSelected"
+          :model-value="accountContactId"
+          label="关联联系人"
+          :options="contactOptions"
+          :disabled="isLoadingContacts"
+          @update:model-value="handleDebtContactChange"
+        />
+        <p v-if="isDebtAccountTypeSelected && accountName" class="create-account-name-hint">
+          账户名称将使用联系人姓名：{{ accountName }}
+        </p>
         <p v-if="accountTypeError" class="create-account-error">{{ accountTypeError }}</p>
         <CommonInput v-model="accountRemark" label="备注" placeholder="可选，添加账户说明" />
         <CommonSwitch v-model="includeInNetWorth" label="是否计入总资产" />

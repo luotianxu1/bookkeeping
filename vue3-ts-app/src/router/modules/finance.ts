@@ -18,6 +18,7 @@ import AccountManagementPage from '@/pages/finance/AccountManagementPage/index.v
 import CashAccountPage from '@/pages/finance/CashAccountPage/index.vue'
 import CashAssetDetailPage from '@/pages/finance/CashAssetDetailPage/index.vue'
 import DebtAccountPage from '@/pages/finance/DebtAccountPage/index.vue'
+import DebtAccountDetailPage from '@/pages/finance/DebtAccountDetailPage/index.vue'
 import InvestmentAccountPage from '@/pages/finance/InvestmentAccountPage/index.vue'
 import InvestmentDetailPage from '@/pages/finance/InvestmentDetailPage/index.vue'
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage/index.vue'
@@ -165,6 +166,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '债务账户',
+    },
+  },
+  {
+    path: '/finance/accounts/debt/:accountId',
+    name: 'finance-accounts-debt-detail',
+    component: DebtAccountDetailPage,
+    meta: {
+      section: 'finance',
+      title: '债务详情',
     },
   },
   {

@@ -6,22 +6,18 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
-public class TransactionResponse {
+public class DebtRecordResponse {
 
     private Long id;
-    private Long sourceId;
-    private String sourceType;
-    private String transactionNo;
     private Long userId;
-    private String type;
+    private Long accountId;
+    private Long contactId;
+    private String accountName;
+    private Long fundingAccountId;
+    private String fundingAccountName;
+    private String direction;
     private BigDecimal amount;
     private String currencyCode;
-    private Long accountId;
-    private String accountName;
-    private Long categoryId;
-    private String categoryName;
-    private String categoryIcon;
-    private String title;
     private String remark;
     private LocalDateTime occurredAt;
     private String status;
