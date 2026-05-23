@@ -8,6 +8,7 @@ import {
   getAccounts,
   getAccountTypes,
   getCurrentMonthlyBudget,
+  getFinanceOverview,
   getTransactions,
   type Transaction,
 } from '@/api/modules/finance'
@@ -60,14 +61,16 @@ async function loadCashTransactions() {
     const currentMonthDate = `${currentMonth}-01`
     const accountTypes = await getAccountTypes({ status: 'active' })
     const cashType = accountTypes.find((type) => type.code === 'cash')
+    const financeOverviewSummaryPromise = getFinanceOverview(currentUser.id)
     if (!cashType) {
       transactions.value = []
       updateOverview([], 0)
+      await syncTotalAssets(financeOverviewSummaryPromise)
       transactionListError.value = '现金账户类型不存在'
       return
     }
 
-    const [cashAccounts, transactionList, currentBudget] = await Promise.all([
+    const [cashAccounts, transactionList, currentBudget, financeOverviewSummary] = await Promise.all([
       getAccounts({
         userId: currentUser.id,
         accountTypeId: cashType.id,
@@ -77,6 +80,7 @@ async function loadCashTransactions() {
         userId: currentUser.id,
       }),
       getCurrentMonthlyBudget(currentUser.id, currentMonthDate),
+      financeOverviewSummaryPromise,
     ])
     const cashAccountIds = new Set(cashAccounts.map((account) => String(account.id)))
     transactions.value = transactionList.filter((transaction) => cashAccountIds.has(String(transaction.accountId)))
@@ -88,6 +92,10 @@ async function loadCashTransactions() {
       toNumber(currentBudget?.amount),
       currentBudget ? toNumber(currentBudget.usedAmount) : undefined,
     )
+    overview.value = {
+      ...overview.value,
+      totalAssets: formatAmount(toNumber(financeOverviewSummary.totalAssets)),
+    }
   } catch (error) {
     transactionListError.value = error instanceof Error ? error.message : '收支记录加载失败'
   } finally {
@@ -121,6 +129,18 @@ function updateOverview(
     budget: budgetAmount > 0 ? `月预算 ${formatAmount(budgetAmount)}` : '月预算 未设置',
     budgetUsageLabel: budgetAmount > 0 ? `已用 ${formatPercent(budgetUsagePercent)}` : '已用 0%',
     budgetUsagePercent: budgetAmount > 0 ? Math.min(Math.max(budgetUsagePercent, 0), 100) : 0,
+  }
+}
+
+async function syncTotalAssets(financeOverviewSummaryPromise: Promise<{ totalAssets: number }>) {
+  try {
+    const financeOverviewSummary = await financeOverviewSummaryPromise
+    overview.value = {
+      ...overview.value,
+      totalAssets: formatAmount(toNumber(financeOverviewSummary.totalAssets)),
+    }
+  } catch {
+    // Keep the current fallback display when the asset overview request fails.
   }
 }
 

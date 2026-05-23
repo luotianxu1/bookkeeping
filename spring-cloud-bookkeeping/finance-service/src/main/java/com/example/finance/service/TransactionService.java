@@ -281,8 +281,9 @@ public class TransactionService {
             .sorted(Comparator
                 .comparing(TransactionResponse::getOccurredAt, Comparator.nullsLast(LocalDateTime::compareTo))
                 .reversed()
-                .thenComparing(TransactionResponse::getSourceId, Comparator.nullsLast(Long::compareTo))
-                .reversed())
+                .thenComparing(
+                    Comparator.comparing(TransactionResponse::getSourceId, Comparator.nullsLast(Long::compareTo)).reversed()
+                ))
             .toList();
     }
 

@@ -2,15 +2,18 @@ import type { Transaction as ApiTransaction } from '@/api/modules/finance'
 import type { DayGroup } from '@/types/finance'
 
 export function buildTransactionDayGroups(source: ApiTransaction[]): DayGroup[] {
+  const sortedSource = [...source].sort(compareTransactionsDesc)
   const grouped = new Map<string, ApiTransaction[]>()
-  source.forEach((transaction) => {
+  sortedSource.forEach((transaction) => {
     const dayKey = formatDayKey(transaction)
     const group = grouped.get(dayKey) ?? []
     group.push(transaction)
     grouped.set(dayKey, group)
   })
 
-  return Array.from(grouped.entries()).map(([dayKey, groupTransactions]) => {
+  return Array.from(grouped.entries())
+    .sort(([leftDayKey], [rightDayKey]) => compareDayKeysDesc(leftDayKey, rightDayKey))
+    .map(([dayKey, groupTransactions]) => {
     const income = groupTransactions
       .filter((transaction) => transaction.type === 'income')
       .reduce((total, transaction) => total + Number(transaction.amount), 0)
@@ -34,6 +37,24 @@ export function buildTransactionDayGroups(source: ApiTransaction[]): DayGroup[] 
       })),
     }
   })
+}
+
+function compareTransactionsDesc(left: ApiTransaction, right: ApiTransaction) {
+  const leftTime = parseTransactionTime(left.occurredAt)
+  const rightTime = parseTransactionTime(right.occurredAt)
+  if (leftTime !== rightTime) {
+    return rightTime - leftTime
+  }
+  return Number(right.id ?? 0) - Number(left.id ?? 0)
+}
+
+function compareDayKeysDesc(leftDayKey: string, rightDayKey: string) {
+  return parseTransactionTime(`${rightDayKey}T00:00:00`) - parseTransactionTime(`${leftDayKey}T00:00:00`)
+}
+
+function parseTransactionTime(value: string) {
+  const date = parseTransactionDate(value)
+  return date ? date.getTime() : 0
 }
 
 function formatAmount(value: number) {

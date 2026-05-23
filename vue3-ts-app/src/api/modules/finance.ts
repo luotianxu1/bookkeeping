@@ -27,6 +27,10 @@ export interface AccountQuery {
   status?: string
 }
 
+export interface FinanceOverviewSummary {
+  totalAssets: number
+}
+
 export interface DebtAccountSummary {
   netAmount: number
   payableTotal: number
@@ -509,6 +513,12 @@ export function getAccounts(params: AccountQuery = {}) {
 
 export function getAccount(id: number) {
   return requestGet<Account>(financeRequest, `/api/finance/accounts/${id}`)
+}
+
+export function getFinanceOverview(userId: number) {
+  return requestGet<FinanceOverviewSummary>(financeRequest, '/api/finance/accounts/overview', {
+    params: { userId },
+  })
 }
 
 export function createAccount(params: CreateAccountParams) {

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.finance.dto.AccountRequest;
 import com.example.finance.dto.AccountResponse;
 import com.example.finance.dto.AccountSortOrderRequest;
+import com.example.finance.dto.FinanceOverviewResponse;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.DebtRecordEntity;
@@ -106,6 +107,26 @@ public class AccountService {
             return Optional.empty();
         }
         return Optional.of(toResponse(account, loadAccountType(account.getAccountTypeId())));
+    }
+
+    public FinanceOverviewResponse overview(Long userId) {
+        LambdaQueryWrapper<AccountEntity> wrapper = new LambdaQueryWrapper<AccountEntity>()
+            .eq(AccountEntity::getUserId, userId)
+            .eq(AccountEntity::getStatus, DEFAULT_STATUS)
+            .eq(AccountEntity::getIncludeInNetWorth, true)
+            .orderByAsc(AccountEntity::getSortOrder)
+            .orderByAsc(AccountEntity::getId);
+
+        List<AccountResponse> accounts = toResponses(accountMapper.selectList(wrapper));
+        BigDecimal totalAssets = accounts.stream()
+            .map(AccountResponse::getCurrentBalance)
+            .filter(balance -> balance != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+
+        FinanceOverviewResponse response = new FinanceOverviewResponse();
+        response.setTotalAssets(totalAssets);
+        return response;
     }
 
     public AccountResponse create(AccountRequest request) {

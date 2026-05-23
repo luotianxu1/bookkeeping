@@ -4,6 +4,7 @@ import com.example.common.result.Result;
 import com.example.finance.dto.AccountRequest;
 import com.example.finance.dto.AccountResponse;
 import com.example.finance.dto.AccountSortOrderRequest;
+import com.example.finance.dto.FinanceOverviewResponse;
 import com.example.finance.service.AccountService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,7 +45,15 @@ public class AccountController {
         return Result.ok(accountService.list(userId, accountTypeId, status));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/overview")
+    @Operation(summary = "查询首页资产总览")
+    public Result<FinanceOverviewResponse> overview(
+        @RequestParam(name = "userId") @NotNull Long userId
+    ) {
+        return Result.ok(accountService.overview(userId));
+    }
+
+    @GetMapping("/{id:\\d+}")
     @Operation(summary = "查询账户详情")
     public Result<AccountResponse> detail(@PathVariable("id") @NotNull Long id) {
         return accountService.getById(id)
@@ -58,7 +67,7 @@ public class AccountController {
         return Result.ok(accountService.create(request));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{id:\\d+}")
     @Operation(summary = "修改账户")
     public Result<AccountResponse> update(
         @PathVariable("id") @NotNull Long id,
@@ -76,7 +85,7 @@ public class AccountController {
         return Result.ok();
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     @Operation(summary = "删除账户")
     public Result<Void> delete(@PathVariable("id") @NotNull Long id) {
         if (!accountService.delete(id)) {
