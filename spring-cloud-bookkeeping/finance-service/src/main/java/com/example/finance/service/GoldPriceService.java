@@ -4,6 +4,7 @@ import com.example.finance.dto.GoldPriceResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -24,6 +25,8 @@ public class GoldPriceService {
     private static final BigDecimal DEFAULT_USD_CNY = new BigDecimal("7.20");
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Shanghai");
     private static final long CACHE_MILLIS = 60_000L;
+    private static final int CONNECT_TIMEOUT_MILLIS = 1500;
+    private static final int READ_TIMEOUT_MILLIS = 2000;
 
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
@@ -41,7 +44,12 @@ public class GoldPriceService {
         @Value("${finance.gold-price.gold-chart-api-url:https://query1.finance.yahoo.com/v8/finance/chart/GC=F}") String goldChartApiUrl
     ) {
         this.objectMapper = objectMapper;
-        this.restClient = RestClient.builder().build();
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT_MILLIS);
+        requestFactory.setReadTimeout(READ_TIMEOUT_MILLIS);
+        this.restClient = RestClient.builder()
+            .requestFactory(requestFactory)
+            .build();
         this.exchangeRateApiUrl = exchangeRateApiUrl;
         this.cngoldRealtimeApiUrl = cngoldRealtimeApiUrl;
         this.goldChartApiUrl = goldChartApiUrl;
@@ -58,6 +66,17 @@ public class GoldPriceService {
         } catch (Exception ex) {
             throw new IllegalStateException("金价数据获取失败", ex);
         }
+    }
+
+    public synchronized BigDecimal getCachedSpotPrice() {
+        if (cachedCurrentPrice == null) {
+            return null;
+        }
+        GoldPriceResponse.GoldMarketQuote spotGold = cachedCurrentPrice.response().getSpotGold();
+        if (spotGold == null || spotGold.getPrice() == null || spotGold.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        return spotGold.getPrice().setScale(2, RoundingMode.HALF_UP);
     }
 
     private GoldPriceResponse getCurrentPrice(long now) throws Exception {

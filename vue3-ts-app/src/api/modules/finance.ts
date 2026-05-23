@@ -36,6 +36,15 @@ export interface DebtAccountSummary {
 }
 
 export type DebtDirection = 'payable' | 'receivable'
+export type HumanRelationDirection = 'outgoing' | 'incoming'
+
+export interface HumanRelationAccountSummary {
+  netAmount: number
+  outgoingTotal: number
+  incomingTotal: number
+  accountCount: number
+  recordCount: number
+}
 
 export interface DebtRecord {
   id: number
@@ -46,6 +55,24 @@ export interface DebtRecord {
   fundingAccountId?: number | null
   fundingAccountName?: string | null
   direction: DebtDirection
+  amount: number
+  currencyCode: string
+  remark?: string | null
+  occurredAt: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HumanRelationRecord {
+  id: number
+  userId: number
+  accountId: number
+  contactId?: number | null
+  accountName?: string | null
+  fundingAccountId?: number | null
+  fundingAccountName?: string | null
+  direction: HumanRelationDirection
   amount: number
   currencyCode: string
   remark?: string | null
@@ -151,7 +178,7 @@ export type TransactionType = 'expense' | 'income'
 export interface Transaction {
   id: number
   sourceId?: number | null
-  sourceType?: 'transaction' | 'debt_record' | null
+  sourceType?: 'transaction' | 'debt_record' | 'human_relation_record' | null
   transactionNo: string
   userId: number
   type: TransactionType
@@ -219,8 +246,24 @@ export interface DebtRecordQuery {
 export interface SaveDebtRecordParams {
   userId: number
   accountId: number
-  fundingAccountId: number
+  fundingAccountId?: number | null
   direction: DebtDirection
+  amount: number
+  currencyCode?: string
+  remark?: string | null
+  occurredAt?: string
+}
+
+export interface HumanRelationRecordQuery {
+  userId: number
+  accountId?: number
+}
+
+export interface SaveHumanRelationRecordParams {
+  userId: number
+  accountId: number
+  fundingAccountId?: number | null
+  direction: HumanRelationDirection
   amount: number
   currencyCode?: string
   remark?: string | null
@@ -507,6 +550,41 @@ export function updateDebtRecord(id: number, params: SaveDebtRecordParams) {
 
 export function deleteDebtRecord(id: number, userId: number) {
   return requestDelete<void>(financeRequest, `/api/finance/debt-accounts/records/${id}`, {
+    params: { userId },
+  })
+}
+
+export function getHumanRelationAccountSummary(userId: number, accountId?: number) {
+  return requestGet<HumanRelationAccountSummary>(financeRequest, '/api/finance/human-relation-accounts/summary', {
+    params: {
+      userId,
+      accountId,
+    },
+  })
+}
+
+export function getHumanRelationRecords(params: HumanRelationRecordQuery) {
+  return requestGet<HumanRelationRecord[]>(financeRequest, '/api/finance/human-relation-accounts/records', { params })
+}
+
+export function createHumanRelationRecord(params: SaveHumanRelationRecordParams) {
+  return requestPost<HumanRelationRecord, SaveHumanRelationRecordParams>(
+    financeRequest,
+    '/api/finance/human-relation-accounts/records',
+    params,
+  )
+}
+
+export function updateHumanRelationRecord(id: number, params: SaveHumanRelationRecordParams) {
+  return requestPut<HumanRelationRecord, SaveHumanRelationRecordParams>(
+    financeRequest,
+    `/api/finance/human-relation-accounts/records/${id}`,
+    params,
+  )
+}
+
+export function deleteHumanRelationRecord(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/human-relation-accounts/records/${id}`, {
     params: { userId },
   })
 }

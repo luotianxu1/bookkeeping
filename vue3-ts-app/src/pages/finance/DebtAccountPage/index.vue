@@ -8,15 +8,19 @@ import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
+import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import {
+  createAccount,
   deleteAccount,
   getAccounts,
+  getAccountTypes,
   getDebtAccountSummary,
   getDebtRecords,
   updateAccount,
   type Account,
+  type AccountType,
   type DebtAccountSummary,
 } from '@/api/modules/finance'
 import { getContacts, type Contact } from '@/api/modules/tool'
@@ -43,10 +47,12 @@ type DeleteTarget = {
 }
 
 const DEBT_ACCOUNT_CODES = new Set(['debt', 'loan_receivable', 'loan_payable'])
+const DEFAULT_DEBT_ACCOUNT_CODE = 'debt'
 
 const router = useRouter()
 const accounts = ref<Account[]>([])
 const contacts = ref<Contact[]>([])
+const accountTypes = ref<AccountType[]>([])
 const debtRecords = ref<Array<{
   id: number
   accountId: number
@@ -80,6 +86,9 @@ const accountRemark = ref('')
 const includeInNetWorth = ref(true)
 
 const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
+const debtAccountType = computed(() => accountTypes.value.find((type) => type.code === DEFAULT_DEBT_ACCOUNT_CODE) ?? null)
+const accountModalTitle = computed(() => (editingAccount.value ? '修改债务账户' : '新增债务账户'))
+const accountSubmitLabel = computed(() => (editingAccount.value ? '保存账户' : '新增账户'))
 
 const contactOptions = computed(() => [
   {
@@ -130,7 +139,6 @@ const debtCards = computed<DebtCardView[]>(() =>
 )
 
 const summaryAmountText = computed(() => formatSignedCurrency(summary.value.netAmount))
-const summarySubText = computed(() => `${summary.value.accountCount} 个债务账户 · ${summary.value.recordCount} 条债务记录`)
 
 onMounted(() => {
   void loadDebtPage()
@@ -152,6 +160,15 @@ function openEditAccountModal(account: Account) {
   accountContactId.value = account.contactId ? String(account.contactId) : ''
   accountRemark.value = account.remark ?? ''
   includeInNetWorth.value = account.includeInNetWorth
+  accountFormError.value = ''
+  showAccountModal.value = true
+}
+
+function openCreateAccountModal() {
+  editingAccount.value = null
+  accountContactId.value = ''
+  accountRemark.value = ''
+  includeInNetWorth.value = debtAccountType.value?.includeInNetWorthDefault ?? true
   accountFormError.value = ''
   showAccountModal.value = true
 }
@@ -197,14 +214,16 @@ async function loadDebtPage() {
   pageError.value = ''
 
   try {
-    const [accountList, contactList, summaryData, recordList] = await Promise.all([
+    const [accountList, typeList, contactList, summaryData, recordList] = await Promise.all([
       getAccounts({ userId: currentUser.id, status: 'active' }),
+      getAccountTypes({ status: 'active' }),
       getContacts({ userId: currentUser.id, status: 'active' }),
       getDebtAccountSummary(currentUser.id),
       getDebtRecords({ userId: currentUser.id }),
     ])
 
     accounts.value = accountList.filter((account) => DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? ''))
+    accountTypes.value = typeList
     contacts.value = contactList
     summary.value = summaryData
     debtRecords.value = recordList
@@ -218,10 +237,11 @@ async function loadDebtPage() {
 async function saveAccount() {
   const currentUser = getStoredCurrentUser()
   const account = editingAccount.value
+  const targetAccountType = account ? accountTypes.value.find((type) => type.id === account.accountTypeId) ?? null : debtAccountType.value
   const normalizedContactId = accountContactId.value ? Number(accountContactId.value) : null
   const contactName = normalizedContactId ? contactMap.value.get(normalizedContactId)?.name?.trim() ?? '' : ''
 
-  if (!currentUser || !account) {
+  if (!currentUser) {
     accountFormError.value = '债务账户信息不完整'
     return
   }
@@ -231,24 +251,36 @@ async function saveAccount() {
     return
   }
 
+  if (!targetAccountType) {
+    accountFormError.value = '债务账户类型不存在'
+    return
+  }
+
   isSavingAccount.value = true
   accountFormError.value = ''
 
   try {
-    await updateAccount(account.id, {
+    const payload = {
       userId: currentUser.id,
-      accountTypeId: account.accountTypeId,
+      accountTypeId: targetAccountType.id,
       contactId: normalizedContactId,
       name: contactName,
-      icon: account.accountTypeCode ?? 'debt',
-      currencyCode: account.currencyCode || 'CNY',
+      icon: targetAccountType.code ?? DEFAULT_DEBT_ACCOUNT_CODE,
+      currencyCode: account?.currencyCode || 'CNY',
       currentBalance: 0,
       includeInNetWorth: includeInNetWorth.value,
       status: 'active',
       remark: accountRemark.value.trim() || null,
-    })
+    }
+
+    if (account) {
+      await updateAccount(account.id, payload)
+      showFeedback('债务账户已更新', 'success')
+    } else {
+      await createAccount(payload)
+      showFeedback('债务账户已新增', 'success')
+    }
     closeAccountModal(true)
-    showFeedback('债务账户已更新', 'success')
     await loadDebtPage()
   } catch (error) {
     const message = error instanceof Error ? error.message : '债务账户保存失败'
@@ -352,7 +384,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
         <div class="debt-summary-top">
           <div class="debt-summary-title">
             <span>债务往来净额</span>
-            <p>{{ summarySubText }}</p>
           </div>
           <span class="debt-summary-badge">{{ summary.accountCount }} 个账户</span>
         </div>
@@ -438,9 +469,11 @@ function showFeedback(message: string, type: 'success' | 'error') {
       </section>
     </template>
 
+    <FloatingAddButton aria-label="新增债务账户" storage-key="debt-account-page" @click="openCreateAccountModal" />
+
     <CommonModal
       v-model="showAccountModal"
-      title="修改债务账户"
+      :title="accountModalTitle"
     >
       <div class="debt-form">
         <CommonSelect
@@ -465,7 +498,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
             取消
           </CommonButton>
           <CommonButton variant="primary" :disabled="isSavingAccount" @click="saveAccount">
-            保存账户
+            {{ accountSubmitLabel }}
           </CommonButton>
         </div>
       </template>

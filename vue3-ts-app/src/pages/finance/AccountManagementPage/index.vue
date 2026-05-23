@@ -24,6 +24,7 @@ import AccountGroupCard from '../components/AccountGroupCard/index.vue'
 import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
 
 const DEBT_ACCOUNT_CODES = new Set(['debt', 'loan_receivable', 'loan_payable'])
+const CONTACT_LINKED_ACCOUNT_CODES = new Set(['debt', 'loan_receivable', 'loan_payable', 'human_relation'])
 
 const showCreateAccountModal = ref(false)
 const accountName = ref('')
@@ -44,7 +45,7 @@ const accountFormError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
-const isDebtAccountTypeSelected = computed(() => DEBT_ACCOUNT_CODES.has(accountType.value))
+const isDebtAccountTypeSelected = computed(() => CONTACT_LINKED_ACCOUNT_CODES.has(accountType.value))
 const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
 const contactOptions = computed(() => [
   {
@@ -96,6 +97,8 @@ const accountGroups = computed<AccountGroup[]>(() => {
     const groupCode = accountType?.code ?? firstAccount?.accountTypeCode
     const title = DEBT_ACCOUNT_CODES.has(groupCode ?? '')
       ? '债务账户'
+      : groupCode === 'human_relation'
+        ? '人情账户'
       : accountType?.name
         ? `${accountType.name}账户`
         : firstAccount?.accountTypeName
@@ -109,6 +112,8 @@ const accountGroups = computed<AccountGroup[]>(() => {
         ? '/finance/accounts/cash'
         : DEBT_ACCOUNT_CODES.has(groupCode ?? '')
           ? '/finance/accounts/debt'
+        : groupCode === 'human_relation'
+          ? '/finance/accounts/human-relation'
         : groupCode === 'gold'
           ? '/finance/accounts/gold'
         : groupCode === 'investment'
@@ -124,6 +129,8 @@ const accountGroups = computed<AccountGroup[]>(() => {
             ? `/finance/accounts/cash/${account.id}`
             : DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
               ? `/finance/accounts/debt/${account.id}`
+              : account.accountTypeCode === 'human_relation'
+                ? `/finance/accounts/human-relation/${account.id}`
               : account.accountTypeCode === 'gold'
                 ? `/finance/accounts/gold/position?accountId=${account.id}`
             : account.accountTypeCode === 'investment'
@@ -161,7 +168,7 @@ watch(accountType, (nextType) => {
   if (selectedType) {
     includeInNetWorth.value = selectedType.includeInNetWorthDefault
   }
-  if (DEBT_ACCOUNT_CODES.has(nextType)) {
+  if (CONTACT_LINKED_ACCOUNT_CODES.has(nextType)) {
     return
   }
   accountContactId.value = ''
@@ -193,7 +200,7 @@ async function saveAccount() {
   const trimmedRemark = accountRemark.value.trim()
   const normalizedContactId = accountContactId.value ? Number(accountContactId.value) : null
   const debtContactName = normalizedContactId ? contactMap.value.get(normalizedContactId)?.name?.trim() ?? '' : ''
-  const resolvedName = DEBT_ACCOUNT_CODES.has(selectedAccountType?.code ?? '')
+  const resolvedName = CONTACT_LINKED_ACCOUNT_CODES.has(selectedAccountType?.code ?? '')
     ? debtContactName
     : trimmedName
 
@@ -212,7 +219,7 @@ async function saveAccount() {
     return
   }
 
-  if (DEBT_ACCOUNT_CODES.has(selectedAccountType.code) && normalizedContactId === null) {
+  if (CONTACT_LINKED_ACCOUNT_CODES.has(selectedAccountType.code) && normalizedContactId === null) {
     accountFormError.value = '请选择联系人'
     return
   }
@@ -229,7 +236,7 @@ async function saveAccount() {
     await createAccount({
       userId: currentUser.id,
       accountTypeId: selectedAccountType.id,
-      contactId: DEBT_ACCOUNT_CODES.has(selectedAccountType.code) ? normalizedContactId : null,
+      contactId: CONTACT_LINKED_ACCOUNT_CODES.has(selectedAccountType.code) ? normalizedContactId : null,
       name: resolvedName,
       icon: selectedAccountType.code,
       currencyCode: 'CNY',
@@ -346,7 +353,7 @@ function formatAmount(value: number) {
 
 function getSignedBalance(account: Account) {
   const rawBalance = Number(account.currentBalance ?? 0)
-  if (DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? '')) {
+  if (CONTACT_LINKED_ACCOUNT_CODES.has(account.accountTypeCode ?? '')) {
     return rawBalance
   }
   const accountType = accountTypes.value.find((type) => type.id === account.accountTypeId)

@@ -113,19 +113,6 @@
   gap: var(--space-6);
 }
 
-.debt-record-history-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.debt-record-history-head strong {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-16);
-  font-weight: 700;
-}
-
-.debt-record-history-head span,
 .debt-record-date {
   color: var(--color-text-subtle);
   font-size: var(--font-size-12);

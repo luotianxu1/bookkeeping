@@ -108,13 +108,13 @@ public class DebtAccountService {
     public DebtRecordResponse createRecord(DebtRecordRequest request) {
         String direction = requireDirection(request.getDirection());
         AccountEntity account = requireDebtAccount(request.getUserId(), request.getAccountId());
-        AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
+        AccountEntity fundingAccount = findCashFundingAccount(request.getUserId(), request.getFundingAccountId());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
 
         DebtRecordEntity entity = new DebtRecordEntity();
         entity.setUserId(request.getUserId());
         entity.setAccountId(account.getId());
-        entity.setFundingAccountId(fundingAccount.getId());
+        entity.setFundingAccountId(fundingAccount == null ? null : fundingAccount.getId());
         entity.setDirection(direction);
         entity.setAmount(amount);
         entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
@@ -137,13 +137,13 @@ public class DebtAccountService {
 
         String direction = requireDirection(request.getDirection());
         AccountEntity account = requireDebtAccount(request.getUserId(), request.getAccountId());
-        AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
+        AccountEntity fundingAccount = findCashFundingAccount(request.getUserId(), request.getFundingAccountId());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
 
         rollbackFundingAccountChange(entity);
 
         entity.setAccountId(account.getId());
-        entity.setFundingAccountId(fundingAccount.getId());
+        entity.setFundingAccountId(fundingAccount == null ? null : fundingAccount.getId());
         entity.setDirection(direction);
         entity.setAmount(amount);
         entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
@@ -232,6 +232,13 @@ public class DebtAccountService {
         return account;
     }
 
+    private AccountEntity findCashFundingAccount(Long userId, Long accountId) {
+        if (accountId == null) {
+            return null;
+        }
+        return requireCashFundingAccount(userId, accountId);
+    }
+
     private String requireDirection(String direction) {
         if (!StringUtils.hasText(direction)) {
             throw new IllegalArgumentException("请选择借入或借出");
@@ -253,6 +260,9 @@ public class DebtAccountService {
     }
 
     private void applyFundingAccountChange(AccountEntity fundingAccount, String direction, BigDecimal amount) {
+        if (fundingAccount == null) {
+            return;
+        }
         if (DIRECTION_RECEIVABLE.equals(direction)) {
             deductFundingAccount(fundingAccount, amount);
             return;

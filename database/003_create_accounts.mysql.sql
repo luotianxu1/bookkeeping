@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
   PRIMARY KEY (id),
-  UNIQUE KEY uk_accounts_user_name (user_id, name),
+  UNIQUE KEY uk_accounts_user_type_name (user_id, account_type_id, name),
   KEY idx_accounts_user_status_sort (user_id, status, sort_order),
   KEY idx_accounts_type (account_type_id),
   CONSTRAINT fk_accounts_user

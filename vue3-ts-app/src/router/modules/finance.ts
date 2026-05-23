@@ -19,6 +19,8 @@ import CashAccountPage from '@/pages/finance/CashAccountPage/index.vue'
 import CashAssetDetailPage from '@/pages/finance/CashAssetDetailPage/index.vue'
 import DebtAccountPage from '@/pages/finance/DebtAccountPage/index.vue'
 import DebtAccountDetailPage from '@/pages/finance/DebtAccountDetailPage/index.vue'
+import HumanRelationAccountPage from '@/pages/finance/HumanRelationAccountPage/index.vue'
+import HumanRelationAccountDetailPage from '@/pages/finance/HumanRelationAccountDetailPage/index.vue'
 import InvestmentAccountPage from '@/pages/finance/InvestmentAccountPage/index.vue'
 import InvestmentDetailPage from '@/pages/finance/InvestmentDetailPage/index.vue'
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage/index.vue'
@@ -175,6 +177,24 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '债务详情',
+    },
+  },
+  {
+    path: '/finance/accounts/human-relation',
+    name: 'finance-accounts-human-relation',
+    component: HumanRelationAccountPage,
+    meta: {
+      section: 'finance',
+      title: '人情账户',
+    },
+  },
+  {
+    path: '/finance/accounts/human-relation/:accountId',
+    name: 'finance-accounts-human-relation-detail',
+    component: HumanRelationAccountDetailPage,
+    meta: {
+      section: 'finance',
+      title: '人情详情',
     },
   },
   {

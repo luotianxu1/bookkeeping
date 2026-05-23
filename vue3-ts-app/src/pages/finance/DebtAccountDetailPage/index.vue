@@ -75,9 +75,9 @@ const detailSubtitle = computed(() => {
   if (relatedContact.value?.phone?.trim()) {
     return `手机号 ${relatedContact.value.phone.trim()}`
   }
-  return account.value?.remark?.trim() || '查看该联系人的全部借入与借出记录'
+  return '未填写联系人手机号'
 })
-const detailNote = computed(() => relatedContact.value?.remark?.trim() || account.value?.remark?.trim() || '')
+const detailNote = computed(() => account.value?.remark?.trim() || relatedContact.value?.remark?.trim() || '')
 const summaryAmountText = computed(() => formatSignedCurrency(Number(account.value?.currentBalance ?? 0)))
 const summarySubText = computed(() => `待还 ${formatCurrency(summary.value.payableTotal)} · 待收 ${formatCurrency(summary.value.receivableTotal)}`)
 const payableCount = computed(() => records.value.filter((record) => record.direction === 'payable').length)
@@ -86,9 +86,8 @@ const latestRecordText = computed(() => records.value[0] ? formatDate(records.va
 const recordModalTitle = computed(() => editingRecord.value ? '修改债务记录' : '新增债务记录')
 const fundingAccountOptions = computed(() => [
   {
-    label: cashAccounts.value.length > 0 ? '请选择现金账户' : '暂无可用现金账户，请先新增现金账户',
+    label: '不关联现金账户',
     value: '',
-    disabled: true,
   },
   ...cashAccounts.value.map((cashAccount) => ({
     label: `${cashAccount.name}（余额 ${formatCurrency(Number(cashAccount.currentBalance ?? 0))}）`,
@@ -164,9 +163,6 @@ function openAddRecordModal() {
   }
   editingRecord.value = null
   resetRecordForm()
-  if (!recordFundingAccountId.value && cashAccounts.value[0]) {
-    recordFundingAccountId.value = String(cashAccounts.value[0].id)
-  }
   showRecordModal.value = true
 }
 
@@ -191,7 +187,7 @@ function closeRecordModal(force = false) {
 }
 
 function resetRecordForm() {
-  recordFundingAccountId.value = cashAccounts.value[0] ? String(cashAccounts.value[0].id) : ''
+  recordFundingAccountId.value = ''
   recordDirection.value = 'payable'
   recordAmount.value = ''
   recordOccurredAt.value = toDateTimeLocalValue(new Date().toISOString())
@@ -217,6 +213,9 @@ function closeDeleteModal(force = false) {
 async function saveRecord() {
   const currentUser = getStoredCurrentUser()
   const fundingAccountId = Number(recordFundingAccountId.value)
+  const normalizedFundingAccountId = Number.isFinite(fundingAccountId) && fundingAccountId > 0
+    ? fundingAccountId
+    : null
   const normalizedAmount = Number(recordAmount.value || '0')
   const isEditing = Boolean(editingRecord.value)
 
@@ -227,11 +226,6 @@ async function saveRecord() {
 
   if (!recordDirection.value) {
     recordFormError.value = '请选择借入或借出'
-    return
-  }
-
-  if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
-    recordFormError.value = '请选择现金账户'
     return
   }
 
@@ -247,7 +241,7 @@ async function saveRecord() {
     const payload = {
       userId: currentUser.id,
       accountId: account.value.id,
-      fundingAccountId,
+      fundingAccountId: normalizedFundingAccountId,
       direction: recordDirection.value,
       amount: normalizedAmount,
       currencyCode: account.value.currencyCode || 'CNY',
@@ -406,11 +400,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
       </section>
 
       <section class="debt-record-history" aria-label="债务记录">
-        <header class="debt-record-history-head">
-          <strong>债务记录</strong>
-          <span>{{ records.length }} 条</span>
-        </header>
-
         <div class="debt-record-history-list">
           <p v-if="records.length === 0" class="debt-record-empty">
             暂无债务记录

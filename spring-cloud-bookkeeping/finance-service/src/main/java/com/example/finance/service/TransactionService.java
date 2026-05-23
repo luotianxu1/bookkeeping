@@ -7,11 +7,13 @@ import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.CategoryEntity;
 import com.example.finance.entity.DebtRecordEntity;
+import com.example.finance.entity.HumanRelationRecordEntity;
 import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
 import com.example.finance.mapper.CategoryMapper;
 import com.example.finance.mapper.DebtRecordMapper;
+import com.example.finance.mapper.HumanRelationRecordMapper;
 import com.example.finance.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,10 +39,14 @@ public class TransactionService {
     private static final String TYPE_INCOME = "income";
     private static final String SOURCE_TRANSACTION = "transaction";
     private static final String SOURCE_DEBT_RECORD = "debt_record";
+    private static final String SOURCE_HUMAN_RELATION_RECORD = "human_relation_record";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
     private static final String DEBT_DIRECTION_RECEIVABLE = "receivable";
+    private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
+    private static final String HUMAN_RELATION_DIRECTION_INCOMING = "incoming";
     private static final String DEBT_RECORD_ACTIVE_STATUS = "active";
+    private static final String HUMAN_RELATION_RECORD_ACTIVE_STATUS = "active";
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_STATUS = "normal";
     private static final String VOIDED_STATUS = "voided";
@@ -51,19 +57,22 @@ public class TransactionService {
     private final AccountTypeMapper accountTypeMapper;
     private final CategoryMapper categoryMapper;
     private final DebtRecordMapper debtRecordMapper;
+    private final HumanRelationRecordMapper humanRelationRecordMapper;
 
     public TransactionService(
         TransactionMapper transactionMapper,
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         CategoryMapper categoryMapper,
-        DebtRecordMapper debtRecordMapper
+        DebtRecordMapper debtRecordMapper,
+        HumanRelationRecordMapper humanRelationRecordMapper
     ) {
         this.transactionMapper = transactionMapper;
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.categoryMapper = categoryMapper;
         this.debtRecordMapper = debtRecordMapper;
+        this.humanRelationRecordMapper = humanRelationRecordMapper;
     }
 
     public List<TransactionResponse> list(Long userId, String type, Long accountId) {
@@ -77,7 +86,8 @@ public class TransactionService {
 
         List<TransactionEntity> transactions = transactionMapper.selectList(wrapper);
         List<DebtRecordEntity> debtRecords = loadDebtRecords(userId, type, accountId);
-        return mergeResponses(transactions, debtRecords);
+        List<HumanRelationRecordEntity> humanRelationRecords = loadHumanRelationRecords(userId, type, accountId);
+        return mergeResponses(transactions, debtRecords, humanRelationRecords);
     }
 
     @Transactional
@@ -199,8 +209,12 @@ public class TransactionService {
         return prefix + timePart + randomPart;
     }
 
-    private List<TransactionResponse> mergeResponses(List<TransactionEntity> transactions, List<DebtRecordEntity> debtRecords) {
-        if (transactions.isEmpty() && debtRecords.isEmpty()) {
+    private List<TransactionResponse> mergeResponses(
+        List<TransactionEntity> transactions,
+        List<DebtRecordEntity> debtRecords,
+        List<HumanRelationRecordEntity> humanRelationRecords
+    ) {
+        if (transactions.isEmpty() && debtRecords.isEmpty() && humanRelationRecords.isEmpty()) {
             return List.of();
         }
 
@@ -214,6 +228,14 @@ public class TransactionService {
             .collect(Collectors.toSet()));
         accountIds.addAll(debtRecords.stream()
             .map(DebtRecordEntity::getFundingAccountId)
+            .filter(id -> id != null)
+            .collect(Collectors.toSet()));
+        accountIds.addAll(humanRelationRecords.stream()
+            .map(HumanRelationRecordEntity::getAccountId)
+            .filter(id -> id != null)
+            .collect(Collectors.toSet()));
+        accountIds.addAll(humanRelationRecords.stream()
+            .map(HumanRelationRecordEntity::getFundingAccountId)
             .filter(id -> id != null)
             .collect(Collectors.toSet()));
         Set<Long> categoryIds = transactions.stream()
@@ -242,8 +264,20 @@ public class TransactionService {
                 accounts.get(record.getFundingAccountId())
             ))
             .toList();
+        List<TransactionResponse> humanRelationResponses = humanRelationRecords.stream()
+            .map(record -> toHumanRelationRecordResponse(
+                record,
+                accounts.get(record.getAccountId()),
+                accounts.get(record.getFundingAccountId())
+            ))
+            .toList();
 
-        return java.util.stream.Stream.concat(expenseIncomeResponses.stream(), debtResponses.stream())
+        return java.util.stream.Stream.of(
+                expenseIncomeResponses.stream(),
+                debtResponses.stream(),
+                humanRelationResponses.stream()
+            )
+            .flatMap(Function.identity())
             .sorted(Comparator
                 .comparing(TransactionResponse::getOccurredAt, Comparator.nullsLast(LocalDateTime::compareTo))
                 .reversed()
@@ -271,6 +305,27 @@ public class TransactionService {
         }
 
         return debtRecordMapper.selectList(wrapper);
+    }
+
+    private List<HumanRelationRecordEntity> loadHumanRelationRecords(Long userId, String type, Long accountId) {
+        if (StringUtils.hasText(type) && !TYPE_EXPENSE.equals(type) && !TYPE_INCOME.equals(type)) {
+            return List.of();
+        }
+
+        LambdaQueryWrapper<HumanRelationRecordEntity> wrapper = new LambdaQueryWrapper<HumanRelationRecordEntity>()
+            .eq(userId != null, HumanRelationRecordEntity::getUserId, userId)
+            .eq(accountId != null, HumanRelationRecordEntity::getFundingAccountId, accountId)
+            .eq(HumanRelationRecordEntity::getStatus, HUMAN_RELATION_RECORD_ACTIVE_STATUS)
+            .orderByDesc(HumanRelationRecordEntity::getOccurredAt)
+            .orderByDesc(HumanRelationRecordEntity::getId);
+
+        if (TYPE_INCOME.equals(type)) {
+            wrapper.eq(HumanRelationRecordEntity::getDirection, HUMAN_RELATION_DIRECTION_INCOMING);
+        } else if (TYPE_EXPENSE.equals(type)) {
+            wrapper.eq(HumanRelationRecordEntity::getDirection, HUMAN_RELATION_DIRECTION_OUTGOING);
+        }
+
+        return humanRelationRecordMapper.selectList(wrapper);
     }
 
     private TransactionResponse toTransactionResponse(TransactionEntity entity, AccountEntity account, CategoryEntity category) {
@@ -328,6 +383,42 @@ public class TransactionService {
     private String buildDebtRecordTitle(AccountEntity account, DebtRecordEntity entity) {
         String accountName = account == null ? "债务账户" : account.getName();
         String directionLabel = DEBT_DIRECTION_RECEIVABLE.equals(entity.getDirection()) ? "借出" : "借入";
+        return accountName + " · " + directionLabel;
+    }
+
+    private TransactionResponse toHumanRelationRecordResponse(
+        HumanRelationRecordEntity entity,
+        AccountEntity humanRelationAccount,
+        AccountEntity fundingAccount
+    ) {
+        TransactionResponse response = new TransactionResponse();
+        response.setId(entity.getId() == null ? null : -1000000L - entity.getId());
+        response.setSourceId(entity.getId());
+        response.setSourceType(SOURCE_HUMAN_RELATION_RECORD);
+        response.setTransactionNo("HUMAN-" + entity.getId());
+        response.setUserId(entity.getUserId());
+        response.setType(HUMAN_RELATION_DIRECTION_INCOMING.equals(entity.getDirection()) ? TYPE_INCOME : TYPE_EXPENSE);
+        response.setAmount(entity.getAmount());
+        response.setCurrencyCode(entity.getCurrencyCode());
+        response.setAccountId(fundingAccount == null ? entity.getAccountId() : fundingAccount.getId());
+        response.setAccountName(fundingAccount == null
+            ? (humanRelationAccount == null ? null : humanRelationAccount.getName())
+            : fundingAccount.getName());
+        response.setCategoryId(null);
+        response.setCategoryName(HUMAN_RELATION_DIRECTION_INCOMING.equals(entity.getDirection()) ? "人情收到" : "人情送出");
+        response.setCategoryIcon("礼");
+        response.setTitle(buildHumanRelationRecordTitle(humanRelationAccount, entity));
+        response.setRemark(entity.getRemark());
+        response.setOccurredAt(entity.getOccurredAt());
+        response.setStatus(entity.getStatus());
+        response.setCreatedAt(entity.getCreatedAt());
+        response.setUpdatedAt(entity.getUpdatedAt());
+        return response;
+    }
+
+    private String buildHumanRelationRecordTitle(AccountEntity account, HumanRelationRecordEntity entity) {
+        String accountName = account == null ? "人情账户" : account.getName();
+        String directionLabel = HUMAN_RELATION_DIRECTION_INCOMING.equals(entity.getDirection()) ? "收到" : "送出";
         return accountName + " · " + directionLabel;
     }
 }

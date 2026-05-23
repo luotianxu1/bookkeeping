@@ -7,6 +7,7 @@ import com.example.finance.dto.AccountSortOrderRequest;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.DebtRecordEntity;
+import com.example.finance.entity.HumanRelationRecordEntity;
 import com.example.finance.entity.InvestmentDividendRecordEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
 import com.example.finance.entity.InvestmentTransactionEntity;
@@ -14,10 +15,12 @@ import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
 import com.example.finance.mapper.DebtRecordMapper;
+import com.example.finance.mapper.HumanRelationRecordMapper;
 import com.example.finance.mapper.InvestmentDividendRecordMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
 import com.example.finance.mapper.InvestmentTransactionMapper;
 import com.example.finance.mapper.TransactionMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -25,6 +28,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,37 +46,46 @@ public class AccountService {
     private static final String INVESTMENT_ACCOUNT_TYPE_CODE = "investment";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
+    private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
     private static final Set<String> DEBT_ACCOUNT_TYPE_CODES = Set.of("debt", "loan_receivable", "loan_payable");
+    private static final Set<String> CONTACT_LINKED_ACCOUNT_TYPE_CODES = Set.of("debt", "loan_receivable", "loan_payable", "human_relation");
     private static final String DEBT_RECORD_STATUS_ACTIVE = "active";
+    private static final String HUMAN_RELATION_RECORD_STATUS_ACTIVE = "active";
     private static final Set<String> POSITION_BALANCE_ACCOUNT_TYPES = Set.of("investment", "gold");
 
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
     private final DebtRecordMapper debtRecordMapper;
+    private final HumanRelationRecordMapper humanRelationRecordMapper;
     private final InvestmentPositionMapper investmentPositionMapper;
     private final InvestmentTransactionMapper investmentTransactionMapper;
     private final InvestmentDividendRecordMapper investmentDividendRecordMapper;
     private final TransactionMapper transactionMapper;
     private final GoldPriceService goldPriceService;
+    private final JdbcTemplate jdbcTemplate;
 
     public AccountService(
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         DebtRecordMapper debtRecordMapper,
+        HumanRelationRecordMapper humanRelationRecordMapper,
         InvestmentPositionMapper investmentPositionMapper,
         InvestmentTransactionMapper investmentTransactionMapper,
         InvestmentDividendRecordMapper investmentDividendRecordMapper,
         TransactionMapper transactionMapper,
-        GoldPriceService goldPriceService
+        GoldPriceService goldPriceService,
+        JdbcTemplate jdbcTemplate
     ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.debtRecordMapper = debtRecordMapper;
+        this.humanRelationRecordMapper = humanRelationRecordMapper;
         this.investmentPositionMapper = investmentPositionMapper;
         this.investmentTransactionMapper = investmentTransactionMapper;
         this.investmentDividendRecordMapper = investmentDividendRecordMapper;
         this.transactionMapper = transactionMapper;
         this.goldPriceService = goldPriceService;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     public List<AccountResponse> list(Long userId, Long accountTypeId, String status) {
@@ -99,7 +112,7 @@ public class AccountService {
         AccountTypeEntity accountType = requireAccountType(request.getAccountTypeId());
         validateContactRequired(accountType, request.getContactId());
         validateDebtAccountContactUnique(accountType, request.getUserId(), request.getContactId(), null);
-        validateNameUnique(request.getUserId(), request.getName(), null);
+        validateNameUnique(request.getUserId(), request.getAccountTypeId(), request.getName(), null);
 
         AccountEntity entity = new AccountEntity();
         fillEntity(entity, request, accountType);
@@ -117,7 +130,7 @@ public class AccountService {
         AccountTypeEntity accountType = requireAccountType(request.getAccountTypeId());
         validateContactRequired(accountType, request.getContactId());
         validateDebtAccountContactUnique(accountType, request.getUserId(), request.getContactId(), id);
-        validateNameUnique(request.getUserId(), request.getName(), id);
+        validateNameUnique(request.getUserId(), request.getAccountTypeId(), request.getName(), id);
         fillEntity(entity, request, accountType);
         accountMapper.updateById(entity);
 
@@ -145,11 +158,17 @@ public class AccountService {
 
         AccountTypeEntity accountType = loadAccountType(account.getAccountTypeId());
         if (accountType != null && CASH_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
-            Long referenceCount = debtRecordMapper.selectCount(new LambdaQueryWrapper<DebtRecordEntity>()
+            Long debtReferenceCount = debtRecordMapper.selectCount(new LambdaQueryWrapper<DebtRecordEntity>()
                 .eq(DebtRecordEntity::getFundingAccountId, id)
                 .eq(DebtRecordEntity::getStatus, DEBT_RECORD_STATUS_ACTIVE));
-            if (referenceCount != null && referenceCount > 0) {
-                throw new IllegalArgumentException("该现金账户已关联债务记录，暂时不能删除");
+            Long humanRelationReferenceCount = isHumanRelationRecordsTableAvailable()
+                ? humanRelationRecordMapper.selectCount(new LambdaQueryWrapper<HumanRelationRecordEntity>()
+                    .eq(HumanRelationRecordEntity::getFundingAccountId, id)
+                    .eq(HumanRelationRecordEntity::getStatus, HUMAN_RELATION_RECORD_STATUS_ACTIVE))
+                : 0L;
+            if ((debtReferenceCount != null && debtReferenceCount > 0)
+                || (humanRelationReferenceCount != null && humanRelationReferenceCount > 0)) {
+                throw new IllegalArgumentException("该现金账户已关联往来记录，暂时不能删除");
             }
         }
 
@@ -167,7 +186,23 @@ public class AccountService {
             .eq(InvestmentPositionEntity::getAccountId, id));
         debtRecordMapper.delete(new LambdaQueryWrapper<DebtRecordEntity>()
             .eq(DebtRecordEntity::getAccountId, id));
+        if (isHumanRelationRecordsTableAvailable()) {
+            humanRelationRecordMapper.delete(new LambdaQueryWrapper<HumanRelationRecordEntity>()
+                .eq(HumanRelationRecordEntity::getAccountId, id));
+        }
         return accountMapper.deleteById(id) > 0;
+    }
+
+    private boolean isHumanRelationRecordsTableAvailable() {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'human_relation_records'",
+                Integer.class
+            );
+            return count != null && count > 0;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private AccountTypeEntity requireAccountType(Long accountTypeId) {
@@ -182,9 +217,10 @@ public class AccountService {
         return accountTypeMapper.selectById(accountTypeId);
     }
 
-    private void validateNameUnique(Long userId, String name, Long ignoredId) {
+    private void validateNameUnique(Long userId, Long accountTypeId, String name, Long ignoredId) {
         LambdaQueryWrapper<AccountEntity> wrapper = new LambdaQueryWrapper<AccountEntity>()
             .eq(AccountEntity::getUserId, userId)
+            .eq(AccountEntity::getAccountTypeId, accountTypeId)
             .eq(AccountEntity::getName, name)
             .ne(ignoredId != null, AccountEntity::getId, ignoredId)
             .last("LIMIT 1");
@@ -194,13 +230,13 @@ public class AccountService {
     }
 
     private void validateContactRequired(AccountTypeEntity accountType, Long contactId) {
-        if (accountType != null && DEBT_ACCOUNT_TYPE_CODES.contains(accountType.getCode()) && contactId == null) {
-            throw new IllegalArgumentException("债务账户必须关联联系人");
+        if (accountType != null && CONTACT_LINKED_ACCOUNT_TYPE_CODES.contains(accountType.getCode()) && contactId == null) {
+            throw new IllegalArgumentException("该账户类型必须关联联系人");
         }
     }
 
     private void validateDebtAccountContactUnique(AccountTypeEntity accountType, Long userId, Long contactId, Long ignoredId) {
-        if (accountType == null || !DEBT_ACCOUNT_TYPE_CODES.contains(accountType.getCode()) || contactId == null) {
+        if (accountType == null || !CONTACT_LINKED_ACCOUNT_TYPE_CODES.contains(accountType.getCode()) || contactId == null) {
             return;
         }
         AccountEntity existingAccount = accountMapper.selectOne(new LambdaQueryWrapper<AccountEntity>()
@@ -210,7 +246,7 @@ public class AccountService {
             .ne(ignoredId != null, AccountEntity::getId, ignoredId)
             .last("LIMIT 1"));
         if (existingAccount != null) {
-            throw new IllegalArgumentException("该联系人已存在债务账户");
+            throw new IllegalArgumentException("该联系人已存在同类型账户");
         }
     }
 
@@ -222,7 +258,7 @@ public class AccountService {
         entity.setIcon(request.getIcon());
         entity.setColor(request.getColor());
         entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
-        entity.setCurrentBalance(accountType != null && DEBT_ACCOUNT_TYPE_CODES.contains(accountType.getCode())
+        entity.setCurrentBalance(accountType != null && CONTACT_LINKED_ACCOUNT_TYPE_CODES.contains(accountType.getCode())
             ? BigDecimal.ZERO
             : request.getCurrentBalance() != null ? request.getCurrentBalance() : BigDecimal.ZERO);
         entity.setIncludeInNetWorth(request.getIncludeInNetWorth());
@@ -241,13 +277,18 @@ public class AccountService {
             .collect(Collectors.toSet());
         Map<Long, AccountTypeEntity> accountTypes = accountTypeMapper.selectBatchIds(accountTypeIds).stream()
             .collect(Collectors.toMap(AccountTypeEntity::getId, Function.identity()));
+        BalanceContext balanceContext = buildBalanceContext(accounts, accountTypes);
 
         return accounts.stream()
-            .map(account -> toResponse(account, accountTypes.get(account.getAccountTypeId())))
+            .map(account -> toResponse(account, accountTypes.get(account.getAccountTypeId()), balanceContext))
             .toList();
     }
 
     private AccountResponse toResponse(AccountEntity entity, AccountTypeEntity accountType) {
+        return toResponse(entity, accountType, null);
+    }
+
+    private AccountResponse toResponse(AccountEntity entity, AccountTypeEntity accountType, BalanceContext balanceContext) {
         AccountResponse response = new AccountResponse();
         response.setId(entity.getId());
         response.setUserId(entity.getUserId());
@@ -261,7 +302,7 @@ public class AccountService {
         response.setIcon(entity.getIcon());
         response.setColor(entity.getColor());
         response.setCurrencyCode(entity.getCurrencyCode());
-        response.setCurrentBalance(resolveCurrentBalance(entity, accountType));
+        response.setCurrentBalance(resolveCurrentBalance(entity, accountType, balanceContext));
         response.setIncludeInNetWorth(entity.getIncludeInNetWorth());
         response.setSortOrder(entity.getSortOrder());
         response.setStatus(entity.getStatus());
@@ -271,9 +312,21 @@ public class AccountService {
         return response;
     }
 
-    private BigDecimal resolveCurrentBalance(AccountEntity entity, AccountTypeEntity accountType) {
+    private BigDecimal resolveCurrentBalance(AccountEntity entity, AccountTypeEntity accountType, BalanceContext balanceContext) {
+        if (entity == null) {
+            return BigDecimal.ZERO;
+        }
+        if (balanceContext != null) {
+            BigDecimal cachedBalance = balanceContext.accountBalances().get(entity.getId());
+            if (cachedBalance != null) {
+                return cachedBalance;
+            }
+        }
         if (accountType != null && entity != null && DEBT_ACCOUNT_TYPE_CODES.contains(accountType.getCode())) {
             return resolveDebtBalance(entity.getId());
+        }
+        if (accountType != null && entity != null && "human_relation".equals(accountType.getCode())) {
+            return resolveHumanRelationBalance(entity.getId());
         }
         if (accountType == null || entity == null || !POSITION_BALANCE_ACCOUNT_TYPES.contains(accountType.getCode())) {
             return entity == null || entity.getCurrentBalance() == null ? BigDecimal.ZERO : entity.getCurrentBalance();
@@ -320,6 +373,23 @@ public class AccountService {
         return receivableTotal.subtract(payableTotal).setScale(2, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal resolveHumanRelationBalance(Long accountId) {
+        List<HumanRelationRecordEntity> records = humanRelationRecordMapper.selectList(new LambdaQueryWrapper<HumanRelationRecordEntity>()
+            .eq(HumanRelationRecordEntity::getAccountId, accountId)
+            .eq(HumanRelationRecordEntity::getStatus, HUMAN_RELATION_RECORD_STATUS_ACTIVE));
+        BigDecimal outgoingTotal = records.stream()
+            .filter(record -> HUMAN_RELATION_DIRECTION_OUTGOING.equals(record.getDirection()))
+            .map(HumanRelationRecordEntity::getAmount)
+            .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal incomingTotal = records.stream()
+            .filter(record -> !HUMAN_RELATION_DIRECTION_OUTGOING.equals(record.getDirection()))
+            .map(HumanRelationRecordEntity::getAmount)
+            .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return outgoingTotal.subtract(incomingTotal).setScale(2, RoundingMode.HALF_UP);
+    }
+
     private BigDecimal resolveRealtimeGoldPrice(List<InvestmentPositionEntity> positions) {
         try {
             BigDecimal price = goldPriceService.getGoldPrice("1d").getSpotGold().getPrice();
@@ -336,5 +406,127 @@ public class AccountService {
             .findFirst()
             .map(value -> value.setScale(2, RoundingMode.HALF_UP))
             .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+    }
+
+    private BigDecimal resolveListGoldPrice(List<InvestmentPositionEntity> positions) {
+        BigDecimal cachedSpotPrice = goldPriceService.getCachedSpotPrice();
+        if (cachedSpotPrice != null && cachedSpotPrice.compareTo(BigDecimal.ZERO) > 0) {
+            return cachedSpotPrice;
+        }
+        return positions.stream()
+            .map(InvestmentPositionEntity::getCurrentPrice)
+            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
+            .findFirst()
+            .map(value -> value.setScale(2, RoundingMode.HALF_UP))
+            .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+    }
+
+    private BalanceContext buildBalanceContext(List<AccountEntity> accounts, Map<Long, AccountTypeEntity> accountTypes) {
+        Map<Long, BigDecimal> accountBalances = new HashMap<>();
+        if (accounts.isEmpty()) {
+            return new BalanceContext(accountBalances);
+        }
+
+        Map<Long, String> accountTypeCodes = accounts.stream()
+            .filter(account -> accountTypes.containsKey(account.getAccountTypeId()))
+            .collect(Collectors.toMap(
+                AccountEntity::getId,
+                account -> accountTypes.get(account.getAccountTypeId()).getCode()
+            ));
+
+        List<Long> debtAccountIds = accountTypeCodes.entrySet().stream()
+            .filter(entry -> DEBT_ACCOUNT_TYPE_CODES.contains(entry.getValue()))
+            .map(Map.Entry::getKey)
+            .toList();
+        if (!debtAccountIds.isEmpty()) {
+            List<DebtRecordEntity> records = debtRecordMapper.selectList(new LambdaQueryWrapper<DebtRecordEntity>()
+                .in(DebtRecordEntity::getAccountId, debtAccountIds)
+                .eq(DebtRecordEntity::getStatus, DEBT_RECORD_STATUS_ACTIVE));
+            Map<Long, BigDecimal> payableTotals = sumByAccount(records, DebtRecordEntity::getAccountId,
+                record -> DEBT_DIRECTION_PAYABLE.equals(record.getDirection()) ? record.getAmount() : BigDecimal.ZERO);
+            Map<Long, BigDecimal> receivableTotals = sumByAccount(records, DebtRecordEntity::getAccountId,
+                record -> DEBT_DIRECTION_PAYABLE.equals(record.getDirection()) ? BigDecimal.ZERO : record.getAmount());
+            for (Long accountId : debtAccountIds) {
+                BigDecimal payable = payableTotals.getOrDefault(accountId, BigDecimal.ZERO);
+                BigDecimal receivable = receivableTotals.getOrDefault(accountId, BigDecimal.ZERO);
+                accountBalances.put(accountId, receivable.subtract(payable).setScale(2, RoundingMode.HALF_UP));
+            }
+        }
+
+        List<Long> humanRelationAccountIds = accountTypeCodes.entrySet().stream()
+            .filter(entry -> "human_relation".equals(entry.getValue()))
+            .map(Map.Entry::getKey)
+            .toList();
+        if (!humanRelationAccountIds.isEmpty()) {
+            List<HumanRelationRecordEntity> records = humanRelationRecordMapper.selectList(new LambdaQueryWrapper<HumanRelationRecordEntity>()
+                .in(HumanRelationRecordEntity::getAccountId, humanRelationAccountIds)
+                .eq(HumanRelationRecordEntity::getStatus, HUMAN_RELATION_RECORD_STATUS_ACTIVE));
+            Map<Long, BigDecimal> outgoingTotals = sumByAccount(records, HumanRelationRecordEntity::getAccountId,
+                record -> HUMAN_RELATION_DIRECTION_OUTGOING.equals(record.getDirection()) ? record.getAmount() : BigDecimal.ZERO);
+            Map<Long, BigDecimal> incomingTotals = sumByAccount(records, HumanRelationRecordEntity::getAccountId,
+                record -> HUMAN_RELATION_DIRECTION_OUTGOING.equals(record.getDirection()) ? BigDecimal.ZERO : record.getAmount());
+            for (Long accountId : humanRelationAccountIds) {
+                BigDecimal outgoing = outgoingTotals.getOrDefault(accountId, BigDecimal.ZERO);
+                BigDecimal incoming = incomingTotals.getOrDefault(accountId, BigDecimal.ZERO);
+                accountBalances.put(accountId, outgoing.subtract(incoming).setScale(2, RoundingMode.HALF_UP));
+            }
+        }
+
+        List<Long> positionAccountIds = accountTypeCodes.entrySet().stream()
+            .filter(entry -> POSITION_BALANCE_ACCOUNT_TYPES.contains(entry.getValue()))
+            .map(Map.Entry::getKey)
+            .toList();
+        if (!positionAccountIds.isEmpty()) {
+            List<InvestmentPositionEntity> positions = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+                .in(InvestmentPositionEntity::getAccountId, positionAccountIds)
+                .eq(InvestmentPositionEntity::getStatus, ACTIVE_POSITION_STATUS));
+            Map<Long, List<InvestmentPositionEntity>> positionsByAccount = positions.stream()
+                .collect(Collectors.groupingBy(InvestmentPositionEntity::getAccountId));
+            BigDecimal realtimeGoldPrice = resolveListGoldPrice(positions);
+            for (Long accountId : positionAccountIds) {
+                List<InvestmentPositionEntity> accountPositions = positionsByAccount.getOrDefault(accountId, List.of());
+                String accountTypeCode = accountTypeCodes.get(accountId);
+                if (GOLD_ACCOUNT_TYPE_CODE.equals(accountTypeCode)) {
+                    BigDecimal totalWeight = accountPositions.stream()
+                        .map(InvestmentPositionEntity::getHoldingQuantity)
+                        .filter(value -> value != null)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    accountBalances.put(accountId, totalWeight.multiply(realtimeGoldPrice).setScale(2, RoundingMode.HALF_UP));
+                    continue;
+                }
+                if (INVESTMENT_ACCOUNT_TYPE_CODE.equals(accountTypeCode)) {
+                    BigDecimal marketValue = accountPositions.stream()
+                        .map(InvestmentPositionEntity::getMarketValue)
+                        .filter(value -> value != null)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    accountBalances.put(accountId, marketValue.setScale(2, RoundingMode.HALF_UP));
+                }
+            }
+        }
+
+        return new BalanceContext(accountBalances);
+    }
+
+    private <T> Map<Long, BigDecimal> sumByAccount(
+        List<T> entities,
+        Function<T, Long> accountIdGetter,
+        Function<T, BigDecimal> amountGetter
+    ) {
+        Map<Long, BigDecimal> totals = new HashMap<>();
+        for (T entity : entities) {
+            Long accountId = accountIdGetter.apply(entity);
+            if (accountId == null) {
+                continue;
+            }
+            BigDecimal amount = amountGetter.apply(entity);
+            if (amount == null) {
+                continue;
+            }
+            totals.merge(accountId, amount, BigDecimal::add);
+        }
+        return totals;
+    }
+
+    private record BalanceContext(Map<Long, BigDecimal> accountBalances) {
     }
 }

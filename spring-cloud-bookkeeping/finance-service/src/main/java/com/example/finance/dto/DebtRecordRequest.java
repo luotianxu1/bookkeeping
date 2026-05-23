@@ -18,7 +18,6 @@ public class DebtRecordRequest {
     @NotNull(message = "债务账户ID不能为空")
     private Long accountId;
 
-    @NotNull(message = "现金账户不能为空")
     private Long fundingAccountId;
 
     @NotBlank(message = "债务方向不能为空")
