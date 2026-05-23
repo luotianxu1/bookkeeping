@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 投资账户页：通过后端接口展示投资账户汇总、持仓列表和新增持仓。
+// 投资账户详情页：展示单个投资账户的汇总、持仓列表和新增持仓。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -12,12 +12,10 @@ import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import {
   createInvestmentPosition,
   getAccounts,
-  getAccountTypes,
   getInvestmentPositions,
   getInvestmentProducts,
   getInvestmentSummary,
   type Account,
-  type AccountType,
   type InvestmentPosition,
   type InvestmentProduct,
   type InvestmentProductType,
@@ -40,7 +38,6 @@ const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const investmentAccounts = ref<Account[]>([])
 const fundingAccounts = ref<Account[]>([])
-const accountTypes = ref<AccountType[]>([])
 const summary = ref<InvestmentSummary>({
   userId: 0,
   totalMarketValue: 0,
@@ -53,7 +50,6 @@ const summary = ref<InvestmentSummary>({
   lastSyncedAt: null as string | null,
 })
 const positions = ref<InvestmentPosition[]>([])
-const selectedAccountId = ref<number | null>(null)
 
 const addAssetKeyword = ref('')
 const addAssetName = ref('')
@@ -91,8 +87,11 @@ const summaryMetrics = computed(() => [
 ])
 
 onMounted(() => {
-  selectedAccountId.value = parseAccountId(route.query.accountId)
-  loadInvestmentData()
+  void loadInvestmentData()
+})
+
+watch(() => route.params.accountId, () => {
+  void loadInvestmentData()
 })
 
 watch(addAssetKeyword, (nextKeyword) => {
@@ -128,10 +127,20 @@ function parseAccountId(value: unknown) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
+const selectedAccountId = computed(() => parseAccountId(route.params.accountId))
+const selectedAccount = computed(() =>
+  investmentAccounts.value.find((account) => account.id === selectedAccountId.value) ?? null,
+)
+
 async function loadInvestmentData() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
-    pageError.value = '请先登录后查看投资账户'
+    pageError.value = '请先登录后查看投资详情'
+    return
+  }
+
+  if (!selectedAccountId.value) {
+    pageError.value = '投资账户不存在'
     return
   }
 
@@ -139,23 +148,33 @@ async function loadInvestmentData() {
   pageError.value = ''
 
   try {
-    const [typeList, accountList] = await Promise.all([
-      getAccountTypes({ status: 'active' }),
+    const [accountList] = await Promise.all([
       getAccounts({ userId: currentUser.id, status: 'active' }),
     ])
-    accountTypes.value = typeList
     investmentAccounts.value = accountList.filter((account) => account.accountTypeCode === 'investment')
     fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
 
-    const selectedExists = investmentAccounts.value.some((account) => account.id === selectedAccountId.value)
-    if (!selectedAccountId.value || !selectedExists) {
-      selectedAccountId.value = investmentAccounts.value[0]?.id ?? null
+    const targetAccount = investmentAccounts.value.find((account) => account.id === selectedAccountId.value)
+    if (!targetAccount) {
+      positions.value = []
+      summary.value = {
+        userId: currentUser.id,
+        totalMarketValue: 0,
+        dayProfit: 0,
+        dayProfitRate: 0,
+        holdingProfit: 0,
+        holdingProfitRate: 0,
+        cumulativeProfit: 0,
+        cumulativeProfitRate: 0,
+        lastSyncedAt: null,
+      }
+      pageError.value = '投资账户不存在'
+      return
     }
 
-    const accountId = selectedAccountId.value ?? undefined
     const [summaryData, positionList] = await Promise.all([
-      getInvestmentSummary({ userId: currentUser.id, accountId }),
-      getInvestmentPositions({ userId: currentUser.id, accountId }),
+      getInvestmentSummary({ userId: currentUser.id, accountId: targetAccount.id }),
+      getInvestmentPositions({ userId: currentUser.id, accountId: targetAccount.id }),
     ])
 
     summary.value = summaryData
@@ -437,7 +456,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
       :type="feedbackType"
     />
 
-    <PageHeader title="投资账户" back-to="/finance/accounts" back-label="返回账户管理" />
+    <PageHeader title="投资详情" back-to="/finance/accounts/investment" back-label="返回投资账户" />
 
     <p v-if="pageError" class="investment-message investment-message-error">{{ pageError }}</p>
     <CommonLoading v-else-if="isLoading" />
@@ -446,9 +465,9 @@ function showFeedback(message: string, type: 'success' | 'error') {
       <section class="investment-summary-card" aria-label="投资总览">
         <div class="investment-summary-top">
           <div class="investment-summary-main">
-            <p>投资总市值</p>
+            <p>{{ selectedAccount?.name || '投资账户' }}</p>
             <AmountText tag="strong" :value="formatAmount(summary.totalMarketValue)" />
-            <span>同步于 {{ summary.lastSyncedAt ? new Date(summary.lastSyncedAt).toLocaleString('zh-CN') : '暂无' }}</span>
+            <span>{{ selectedAccount?.remark?.trim() || `同步于 ${summary.lastSyncedAt ? new Date(summary.lastSyncedAt).toLocaleString('zh-CN') : '暂无'}` }}</span>
           </div>
           <div class="investment-summary-side">
             <span>今日盈亏</span>

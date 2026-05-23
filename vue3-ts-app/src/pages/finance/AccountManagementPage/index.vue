@@ -134,7 +134,7 @@ const accountGroups = computed<AccountGroup[]>(() => {
               : account.accountTypeCode === 'gold'
                 ? `/finance/accounts/gold/position?accountId=${account.id}`
             : account.accountTypeCode === 'investment'
-              ? `/finance/accounts/investment?accountId=${account.id}`
+              ? `/finance/accounts/investment/${account.id}`
               : undefined,
       })),
     }

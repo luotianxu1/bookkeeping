@@ -61,7 +61,7 @@ const positionId = computed(() => {
 
 const backTo = computed(() => {
   const accountId = detail.value?.position?.accountId
-  return accountId ? `/finance/accounts/investment?accountId=${accountId}` : '/finance/accounts/investment'
+  return accountId ? `/finance/accounts/investment/${accountId}` : '/finance/accounts/investment'
 })
 
 const summaryAmount = computed(() => formatCurrency(Number(detail.value?.position?.marketValue ?? 0)))

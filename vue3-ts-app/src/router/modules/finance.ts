@@ -21,6 +21,7 @@ import DebtAccountPage from '@/pages/finance/DebtAccountPage/index.vue'
 import DebtAccountDetailPage from '@/pages/finance/DebtAccountDetailPage/index.vue'
 import HumanRelationAccountPage from '@/pages/finance/HumanRelationAccountPage/index.vue'
 import HumanRelationAccountDetailPage from '@/pages/finance/HumanRelationAccountDetailPage/index.vue'
+import InvestmentAccountListPage from '@/pages/finance/InvestmentAccountListPage/index.vue'
 import InvestmentAccountPage from '@/pages/finance/InvestmentAccountPage/index.vue'
 import InvestmentDetailPage from '@/pages/finance/InvestmentDetailPage/index.vue'
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage/index.vue'
@@ -227,10 +228,19 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/investment',
     name: 'finance-accounts-investment',
-    component: InvestmentAccountPage,
+    component: InvestmentAccountListPage,
     meta: {
       section: 'finance',
       title: '投资账户',
+    },
+  },
+  {
+    path: '/finance/accounts/investment/:accountId',
+    name: 'finance-accounts-investment-account-detail',
+    component: InvestmentAccountPage,
+    meta: {
+      section: 'finance',
+      title: '投资详情',
     },
   },
   {
@@ -239,7 +249,7 @@ export const financeRoutes: RouteRecordRaw[] = [
     component: InvestmentDetailPage,
     meta: {
       section: 'finance',
-      title: '投资详情',
+      title: '投资资产详情',
     },
   },
 ]
