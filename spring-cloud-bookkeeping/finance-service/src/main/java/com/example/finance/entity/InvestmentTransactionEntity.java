@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -47,10 +48,26 @@ public class InvestmentTransactionEntity {
     @TableField("currency_code")
     private String currencyCode;
 
+    @TableField("funding_account_id")
+    private Long fundingAccountId;
+
     @TableField("trade_at")
     private LocalDateTime tradeAt;
 
     private String status;
+
+    @TableField("settlement_status")
+    private String settlementStatus;
+
+    @TableField("settlement_applied_date")
+    private LocalDate settlementAppliedDate;
+
+    @TableField("settlement_expected_date")
+    private LocalDate settlementExpectedDate;
+
+    @TableField("settlement_confirmed_at")
+    private LocalDateTime settlementConfirmedAt;
+
     private String remark;
 
     @TableField("created_at")

@@ -3,6 +3,7 @@ package com.example.finance.dto;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -23,8 +24,13 @@ public class InvestmentTransactionResponse {
     private BigDecimal feeAmount;
     private BigDecimal taxAmount;
     private String currencyCode;
+    private Long fundingAccountId;
     private LocalDateTime tradeAt;
     private String status;
+    private String settlementStatus;
+    private LocalDate settlementAppliedDate;
+    private LocalDate settlementExpectedDate;
+    private LocalDateTime settlementConfirmedAt;
     private String remark;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

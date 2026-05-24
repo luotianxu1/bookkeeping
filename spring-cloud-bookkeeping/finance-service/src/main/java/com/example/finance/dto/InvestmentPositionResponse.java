@@ -3,6 +3,7 @@ package com.example.finance.dto;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -34,6 +35,10 @@ public class InvestmentPositionResponse {
     private Boolean includeInNetWorth;
     private String status;
     private LocalDateTime lastSyncedAt;
+    private String subscriptionStatus;
+    private LocalDate subscriptionAppliedDate;
+    private LocalDate subscriptionExpectedConfirmDate;
+    private LocalDateTime subscriptionConfirmedAt;
     private String remark;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

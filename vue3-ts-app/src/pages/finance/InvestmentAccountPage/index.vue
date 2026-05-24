@@ -15,11 +15,13 @@ import {
   getInvestmentPositions,
   getInvestmentProducts,
   getInvestmentSummary,
+  getInvestmentTransactions,
   type Account,
   type InvestmentPosition,
   type InvestmentProduct,
   type InvestmentProductType,
   type InvestmentSummary,
+  type InvestmentTransaction,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
@@ -50,6 +52,7 @@ const summary = ref<InvestmentSummary>({
   lastSyncedAt: null as string | null,
 })
 const positions = ref<InvestmentPosition[]>([])
+const transactions = ref<InvestmentTransaction[]>([])
 
 const addAssetKeyword = ref('')
 const addAssetName = ref('')
@@ -59,6 +62,7 @@ const addAssetCategory = ref<InvestmentProductType>('fund')
 const addAssetFundingAccount = ref('')
 const addAssetAmount = ref('')
 const addAssetCurrentPrice = ref('')
+const addAssetSubscriptionTimeSlot = ref<'before_1500' | 'after_1500'>('before_1500')
 const isLookingUpProduct = ref(false)
 const productLookupMessage = ref('')
 let productLookupTimer: number | undefined
@@ -71,12 +75,30 @@ const fundingAccountOptions = computed(() =>
   })),
 )
 
+const subscriptionTimeSlotOptions = [
+  { label: '15点前', value: 'before_1500' },
+  { label: '15点后', value: 'after_1500' },
+]
+
 const holdings = computed(() => {
   if (activeTab.value === 'A股') {
     return positions.value.filter((item) => item.productType === 'stock')
   }
 
   return positions.value.filter((item) => item.productType === 'fund')
+})
+
+const isFundSubscriptionDraft = computed(() => addAssetCategory.value === 'fund')
+const pendingAmountsByPositionId = computed(() => {
+  const pendingMap = new Map<number, number>()
+  for (const entry of transactions.value) {
+    if (entry.settlementStatus !== 'pending' || !entry.positionId) {
+      continue
+    }
+    const nextAmount = (pendingMap.get(entry.positionId) ?? 0) + Number(entry.amount || 0)
+    pendingMap.set(entry.positionId, nextAmount)
+  }
+  return pendingMap
 })
 
 const summaryMetrics = computed(() => [
@@ -168,20 +190,23 @@ async function loadInvestmentData() {
         cumulativeProfitRate: 0,
         lastSyncedAt: null,
       }
+      transactions.value = []
       pageError.value = '投资账户不存在'
       return
     }
 
-    const [summaryData, positionList] = await Promise.all([
+    const [summaryData, positionList, transactionList] = await Promise.all([
       getInvestmentSummary({ userId: currentUser.id, accountId: targetAccount.id }),
       getInvestmentPositions({ userId: currentUser.id, accountId: targetAccount.id }),
+      getInvestmentTransactions({ userId: currentUser.id, accountId: targetAccount.id }),
     ])
 
     summary.value = summaryData
     positions.value = positionList
+    transactions.value = transactionList
     syncActiveInvestmentTab()
-    if (!addAssetFundingAccount.value || !fundingAccounts.value.some((account) => String(account.id) === addAssetFundingAccount.value)) {
-      addAssetFundingAccount.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
+    if (addAssetFundingAccount.value && !fundingAccounts.value.some((account) => String(account.id) === addAssetFundingAccount.value)) {
+      addAssetFundingAccount.value = ''
     }
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : '投资账户加载失败'
@@ -226,9 +251,11 @@ async function saveAsset() {
 
   const accountId = selectedAccountId.value
   const fundingAccountId = Number(addAssetFundingAccount.value)
+  const normalizedFundingAccountId = Number.isFinite(fundingAccountId) && fundingAccountId > 0 ? fundingAccountId : undefined
   const currentPrice = Number(addAssetCurrentPrice.value)
   const costAmount = Number(addAssetAmount.value)
-  const quantity = currentPrice > 0 ? costAmount / currentPrice : 0
+  const isFundProduct = addAssetCategory.value === 'fund'
+  const quantity = !isFundProduct && currentPrice > 0 ? costAmount / currentPrice : 0
 
   if (!addAssetName.value.trim() || !addAssetSymbol.value.trim()) {
     formError.value = '请先搜索并选择有效资产'
@@ -238,19 +265,15 @@ async function saveAsset() {
     formError.value = '当前投资账户不存在'
     return
   }
-  if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
-    formError.value = '请选择资金账户'
-    return
-  }
   if (!Number.isFinite(costAmount) || costAmount <= 0) {
     formError.value = '请输入买入金额'
     return
   }
-  if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+  if (!isFundProduct && (!Number.isFinite(currentPrice) || currentPrice <= 0)) {
     formError.value = '未获取到当前价格，请重新搜索资产'
     return
   }
-  if (!Number.isFinite(quantity) || quantity <= 0) {
+  if (!isFundProduct && (!Number.isFinite(quantity) || quantity <= 0)) {
     formError.value = '买入金额或当前价格不正确'
     return
   }
@@ -262,7 +285,7 @@ async function saveAsset() {
     await createInvestmentPosition({
       userId: currentUser.id,
       accountId,
-      fundingAccountId,
+      fundingAccountId: normalizedFundingAccountId,
       product: {
         productType: addAssetCategory.value as InvestmentProductType,
         market: addAssetMarket.value.trim() || null,
@@ -273,17 +296,18 @@ async function saveAsset() {
         status: 'active',
         remark: null,
       },
-      holdingQuantity: Number(quantity.toFixed(6)),
-      availableQuantity: Number(quantity.toFixed(6)),
+      holdingQuantity: isFundProduct ? undefined : Number(quantity.toFixed(6)),
+      availableQuantity: isFundProduct ? undefined : Number(quantity.toFixed(6)),
       frozenQuantity: 0,
       costAmount: Number(costAmount.toFixed(2)),
-      currentPrice,
+      currentPrice: isFundProduct ? undefined : currentPrice,
+      subscriptionTimeSlot: isFundProduct ? addAssetSubscriptionTimeSlot.value : undefined,
       includeInNetWorth: true,
       status: 'active',
       remark: null,
     })
     closeAddModal()
-    showFeedback('新增成功', 'success')
+    showFeedback(isFundProduct ? '基金申购已提交，待确认后生成份额' : '新增成功', 'success')
     await loadInvestmentData()
   } catch (error) {
     const message = error instanceof Error ? error.message : '新增投资失败'
@@ -323,7 +347,6 @@ async function lookupProductByKeyword(keyword = addAssetKeyword.value) {
     }
 
     fillProductFields(matchedProduct)
-    productLookupMessage.value = `已识别：${matchedProduct.name}`
   } catch (error) {
     productLookupMessage.value = error instanceof Error ? error.message : '代码识别失败'
   } finally {
@@ -342,6 +365,9 @@ function fillProductFields(product: InvestmentProduct) {
   if (product.latestPrice && product.latestPrice > 0) {
     addAssetCurrentPrice.value = String(product.latestPrice)
   }
+  productLookupMessage.value = product.productType === 'fund'
+    ? `已识别：${product.name}，将按场外基金金额申购并在确认后生成份额`
+    : `已识别：${product.name}`
 }
 
 function clearProductFields() {
@@ -367,9 +393,10 @@ function resetAddForm() {
   addAssetSymbol.value = ''
   addAssetMarket.value = ''
   addAssetCategory.value = 'fund'
-  addAssetFundingAccount.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
+  addAssetFundingAccount.value = ''
   addAssetAmount.value = ''
   addAssetCurrentPrice.value = ''
+  addAssetSubscriptionTimeSlot.value = 'before_1500'
   productLookupMessage.value = ''
   formError.value = ''
 }
@@ -432,6 +459,48 @@ function getAllocationPercent(position: InvestmentPosition) {
     return 0
   }
   return Math.min(Math.max(percent, 0), 100)
+}
+
+function isPendingSubscription(position: InvestmentPosition) {
+  return position.subscriptionStatus === 'pending'
+}
+
+function getHoldingStatusText(position: InvestmentPosition) {
+  if (!isPendingSubscription(position)) {
+    return formatQuantity(position.holdingQuantity, position.unitName)
+  }
+  return `待确认 · ${position.subscriptionExpectedConfirmDate || '--'}`
+}
+
+function getHoldingActionLabel(position: InvestmentPosition) {
+  return isPendingSubscription(position) ? '申购处理中' : '今日盈亏'
+}
+
+function getHoldingActionValue(position: InvestmentPosition) {
+  return isPendingSubscription(position) ? formatCurrency(position.costAmount) : formatAmount(position.dayProfit)
+}
+
+function getHoldingPriceText(position: InvestmentPosition) {
+  if (isPendingSubscription(position)) {
+    return `预计确认 ${position.subscriptionExpectedConfirmDate || '--'}`
+  }
+  return `最新净值 ${formatSyncDate(position.lastSyncedAt)}`
+}
+
+function getHoldingBottomLabel(position: InvestmentPosition) {
+  return isPendingSubscription(position) ? '申购金额' : '累计盈亏'
+}
+
+function getHoldingBottomValue(position: InvestmentPosition) {
+  return isPendingSubscription(position) ? formatCurrency(position.costAmount, 0) : formatCurrency(position.cumulativeProfit, 0)
+}
+
+function getHoldingBottomRate(position: InvestmentPosition) {
+  return isPendingSubscription(position) ? '待确认' : `${formatAmount(position.cumulativeProfitRate)}%`
+}
+
+function getHoldingPendingAmount(position: InvestmentPosition) {
+  return pendingAmountsByPositionId.value.get(position.id) ?? 0
 }
 
 function formatAmount(value: number) {
@@ -503,23 +572,24 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <div class="holding-left">
               <div class="holding-title">
                 <strong>{{ holding.productName }}</strong>
-                <span>{{ formatQuantity(holding.holdingQuantity, holding.unitName) }}</span>
+                <span>{{ getHoldingStatusText(holding) }}</span>
               </div>
               <div class="holding-tags">
                 <span class="holding-tag">{{ getProductTag(holding) }}</span>
+                <span v-if="isPendingSubscription(holding)" class="holding-tag is-pending">待确认</span>
                 <span class="holding-market-value">{{ formatCurrency(holding.marketValue, 0) }}</span>
               </div>
             </div>
             <div class="holding-right">
-              <span>今日盈亏</span>
-              <AmountText tag="strong" :value="holding.dayProfit === 0 ? '--' : formatAmount(holding.dayProfit)" />
+              <span>{{ getHoldingActionLabel(holding) }}</span>
+              <AmountText tag="strong" :value="getHoldingActionValue(holding)" />
             </div>
           </div>
 
           <div class="holding-row middle">
             <div class="holding-price-line">
               <AmountText tag="strong" tone="inherit" :value="formatPrice(holding.currentPrice)" />
-              <span>最新净值 {{ formatSyncDate(holding.lastSyncedAt) }}</span>
+              <span>{{ getHoldingPriceText(holding) }}</span>
             </div>
             <div class="holding-right compact">
               <span>成本价</span>
@@ -527,14 +597,18 @@ function showFeedback(message: string, type: 'success' | 'error') {
             </div>
           </div>
 
+          <p v-if="getHoldingPendingAmount(holding) > 0" class="holding-pending-amount">
+            待确认金额 {{ formatCurrency(getHoldingPendingAmount(holding)) }}
+          </p>
+
           <div class="holding-divider"></div>
 
           <div class="holding-row bottom">
             <div class="holding-left compact">
-              <span>累计盈亏</span>
+              <span>{{ getHoldingBottomLabel(holding) }}</span>
               <div class="holding-pnl-line">
-                <AmountText tag="strong" :value="formatCurrency(holding.cumulativeProfit, 0)" />
-                <AmountText tag="span" class="holding-pnl-rate" :value="`${formatAmount(holding.cumulativeProfitRate)}%`" />
+                <AmountText tag="strong" :value="getHoldingBottomValue(holding)" />
+                <AmountText tag="span" class="holding-pnl-rate" :value="getHoldingBottomRate(holding)" />
               </div>
             </div>
             <div class="holding-right compact">
@@ -576,9 +650,23 @@ function showFeedback(message: string, type: 'success' | 'error') {
           {{ productLookupMessage }}
         </p>
 
+        <p v-if="isFundSubscriptionDraft" class="investment-lookup-message">
+          场外基金按金额申购处理，确认份额会在后续净值确认后自动生成；QDII 基金通常为 T+2 确认。
+        </p>
+
+        <label v-if="isFundSubscriptionDraft" class="investment-add-modal-field">
+          <span>申购时点</span>
+          <SegmentedControl
+            v-model="addAssetSubscriptionTimeSlot"
+            :options="subscriptionTimeSlotOptions"
+            label="基金申购时点"
+          />
+        </label>
+
         <label class="investment-add-modal-field">
-          <span>资金账户</span>
+          <span>资金账户（选填）</span>
           <select v-model="addAssetFundingAccount" class="investment-field-control">
+            <option value="">不选择</option>
             <option v-for="option in fundingAccountOptions" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>

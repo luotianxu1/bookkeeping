@@ -9,6 +9,7 @@ import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.DebtRecordEntity;
 import com.example.finance.entity.HumanRelationRecordEntity;
+import com.example.finance.entity.InvestmentAutoInvestPlanEntity;
 import com.example.finance.entity.InvestmentDividendRecordEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
 import com.example.finance.entity.InvestmentTransactionEntity;
@@ -17,6 +18,7 @@ import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
 import com.example.finance.mapper.DebtRecordMapper;
 import com.example.finance.mapper.HumanRelationRecordMapper;
+import com.example.finance.mapper.InvestmentAutoInvestPlanMapper;
 import com.example.finance.mapper.InvestmentDividendRecordMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
 import com.example.finance.mapper.InvestmentTransactionMapper;
@@ -58,6 +60,7 @@ public class AccountService {
     private final AccountTypeMapper accountTypeMapper;
     private final DebtRecordMapper debtRecordMapper;
     private final HumanRelationRecordMapper humanRelationRecordMapper;
+    private final InvestmentAutoInvestPlanMapper investmentAutoInvestPlanMapper;
     private final InvestmentPositionMapper investmentPositionMapper;
     private final InvestmentTransactionMapper investmentTransactionMapper;
     private final InvestmentDividendRecordMapper investmentDividendRecordMapper;
@@ -70,6 +73,7 @@ public class AccountService {
         AccountTypeMapper accountTypeMapper,
         DebtRecordMapper debtRecordMapper,
         HumanRelationRecordMapper humanRelationRecordMapper,
+        InvestmentAutoInvestPlanMapper investmentAutoInvestPlanMapper,
         InvestmentPositionMapper investmentPositionMapper,
         InvestmentTransactionMapper investmentTransactionMapper,
         InvestmentDividendRecordMapper investmentDividendRecordMapper,
@@ -81,6 +85,7 @@ public class AccountService {
         this.accountTypeMapper = accountTypeMapper;
         this.debtRecordMapper = debtRecordMapper;
         this.humanRelationRecordMapper = humanRelationRecordMapper;
+        this.investmentAutoInvestPlanMapper = investmentAutoInvestPlanMapper;
         this.investmentPositionMapper = investmentPositionMapper;
         this.investmentTransactionMapper = investmentTransactionMapper;
         this.investmentDividendRecordMapper = investmentDividendRecordMapper;
@@ -201,6 +206,10 @@ public class AccountService {
             .eq(TransactionEntity::getToAccountId, id));
         investmentTransactionMapper.delete(new LambdaQueryWrapper<InvestmentTransactionEntity>()
             .eq(InvestmentTransactionEntity::getAccountId, id));
+        investmentAutoInvestPlanMapper.delete(new LambdaQueryWrapper<InvestmentAutoInvestPlanEntity>()
+            .eq(InvestmentAutoInvestPlanEntity::getAccountId, id)
+            .or()
+            .eq(InvestmentAutoInvestPlanEntity::getFundingAccountId, id));
         investmentDividendRecordMapper.delete(new LambdaQueryWrapper<InvestmentDividendRecordEntity>()
             .eq(InvestmentDividendRecordEntity::getAccountId, id));
         investmentPositionMapper.delete(new LambdaQueryWrapper<InvestmentPositionEntity>()
@@ -353,6 +362,13 @@ public class AccountService {
             return entity == null || entity.getCurrentBalance() == null ? BigDecimal.ZERO : entity.getCurrentBalance();
         }
         List<InvestmentPositionEntity> positions = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+                .select(
+                    InvestmentPositionEntity::getAccountId,
+                    InvestmentPositionEntity::getHoldingQuantity,
+                    InvestmentPositionEntity::getCurrentPrice,
+                    InvestmentPositionEntity::getMarketValue,
+                    InvestmentPositionEntity::getStatus
+                )
                 .eq(InvestmentPositionEntity::getAccountId, entity.getId())
                 .eq(InvestmentPositionEntity::getStatus, ACTIVE_POSITION_STATUS));
 
@@ -499,6 +515,13 @@ public class AccountService {
             .toList();
         if (!positionAccountIds.isEmpty()) {
             List<InvestmentPositionEntity> positions = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+                .select(
+                    InvestmentPositionEntity::getAccountId,
+                    InvestmentPositionEntity::getHoldingQuantity,
+                    InvestmentPositionEntity::getCurrentPrice,
+                    InvestmentPositionEntity::getMarketValue,
+                    InvestmentPositionEntity::getStatus
+                )
                 .in(InvestmentPositionEntity::getAccountId, positionAccountIds)
                 .eq(InvestmentPositionEntity::getStatus, ACTIVE_POSITION_STATUS));
             Map<Long, List<InvestmentPositionEntity>> positionsByAccount = positions.stream()

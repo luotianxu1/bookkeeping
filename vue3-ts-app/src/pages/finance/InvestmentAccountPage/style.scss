@@ -346,6 +346,11 @@
   font-weight: 600;
 }
 
+.holding-tag.is-pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
 .holding-market-value {
   color: var(--color-text-tertiary);
   font-size: var(--font-size-12);
@@ -406,6 +411,13 @@
   width: 100%;
   height: var(--space-1);
   background: var(--color-bg-soft-2);
+}
+
+.holding-pending-amount {
+  margin: -2px 0 0;
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-12);
+  font-weight: 600;
 }
 
 .holding-pnl-line {
@@ -512,9 +524,18 @@
     color: #7ba0ff;
   }
 
+  .holding-tag.is-pending {
+    background: rgba(245, 158, 11, 0.16);
+    color: #fbbf24;
+  }
+
   .holding-pnl-rate {
     background: rgba(22, 163, 74, 0.12);
     color: #86efac;
+  }
+
+  .holding-pending-amount {
+    color: #7ba0ff;
   }
 
   .holding-allocation-track {

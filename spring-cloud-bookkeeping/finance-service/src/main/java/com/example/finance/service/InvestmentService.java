@@ -3,6 +3,8 @@ package com.example.finance.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.finance.dto.InvestmentDividendResponse;
 import com.example.finance.dto.InvestmentAssetDetailResponse;
+import com.example.finance.dto.InvestmentAutoInvestPlanRequest;
+import com.example.finance.dto.InvestmentAutoInvestPlanResponse;
 import com.example.finance.dto.InvestmentChartPointResponse;
 import com.example.finance.dto.InvestmentDetailStatResponse;
 import com.example.finance.dto.InvestmentPositionRequest;
@@ -14,20 +16,27 @@ import com.example.finance.dto.InvestmentTransactionRequest;
 import com.example.finance.dto.InvestmentTransactionResponse;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
+import com.example.finance.entity.InvestmentAutoInvestPlanEntity;
 import com.example.finance.entity.InvestmentDividendPlanEntity;
 import com.example.finance.entity.InvestmentDividendRecordEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
+import com.example.finance.entity.InvestmentPriceQuoteEntity;
 import com.example.finance.entity.InvestmentProductEntity;
 import com.example.finance.entity.InvestmentTransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
+import com.example.finance.mapper.InvestmentAutoInvestPlanMapper;
 import com.example.finance.mapper.InvestmentDividendPlanMapper;
 import com.example.finance.mapper.InvestmentDividendRecordMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
+import com.example.finance.mapper.InvestmentPriceQuoteMapper;
 import com.example.finance.mapper.InvestmentProductMapper;
 import com.example.finance.mapper.InvestmentTransactionMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -43,10 +52,14 @@ import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,49 +71,84 @@ import java.util.stream.Collectors;
 @Service
 public class InvestmentService {
 
+    private record FundQuoteSnapshot(
+        LocalDate quoteDate,
+        BigDecimal latestPrice,
+        BigDecimal preClosePrice,
+        LocalDateTime syncedAt
+    ) {
+    }
+
+    private static final Logger log = LoggerFactory.getLogger(InvestmentService.class);
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_UNIT_NAME = "份";
     private static final String ACTIVE_STATUS = "active";
     private static final String NORMAL_STATUS = "normal";
     private static final String VOIDED_STATUS = "voided";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
+    private static final String FUND_PRODUCT_TYPE = "fund";
+    private static final String FUND_QUOTE_SOURCE = "EASTMONEY_FUND_DAILY";
+    private static final String SUBSCRIPTION_STATUS_CONFIRMED = "confirmed";
+    private static final String SUBSCRIPTION_STATUS_PENDING = "pending";
+    private static final String SETTLEMENT_STATUS_CONFIRMED = "confirmed";
+    private static final String SETTLEMENT_STATUS_PENDING = "pending";
+    private static final String AUTO_INVEST_STATUS_ACTIVE = "active";
+    private static final String AUTO_INVEST_STATUS_PAUSED = "paused";
+    private static final String AUTO_INVEST_STATUS_CANCELLED = "cancelled";
+    private static final String AUTO_INVEST_FREQUENCY_DAILY = "daily";
+    private static final String AUTO_INVEST_FREQUENCY_WEEKLY = "weekly";
+    private static final String AUTO_INVEST_FREQUENCY_MONTHLY = "monthly";
+    private static final String SUBSCRIPTION_TIME_SLOT_BEFORE_1500 = "before_1500";
+    private static final String SUBSCRIPTION_TIME_SLOT_AFTER_1500 = "after_1500";
+    private static final int DEFAULT_FUND_CONFIRM_DAYS = 1;
+    private static final int QDII_FUND_CONFIRM_DAYS = 2;
+    private static final LocalTime FUND_SUBSCRIPTION_CUTOFF_TIME = LocalTime.of(15, 0);
     private static final Set<String> POSITION_ACCOUNT_TYPE_CODES = Set.of("investment", "gold");
     private static final DateTimeFormatter NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private final InvestmentProductMapper productMapper;
     private final InvestmentPositionMapper positionMapper;
     private final InvestmentTransactionMapper transactionMapper;
+    private final InvestmentAutoInvestPlanMapper autoInvestPlanMapper;
     private final InvestmentDividendPlanMapper dividendPlanMapper;
     private final InvestmentDividendRecordMapper dividendRecordMapper;
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
+    private final InvestmentPriceQuoteMapper priceQuoteMapper;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final HttpClient httpClient;
+    private final Set<LocalDate> marketClosedDates;
 
     public InvestmentService(
         InvestmentProductMapper productMapper,
         InvestmentPositionMapper positionMapper,
         InvestmentTransactionMapper transactionMapper,
+        InvestmentAutoInvestPlanMapper autoInvestPlanMapper,
         InvestmentDividendPlanMapper dividendPlanMapper,
         InvestmentDividendRecordMapper dividendRecordMapper,
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
-        ObjectMapper objectMapper
+        InvestmentPriceQuoteMapper priceQuoteMapper,
+        ObjectMapper objectMapper,
+        @Value("${finance.investment.market-closed-dates:}") String marketClosedDatesConfig
     ) {
         this.productMapper = productMapper;
         this.positionMapper = positionMapper;
         this.transactionMapper = transactionMapper;
+        this.autoInvestPlanMapper = autoInvestPlanMapper;
         this.dividendPlanMapper = dividendPlanMapper;
         this.dividendRecordMapper = dividendRecordMapper;
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
+        this.priceQuoteMapper = priceQuoteMapper;
         this.objectMapper = objectMapper;
         this.restClient = RestClient.builder().build();
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
+        this.marketClosedDates = parseMarketClosedDates(marketClosedDatesConfig);
     }
 
     public List<InvestmentProductResponse> listProducts(String productType, String keyword) {
@@ -172,12 +220,15 @@ public class InvestmentService {
         response.setUpdatedAt(positionResponse.getLastSyncedAt() == null ? null : positionResponse.getLastSyncedAt().toString());
         response.setChartType(product != null && "stock".equals(product.getProductType()) ? "candlestick" : "line");
         response.setSource("本地持仓");
-        response.setDescription("页面先展示本地持仓数据，行情和走势由前端直接从公开接口加载。");
+        response.setDescription(isPendingFundSubscription(position)
+            ? "该基金按场外申购规则处理中，份额将在确认后生成。"
+            : "页面先展示本地持仓数据，行情和走势由前端直接从公开接口加载。");
         response.setMarketStats(List.of(
             stat("资产类型", product == null ? "-" : productTypeName(product.getProductType()), null),
             stat("资产代码", product == null ? "-" : blankToDash(product.getSymbol()), null),
             stat("市场", product == null ? "-" : blankToDash(product.getMarket()), null),
             stat("当前净值", moneyText(positionResponse.getCurrentPrice(), "stock".equals(product == null ? null : product.getProductType()) ? 2 : 4), null),
+            stat("申购状态", isPendingFundSubscription(position) ? "待确认" : "已确认", null),
             stat("最新同步", response.getUpdatedAt() == null ? "-" : response.getUpdatedAt(), null)
         ));
         return Optional.of(response);
@@ -190,6 +241,12 @@ public class InvestmentService {
         InvestmentProductEntity product = request.getProductId() != null
             ? requireProduct(request.getProductId())
             : createOrLoadProduct(request.getProduct());
+
+        if (isFundSubscriptionProduct(product)) {
+            return createFundSubscriptionPosition(request, account, fundingAccount, product);
+        }
+
+        validateDirectPositionRequest(request);
 
         InvestmentPositionEntity entity = new InvestmentPositionEntity();
         fillPosition(entity, request, product.getId());
@@ -219,6 +276,13 @@ public class InvestmentService {
         InvestmentProductEntity product = request.getProductId() != null
             ? requireProduct(request.getProductId())
             : createOrLoadProduct(request.getProduct());
+        if (isPendingFundSubscription(entity)) {
+            entity.setIncludeInNetWorth(request.getIncludeInNetWorth() == null ? entity.getIncludeInNetWorth() : request.getIncludeInNetWorth());
+            entity.setRemark(request.getRemark());
+            positionMapper.updateById(entity);
+            return Optional.of(toPositionResponse(positionMapper.selectById(id), product, account));
+        }
+        validateDirectPositionRequest(request);
         fillPosition(entity, request, product.getId());
         positionMapper.updateById(entity);
         syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
@@ -237,6 +301,9 @@ public class InvestmentService {
         transactionMapper.delete(new LambdaQueryWrapper<InvestmentTransactionEntity>()
             .eq(InvestmentTransactionEntity::getUserId, userId)
             .eq(InvestmentTransactionEntity::getPositionId, id));
+        autoInvestPlanMapper.delete(new LambdaQueryWrapper<InvestmentAutoInvestPlanEntity>()
+            .eq(InvestmentAutoInvestPlanEntity::getUserId, userId)
+            .eq(InvestmentAutoInvestPlanEntity::getPositionId, id));
         dividendRecordMapper.delete(new LambdaQueryWrapper<InvestmentDividendRecordEntity>()
             .eq(InvestmentDividendRecordEntity::getUserId, userId)
             .eq(InvestmentDividendRecordEntity::getPositionId, id));
@@ -274,6 +341,139 @@ public class InvestmentService {
         return response;
     }
 
+    public int syncDailyFundProfits() {
+        List<InvestmentPositionEntity> positions = listActiveFundPositions();
+        if (positions.isEmpty()) {
+            log.info("基金收益同步跳过：当前没有基金持仓");
+            return 0;
+        }
+
+        Map<Long, InvestmentProductEntity> products = loadFundProducts(positions);
+        if (products.isEmpty()) {
+            log.info("基金收益同步跳过：当前没有可同步的基金产品");
+            return 0;
+        }
+
+        Map<Long, Long> accountUsers = new HashMap<>();
+        int syncedProducts = 0;
+        int syncedPositions = 0;
+        for (Map.Entry<Long, List<InvestmentPositionEntity>> entry : groupPositionsByProduct(positions, products).entrySet()) {
+            InvestmentProductEntity product = products.get(entry.getKey());
+            if (product == null) {
+                continue;
+            }
+            try {
+                int updatedCount = syncFundProfitForProduct(product, entry.getValue(), accountUsers);
+                if (updatedCount > 0) {
+                    syncedProducts++;
+                    syncedPositions += updatedCount;
+                }
+            } catch (Exception ex) {
+                log.warn("基金收益同步失败，productId={}, symbol={}, reason={}",
+                    product.getId(), product.getSymbol(), ex.getMessage());
+            }
+        }
+
+        accountUsers.forEach((accountId, userId) -> syncInvestmentAccountBalance(userId, accountId));
+        log.info("基金收益同步完成：{} 个基金产品，{} 条持仓已更新", syncedProducts, syncedPositions);
+        return syncedPositions;
+    }
+
+    public int settlePendingFundTrades() {
+        int settledPositions = settlePendingFundPositions();
+        int settledTransactions = settlePendingFundTransactions();
+        return settledPositions + settledTransactions;
+    }
+
+    private int settlePendingFundPositions() {
+        List<InvestmentPositionEntity> positions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)
+            .eq(InvestmentPositionEntity::getSubscriptionStatus, SUBSCRIPTION_STATUS_PENDING));
+        if (positions.isEmpty()) {
+            log.info("基金申购结算跳过：当前没有待确认的基金持仓");
+            return 0;
+        }
+
+        Map<Long, InvestmentProductEntity> products = loadFundProducts(positions);
+        if (products.isEmpty()) {
+            log.info("基金申购结算跳过：当前没有可结算的基金产品");
+            return 0;
+        }
+
+        Map<Long, Long> accountUsers = new HashMap<>();
+        int settledProducts = 0;
+        int settledPositions = 0;
+        for (Map.Entry<Long, List<InvestmentPositionEntity>> entry : groupPositionsByProduct(positions, products).entrySet()) {
+            InvestmentProductEntity product = products.get(entry.getKey());
+            if (product == null) {
+                continue;
+            }
+            try {
+                int updatedCount = settlePendingFundTradesForProduct(product, entry.getValue(), accountUsers);
+                if (updatedCount > 0) {
+                    settledProducts++;
+                    settledPositions += updatedCount;
+                }
+            } catch (Exception ex) {
+                log.warn("基金申购结算失败，productId={}, symbol={}, reason={}",
+                    product.getId(), product.getSymbol(), ex.getMessage());
+            }
+        }
+
+        accountUsers.forEach((accountId, userId) -> syncInvestmentAccountBalance(userId, accountId));
+        log.info("基金申购结算完成：{} 个基金产品，{} 条持仓已处理", settledProducts, settledPositions);
+        return settledPositions;
+    }
+
+    private int settlePendingFundTransactions() {
+        List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+            .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
+            .eq(InvestmentTransactionEntity::getSettlementStatus, SETTLEMENT_STATUS_PENDING));
+        if (transactions.isEmpty()) {
+            log.info("基金交易结算跳过：当前没有待确认的基金交易");
+            return 0;
+        }
+
+        Map<Long, InvestmentProductEntity> products = productMapper.selectBatchIds(
+                transactions.stream().map(InvestmentTransactionEntity::getProductId).collect(Collectors.toSet())
+            ).stream()
+            .filter(product -> product != null
+                && FUND_PRODUCT_TYPE.equals(product.getProductType())
+                && StringUtils.hasText(product.getSymbol()))
+            .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
+        if (products.isEmpty()) {
+            log.info("基金交易结算跳过：当前没有可结算的基金产品");
+            return 0;
+        }
+
+        Map<Long, List<InvestmentTransactionEntity>> transactionsByProduct = transactions.stream()
+            .filter(transaction -> products.containsKey(transaction.getProductId()))
+            .collect(Collectors.groupingBy(InvestmentTransactionEntity::getProductId));
+        Map<Long, Long> accountUsers = new HashMap<>();
+        int settledProducts = 0;
+        int settledTransactions = 0;
+        for (Map.Entry<Long, List<InvestmentTransactionEntity>> entry : transactionsByProduct.entrySet()) {
+            InvestmentProductEntity product = products.get(entry.getKey());
+            if (product == null) {
+                continue;
+            }
+            try {
+                int updatedCount = settlePendingFundTransactionsForProduct(product, entry.getValue(), accountUsers);
+                if (updatedCount > 0) {
+                    settledProducts++;
+                    settledTransactions += updatedCount;
+                }
+            } catch (Exception ex) {
+                log.warn("基金交易结算失败，productId={}, symbol={}, reason={}",
+                    product.getId(), product.getSymbol(), ex.getMessage());
+            }
+        }
+
+        accountUsers.forEach((accountId, userId) -> syncInvestmentAccountBalance(userId, accountId));
+        log.info("基金交易结算完成：{} 个基金产品，{} 条交易已处理", settledProducts, settledTransactions);
+        return settledTransactions;
+    }
+
     public List<InvestmentTransactionResponse> listTransactions(Long userId, Long accountId, Long positionId) {
         List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
             .eq(userId != null, InvestmentTransactionEntity::getUserId, userId)
@@ -291,8 +491,11 @@ public class InvestmentService {
     @Transactional
     public InvestmentTransactionResponse createTransaction(InvestmentTransactionRequest request) {
         AccountEntity investmentAccount = requireInvestmentAccount(request.getUserId(), request.getAccountId());
-        InvestmentPositionEntity position = requirePosition(request);
         InvestmentProductEntity product = requireProduct(request.getProductId());
+        InvestmentPositionEntity position = requirePosition(request);
+        if (isFundSubscriptionProduct(product)) {
+            return createPendingFundTransaction(request, investmentAccount, position, product);
+        }
         BigDecimal quantity = defaultZero(request.getQuantity()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal price = defaultZero(request.getPrice()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
@@ -331,8 +534,13 @@ public class InvestmentService {
         entity.setFeeAmount(feeAmount);
         entity.setTaxAmount(taxAmount);
         entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+        entity.setFundingAccountId(request.getFundingAccountId());
         entity.setTradeAt(request.getTradeAt());
         entity.setStatus(NORMAL_STATUS);
+        entity.setSettlementStatus(SETTLEMENT_STATUS_CONFIRMED);
+        entity.setSettlementAppliedDate(null);
+        entity.setSettlementExpectedDate(null);
+        entity.setSettlementConfirmedAt(LocalDateTime.now());
         entity.setRemark(request.getRemark());
         transactionMapper.insert(entity);
         positionMapper.updateById(position);
@@ -348,6 +556,79 @@ public class InvestmentService {
         entity.setStatus(VOIDED_STATUS);
         transactionMapper.updateById(entity);
         return true;
+    }
+
+    public List<InvestmentAutoInvestPlanResponse> listAutoInvestPlans(Long userId, Long accountId, Long positionId, String status) {
+        return autoInvestPlanMapper.selectList(new LambdaQueryWrapper<InvestmentAutoInvestPlanEntity>()
+                .eq(userId != null, InvestmentAutoInvestPlanEntity::getUserId, userId)
+                .eq(accountId != null, InvestmentAutoInvestPlanEntity::getAccountId, accountId)
+                .eq(positionId != null, InvestmentAutoInvestPlanEntity::getPositionId, positionId)
+                .eq(StringUtils.hasText(status), InvestmentAutoInvestPlanEntity::getStatus, status)
+                .orderByAsc(InvestmentAutoInvestPlanEntity::getNextExecuteDate)
+                .orderByDesc(InvestmentAutoInvestPlanEntity::getId))
+            .stream()
+            .map(this::toAutoInvestPlanResponse)
+            .toList();
+    }
+
+    @Transactional
+    public InvestmentAutoInvestPlanResponse createAutoInvestPlan(InvestmentAutoInvestPlanRequest request) {
+        InvestmentPositionEntity position = requireAutoInvestPosition(request.getUserId(), request.getPositionId());
+        validateAutoInvestPlanRequest(request, position);
+
+        InvestmentAutoInvestPlanEntity entity = new InvestmentAutoInvestPlanEntity();
+        fillAutoInvestPlan(entity, request, position);
+        autoInvestPlanMapper.insert(entity);
+        return toAutoInvestPlanResponse(autoInvestPlanMapper.selectById(entity.getId()));
+    }
+
+    @Transactional
+    public Optional<InvestmentAutoInvestPlanResponse> updateAutoInvestPlan(Long id, InvestmentAutoInvestPlanRequest request) {
+        InvestmentAutoInvestPlanEntity entity = autoInvestPlanMapper.selectById(id);
+        if (entity == null || !request.getUserId().equals(entity.getUserId())) {
+            return Optional.empty();
+        }
+        InvestmentPositionEntity position = requireAutoInvestPosition(request.getUserId(), request.getPositionId());
+        validateAutoInvestPlanRequest(request, position);
+
+        fillAutoInvestPlan(entity, request, position);
+        autoInvestPlanMapper.updateById(entity);
+        return Optional.of(toAutoInvestPlanResponse(autoInvestPlanMapper.selectById(id)));
+    }
+
+    @Transactional
+    public boolean deleteAutoInvestPlan(Long id, Long userId) {
+        InvestmentAutoInvestPlanEntity entity = autoInvestPlanMapper.selectById(id);
+        if (entity == null || !userId.equals(entity.getUserId())) {
+            return false;
+        }
+        return autoInvestPlanMapper.deleteById(id) > 0;
+    }
+
+    public int executeDueAutoInvestPlans() {
+        LocalDate today = LocalDate.now();
+        List<InvestmentAutoInvestPlanEntity> plans = autoInvestPlanMapper.selectList(new LambdaQueryWrapper<InvestmentAutoInvestPlanEntity>()
+            .eq(InvestmentAutoInvestPlanEntity::getStatus, AUTO_INVEST_STATUS_ACTIVE)
+            .le(InvestmentAutoInvestPlanEntity::getNextExecuteDate, today)
+            .orderByAsc(InvestmentAutoInvestPlanEntity::getNextExecuteDate)
+            .orderByAsc(InvestmentAutoInvestPlanEntity::getId));
+        if (plans.isEmpty()) {
+            log.info("基金定投执行跳过：当前没有到期计划");
+            return 0;
+        }
+
+        int executedCount = 0;
+        for (InvestmentAutoInvestPlanEntity plan : plans) {
+            try {
+                executeAutoInvestPlan(plan, today);
+                executedCount++;
+            } catch (Exception ex) {
+                log.warn("基金定投执行失败，planId={}, positionId={}, reason={}",
+                    plan.getId(), plan.getPositionId(), ex.getMessage());
+            }
+        }
+        log.info("基金定投执行完成：{} 条计划已提交申购", executedCount);
+        return executedCount;
     }
 
     public List<InvestmentDividendResponse> listDividends(Long userId, Long accountId) {
@@ -441,6 +722,10 @@ public class InvestmentService {
         entity.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
         entity.setIncludeInNetWorth(request.getIncludeInNetWorth() == null ? Boolean.TRUE : request.getIncludeInNetWorth());
         entity.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus() : ACTIVE_STATUS);
+        entity.setSubscriptionStatus(SUBSCRIPTION_STATUS_CONFIRMED);
+        entity.setSubscriptionAppliedDate(null);
+        entity.setSubscriptionExpectedConfirmDate(null);
+        entity.setSubscriptionConfirmedAt(LocalDateTime.now());
         entity.setLastSyncedAt(LocalDateTime.now());
         entity.setRemark(request.getRemark());
     }
@@ -451,6 +736,17 @@ public class InvestmentService {
         BigDecimal price,
         BigDecimal amount,
         String remark
+    ) {
+        createBuyTransaction(position, quantity, price, amount, remark, LocalDateTime.now());
+    }
+
+    private void createBuyTransaction(
+        InvestmentPositionEntity position,
+        BigDecimal quantity,
+        BigDecimal price,
+        BigDecimal amount,
+        String remark,
+        LocalDateTime tradeAt
     ) {
         InvestmentTransactionEntity transaction = new InvestmentTransactionEntity();
         transaction.setTransactionNo(generateTransactionNo());
@@ -465,10 +761,123 @@ public class InvestmentService {
         transaction.setFeeAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         transaction.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         transaction.setCurrencyCode(DEFAULT_CURRENCY_CODE);
-        transaction.setTradeAt(LocalDateTime.now());
+        transaction.setFundingAccountId(null);
+        transaction.setTradeAt(tradeAt);
         transaction.setStatus(NORMAL_STATUS);
+        transaction.setSettlementStatus(SETTLEMENT_STATUS_CONFIRMED);
+        transaction.setSettlementAppliedDate(null);
+        transaction.setSettlementExpectedDate(null);
+        transaction.setSettlementConfirmedAt(tradeAt);
         transaction.setRemark(remark);
         transactionMapper.insert(transaction);
+    }
+
+    private InvestmentPositionEntity requireAutoInvestPosition(Long userId, Long positionId) {
+        InvestmentPositionEntity position = positionMapper.selectById(positionId);
+        if (position == null || !userId.equals(position.getUserId())) {
+            throw new IllegalArgumentException("投资持仓不存在");
+        }
+        if (!ACTIVE_STATUS.equals(position.getStatus())) {
+            throw new IllegalArgumentException("仅支持对有效持仓设置定投");
+        }
+        if (isPendingFundSubscription(position)) {
+            throw new IllegalArgumentException("待确认基金暂不支持设置定投");
+        }
+        return position;
+    }
+
+    private void validateAutoInvestPlanRequest(InvestmentAutoInvestPlanRequest request, InvestmentPositionEntity position) {
+        if (!position.getAccountId().equals(request.getAccountId())) {
+            throw new IllegalArgumentException("定投计划与持仓所属账户不一致");
+        }
+        InvestmentProductEntity product = requireProduct(position.getProductId());
+        if (!isFundSubscriptionProduct(product)) {
+            throw new IllegalArgumentException("当前仅支持基金设置定投");
+        }
+        requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
+
+        String frequency = StringUtils.hasText(request.getFrequency()) ? request.getFrequency().trim() : "";
+        if (!AUTO_INVEST_FREQUENCY_DAILY.equals(frequency)
+            && !AUTO_INVEST_FREQUENCY_WEEKLY.equals(frequency)
+            && !AUTO_INVEST_FREQUENCY_MONTHLY.equals(frequency)) {
+            throw new IllegalArgumentException("定投周期仅支持每日、每周或每月");
+        }
+        if (request.getAmount() == null || request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("定投金额必须大于0");
+        }
+        if (request.getNextExecuteDate() == null) {
+            throw new IllegalArgumentException("请选择下次执行日期");
+        }
+        if (StringUtils.hasText(request.getStatus())
+            && !AUTO_INVEST_STATUS_ACTIVE.equals(request.getStatus())
+            && !AUTO_INVEST_STATUS_PAUSED.equals(request.getStatus())
+            && !AUTO_INVEST_STATUS_CANCELLED.equals(request.getStatus())) {
+            throw new IllegalArgumentException("定投计划状态不正确");
+        }
+    }
+
+    private void fillAutoInvestPlan(
+        InvestmentAutoInvestPlanEntity entity,
+        InvestmentAutoInvestPlanRequest request,
+        InvestmentPositionEntity position
+    ) {
+        entity.setUserId(request.getUserId());
+        entity.setAccountId(request.getAccountId());
+        entity.setPositionId(position.getId());
+        entity.setProductId(position.getProductId());
+        entity.setFundingAccountId(request.getFundingAccountId());
+        entity.setFrequency(request.getFrequency().trim());
+        entity.setAmount(request.getAmount().setScale(2, RoundingMode.HALF_UP));
+        entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+        entity.setNextExecuteDate(request.getNextExecuteDate());
+        entity.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus() : AUTO_INVEST_STATUS_ACTIVE);
+        entity.setRemark(request.getRemark());
+    }
+
+    @Transactional
+    private void executeAutoInvestPlan(InvestmentAutoInvestPlanEntity plan, LocalDate today) {
+        AccountEntity investmentAccount = requireInvestmentAccount(plan.getUserId(), plan.getAccountId());
+        InvestmentPositionEntity position = requireAutoInvestPosition(plan.getUserId(), plan.getPositionId());
+        InvestmentProductEntity product = requireProduct(plan.getProductId());
+        if (!isFundSubscriptionProduct(product)) {
+            throw new IllegalArgumentException("当前仅支持基金定投");
+        }
+
+        InvestmentTransactionRequest request = new InvestmentTransactionRequest();
+        request.setUserId(plan.getUserId());
+        request.setAccountId(plan.getAccountId());
+        request.setPositionId(plan.getPositionId());
+        request.setProductId(plan.getProductId());
+        request.setTradeType("buy");
+        request.setQuantity(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
+        request.setPrice(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
+        request.setAmount(plan.getAmount());
+        request.setFeeAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        request.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        request.setCurrencyCode(plan.getCurrencyCode());
+        request.setTradeAt(today.atTime(9, 5));
+        request.setFundingAccountId(plan.getFundingAccountId());
+        request.setSubscriptionTimeSlot(SUBSCRIPTION_TIME_SLOT_BEFORE_1500);
+        request.setRemark(StringUtils.hasText(plan.getRemark()) ? "定投执行：" + plan.getRemark() : "定投执行");
+        createPendingFundTransaction(request, investmentAccount, position, product);
+
+        plan.setLastExecutedAt(LocalDateTime.now());
+        plan.setNextExecuteDate(resolveNextAutoInvestExecuteDate(plan.getFrequency(), plan.getNextExecuteDate(), today));
+        autoInvestPlanMapper.updateById(plan);
+    }
+
+    private LocalDate resolveNextAutoInvestExecuteDate(String frequency, LocalDate currentDate, LocalDate today) {
+        LocalDate next = currentDate;
+        do {
+            if (AUTO_INVEST_FREQUENCY_MONTHLY.equals(frequency)) {
+                next = next.plusMonths(1);
+            } else if (AUTO_INVEST_FREQUENCY_WEEKLY.equals(frequency)) {
+                next = next.plusWeeks(1);
+            } else {
+                next = next.plusDays(1);
+            }
+        } while (!next.isAfter(today));
+        return next;
     }
 
     private AccountEntity requireInvestmentAccount(Long userId, Long accountId) {
@@ -502,13 +911,7 @@ public class InvestmentService {
         if (request.getFundingAccountId() != null) {
             return requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
         }
-
-        AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
-        if (accountType != null && "gold".equals(accountType.getCode())) {
-            return null;
-        }
-
-        throw new IllegalArgumentException("请选择资金账户");
+        return null;
     }
 
     private AccountEntity resolveFundingAccountForSell(InvestmentTransactionRequest request, AccountEntity account) {
@@ -522,6 +925,267 @@ public class InvestmentService {
         }
 
         throw new IllegalArgumentException("请选择资金账户");
+    }
+
+    private boolean isFundSubscriptionProduct(InvestmentProductEntity product) {
+        return product != null && FUND_PRODUCT_TYPE.equals(product.getProductType());
+    }
+
+    private boolean isPendingFundSubscription(InvestmentPositionEntity position) {
+        return position != null && SUBSCRIPTION_STATUS_PENDING.equals(position.getSubscriptionStatus());
+    }
+
+    private void validateDirectPositionRequest(InvestmentPositionRequest request) {
+        BigDecimal quantity = request.getHoldingQuantity();
+        BigDecimal currentPrice = request.getCurrentPrice();
+        BigDecimal availableQuantity = request.getAvailableQuantity();
+        BigDecimal frozenQuantity = defaultZero(request.getFrozenQuantity());
+        if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("持仓数量必须大于0");
+        }
+        if (currentPrice == null || currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("当前价格必须大于0");
+        }
+        if (availableQuantity != null && availableQuantity.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("可用份额不能小于0");
+        }
+        if (frozenQuantity.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("冻结份额不能小于0");
+        }
+        if (frozenQuantity.compareTo(quantity) > 0) {
+            throw new IllegalArgumentException("冻结份额不能大于当前份额");
+        }
+        if (availableQuantity != null && availableQuantity.add(frozenQuantity).compareTo(quantity) > 0) {
+            throw new IllegalArgumentException("可用份额与冻结份额之和不能大于当前份额");
+        }
+    }
+
+    private InvestmentPositionResponse createFundSubscriptionPosition(
+        InvestmentPositionRequest request,
+        AccountEntity account,
+        AccountEntity fundingAccount,
+        InvestmentProductEntity product
+    ) {
+        JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
+        BigDecimal officialPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
+        String fundType = baseInfo.path("FTYPE").asText("");
+        LocalDate appliedDate = resolveFundSubscriptionTradeDate(request.getSubscriptionTimeSlot(), LocalDate.now());
+        int confirmDelayDays = resolveFundConfirmDelayDays(fundType);
+        LocalDate expectedConfirmDate = addTradingDays(appliedDate, confirmDelayDays);
+        BigDecimal costAmount = defaultZero(request.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
+        if (costAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("申购金额必须大于0");
+        }
+
+        InvestmentPositionEntity entity = new InvestmentPositionEntity();
+        entity.setUserId(request.getUserId());
+        entity.setAccountId(request.getAccountId());
+        entity.setProductId(product.getId());
+        entity.setHoldingQuantity(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
+        entity.setAvailableQuantity(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
+        entity.setFrozenQuantity(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
+        entity.setCostAmount(costAmount);
+        entity.setAvgCostPrice(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
+        entity.setCurrentPrice(defaultZero(officialPrice).setScale(6, RoundingMode.HALF_UP));
+        entity.setMarketValue(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        entity.setDayProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        entity.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        entity.setHoldingProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        entity.setHoldingProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        entity.setCumulativeProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        entity.setCumulativeProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        entity.setIncludeInNetWorth(request.getIncludeInNetWorth() == null ? Boolean.TRUE : request.getIncludeInNetWorth());
+        entity.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus() : ACTIVE_STATUS);
+        entity.setSubscriptionStatus(SUBSCRIPTION_STATUS_PENDING);
+        entity.setSubscriptionAppliedDate(appliedDate);
+        entity.setSubscriptionExpectedConfirmDate(expectedConfirmDate);
+        entity.setSubscriptionConfirmedAt(null);
+        entity.setLastSyncedAt(LocalDateTime.now());
+        entity.setRemark(request.getRemark());
+
+        if (fundingAccount != null) {
+            deductFundingAccount(fundingAccount, costAmount);
+        }
+        positionMapper.insert(entity);
+        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
+        return toPositionResponse(positionMapper.selectById(entity.getId()), product, account);
+    }
+
+    private InvestmentTransactionResponse createPendingFundTransaction(
+        InvestmentTransactionRequest request,
+        AccountEntity investmentAccount,
+        InvestmentPositionEntity position,
+        InvestmentProductEntity product
+    ) {
+        JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
+        String fundType = baseInfo.path("FTYPE").asText("");
+        LocalDate appliedDate = resolveFundSubscriptionTradeDate(request.getSubscriptionTimeSlot(), LocalDate.now());
+        LocalDate expectedSettlementDate = addTradingDays(appliedDate, resolveFundConfirmDelayDays(fundType));
+        LocalDateTime tradeAt = request.getTradeAt() == null ? LocalDateTime.now() : request.getTradeAt();
+
+        if ("buy".equals(request.getTradeType())) {
+            BigDecimal amount = defaultZero(request.getAmount()).setScale(2, RoundingMode.HALF_UP);
+            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("申购金额必须大于0");
+            }
+            BigDecimal feeAmount = defaultZero(request.getFeeAmount()).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal taxAmount = defaultZero(request.getTaxAmount()).setScale(2, RoundingMode.HALF_UP);
+            AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
+            deductFundingAccount(fundingAccount, amount.add(feeAmount).add(taxAmount));
+
+            InvestmentTransactionEntity entity = buildPendingFundTransactionEntity(
+                request,
+                position,
+                BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP),
+                BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP),
+                amount,
+                feeAmount,
+                taxAmount,
+                tradeAt,
+                appliedDate,
+                expectedSettlementDate
+            );
+            transactionMapper.insert(entity);
+            return toTransactionResponse(entity, product, investmentAccount);
+        }
+
+        if ("sell".equals(request.getTradeType())) {
+            BigDecimal quantity = defaultZero(request.getQuantity()).setScale(6, RoundingMode.HALF_UP);
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("赎回份额必须大于0");
+            }
+            BigDecimal feeAmount = defaultZero(request.getFeeAmount()).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal taxAmount = defaultZero(request.getTaxAmount()).setScale(2, RoundingMode.HALF_UP);
+            AccountEntity fundingAccount = resolveFundingAccountForSell(request, investmentAccount);
+            BigDecimal estimatedPrice = defaultZero(position.getCurrentPrice()).setScale(6, RoundingMode.HALF_UP);
+            BigDecimal estimatedAmount = estimatedPrice.compareTo(BigDecimal.ZERO) > 0
+                ? quantity.multiply(estimatedPrice).setScale(2, RoundingMode.HALF_UP)
+                : defaultZero(request.getAmount()).setScale(2, RoundingMode.HALF_UP);
+            if (estimatedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("回款金额必须大于0");
+            }
+
+            freezePendingFundSellQuantity(position, quantity);
+            positionMapper.updateById(position);
+
+            InvestmentTransactionEntity entity = buildPendingFundTransactionEntity(
+                request,
+                position,
+                quantity,
+                BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP),
+                estimatedAmount,
+                feeAmount,
+                taxAmount,
+                tradeAt,
+                appliedDate,
+                expectedSettlementDate
+            );
+            entity.setFundingAccountId(fundingAccount == null ? null : fundingAccount.getId());
+            transactionMapper.insert(entity);
+            return toTransactionResponse(entity, product, investmentAccount);
+        }
+
+        throw new IllegalArgumentException("基金仅支持加仓或减仓");
+    }
+
+    private InvestmentTransactionEntity buildPendingFundTransactionEntity(
+        InvestmentTransactionRequest request,
+        InvestmentPositionEntity position,
+        BigDecimal quantity,
+        BigDecimal price,
+        BigDecimal amount,
+        BigDecimal feeAmount,
+        BigDecimal taxAmount,
+        LocalDateTime tradeAt,
+        LocalDate appliedDate,
+        LocalDate expectedSettlementDate
+    ) {
+        InvestmentTransactionEntity entity = new InvestmentTransactionEntity();
+        entity.setTransactionNo(generateTransactionNo());
+        entity.setUserId(request.getUserId());
+        entity.setAccountId(request.getAccountId());
+        entity.setPositionId(position.getId());
+        entity.setProductId(request.getProductId());
+        entity.setTradeType(request.getTradeType());
+        entity.setQuantity(defaultZero(quantity).setScale(6, RoundingMode.HALF_UP));
+        entity.setPrice(defaultZero(price).setScale(6, RoundingMode.HALF_UP));
+        entity.setAmount(defaultZero(amount).setScale(2, RoundingMode.HALF_UP));
+        entity.setFeeAmount(defaultZero(feeAmount).setScale(2, RoundingMode.HALF_UP));
+        entity.setTaxAmount(defaultZero(taxAmount).setScale(2, RoundingMode.HALF_UP));
+        entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+        entity.setFundingAccountId(request.getFundingAccountId());
+        entity.setTradeAt(tradeAt);
+        entity.setStatus(NORMAL_STATUS);
+        entity.setSettlementStatus(SETTLEMENT_STATUS_PENDING);
+        entity.setSettlementAppliedDate(appliedDate);
+        entity.setSettlementExpectedDate(expectedSettlementDate);
+        entity.setSettlementConfirmedAt(null);
+        entity.setRemark(request.getRemark());
+        return entity;
+    }
+
+    private int resolveFundConfirmDelayDays(String fundType) {
+        return StringUtils.hasText(fundType) && fundType.toUpperCase().contains("QDII")
+            ? QDII_FUND_CONFIRM_DAYS
+            : DEFAULT_FUND_CONFIRM_DAYS;
+    }
+
+    private Set<LocalDate> parseMarketClosedDates(String marketClosedDatesConfig) {
+        if (!StringUtils.hasText(marketClosedDatesConfig)) {
+            return Collections.emptySet();
+        }
+        Set<LocalDate> dates = new HashSet<>();
+        for (String rawDate : marketClosedDatesConfig.split(",")) {
+            String value = rawDate.trim();
+            if (value.isEmpty()) {
+                continue;
+            }
+            dates.add(LocalDate.parse(value));
+        }
+        return Collections.unmodifiableSet(dates);
+    }
+
+    private LocalDate resolveFundSubscriptionTradeDate(String subscriptionTimeSlot, LocalDate requestDate) {
+        LocalDate candidateDate = requestDate;
+        if (isNonTradingDay(candidateDate) || isAfterFundCutoff(subscriptionTimeSlot)) {
+            candidateDate = candidateDate.plusDays(1);
+        }
+        return nextTradingDay(candidateDate);
+    }
+
+    private boolean isAfterFundCutoff(String subscriptionTimeSlot) {
+        if (SUBSCRIPTION_TIME_SLOT_AFTER_1500.equals(subscriptionTimeSlot)) {
+            return true;
+        }
+        if (SUBSCRIPTION_TIME_SLOT_BEFORE_1500.equals(subscriptionTimeSlot)) {
+            return false;
+        }
+        return !LocalTime.now().isBefore(FUND_SUBSCRIPTION_CUTOFF_TIME);
+    }
+
+    private LocalDate addTradingDays(LocalDate baseDate, int tradingDays) {
+        LocalDate result = nextTradingDay(baseDate);
+        int remainingDays = Math.max(tradingDays, 0);
+        while (remainingDays > 0) {
+            result = nextTradingDay(result.plusDays(1));
+            remainingDays--;
+        }
+        return result;
+    }
+
+    private LocalDate nextTradingDay(LocalDate date) {
+        LocalDate result = date;
+        while (isNonTradingDay(result)) {
+            result = result.plusDays(1);
+        }
+        return result;
+    }
+
+    private boolean isNonTradingDay(LocalDate date) {
+        return switch (date.getDayOfWeek()) {
+            case SATURDAY, SUNDAY -> true;
+            default -> marketClosedDates.contains(date);
+        };
     }
 
     private void deductFundingAccount(AccountEntity account, BigDecimal amount) {
@@ -551,6 +1215,9 @@ public class InvestmentService {
         InvestmentPositionEntity position = positionMapper.selectById(request.getPositionId());
         if (position == null || !request.getUserId().equals(position.getUserId())) {
             throw new IllegalArgumentException("投资持仓不存在");
+        }
+        if (isPendingFundSubscription(position)) {
+            throw new IllegalArgumentException("基金申购待确认，暂不支持加仓或减仓");
         }
         if (!request.getAccountId().equals(position.getAccountId())) {
             throw new IllegalArgumentException("投资账户不匹配");
@@ -618,6 +1285,59 @@ public class InvestmentService {
         position.setCumulativeProfitRate(rate(position.getCumulativeProfit(), position.getCostAmount()));
     }
 
+    private void freezePendingFundSellQuantity(InvestmentPositionEntity position, BigDecimal quantity) {
+        BigDecimal availableQuantity = defaultZero(position.getAvailableQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal frozenQuantity = defaultZero(position.getFrozenQuantity()).setScale(6, RoundingMode.HALF_UP);
+        if (quantity.compareTo(availableQuantity) > 0) {
+            throw new IllegalArgumentException("赎回份额不能超过可用持仓");
+        }
+        position.setAvailableQuantity(availableQuantity.subtract(quantity).setScale(6, RoundingMode.HALF_UP));
+        position.setFrozenQuantity(frozenQuantity.add(quantity).setScale(6, RoundingMode.HALF_UP));
+        position.setLastSyncedAt(LocalDateTime.now());
+    }
+
+    private void settlePendingFundSellTransaction(
+        InvestmentPositionEntity position,
+        InvestmentTransactionEntity transaction,
+        BigDecimal confirmedPrice
+    ) {
+        BigDecimal quantity = defaultZero(transaction.getQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal frozenQuantity = defaultZero(position.getFrozenQuantity()).setScale(6, RoundingMode.HALF_UP);
+        if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("赎回份额必须大于0");
+        }
+        if (quantity.compareTo(holdingQuantity) > 0 || quantity.compareTo(frozenQuantity) > 0) {
+            throw new IllegalArgumentException("待确认赎回份额超过当前冻结持仓");
+        }
+
+        BigDecimal actualAmount = quantity.multiply(confirmedPrice).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal feeAmount = defaultZero(transaction.getFeeAmount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxAmount = defaultZero(transaction.getTaxAmount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal nextHoldingQuantity = holdingQuantity.subtract(quantity).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal nextFrozenQuantity = frozenQuantity.subtract(quantity).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal avgCostPrice = defaultZero(position.getAvgCostPrice()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal soldCostAmount = avgCostPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal nextCostAmount = defaultZero(position.getCostAmount()).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal previousCumulativeProfit = defaultZero(position.getCumulativeProfit()).setScale(2, RoundingMode.HALF_UP);
+
+        if (nextCostAmount.compareTo(BigDecimal.ZERO) < 0) {
+            nextCostAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        position.setHoldingQuantity(nextHoldingQuantity);
+        position.setFrozenQuantity(nextFrozenQuantity);
+        position.setCostAmount(nextCostAmount);
+        position.setCurrentPrice(confirmedPrice.setScale(6, RoundingMode.HALF_UP));
+        recalculatePositionMetrics(position, nextHoldingQuantity.compareTo(BigDecimal.ZERO) == 0 ? "closed" : ACTIVE_STATUS);
+
+        BigDecimal realizedProfit = actualAmount.subtract(feeAmount).subtract(taxAmount).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
+        position.setCumulativeProfit(previousCumulativeProfit.add(realizedProfit).setScale(2, RoundingMode.HALF_UP));
+        position.setCumulativeProfitRate(rate(position.getCumulativeProfit(), position.getCostAmount()));
+        transaction.setAmount(actualAmount);
+        transaction.setPrice(confirmedPrice.setScale(6, RoundingMode.HALF_UP));
+    }
+
     private void recalculatePositionMetrics(InvestmentPositionEntity position, String status) {
         BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
@@ -639,6 +1359,10 @@ public class InvestmentService {
         position.setCumulativeProfit(cumulativeProfit);
         position.setCumulativeProfitRate(rate(cumulativeProfit, costAmount));
         position.setStatus(status);
+        if (!isPendingFundSubscription(position)) {
+            position.setSubscriptionStatus(SUBSCRIPTION_STATUS_CONFIRMED);
+            position.setSubscriptionConfirmedAt(LocalDateTime.now());
+        }
         position.setLastSyncedAt(LocalDateTime.now());
     }
 
@@ -717,6 +1441,10 @@ public class InvestmentService {
         response.setIncludeInNetWorth(entity.getIncludeInNetWorth());
         response.setStatus(entity.getStatus());
         response.setLastSyncedAt(entity.getLastSyncedAt());
+        response.setSubscriptionStatus(entity.getSubscriptionStatus());
+        response.setSubscriptionAppliedDate(entity.getSubscriptionAppliedDate());
+        response.setSubscriptionExpectedConfirmDate(entity.getSubscriptionExpectedConfirmDate());
+        response.setSubscriptionConfirmedAt(entity.getSubscriptionConfirmedAt());
         response.setRemark(entity.getRemark());
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
@@ -735,6 +1463,9 @@ public class InvestmentService {
     private List<InvestmentTransactionResponse> inferInitialTransaction(Long userId, Long accountId, Long positionId) {
         InvestmentPositionEntity position = positionMapper.selectById(positionId);
         if (position == null || (userId != null && !userId.equals(position.getUserId())) || (accountId != null && !accountId.equals(position.getAccountId()))) {
+            return Collections.emptyList();
+        }
+        if (isPendingFundSubscription(position)) {
             return Collections.emptyList();
         }
         InvestmentTransactionResponse response = new InvestmentTransactionResponse();
@@ -756,8 +1487,13 @@ public class InvestmentService {
         response.setFeeAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         response.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
+        response.setFundingAccountId(null);
         response.setTradeAt(position.getCreatedAt());
         response.setStatus(NORMAL_STATUS);
+        response.setSettlementStatus(SETTLEMENT_STATUS_CONFIRMED);
+        response.setSettlementAppliedDate(null);
+        response.setSettlementExpectedDate(null);
+        response.setSettlementConfirmedAt(position.getCreatedAt());
         response.setRemark("初始买入");
         response.setCreatedAt(position.getCreatedAt());
         response.setUpdatedAt(position.getUpdatedAt());
@@ -782,11 +1518,46 @@ public class InvestmentService {
         response.setFeeAmount(entity.getFeeAmount());
         response.setTaxAmount(entity.getTaxAmount());
         response.setCurrencyCode(entity.getCurrencyCode());
+        response.setFundingAccountId(entity.getFundingAccountId());
         response.setTradeAt(entity.getTradeAt());
+        response.setStatus(entity.getStatus());
+        response.setSettlementStatus(entity.getSettlementStatus());
+        response.setSettlementAppliedDate(entity.getSettlementAppliedDate());
+        response.setSettlementExpectedDate(entity.getSettlementExpectedDate());
+        response.setSettlementConfirmedAt(entity.getSettlementConfirmedAt());
+        response.setRemark(entity.getRemark());
+        response.setCreatedAt(entity.getCreatedAt());
+        response.setUpdatedAt(entity.getUpdatedAt());
+        return response;
+    }
+
+    private InvestmentAutoInvestPlanResponse toAutoInvestPlanResponse(InvestmentAutoInvestPlanEntity entity) {
+        InvestmentAutoInvestPlanResponse response = new InvestmentAutoInvestPlanResponse();
+        response.setId(entity.getId());
+        response.setUserId(entity.getUserId());
+        response.setAccountId(entity.getAccountId());
+        response.setPositionId(entity.getPositionId());
+        response.setProductId(entity.getProductId());
+        response.setFundingAccountId(entity.getFundingAccountId());
+        response.setFrequency(entity.getFrequency());
+        response.setAmount(entity.getAmount());
+        response.setCurrencyCode(entity.getCurrencyCode());
+        response.setNextExecuteDate(entity.getNextExecuteDate());
+        response.setLastExecutedAt(entity.getLastExecutedAt());
         response.setStatus(entity.getStatus());
         response.setRemark(entity.getRemark());
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
+
+        AccountEntity account = accountMapper.selectById(entity.getAccountId());
+        response.setAccountName(account == null ? null : account.getName());
+        AccountEntity fundingAccount = accountMapper.selectById(entity.getFundingAccountId());
+        response.setFundingAccountName(fundingAccount == null ? null : fundingAccount.getName());
+        InvestmentProductEntity product = productMapper.selectById(entity.getProductId());
+        if (product != null) {
+            response.setProductName(product.getName());
+            response.setProductSymbol(product.getSymbol());
+        }
         return response;
     }
 
@@ -809,11 +1580,354 @@ public class InvestmentService {
         return response;
     }
 
+    private List<InvestmentPositionEntity> listActiveFundPositions() {
+        return positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS));
+    }
+
+    private Map<Long, InvestmentProductEntity> loadFundProducts(List<InvestmentPositionEntity> positions) {
+        return productMapper.selectBatchIds(
+                positions.stream().map(InvestmentPositionEntity::getProductId).collect(Collectors.toSet())
+            ).stream()
+            .filter(product -> product != null
+                && FUND_PRODUCT_TYPE.equals(product.getProductType())
+                && StringUtils.hasText(product.getSymbol()))
+            .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
+    }
+
+    private Map<Long, List<InvestmentPositionEntity>> groupPositionsByProduct(
+        List<InvestmentPositionEntity> positions,
+        Map<Long, InvestmentProductEntity> products
+    ) {
+        return positions.stream()
+            .filter(position -> products.containsKey(position.getProductId()))
+            .collect(Collectors.groupingBy(InvestmentPositionEntity::getProductId));
+    }
+
+    private int syncFundProfitForProduct(
+        InvestmentProductEntity product,
+        List<InvestmentPositionEntity> positions,
+        Map<Long, Long> accountUsers
+    ) {
+        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product);
+        if (snapshot == null) {
+            return 0;
+        }
+
+        int updatedCount = 0;
+        for (InvestmentPositionEntity position : positions) {
+            if (isPendingFundSubscription(position)) {
+                updatePendingFundPositionSnapshot(position, snapshot.latestPrice(), snapshot.syncedAt());
+            } else {
+                applyFundQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
+            }
+            positionMapper.updateById(position);
+            accountUsers.put(position.getAccountId(), position.getUserId());
+            updatedCount++;
+        }
+        return updatedCount;
+    }
+
+    private int settlePendingFundTradesForProduct(
+        InvestmentProductEntity product,
+        List<InvestmentPositionEntity> positions,
+        Map<Long, Long> accountUsers
+    ) {
+        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product);
+        if (snapshot == null) {
+            return 0;
+        }
+
+        int updatedCount = 0;
+        for (InvestmentPositionEntity position : positions) {
+            InvestmentPriceQuoteEntity appliedQuote = findQuoteByProductAndDate(product.getId(), position.getSubscriptionAppliedDate());
+            if (shouldConfirmFundSubscription(position, snapshot.quoteDate()) && appliedQuote != null) {
+                confirmPendingFundSubscription(position, appliedQuote, snapshot.syncedAt());
+                applyFundQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
+                positionMapper.updateById(position);
+                accountUsers.put(position.getAccountId(), position.getUserId());
+                updatedCount++;
+            }
+        }
+        return updatedCount;
+    }
+
+    private int settlePendingFundTransactionsForProduct(
+        InvestmentProductEntity product,
+        List<InvestmentTransactionEntity> transactions,
+        Map<Long, Long> accountUsers
+    ) {
+        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product);
+        if (snapshot == null) {
+            return 0;
+        }
+
+        int updatedCount = 0;
+        for (InvestmentTransactionEntity transaction : transactions) {
+            InvestmentPriceQuoteEntity appliedQuote = findQuoteByProductAndDate(product.getId(), transaction.getSettlementAppliedDate());
+            if (!shouldSettlePendingFundTransaction(transaction, snapshot.quoteDate()) || appliedQuote == null) {
+                continue;
+            }
+            InvestmentPositionEntity position = positionMapper.selectById(transaction.getPositionId());
+            if (position == null) {
+                continue;
+            }
+
+            BigDecimal confirmedPrice = defaultZero(
+                appliedQuote.getClosePrice() != null ? appliedQuote.getClosePrice() : appliedQuote.getLatestPrice()
+            ).setScale(6, RoundingMode.HALF_UP);
+            if (confirmedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+
+            if ("buy".equals(transaction.getTradeType())) {
+                BigDecimal quantity = defaultZero(transaction.getAmount()).setScale(2, RoundingMode.HALF_UP)
+                    .divide(confirmedPrice, 6, RoundingMode.HALF_UP);
+                applyBuyTransaction(
+                    position,
+                    quantity,
+                    confirmedPrice,
+                    defaultZero(transaction.getAmount()).setScale(2, RoundingMode.HALF_UP),
+                    defaultZero(transaction.getFeeAmount()).setScale(2, RoundingMode.HALF_UP),
+                    defaultZero(transaction.getTaxAmount()).setScale(2, RoundingMode.HALF_UP)
+                );
+                transaction.setQuantity(quantity);
+                transaction.setPrice(confirmedPrice);
+            } else if ("sell".equals(transaction.getTradeType())) {
+                settlePendingFundSellTransaction(position, transaction, confirmedPrice);
+                if (transaction.getFundingAccountId() != null) {
+                    AccountEntity fundingAccount = requireCashFundingAccount(transaction.getUserId(), transaction.getFundingAccountId());
+                    creditFundingAccount(
+                        fundingAccount,
+                        defaultZero(transaction.getAmount())
+                            .subtract(defaultZero(transaction.getFeeAmount()))
+                            .subtract(defaultZero(transaction.getTaxAmount()))
+                    );
+                }
+            } else {
+                continue;
+            }
+
+            transaction.setSettlementStatus(SETTLEMENT_STATUS_CONFIRMED);
+            transaction.setSettlementConfirmedAt(snapshot.syncedAt());
+            applyFundQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
+            positionMapper.updateById(position);
+            transactionMapper.updateById(transaction);
+            accountUsers.put(position.getAccountId(), position.getUserId());
+            updatedCount++;
+        }
+        return updatedCount;
+    }
+
+    private FundQuoteSnapshot fetchAndSaveLatestFundQuote(InvestmentProductEntity product) {
+        JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
+        BigDecimal latestPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
+        LocalDate quoteDate = safeDate(baseInfo.path("FSRQ").asText(null));
+        if (latestPrice == null || quoteDate == null) {
+            log.warn("基金净值同步跳过：symbol={} 未返回有效净值或净值日期", product.getSymbol());
+            return null;
+        }
+
+        InvestmentPriceQuoteEntity existingQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
+            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
+            .eq(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
+            .last("LIMIT 1"));
+        InvestmentPriceQuoteEntity previousQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
+            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
+            .lt(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
+            .orderByDesc(InvestmentPriceQuoteEntity::getQuoteDate)
+            .last("LIMIT 1"));
+
+        BigDecimal changeRate = safeDecimal(baseInfo.path("RZDF").asText(null));
+        BigDecimal preClosePrice = resolveFundPreClose(existingQuote, previousQuote, latestPrice, changeRate);
+        BigDecimal changeAmount = preClosePrice == null
+            ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
+            : latestPrice.subtract(preClosePrice).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal normalizedChangeRate = changeRate != null
+            ? changeRate.setScale(4, RoundingMode.HALF_UP)
+            : rate(changeAmount, preClosePrice);
+        LocalDateTime syncedAt = LocalDateTime.now();
+
+        saveFundQuote(product.getId(), existingQuote, quoteDate, syncedAt, latestPrice, preClosePrice, changeAmount, normalizedChangeRate);
+        return new FundQuoteSnapshot(quoteDate, latestPrice, preClosePrice, syncedAt);
+    }
+
+    private void saveFundQuote(
+        Long productId,
+        InvestmentPriceQuoteEntity existingQuote,
+        LocalDate quoteDate,
+        LocalDateTime syncedAt,
+        BigDecimal latestPrice,
+        BigDecimal preClosePrice,
+        BigDecimal changeAmount,
+        BigDecimal changeRate
+    ) {
+        InvestmentPriceQuoteEntity quote = existingQuote == null ? new InvestmentPriceQuoteEntity() : existingQuote;
+        quote.setProductId(productId);
+        quote.setQuoteDate(quoteDate);
+        quote.setQuoteTime(syncedAt);
+        quote.setClosePrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
+        quote.setLatestPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
+        quote.setPreClosePrice(preClosePrice == null ? null : preClosePrice.setScale(6, RoundingMode.HALF_UP));
+        quote.setChangeAmount(changeAmount.setScale(6, RoundingMode.HALF_UP));
+        quote.setChangeRate(changeRate.setScale(4, RoundingMode.HALF_UP));
+        quote.setSource(FUND_QUOTE_SOURCE);
+        if (existingQuote == null) {
+            priceQuoteMapper.insert(quote);
+        } else {
+            priceQuoteMapper.updateById(quote);
+        }
+    }
+
+    private void applyFundQuoteToPosition(
+        InvestmentPositionEntity position,
+        BigDecimal latestPrice,
+        BigDecimal preClosePrice,
+        LocalDateTime syncedAt
+    ) {
+        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal marketValue = holdingQuantity.multiply(latestPrice).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal previousMarketValue = preClosePrice == null
+            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+            : holdingQuantity.multiply(preClosePrice).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal dayProfit = preClosePrice == null
+            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+            : marketValue.subtract(previousMarketValue).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
+
+        position.setCurrentPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
+        position.setMarketValue(marketValue);
+        position.setDayProfit(dayProfit);
+        position.setDayProfitRate(rate(dayProfit, previousMarketValue));
+        position.setHoldingProfit(holdingProfit);
+        position.setHoldingProfitRate(rate(holdingProfit, costAmount));
+        position.setLastSyncedAt(syncedAt);
+    }
+
+    private void updatePendingFundPositionSnapshot(
+        InvestmentPositionEntity position,
+        BigDecimal latestPrice,
+        LocalDateTime syncedAt
+    ) {
+        position.setCurrentPrice(defaultZero(latestPrice).setScale(6, RoundingMode.HALF_UP));
+        position.setDayProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        position.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        position.setHoldingProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        position.setHoldingProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        position.setMarketValue(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        position.setLastSyncedAt(syncedAt);
+    }
+
+    private boolean shouldConfirmFundSubscription(InvestmentPositionEntity position, LocalDate latestQuoteDate) {
+        if (!isPendingFundSubscription(position) || position.getSubscriptionAppliedDate() == null) {
+            return false;
+        }
+        LocalDate expectedConfirmDate = position.getSubscriptionExpectedConfirmDate();
+        if (expectedConfirmDate != null && latestQuoteDate.isBefore(expectedConfirmDate)) {
+            return false;
+        }
+        return !latestQuoteDate.isBefore(position.getSubscriptionAppliedDate());
+    }
+
+    private boolean shouldSettlePendingFundTransaction(InvestmentTransactionEntity transaction, LocalDate latestQuoteDate) {
+        if (transaction == null || !SETTLEMENT_STATUS_PENDING.equals(transaction.getSettlementStatus())) {
+            return false;
+        }
+        if (transaction.getSettlementAppliedDate() == null) {
+            return false;
+        }
+        LocalDate expectedDate = transaction.getSettlementExpectedDate();
+        if (expectedDate != null && latestQuoteDate.isBefore(expectedDate)) {
+            return false;
+        }
+        return !latestQuoteDate.isBefore(transaction.getSettlementAppliedDate());
+    }
+
+    private InvestmentPriceQuoteEntity findQuoteByProductAndDate(Long productId, LocalDate quoteDate) {
+        if (productId == null || quoteDate == null) {
+            return null;
+        }
+        return priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
+            .eq(InvestmentPriceQuoteEntity::getProductId, productId)
+            .eq(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
+            .last("LIMIT 1"));
+    }
+
+    private void confirmPendingFundSubscription(
+        InvestmentPositionEntity position,
+        InvestmentPriceQuoteEntity appliedQuote,
+        LocalDateTime syncedAt
+    ) {
+        BigDecimal confirmedPrice = defaultZero(
+            appliedQuote.getClosePrice() != null ? appliedQuote.getClosePrice() : appliedQuote.getLatestPrice()
+        ).setScale(6, RoundingMode.HALF_UP);
+        if (confirmedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            updatePendingFundPositionSnapshot(position, confirmedPrice, syncedAt);
+            return;
+        }
+
+        BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal quantity = costAmount.divide(confirmedPrice, 6, RoundingMode.HALF_UP);
+        position.setHoldingQuantity(quantity);
+        position.setAvailableQuantity(quantity);
+        position.setFrozenQuantity(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
+        position.setAvgCostPrice(confirmedPrice);
+        position.setCurrentPrice(confirmedPrice);
+        position.setMarketValue(costAmount);
+        position.setDayProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        position.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        position.setHoldingProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        position.setHoldingProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        position.setSubscriptionStatus(SUBSCRIPTION_STATUS_CONFIRMED);
+        position.setSubscriptionConfirmedAt(syncedAt);
+        position.setLastSyncedAt(syncedAt);
+
+        LocalDateTime tradeAt = position.getCreatedAt() != null ? position.getCreatedAt() : syncedAt;
+        createBuyTransaction(position, quantity, confirmedPrice, costAmount, "基金申购确认", tradeAt);
+    }
+
+    private BigDecimal resolveFundPreClose(
+        InvestmentPriceQuoteEntity existingQuote,
+        InvestmentPriceQuoteEntity previousQuote,
+        BigDecimal latestPrice,
+        BigDecimal changeRate
+    ) {
+        if (existingQuote != null && existingQuote.getPreClosePrice() != null) {
+            return existingQuote.getPreClosePrice().setScale(6, RoundingMode.HALF_UP);
+        }
+        if (previousQuote != null) {
+            BigDecimal previousPrice = previousQuote.getClosePrice() != null
+                ? previousQuote.getClosePrice()
+                : previousQuote.getLatestPrice();
+            if (previousPrice != null) {
+                return previousPrice.setScale(6, RoundingMode.HALF_UP);
+            }
+        }
+        if (changeRate != null && latestPrice != null && changeRate.compareTo(BigDecimal.valueOf(-100)) > 0) {
+            BigDecimal divisor = BigDecimal.ONE.add(changeRate.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
+            if (divisor.compareTo(BigDecimal.ZERO) != 0) {
+                return latestPrice.divide(divisor, 6, RoundingMode.HALF_UP);
+            }
+        }
+        return null;
+    }
+
     private List<InvestmentDetailStatResponse> buildHoldingStats(InvestmentPositionResponse position) {
+        if (SUBSCRIPTION_STATUS_PENDING.equals(position.getSubscriptionStatus())) {
+            return List.of(
+                stat("所属账户", blankToDash(position.getAccountName()), null),
+                stat("申购金额", currencyText(position.getCostAmount(), 2), null),
+                stat("申购状态", "待确认", null),
+                stat("申请日期", position.getSubscriptionAppliedDate() == null ? "-" : position.getSubscriptionAppliedDate().toString(), null),
+                stat("确认日期", "-", null),
+                stat("确认后份额", "以确认净值为准", null)
+            );
+        }
         return List.of(
             stat("所属账户", blankToDash(position.getAccountName()), null),
             stat("持仓数量", moneyText(position.getHoldingQuantity(), 2) + " " + blankToDefault(position.getUnitName(), DEFAULT_UNIT_NAME), null),
-            stat("持仓成本", currencyText(position.getCostAmount(), 2), null),
+            stat("持仓成本价", priceText(position.getAvgCostPrice(), position.getProductType()), null),
             stat("当前市值", currencyText(position.getMarketValue(), 2), null),
             stat("持仓收益", currencyText(position.getHoldingProfit(), 2), tone(position.getHoldingProfit())),
             stat("收益率", percentText(position.getHoldingProfitRate()), tone(position.getHoldingProfitRate()))
@@ -823,15 +1937,10 @@ public class InvestmentService {
     private void fillFundDetail(InvestmentAssetDetailResponse response, InvestmentProductEntity product) {
         JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
         JsonNode estimateInfo = fetchFundEstimateInfo(product.getSymbol());
-        BigDecimal estimatePrice = safeDecimal(estimateInfo.path("gsz").asText(null));
         BigDecimal officialPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
-        BigDecimal latestPrice = estimatePrice != null ? estimatePrice : officialPrice;
-        BigDecimal changePercent = estimatePrice != null
-            ? safeDecimal(estimateInfo.path("gszzl").asText(null))
-            : safeDecimal(baseInfo.path("RZDF").asText(null));
-        String updatedAt = estimatePrice != null
-            ? estimateInfo.path("gztime").asText(null)
-            : baseInfo.path("FSRQ").asText(null);
+        BigDecimal latestPrice = officialPrice;
+        BigDecimal changePercent = safeDecimal(baseInfo.path("RZDF").asText(null));
+        String updatedAt = baseInfo.path("FSRQ").asText(null);
 
         response.setProductType("fund");
         response.setName(blankToDefault(baseInfo.path("SHORTNAME").asText(null), product.getName()));
@@ -841,16 +1950,15 @@ public class InvestmentService {
         response.setUpdatedAt(updatedAt);
         response.setChartType("line");
         response.setSource("东方财富");
-        response.setDescription("基金详情、估算净值和近一年走势来自东方财富公开接口。");
+        response.setDescription("基金详情和近一年走势来自东方财富公开接口。");
         response.setMarketStats(List.of(
             stat("资产类型", "基金", null),
             stat("基金代码", product.getSymbol(), null),
             stat("基金类型", blankToDash(baseInfo.path("FTYPE").asText(null)), null),
-            stat(estimatePrice != null ? "当前净值（估算）" : "当前净值（单位净值）", latestPrice == null ? "-" : moneyText(latestPrice, 4), tone(changePercent)),
+            stat("当前净值（单位净值）", latestPrice == null ? "-" : moneyText(latestPrice, 4), tone(changePercent)),
             stat("累计净值", blankToDash(baseInfo.path("LJJZ").asText(null)), null),
             stat("当日涨跌幅", percentText(changePercent), tone(changePercent)),
-            stat(estimatePrice != null ? "估值时间" : "净值日期", blankToDash(updatedAt), null),
-            stat("最新官方净值", blankToDash(blankToDefault(estimateInfo.path("dwjz").asText(null), baseInfo.path("DWJZ").asText(null))), null),
+            stat("净值日期", blankToDash(updatedAt), null),
             stat("基金公司", blankToDash(baseInfo.path("JJGS").asText(null)), null),
             stat("申购状态", blankToDash(baseInfo.path("SGZT").asText(null)), null),
             stat("赎回状态", blankToDash(baseInfo.path("SHZT").asText(null)), null)
@@ -1349,6 +2457,17 @@ public class InvestmentService {
         }
     }
 
+    private LocalDate safeDate(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
     private String field(String[] fields, int index) {
         return fields.length > index ? fields[index] : "";
     }
@@ -1374,6 +2493,14 @@ public class InvestmentService {
             return "-";
         }
         return (value.compareTo(BigDecimal.ZERO) < 0 ? "-¥" : "¥") + text;
+    }
+
+    private String priceText(BigDecimal value, String productType) {
+        String text = moneyText(value, "stock".equals(productType) ? 2 : 4);
+        if ("-".equals(text)) {
+            return "-";
+        }
+        return "¥" + text;
     }
 
     private String percentText(BigDecimal value) {

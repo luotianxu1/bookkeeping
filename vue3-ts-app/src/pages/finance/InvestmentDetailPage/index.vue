@@ -11,13 +11,19 @@ import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import {
+  createInvestmentAutoInvestPlan,
   createInvestmentTransaction,
+  deleteInvestmentAutoInvestPlan,
   getAccounts,
+  getInvestmentAutoInvestPlans,
   getInvestmentPositionDetail,
   getInvestmentTransactions,
+  updateInvestmentAutoInvestPlan,
   updateInvestmentPosition,
   type Account,
   type InvestmentAssetDetail,
+  type InvestmentAutoInvestFrequency,
+  type InvestmentAutoInvestPlan,
   type InvestmentChartPoint,
   type InvestmentDetailStat,
   type InvestmentPosition,
@@ -30,6 +36,7 @@ const isLoading = ref(false)
 const pageError = ref('')
 const detail = ref<InvestmentAssetDetail | null>(null)
 const transactions = ref<InvestmentTransaction[]>([])
+const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
 const fundingAccounts = ref<Account[]>([])
 const externalStatus = ref('')
 const chartRef = ref<HTMLDivElement | null>(null)
@@ -45,12 +52,24 @@ const tradeQuantity = ref('')
 const tradePrice = ref('')
 const tradeRemark = ref('')
 const tradeError = ref('')
+const tradeTimeSlot = ref<'before_1500' | 'after_1500'>('before_1500')
 const showEditModal = ref(false)
 const editPrice = ref('')
+const editHoldingQuantity = ref('')
+const editCostPrice = ref('')
 const editIncludeInNetWorth = ref(true)
 const editRemark = ref('')
 const editError = ref('')
 const isSubmitting = ref(false)
+const showAutoInvestModal = ref(false)
+const editingAutoInvestPlanId = ref<number | null>(null)
+const autoInvestFundingAccountId = ref('')
+const autoInvestFrequency = ref<InvestmentAutoInvestFrequency>('daily')
+const autoInvestAmount = ref('')
+const autoInvestNextExecuteDate = ref('')
+const autoInvestRemark = ref('')
+const autoInvestError = ref('')
+const isSavingAutoInvest = ref(false)
 let chart: ECharts | null = null
 
 const positionId = computed(() => {
@@ -64,7 +83,11 @@ const backTo = computed(() => {
   return accountId ? `/finance/accounts/investment/${accountId}` : '/finance/accounts/investment'
 })
 
-const summaryAmount = computed(() => formatCurrency(Number(detail.value?.position?.marketValue ?? 0)))
+const summaryAmount = computed(() =>
+  currentPosition.value?.subscriptionStatus === 'pending'
+    ? formatCurrency(Number(detail.value?.position?.costAmount ?? 0))
+    : formatCurrency(Number(detail.value?.position?.marketValue ?? 0)),
+)
 const todayValue = computed(() => {
   const changePercent = detail.value?.changePercent
   if (changePercent !== null && changePercent !== undefined) {
@@ -72,33 +95,85 @@ const todayValue = computed(() => {
   }
   return formatNumber(Number(detail.value?.position?.dayProfitRate ?? 0)) + '%'
 })
-const displayUpdatedAt = computed(() => detail.value?.updatedAt ? `同步于 ${detail.value.updatedAt}` : '同步于 --')
+const todayTone = computed<'positive' | 'negative' | 'neutral'>(() => {
+  const changePercent = Number(detail.value?.changePercent)
+  const fallbackRate = Number(detail.value?.position?.dayProfitRate ?? 0)
+  const value = Number.isFinite(changePercent) ? changePercent : fallbackRate
+  if (!Number.isFinite(value) || value === 0) {
+    return 'neutral'
+  }
+  return value > 0 ? 'positive' : 'negative'
+})
+const displayUpdatedAt = computed(() => {
+  if (currentPosition.value?.subscriptionStatus === 'pending') {
+    return '待确认'
+  }
+  return detail.value?.updatedAt ? `同步于 ${detail.value.updatedAt}` : '同步于 --'
+})
 const transactionCountText = computed(() => `共 ${transactions.value.length} 条`)
 const currentPosition = computed<InvestmentPosition | null>(() => detail.value?.position ?? null)
+const isPendingSubscription = computed(() => currentPosition.value?.subscriptionStatus === 'pending')
+const isFundPosition = computed(() => (detail.value?.productType || currentPosition.value?.productType) === 'fund')
+const showAutoInvestSection = computed(() => isFundPosition.value && !isPendingSubscription.value)
 const currentUnitName = computed(() => detail.value?.unitName || detail.value?.position.unitName || '份')
+const chartCostBaseline = computed(() => {
+  const costPrice = Number(currentPosition.value?.avgCostPrice ?? 0)
+  return Number.isFinite(costPrice) && costPrice > 0 ? costPrice : null
+})
 const tradeModalTitle = computed(() => currentTradeAction.value === 'buy' ? '加仓' : '减仓')
-const tradeAmountLabel = computed(() => currentTradeAction.value === 'buy' ? '加仓金额' : '减仓金额')
+const tradeAmountLabel = computed(() => {
+  if (isFundPosition.value) {
+    return currentTradeAction.value === 'buy' ? '申购金额' : '回款金额'
+  }
+  return currentTradeAction.value === 'buy' ? '加仓金额' : '减仓金额'
+})
 const tradeAccountLabel = computed(() => currentTradeAction.value === 'buy' ? '资金账户' : '回款账户')
-const showTradeInputMode = computed(() => currentTradeAction.value === 'buy')
+const editFundCostAmountPreview = computed(() => {
+  const quantity = Number(editHoldingQuantity.value)
+  const costPrice = Number(editCostPrice.value)
+  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(costPrice) || costPrice < 0) {
+    return '--'
+  }
+  return formatCurrency(quantity * costPrice)
+})
+const showTradeInputMode = computed(() => currentTradeAction.value === 'buy' && !isFundPosition.value)
 const tradePrimaryLabel = computed(() => {
+  if (isFundPosition.value) {
+    return currentTradeAction.value === 'buy' ? '申购金额' : '赎回份额'
+  }
   if (currentTradeAction.value === 'buy') {
     return tradeInputMode.value === 'amount' ? '加仓金额' : '加仓份额'
   }
   return '减仓金额'
 })
 const tradePrimaryPlaceholder = computed(() => {
+  if (isFundPosition.value) {
+    return currentTradeAction.value === 'buy' ? '请输入申购金额' : '请输入赎回份额'
+  }
   if (currentTradeAction.value === 'buy') {
     return tradeInputMode.value === 'amount' ? '请输入金额' : '请输入份额'
   }
   return '请输入金额'
 })
 const tradeModeOptions = ['按金额', '按份额和净值']
+const autoInvestFrequencyOptions = [
+  { label: '每日', value: 'daily' },
+  { label: '每周', value: 'weekly' },
+  { label: '每月', value: 'monthly' },
+]
+const tradeTimeSlotOptions = [
+  { label: '15点前', value: 'before_1500' },
+  { label: '15点后', value: 'after_1500' },
+]
 const tradeModeValue = computed({
   get: () => tradeInputMode.value === 'quantity' ? '按份额和净值' : '按金额',
   set: (value: string) => {
     tradeInputMode.value = value === '按份额和净值' ? 'quantity' : 'amount'
   },
 })
+const showTradePriceField = computed(() => !isFundPosition.value)
+const showTradeQuantityPreview = computed(() => !isFundPosition.value)
+const showTradeAmountPreview = computed(() => !isFundPosition.value && currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity')
 const tradeQuantityPreview = computed(() => {
   const amount = getTradeAmountValue()
   const quantity = getTradeQuantityValue()
@@ -123,6 +198,14 @@ const tradeAmountPreview = computed(() => {
 })
 
 function getTradeAmountValue() {
+  if (isFundPosition.value) {
+    if (currentTradeAction.value === 'buy') {
+      return Number(tradeAmount.value)
+    }
+    const quantity = Number(tradeQuantity.value)
+    const price = Number(detail.value?.latestPrice ?? currentPosition.value?.currentPrice ?? 0)
+    return Number.isFinite(quantity) && quantity > 0 && Number.isFinite(price) && price > 0 ? quantity * price : NaN
+  }
   if (currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity') {
     const quantity = Number(tradeQuantity.value)
     const price = Number(tradePrice.value)
@@ -132,6 +215,12 @@ function getTradeAmountValue() {
 }
 
 function getTradeQuantityValue() {
+  if (isFundPosition.value) {
+    if (currentTradeAction.value === 'sell') {
+      return Number(tradeQuantity.value)
+    }
+    return NaN
+  }
   if (currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity') {
     return Number(tradeQuantity.value)
   }
@@ -153,7 +242,7 @@ onBeforeUnmount(() => {
   disposeChart()
 })
 
-watch(detail, async () => {
+watch([detail, transactions], async () => {
   await nextTick()
   requestAnimationFrame(() => {
     renderChart()
@@ -170,10 +259,13 @@ async function loadDetail() {
   pageError.value = ''
   try {
     const currentUser = getStoredCurrentUser()
-    const [detailData, transactionList, accountList] = await Promise.all([
+    const [detailData, transactionList, planList, accountList] = await Promise.all([
       getInvestmentPositionDetail(positionId.value),
       currentUser
         ? getInvestmentTransactions({ userId: currentUser.id, positionId: positionId.value })
+        : Promise.resolve([]),
+      currentUser
+        ? getInvestmentAutoInvestPlans({ userId: currentUser.id, positionId: positionId.value })
         : Promise.resolve([]),
       currentUser
         ? getAccounts({ userId: currentUser.id, status: 'active' })
@@ -181,6 +273,7 @@ async function loadDetail() {
     ])
     detail.value = detailData
     transactions.value = transactionList
+    autoInvestPlans.value = planList
     fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
     loadExternalMarketData(detailData)
   } catch (error) {
@@ -231,26 +324,19 @@ async function loadExternalMarketData(baseDetail: InvestmentAssetDetail) {
 }
 
 async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: string) {
-  const [baseResult, estimateResult, trendResult] = await Promise.allSettled([
+  const [baseResult, trendResult] = await Promise.allSettled([
     jsonpRequest<Record<string, any>>(
       `https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
       ['callback'],
-    ),
-    jsonpRequest<Record<string, any>>(
-      `https://fund.eastmoney.com/data/funddataforgznew.aspx?fc=${encodeURIComponent(fundCode)}&t=basewap`,
-      ['cb'],
     ),
     fetchFundTrend(fundCode),
   ])
 
   const baseInfo = baseResult.status === 'fulfilled' ? baseResult.value?.Datas ?? {} : {}
-  const estimateInfo = estimateResult.status === 'fulfilled' ? estimateResult.value ?? {} : {}
-  const estimatePrice = Number(estimateInfo.gsz)
   const officialPrice = Number(baseInfo.DWJZ)
-  const useEstimate = Number.isFinite(estimatePrice) && estimatePrice > 0
-  const latestPrice = useEstimate ? estimatePrice : officialPrice
-  const changePercent = useEstimate ? Number(estimateInfo.gszzl) : Number(baseInfo.RZDF)
-  const updatedAt = useEstimate ? estimateInfo.gztime : baseInfo.FSRQ
+  const latestPrice = officialPrice
+  const changePercent = Number(baseInfo.RZDF)
+  const updatedAt = baseInfo.FSRQ
   const chartPoints = trendResult.status === 'fulfilled' ? buildFundTrendPoints(trendResult.value) : []
 
   mergeDetail({
@@ -265,11 +351,10 @@ async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: s
       stat('资产类型', '基金'),
       stat('基金代码', fundCode),
       stat('基金类型', baseInfo.FTYPE || '-'),
-      stat(useEstimate ? '当前净值（估算）' : '当前净值（单位净值）', Number.isFinite(latestPrice) ? formatNumber(latestPrice, 4) : '-', toneByNumber(changePercent)),
+      stat('当前净值（单位净值）', Number.isFinite(latestPrice) ? formatNumber(latestPrice, 4) : '-', toneByNumber(changePercent)),
       stat('累计净值', baseInfo.LJJZ || '-'),
       stat('当日涨跌幅', Number.isFinite(changePercent) ? `${formatNumber(changePercent)}%` : '-', toneByNumber(changePercent)),
-      stat(useEstimate ? '估值时间' : '净值日期', updatedAt || '-'),
-      stat('最新官方净值', estimateInfo.dwjz || baseInfo.DWJZ || '-'),
+      stat('净值日期', updatedAt || '-'),
       stat('基金公司', baseInfo.JJGS || '-'),
       stat('申购状态', baseInfo.SGZT || '-'),
       stat('赎回状态', baseInfo.SHZT || '-'),
@@ -315,10 +400,67 @@ async function loadStockMarketData(baseDetail: InvestmentAssetDetail, stockCode:
 }
 
 function renderLineChart(points: InvestmentChartPoint[]) {
+  const costPrice = chartCostBaseline.value
+  const tradeMarkerSeries = buildTradeMarkerSeries(points, 'line')
+  const series: Array<Record<string, any>> = [
+    {
+      name: '单位净值',
+      type: 'line',
+      smooth: true,
+      showSymbol: false,
+      data: points.map((point) => point.value ?? null),
+      lineStyle: { width: 2 },
+      areaStyle: { opacity: 0.08 },
+    },
+  ]
+
+  if (costPrice !== null) {
+    series.push({
+      name: '持仓成本价',
+      type: 'line',
+      smooth: false,
+      showSymbol: false,
+      data: points.map(() => costPrice),
+      lineStyle: {
+        width: 1.5,
+        type: 'dashed',
+      },
+    })
+  }
+
+  series.push(...tradeMarkerSeries)
+
   chart?.setOption({
-    color: ['#1D4ED8'],
-    tooltip: { trigger: 'axis', confine: true },
-    grid: { top: 18, right: 14, bottom: 26, left: 42 },
+    color: ['#1D4ED8', '#F59E0B', '#2563EB', '#DC2626'],
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+      formatter: (params: any) => {
+        const items = Array.isArray(params) ? params : [params]
+        if (items.length === 0) {
+          return '--'
+        }
+        const title = items[0]?.axisValueLabel || items[0]?.axisValue || '--'
+        const lines = [title]
+        for (const item of items) {
+          lines.push(`${item.marker}${item.seriesName} ${formatPriceWithChange(getTooltipPointValue(item), 4)}`)
+        }
+        return lines.join('<br/>')
+      },
+    },
+    legend: {
+      top: 0,
+      left: 0,
+      icon: 'roundRect',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: {
+        color: '#64748B',
+        fontSize: 11,
+      },
+      data: series.map((entry) => entry.name),
+    },
+    grid: { top: 42, right: 14, bottom: 26, left: 42 },
     xAxis: {
       type: 'category',
       data: points.map((point) => point.label),
@@ -328,19 +470,15 @@ function renderLineChart(points: InvestmentChartPoint[]) {
     yAxis: {
       type: 'value',
       scale: true,
-      axisLabel: { color: '#64748B', fontSize: 10 },
+      axisLabel: {
+        color: '#64748B',
+        fontSize: 10,
+        formatter: (value: number) => formatAxisChangeLabel(value),
+      },
       splitLine: { lineStyle: { color: '#EDF2FB' } },
     },
     dataZoom: [{ type: 'inside', start: 60, end: 100 }],
-    series: [{
-      name: '单位净值',
-      type: 'line',
-      smooth: true,
-      showSymbol: false,
-      data: points.map((point) => point.value ?? null),
-      lineStyle: { width: 2 },
-      areaStyle: { opacity: 0.08 },
-    }],
+    series,
   })
 }
 
@@ -348,12 +486,50 @@ function renderStockChart(points: InvestmentChartPoint[]) {
   const dates = points.map((point) => point.label)
   const candleData = points.map((point) => [point.open, point.close, point.low, point.high])
   const volumeData = points.map((point) => point.volume ?? 0)
+  const tradeMarkerSeries = buildTradeMarkerSeries(points, 'candlestick')
 
   chart?.setOption({
     animation: false,
-    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' }, confine: true },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      confine: true,
+      formatter: (params: any) => {
+        const items = Array.isArray(params) ? params : [params]
+        if (items.length === 0) {
+          return '--'
+        }
+        const title = items[0]?.axisValueLabel || items[0]?.axisValue || '--'
+        const lines = [title]
+        for (const item of items) {
+          if (item.seriesType === 'candlestick' && Array.isArray(item.data)) {
+            const [open, close, low, high] = item.data
+            lines.push(`${item.marker}${item.seriesName} 开 ${formatTooltipPointValue(open, 2)} 收 ${formatTooltipPointValue(close, 2)} 高 ${formatTooltipPointValue(high, 2)} 低 ${formatTooltipPointValue(low, 2)}`)
+            continue
+          }
+          if (item.seriesType === 'bar') {
+            lines.push(`${item.marker}${item.seriesName} ${formatTooltipPointValue(item.value, 0)}`)
+            continue
+          }
+          lines.push(`${item.marker}${item.seriesName} ${formatPriceWithChange(getTooltipPointValue(item), 2)}`)
+        }
+        return lines.join('<br/>')
+      },
+    },
+    legend: {
+      top: 0,
+      left: 0,
+      icon: 'roundRect',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: {
+        color: '#64748B',
+        fontSize: 11,
+      },
+      data: ['K线', '买入点', '卖出点'],
+    },
     grid: [
-      { left: 42, right: 14, top: 18, height: '58%' },
+      { left: 42, right: 14, top: 42, height: '54%' },
       { left: 42, right: 14, top: '76%', height: '14%' },
     ],
     xAxis: [
@@ -361,7 +537,15 @@ function renderStockChart(points: InvestmentChartPoint[]) {
       { type: 'category', gridIndex: 1, data: dates, boundaryGap: false, axisLabel: { show: false }, axisTick: { show: false } },
     ],
     yAxis: [
-      { scale: true, axisLabel: { color: '#64748B', fontSize: 10 }, splitLine: { lineStyle: { color: '#EDF2FB' } } },
+      {
+        scale: true,
+        axisLabel: {
+          color: '#64748B',
+          fontSize: 10,
+          formatter: (value: number) => formatAxisChangeLabel(value),
+        },
+        splitLine: { lineStyle: { color: '#EDF2FB' } },
+      },
       { scale: true, gridIndex: 1, splitNumber: 2, axisLabel: { color: '#64748B', fontSize: 10 }, splitLine: { show: false } },
     ],
     dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 }],
@@ -385,8 +569,99 @@ function renderStockChart(points: InvestmentChartPoint[]) {
         data: volumeData,
         itemStyle: { color: '#93C5FD' },
       },
+      ...tradeMarkerSeries,
     ],
   })
+}
+
+function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line' | 'candlestick') {
+  const pointMap = new Map(points.map((point) => [normalizeDateLabel(point.label), point]))
+  const buyData: Array<Record<string, any>> = []
+  const sellData: Array<Record<string, any>> = []
+
+  for (const entry of transactions.value) {
+    if (entry.tradeType !== 'buy' && entry.tradeType !== 'sell') {
+      continue
+    }
+
+    const point = pointMap.get(normalizeDateLabel(entry.tradeAt))
+    if (!point) {
+      continue
+    }
+
+    const rawPrice = Number(entry.price)
+    const fallbackPrice = chartType === 'candlestick'
+      ? Number(point.close ?? point.open ?? point.high ?? point.low ?? point.value)
+      : Number(point.value ?? point.close ?? point.open ?? point.high ?? point.low)
+    const targetPrice = Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : fallbackPrice
+    if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
+      continue
+    }
+
+    const marker = {
+      value: [point.label, targetPrice],
+      tradeAt: entry.tradeAt,
+      amount: entry.amount,
+      price: targetPrice,
+      settlementStatus: entry.settlementStatus,
+    }
+
+    if (entry.tradeType === 'buy') {
+      buyData.push(marker)
+    } else {
+      sellData.push(marker)
+    }
+  }
+
+  const result: Array<Record<string, any>> = []
+  if (buyData.length > 0) {
+    result.push({
+      name: '买入点',
+      type: 'scatter',
+      data: buyData,
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+      symbol: 'circle',
+      symbolSize: 14,
+      itemStyle: { color: '#2563EB' },
+      label: {
+        show: true,
+        formatter: '买',
+        position: 'top',
+        distance: 4,
+        color: '#2563EB',
+        fontSize: 10,
+        fontWeight: 700,
+      },
+      emphasis: { scale: 1.15 },
+      z: 5,
+    })
+  }
+  if (sellData.length > 0) {
+    result.push({
+      name: '卖出点',
+      type: 'scatter',
+      data: sellData,
+      xAxisIndex: 0,
+      yAxisIndex: 0,
+      symbol: 'diamond',
+      symbolSize: 16,
+      itemStyle: { color: '#DC2626' },
+      label: {
+        show: true,
+        formatter: '卖',
+        position: 'bottom',
+        distance: 4,
+        color: '#DC2626',
+        fontSize: 10,
+        fontWeight: 700,
+      },
+      emphasis: { scale: 1.15 },
+      z: 5,
+    })
+  }
+
+  return result
 }
 
 function disposeChart() {
@@ -402,22 +677,23 @@ function resizeChart() {
 
 function openTradeModal(action: 'buy' | 'sell') {
   const position = currentPosition.value
-  if (!position) {
+  if (!position || isPendingSubscription.value) {
     return
   }
   currentTradeAction.value = action
   tradeInputMode.value = 'amount'
+  tradeTimeSlot.value = 'before_1500'
   tradeFundingAccountId.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
   tradeAmount.value = ''
   tradeQuantity.value = ''
-  tradePrice.value = String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
+  tradePrice.value = isFundPosition.value ? '' : String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
   tradeRemark.value = ''
   tradeError.value = ''
   showTradeModal.value = true
 }
 
-function closeTradeModal() {
-  if (isSubmitting.value) {
+function closeTradeModal(force = false) {
+  if (isSubmitting.value && !force) {
     return
   }
   showTradeModal.value = false
@@ -429,19 +705,173 @@ function openEditModal() {
   if (!position) {
     return
   }
-  editPrice.value = String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
+  editPrice.value = isPendingSubscription.value ? '' : String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
+  editHoldingQuantity.value = String(Number(position.holdingQuantity ?? 0) || '')
+  editCostPrice.value = String(Number(position.avgCostPrice ?? 0) || '')
   editIncludeInNetWorth.value = Boolean(position.includeInNetWorth)
   editRemark.value = position.remark || ''
   editError.value = ''
   showEditModal.value = true
 }
 
-function closeEditModal() {
-  if (isSubmitting.value) {
+function closeEditModal(force = false) {
+  if (isSubmitting.value && !force) {
     return
   }
   showEditModal.value = false
   editError.value = ''
+}
+
+function resetAutoInvestForm() {
+  autoInvestFundingAccountId.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
+  autoInvestFrequency.value = 'daily'
+  autoInvestAmount.value = ''
+  autoInvestNextExecuteDate.value = formatDateInput(new Date())
+  autoInvestRemark.value = ''
+  autoInvestError.value = ''
+}
+
+function openAutoInvestModal(plan?: InvestmentAutoInvestPlan) {
+  if (!currentPosition.value || !showAutoInvestSection.value) {
+    return
+  }
+  autoInvestError.value = ''
+  if (!plan) {
+    editingAutoInvestPlanId.value = null
+    resetAutoInvestForm()
+  } else {
+    editingAutoInvestPlanId.value = plan.id
+    autoInvestFundingAccountId.value = String(plan.fundingAccountId)
+    autoInvestFrequency.value = plan.frequency === 'monthly'
+      ? 'monthly'
+      : plan.frequency === 'weekly'
+        ? 'weekly'
+        : 'daily'
+    autoInvestAmount.value = String(Number(plan.amount) || '')
+    autoInvestNextExecuteDate.value = plan.nextExecuteDate
+    autoInvestRemark.value = plan.remark || ''
+  }
+  showAutoInvestModal.value = true
+}
+
+function closeAutoInvestModal(force = false) {
+  if (isSavingAutoInvest.value && !force) {
+    return
+  }
+  showAutoInvestModal.value = false
+  autoInvestError.value = ''
+}
+
+async function saveAutoInvestPlan() {
+  if (isSavingAutoInvest.value || !currentPosition.value) {
+    return
+  }
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    autoInvestError.value = '请先登录后再操作'
+    return
+  }
+  const fundingAccountId = Number(autoInvestFundingAccountId.value)
+  const amount = Number(autoInvestAmount.value)
+  if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
+    autoInvestError.value = '请选择资金账户'
+    return
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    autoInvestError.value = '请输入有效的定投金额'
+    return
+  }
+  if (!autoInvestNextExecuteDate.value) {
+    autoInvestError.value = '请选择下次执行日期'
+    return
+  }
+
+  isSavingAutoInvest.value = true
+  autoInvestError.value = ''
+
+  try {
+    const existingPlan = editingAutoInvestPlanId.value
+      ? autoInvestPlans.value.find((item) => item.id === editingAutoInvestPlanId.value) ?? null
+      : null
+    const payload = {
+      userId: currentUser.id,
+      accountId: currentPosition.value.accountId,
+      positionId: currentPosition.value.id,
+      fundingAccountId,
+      frequency: autoInvestFrequency.value,
+      amount: Number(amount.toFixed(2)),
+      currencyCode: currentPosition.value.currencyCode || 'CNY',
+      nextExecuteDate: autoInvestNextExecuteDate.value,
+      status: existingPlan?.status === 'paused' ? 'paused' as const : existingPlan?.status === 'cancelled' ? 'cancelled' as const : 'active' as const,
+      remark: autoInvestRemark.value.trim() || null,
+    }
+    if (editingAutoInvestPlanId.value) {
+      await updateInvestmentAutoInvestPlan(editingAutoInvestPlanId.value, payload)
+    } else {
+      await createInvestmentAutoInvestPlan(payload)
+    }
+    closeAutoInvestModal(true)
+    showFeedback(editingAutoInvestPlanId.value ? '定投计划已更新' : '定投计划已创建', 'success')
+    await loadDetail()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '定投计划保存失败'
+    autoInvestError.value = message
+    showFeedback(message, 'error')
+  } finally {
+    isSavingAutoInvest.value = false
+  }
+}
+
+async function updateAutoInvestPlanStatus(plan: InvestmentAutoInvestPlan, status: 'active' | 'paused' | 'cancelled') {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser || isSavingAutoInvest.value) {
+    return
+  }
+  isSavingAutoInvest.value = true
+  try {
+    await updateInvestmentAutoInvestPlan(plan.id, {
+      userId: currentUser.id,
+      accountId: plan.accountId,
+      positionId: plan.positionId,
+      fundingAccountId: plan.fundingAccountId,
+      frequency: plan.frequency === 'monthly'
+        ? 'monthly'
+        : plan.frequency === 'weekly'
+          ? 'weekly'
+          : 'daily',
+      amount: plan.amount,
+      currencyCode: plan.currencyCode || 'CNY',
+      nextExecuteDate: plan.nextExecuteDate,
+      status,
+      remark: plan.remark || null,
+    })
+    showFeedback(status === 'active' ? '定投计划已恢复' : status === 'paused' ? '定投计划已暂停' : '定投计划已停用', 'success')
+    await loadDetail()
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : '定投计划更新失败', 'error')
+  } finally {
+    isSavingAutoInvest.value = false
+  }
+}
+
+async function removeAutoInvestPlan(plan: InvestmentAutoInvestPlan) {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser || isSavingAutoInvest.value) {
+    return
+  }
+  if (!window.confirm('确认删除该定投计划吗？')) {
+    return
+  }
+  isSavingAutoInvest.value = true
+  try {
+    await deleteInvestmentAutoInvestPlan(plan.id, currentUser.id)
+    showFeedback('定投计划已删除', 'success')
+    await loadDetail()
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : '删除定投计划失败', 'error')
+  } finally {
+    isSavingAutoInvest.value = false
+  }
 }
 
 async function submitTrade() {
@@ -462,6 +892,56 @@ async function submitTrade() {
 
   if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
     tradeError.value = '请选择资金账户'
+    return
+  }
+  if (isFundPosition.value) {
+    if (currentTradeAction.value === 'buy') {
+      if (!Number.isFinite(amount) || amount <= 0) {
+        tradeError.value = '请输入有效的申购金额'
+        return
+      }
+    } else {
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        tradeError.value = '请输入有效的赎回份额'
+        return
+      }
+      if (quantity > Number(currentPosition.value.availableQuantity)) {
+        tradeError.value = '赎回份额不能超过可用持仓'
+        return
+      }
+    }
+
+    isSubmitting.value = true
+    tradeError.value = ''
+
+    try {
+      await createInvestmentTransaction({
+        userId: currentUser.id,
+        accountId: currentPosition.value.accountId,
+        positionId: currentPosition.value.id,
+        productId: currentPosition.value.productId,
+        tradeType: currentTradeAction.value,
+        quantity: currentTradeAction.value === 'sell' ? Number(quantity.toFixed(6)) : 0,
+        price: null,
+        amount: Number((currentTradeAction.value === 'buy' ? amount : getTradeAmountValue()).toFixed(2)),
+        feeAmount: 0,
+        taxAmount: 0,
+        currencyCode: currentPosition.value.currencyCode || 'CNY',
+        tradeAt: toApiDateTime(new Date()),
+        fundingAccountId,
+        subscriptionTimeSlot: tradeTimeSlot.value,
+        remark: tradeRemark.value.trim() || null,
+      })
+      closeTradeModal(true)
+      showFeedback(currentTradeAction.value === 'buy' ? '基金加仓申请已提交，待确认后更新份额' : '基金减仓申请已提交，待确认后更新到账金额', 'success')
+      await loadDetail()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${tradeModalTitle.value}失败`
+      tradeError.value = message
+      showFeedback(message, 'error')
+    } finally {
+      isSubmitting.value = false
+    }
     return
   }
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -503,7 +983,7 @@ async function submitTrade() {
       fundingAccountId,
       remark: tradeRemark.value.trim() || null,
     })
-    closeTradeModal()
+    closeTradeModal(true)
     showFeedback(currentTradeAction.value === 'buy' ? '加仓成功' : '减仓成功', 'success')
     await loadDetail()
   } catch (error) {
@@ -525,29 +1005,54 @@ async function submitEdit() {
     return
   }
   const price = Number(editPrice.value)
-  if (!Number.isFinite(price) || price <= 0) {
+  const holdingQuantity = Number(editHoldingQuantity.value)
+  const costPrice = Number(editCostPrice.value)
+  const frozenQuantity = Number(currentPosition.value.frozenQuantity ?? 0)
+  const isEditingFundPosition = isFundPosition.value && !isPendingSubscription.value
+  if (!isPendingSubscription.value && (!Number.isFinite(price) || price <= 0)) {
     editError.value = '请输入有效的当前价格'
     return
+  }
+  if (isEditingFundPosition) {
+    if (!Number.isFinite(holdingQuantity) || holdingQuantity <= 0) {
+      editError.value = '请输入有效的当前份额'
+      return
+    }
+    if (!Number.isFinite(costPrice) || costPrice < 0) {
+      editError.value = '请输入有效的持仓成本价'
+      return
+    }
+    if (holdingQuantity < frozenQuantity) {
+      editError.value = '当前份额不能小于冻结份额'
+      return
+    }
   }
 
   isSubmitting.value = true
   editError.value = ''
 
   try {
+    const nextHoldingQuantity = isEditingFundPosition ? holdingQuantity : Number(currentPosition.value.holdingQuantity)
+    const nextCostAmount = isEditingFundPosition
+      ? Number((holdingQuantity * costPrice).toFixed(2))
+      : Number(currentPosition.value.costAmount)
+    const nextAvailableQuantity = isEditingFundPosition
+      ? Number((holdingQuantity - frozenQuantity).toFixed(6))
+      : Number(currentPosition.value.availableQuantity)
     await updateInvestmentPosition(currentPosition.value.id, {
       userId: currentUser.id,
       accountId: currentPosition.value.accountId,
       productId: currentPosition.value.productId,
-      holdingQuantity: Number(currentPosition.value.holdingQuantity),
-      availableQuantity: Number(currentPosition.value.availableQuantity),
-      frozenQuantity: Number(currentPosition.value.frozenQuantity),
-      costAmount: Number(currentPosition.value.costAmount),
-      currentPrice: price,
+      holdingQuantity: nextHoldingQuantity,
+      availableQuantity: nextAvailableQuantity,
+      frozenQuantity,
+      costAmount: nextCostAmount,
+      currentPrice: isPendingSubscription.value ? undefined : price,
       includeInNetWorth: editIncludeInNetWorth.value,
       status: currentPosition.value.status,
       remark: editRemark.value.trim() || null,
     })
-    closeEditModal()
+    closeEditModal(true)
     showFeedback('修改成功', 'success')
     await loadDetail()
   } catch (error) {
@@ -566,10 +1071,15 @@ function showFeedback(message: string, type: 'success' | 'error') {
 }
 
 function statClass(entry: InvestmentDetailStat) {
-  if (entry.tone === 'positive') return 'tone-positive'
-  if (entry.tone === 'negative') return 'tone-negative'
   if (entry.tone === 'primary') return 'tone-primary'
   return ''
+}
+
+function statTone(entry: InvestmentDetailStat) {
+  if (entry.tone === 'positive') return 'positive'
+  if (entry.tone === 'negative') return 'negative'
+  if (entry.tone === 'neutral') return 'neutral'
+  return 'inherit'
 }
 
 function mergeDetail(partial: Partial<InvestmentAssetDetail>) {
@@ -733,14 +1243,22 @@ function toTencentSymbol(code: string, market?: string | null) {
   return code.startsWith('6') ? `sh${code}` : `sz${code}`
 }
 
-function getTradeTypeLabel(type: string) {
+function getTradeTypeLabel(entry: InvestmentTransaction) {
+  if (entry.settlementStatus === 'pending') {
+    if (entry.tradeType === 'buy') {
+      return '加仓待确认'
+    }
+    if (entry.tradeType === 'sell') {
+      return '减仓待确认'
+    }
+  }
   const map: Record<string, string> = {
     buy: '买入',
     sell: '卖出',
     dividend: '分红',
     bonus: '送股',
   }
-  return map[type] ?? type
+  return map[entry.tradeType] ?? entry.tradeType
 }
 
 function getTradeQuantityClass(type: string) {
@@ -751,6 +1269,9 @@ function getTradeQuantityClass(type: string) {
 }
 
 function getTradeQuantityText(entry: InvestmentTransaction, unitName?: string | null) {
+  if (entry.settlementStatus === 'pending' && entry.tradeType === 'buy') {
+    return '待确认份额'
+  }
   const sign = entry.tradeType === 'sell' ? '-' : '+'
   return `${sign} ${formatNumber(Number(entry.quantity), 2)} ${unitName || '份'}`
 }
@@ -772,6 +1293,85 @@ function formatTradeTime(value: string) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${month}-${day} ${time}`
+}
+
+function formatDateInput(value: Date) {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatAutoInvestFrequency(value: string) {
+  if (value === 'daily') return '每日定投'
+  return value === 'monthly' ? '每月定投' : '每周定投'
+}
+
+function formatAutoInvestStatus(value: string) {
+  if (value === 'paused') return '已暂停'
+  if (value === 'cancelled') return '已停用'
+  return '执行中'
+}
+
+function formatDateTimeLabel(value?: string | null) {
+  if (!value) return '--'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return `${formatDate(date.getTime())} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function normalizeDateLabel(value: string) {
+  if (!value) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 10)
+  }
+  return formatDate(date.getTime())
+}
+
+function getTooltipPointValue(item: any) {
+  if (Array.isArray(item?.value)) {
+    return item.value[item.value.length - 1]
+  }
+  return item?.value
+}
+
+function getChangePercentByBaseline(value: unknown) {
+  const baseline = chartCostBaseline.value
+  const numeric = Number(value)
+  if (!baseline || !Number.isFinite(numeric)) {
+    return null
+  }
+  return ((numeric - baseline) / baseline) * 100
+}
+
+function formatAxisChangeLabel(value: unknown) {
+  const percent = getChangePercentByBaseline(value)
+  if (percent === null) {
+    return '--'
+  }
+  return `${percent > 0 ? '+' : ''}${formatNumber(percent)}%`
+}
+
+function formatPriceWithChange(value: unknown, digits: number) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return '--'
+  }
+  const percent = getChangePercentByBaseline(numeric)
+  const priceText = formatNumber(numeric, digits)
+  if (percent === null) {
+    return priceText
+  }
+  return `${priceText}（${percent > 0 ? '+' : ''}${formatNumber(percent)}%）`
+}
+
+function formatTooltipPointValue(value: unknown, digits: number) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? formatNumber(numeric, digits) : '--'
 }
 
 function formatDate(timestamp: number) {
@@ -812,8 +1412,14 @@ function formatCurrency(value: number) {
   return `${sign}¥${formatNumber(Math.abs(value))}`
 }
 
-function formatAmountLabel(value: number) {
-  return `金额 ${formatCurrency(value)}`
+function formatAmountLabel(entry: InvestmentTransaction) {
+  if (entry.settlementStatus === 'pending' && entry.tradeType === 'sell') {
+    return `回款金额 ${formatCurrency(Number(entry.amount))}`
+  }
+  if (entry.settlementStatus === 'pending' && entry.tradeType === 'buy') {
+    return `申购金额 ${formatCurrency(Number(entry.amount))}`
+  }
+  return `金额 ${formatCurrency(Number(entry.amount))}`
 }
 </script>
 
@@ -839,7 +1445,7 @@ function formatAmountLabel(value: number) {
           </div>
           <div class="investment-detail-summary-side">
             <span>当日涨跌</span>
-            <AmountText tag="strong" :value="todayValue" />
+            <AmountText tag="strong" :tone="todayTone" :value="todayValue" />
           </div>
         </div>
         <AmountText tag="p" class="investment-detail-summary-amount" tone="inherit" :value="summaryAmount" />
@@ -847,8 +1453,16 @@ function formatAmountLabel(value: number) {
       </section>
 
       <section class="investment-detail-actions" aria-label="持仓操作">
-        <button class="investment-detail-action-button buy" type="button" @click="openTradeModal('buy')">加仓</button>
-        <button class="investment-detail-action-button sell" type="button" @click="openTradeModal('sell')">减仓</button>
+        <button class="investment-detail-action-button buy" type="button" :disabled="isPendingSubscription" @click="openTradeModal('buy')">加仓</button>
+        <button class="investment-detail-action-button sell" type="button" :disabled="isPendingSubscription" @click="openTradeModal('sell')">减仓</button>
+        <button
+          class="investment-detail-action-button auto-invest"
+          type="button"
+          :disabled="!showAutoInvestSection"
+          @click="openAutoInvestModal()"
+        >
+          定投
+        </button>
         <button class="investment-detail-action-button edit" type="button" @click="openEditModal">修改</button>
       </section>
 
@@ -866,7 +1480,7 @@ function formatAmountLabel(value: number) {
         <div class="investment-detail-grid">
           <div v-for="entry in detail.marketStats" :key="entry.label" class="investment-detail-grid-item">
             <span>{{ entry.label }}</span>
-            <AmountText tag="strong" :class="statClass(entry)" tone="inherit" :value="entry.value" />
+            <AmountText tag="strong" :class="statClass(entry)" :tone="statTone(entry)" :value="entry.value" />
           </div>
         </div>
       </section>
@@ -876,14 +1490,63 @@ function formatAmountLabel(value: number) {
         <div class="investment-detail-grid">
           <div v-for="entry in detail.holdingStats" :key="entry.label" class="investment-detail-grid-item">
             <span>{{ entry.label }}</span>
-            <AmountText tag="strong" :class="statClass(entry)" tone="inherit" :value="entry.value" />
+            <AmountText tag="strong" :class="statClass(entry)" :tone="statTone(entry)" :value="entry.value" />
           </div>
         </div>
       </section>
 
-      <section class="investment-detail-card" aria-label="行情说明">
-        <h2>行情说明</h2>
-        <p class="investment-detail-description">{{ detail.description || '行情数据来自公开接口，仅用于个人记账参考。' }}</p>
+      <section v-if="showAutoInvestSection" class="investment-detail-card" aria-label="定投计划">
+        <header class="investment-detail-card-head">
+          <h2>定投计划</h2>
+        </header>
+
+        <div v-if="autoInvestPlans.length > 0" class="investment-auto-invest-list">
+          <article
+            v-for="plan in autoInvestPlans"
+            :key="plan.id"
+            class="investment-auto-invest-item"
+          >
+            <div class="investment-auto-invest-top">
+              <div class="investment-auto-invest-main">
+                <strong>{{ formatCurrency(Number(plan.amount)) }}</strong>
+                <span>{{ formatAutoInvestFrequency(plan.frequency) }}</span>
+              </div>
+              <em :class="['investment-auto-invest-status', `is-${plan.status}`]">{{ formatAutoInvestStatus(plan.status) }}</em>
+            </div>
+
+            <div class="investment-auto-invest-grid">
+              <div>
+                <span>下次执行</span>
+                <strong>{{ plan.nextExecuteDate }}</strong>
+              </div>
+              <div>
+                <span>扣款账户</span>
+                <strong>{{ plan.fundingAccountName || '--' }}</strong>
+              </div>
+              <div>
+                <span>最近执行</span>
+                <strong>{{ formatDateTimeLabel(plan.lastExecutedAt) }}</strong>
+              </div>
+              <div>
+                <span>备注</span>
+                <strong>{{ plan.remark?.trim() || '--' }}</strong>
+              </div>
+            </div>
+
+            <div class="investment-auto-invest-actions">
+              <button type="button" :disabled="isSavingAutoInvest" @click="openAutoInvestModal(plan)">修改</button>
+              <button
+                type="button"
+                :disabled="isSavingAutoInvest"
+                @click="updateAutoInvestPlanStatus(plan, plan.status === 'active' ? 'paused' : 'active')"
+              >
+                {{ plan.status === 'active' ? '暂停' : '恢复' }}
+              </button>
+              <button type="button" class="danger" :disabled="isSavingAutoInvest" @click="removeAutoInvestPlan(plan)">删除</button>
+            </div>
+          </article>
+        </div>
+        <p v-else class="investment-detail-empty">暂无定投计划</p>
       </section>
 
       <section class="investment-detail-transactions-wrap" aria-label="交易记录">
@@ -899,11 +1562,11 @@ function formatAmountLabel(value: number) {
             class="investment-detail-transaction-item"
           >
             <div class="investment-detail-transaction-left">
-              <strong>{{ getTradeTypeLabel(entry.tradeType) }}</strong>
+              <strong>{{ getTradeTypeLabel(entry) }}</strong>
               <span>{{ formatTradeTime(entry.tradeAt) }}</span>
             </div>
             <div class="investment-detail-transaction-right">
-              <span>{{ formatAmountLabel(Number(entry.amount)) }}</span>
+              <span>{{ formatAmountLabel(entry) }}</span>
               <AmountText
                 tag="strong"
                 :class="getTradeQuantityClass(entry.tradeType)"
@@ -942,13 +1605,13 @@ function formatAmountLabel(value: number) {
           label="加仓方式切换"
         />
 
-        <div class="investment-detail-modal-row">
+        <div :class="['investment-detail-modal-row', { 'single-column': isFundPosition }]">
           <label class="investment-detail-modal-field">
             <span>{{ tradePrimaryLabel }}</span>
             <input
-              v-if="currentTradeAction !== 'buy' || tradeInputMode === 'amount'"
+              v-if="isFundPosition ? currentTradeAction === 'buy' : currentTradeAction !== 'buy' || tradeInputMode === 'amount'"
               v-model="tradeAmount"
-              class="investment-detail-field-control investment-detail-number-control"
+              class="investment-detail-field-control"
               type="number"
               inputmode="decimal"
               :placeholder="tradePrimaryPlaceholder"
@@ -956,14 +1619,14 @@ function formatAmountLabel(value: number) {
             <input
               v-else
               v-model="tradeQuantity"
-              class="investment-detail-field-control investment-detail-number-control"
+              class="investment-detail-field-control"
               type="number"
               inputmode="decimal"
               :placeholder="tradePrimaryPlaceholder"
             />
           </label>
 
-          <label class="investment-detail-modal-field">
+          <label v-if="showTradePriceField" class="investment-detail-modal-field">
             <span>成交价格</span>
             <input
               v-model="tradePrice"
@@ -985,14 +1648,23 @@ function formatAmountLabel(value: number) {
           </select>
         </label>
 
-        <label class="investment-detail-modal-field">
-          <span>预计数量</span>
+        <label v-if="showTradeQuantityPreview" class="investment-detail-modal-field">
+          <span>数量</span>
           <input class="investment-detail-field-control" :value="tradeQuantityPreview" type="text" readonly />
         </label>
 
-        <label v-if="currentTradeAction === 'buy' && tradeInputMode === 'quantity'" class="investment-detail-modal-field">
-          <span>预计金额</span>
+        <label v-if="showTradeAmountPreview" class="investment-detail-modal-field">
+          <span>金额</span>
           <input class="investment-detail-field-control" :value="tradeAmountPreview" type="text" readonly />
+        </label>
+
+        <label v-if="isFundPosition" class="investment-detail-modal-field">
+          <span>{{ currentTradeAction === 'buy' ? '申购时点' : '赎回时点' }}</span>
+          <SegmentedControl
+            v-model="tradeTimeSlot"
+            :options="tradeTimeSlotOptions"
+            label="基金交易时点"
+          />
         </label>
 
         <label class="investment-detail-modal-field">
@@ -1022,6 +1694,95 @@ function formatAmountLabel(value: number) {
     </CommonModal>
 
     <CommonModal
+      v-model="showAutoInvestModal"
+      :title="editingAutoInvestPlanId ? '修改定投计划' : '新增定投计划'"
+      size="compact"
+      :close-on-overlay="!isSavingAutoInvest"
+      @close="closeAutoInvestModal"
+    >
+      <div class="investment-detail-modal-form">
+        <label class="investment-detail-modal-field">
+          <span>资产名称</span>
+          <input
+            class="investment-detail-field-control"
+            :value="detail?.name || detail?.position.productName || ''"
+            type="text"
+            readonly
+          />
+        </label>
+
+        <label class="investment-detail-modal-field">
+          <span>扣款账户</span>
+          <select v-model="autoInvestFundingAccountId" class="investment-detail-field-control">
+            <option value="" disabled>请选择资金账户</option>
+            <option v-for="account in fundingAccounts" :key="account.id" :value="String(account.id)">
+              {{ account.name }}（余额 {{ formatCurrency(Number(account.currentBalance)) }}）
+            </option>
+          </select>
+        </label>
+
+        <label class="investment-detail-modal-field">
+          <span>定投周期</span>
+          <SegmentedControl
+            v-model="autoInvestFrequency"
+            :options="autoInvestFrequencyOptions"
+            label="定投周期"
+          />
+        </label>
+
+        <div class="investment-detail-modal-row">
+          <label class="investment-detail-modal-field">
+            <span>定投金额</span>
+            <input
+              v-model="autoInvestAmount"
+              class="investment-detail-field-control"
+              type="number"
+              inputmode="decimal"
+              placeholder="请输入定投金额"
+            />
+          </label>
+
+          <label class="investment-detail-modal-field">
+            <span>下次执行日</span>
+            <input
+              v-model="autoInvestNextExecuteDate"
+              class="investment-detail-field-control"
+              type="date"
+            />
+          </label>
+        </div>
+
+        <label class="investment-detail-modal-field">
+          <span>备注</span>
+          <textarea
+            v-model="autoInvestRemark"
+            class="investment-detail-textarea-control"
+            rows="3"
+            maxlength="200"
+            placeholder="选填"
+          ></textarea>
+        </label>
+
+        <p class="investment-detail-description">
+          到期后系统会自动按计划金额生成一笔基金申购，默认按 15 点前规则提交。
+        </p>
+
+        <p v-if="autoInvestError" class="investment-detail-modal-error">{{ autoInvestError }}</p>
+      </div>
+
+      <template #footer>
+        <div class="investment-detail-modal-actions">
+          <CommonButton variant="secondary" :disabled="isSavingAutoInvest" @click="closeAutoInvestModal">
+            取消
+          </CommonButton>
+          <CommonButton variant="primary" :disabled="isSavingAutoInvest" @click="saveAutoInvestPlan">
+            {{ isSavingAutoInvest ? '保存中...' : '保存计划' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+
+    <CommonModal
       v-model="showEditModal"
       title="修改持仓"
       size="compact"
@@ -1039,7 +1800,7 @@ function formatAmountLabel(value: number) {
           />
         </label>
 
-        <label class="investment-detail-modal-field">
+        <label v-if="!isPendingSubscription" class="investment-detail-modal-field">
           <span>当前价格</span>
           <input
             v-model="editPrice"
@@ -1049,6 +1810,38 @@ function formatAmountLabel(value: number) {
             placeholder="请输入当前价格"
           />
         </label>
+
+        <div v-if="isFundPosition && !isPendingSubscription" class="investment-detail-modal-row">
+          <label class="investment-detail-modal-field">
+            <span>当前份额</span>
+            <input
+              v-model="editHoldingQuantity"
+              class="investment-detail-field-control investment-detail-number-control"
+              type="number"
+              inputmode="decimal"
+              placeholder="请输入当前份额"
+            />
+          </label>
+
+          <label class="investment-detail-modal-field">
+            <span>持仓成本价</span>
+            <input
+              v-model="editCostPrice"
+              class="investment-detail-field-control investment-detail-number-control"
+              type="number"
+              inputmode="decimal"
+              placeholder="请输入持仓成本价"
+            />
+          </label>
+        </div>
+
+        <p v-if="isPendingSubscription" class="investment-detail-description">
+          场外基金申购待确认时不支持手动修改价格，系统会在确认净值后自动生成份额和成本价。
+        </p>
+
+        <p v-if="isFundPosition && !isPendingSubscription" class="investment-detail-description">
+          总持仓成本将按 当前份额 × 持仓成本价 自动计算，当前约为 {{ editFundCostAmountPreview }}，保存后立即生效。
+        </p>
 
         <label class="investment-detail-switch-field">
           <span>计入总资产</span>

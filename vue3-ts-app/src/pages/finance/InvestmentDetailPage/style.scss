@@ -57,6 +57,18 @@
   font-weight: 700;
 }
 
+.investment-detail-summary-side :deep(.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.investment-detail-summary-side :deep(.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.investment-detail-summary-side :deep(.amount-text--neutral) {
+  color: var(--color-text-primary);
+}
+
 .investment-detail-summary-amount {
   margin: 0;
   color: var(--color-finance-title);
@@ -74,7 +86,7 @@
 
 .investment-detail-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -97,6 +109,11 @@
 .investment-detail-action-button.sell {
   color: #dc2626;
   border-color: #fecaca;
+}
+
+.investment-detail-action-button.auto-invest {
+  color: #2563eb;
+  border-color: #bfdbfe;
 }
 
 .investment-detail-action-button.edit {
@@ -213,6 +230,114 @@
   font-weight: 500;
 }
 
+.investment-auto-invest-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.investment-auto-invest-item {
+  display: grid;
+  gap: var(--space-8);
+  padding: 12px;
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-soft);
+}
+
+.investment-auto-invest-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.investment-auto-invest-main {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.investment-auto-invest-main strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-18);
+  font-weight: 700;
+}
+
+.investment-auto-invest-main span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-auto-invest-status {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--font-size-12);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.investment-auto-invest-status.is-active {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.investment-auto-invest-status.is-paused {
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+}
+
+.investment-auto-invest-status.is-cancelled {
+  background: rgba(148, 163, 184, 0.16);
+  color: #64748b;
+}
+
+.investment-auto-invest-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.investment-auto-invest-grid div {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.investment-auto-invest-grid span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-auto-invest-grid strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-13);
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.investment-auto-invest-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.investment-auto-invest-actions button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-10);
+  background: var(--color-white);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(148, 163, 184, 0.12);
+}
+
+.investment-auto-invest-actions button.danger {
+  color: var(--color-danger);
+}
+
 .investment-detail-transactions-wrap {
   display: grid;
   gap: var(--space-6);
@@ -299,6 +424,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.investment-detail-modal-row.single-column {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .investment-detail-modal-field {

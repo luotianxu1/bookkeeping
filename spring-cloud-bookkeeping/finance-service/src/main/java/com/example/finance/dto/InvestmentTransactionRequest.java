@@ -20,7 +20,6 @@ public class InvestmentTransactionRequest {
     private Long productId;
     @NotBlank(message = "交易类型不能为空")
     private String tradeType;
-    @NotNull(message = "交易数量不能为空")
     @DecimalMin(value = "0.000000", message = "交易数量不能小于0")
     private BigDecimal quantity;
     @DecimalMin(value = "0.000000", message = "成交价格不能小于0")
@@ -37,6 +36,7 @@ public class InvestmentTransactionRequest {
     @NotNull(message = "交易时间不能为空")
     private LocalDateTime tradeAt;
     private Long fundingAccountId;
+    private String subscriptionTimeSlot;
     @Size(max = 500, message = "备注不能超过500个字符")
     private String remark;
 }

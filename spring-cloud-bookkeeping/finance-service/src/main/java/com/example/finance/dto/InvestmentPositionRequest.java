@@ -21,7 +21,6 @@ public class InvestmentPositionRequest {
     private Long productId;
     private InvestmentProductRequest product;
 
-    @NotNull(message = "持仓数量不能为空")
     @DecimalMin(value = "0.000000", message = "持仓数量不能小于0")
     private BigDecimal holdingQuantity;
 
@@ -37,6 +36,8 @@ public class InvestmentPositionRequest {
 
     @DecimalMin(value = "0.000000", message = "当前价格不能小于0")
     private BigDecimal currentPrice;
+
+    private String subscriptionTimeSlot;
 
     private Boolean includeInNetWorth;
     private String status;

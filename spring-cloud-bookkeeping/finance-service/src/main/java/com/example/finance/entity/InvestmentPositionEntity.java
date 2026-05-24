@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -71,6 +72,18 @@ public class InvestmentPositionEntity {
 
     @TableField("last_synced_at")
     private LocalDateTime lastSyncedAt;
+
+    @TableField("subscription_status")
+    private String subscriptionStatus;
+
+    @TableField("subscription_applied_date")
+    private LocalDate subscriptionAppliedDate;
+
+    @TableField("subscription_expected_confirm_date")
+    private LocalDate subscriptionExpectedConfirmDate;
+
+    @TableField("subscription_confirmed_at")
+    private LocalDateTime subscriptionConfirmedAt;
 
     private String remark;
 

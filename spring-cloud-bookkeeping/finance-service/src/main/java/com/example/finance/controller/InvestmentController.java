@@ -2,6 +2,8 @@ package com.example.finance.controller;
 
 import com.example.common.result.Result;
 import com.example.finance.dto.InvestmentAssetDetailResponse;
+import com.example.finance.dto.InvestmentAutoInvestPlanRequest;
+import com.example.finance.dto.InvestmentAutoInvestPlanResponse;
 import com.example.finance.dto.InvestmentDividendResponse;
 import com.example.finance.dto.InvestmentPositionRequest;
 import com.example.finance.dto.InvestmentPositionResponse;
@@ -144,6 +146,46 @@ public class InvestmentController {
     ) {
         if (!investmentService.deleteTransaction(id, userId)) {
             return Result.<Void>fail().code(404).message("投资交易不存在");
+        }
+        return Result.ok();
+    }
+
+    @GetMapping("/auto-invest-plans")
+    @Operation(summary = "查询基金定投计划")
+    public Result<List<InvestmentAutoInvestPlanResponse>> listAutoInvestPlans(
+        @RequestParam(name = "userId") @NotNull Long userId,
+        @RequestParam(name = "accountId", required = false) Long accountId,
+        @RequestParam(name = "positionId", required = false) Long positionId,
+        @RequestParam(name = "status", required = false) String status
+    ) {
+        return Result.ok(investmentService.listAutoInvestPlans(userId, accountId, positionId, status));
+    }
+
+    @PostMapping("/auto-invest-plans")
+    @Operation(summary = "新增基金定投计划")
+    public Result<InvestmentAutoInvestPlanResponse> createAutoInvestPlan(@Valid @RequestBody InvestmentAutoInvestPlanRequest request) {
+        return Result.ok(investmentService.createAutoInvestPlan(request));
+    }
+
+    @PutMapping("/auto-invest-plans/{id}")
+    @Operation(summary = "修改基金定投计划")
+    public Result<InvestmentAutoInvestPlanResponse> updateAutoInvestPlan(
+        @PathVariable("id") @NotNull Long id,
+        @Valid @RequestBody InvestmentAutoInvestPlanRequest request
+    ) {
+        return investmentService.updateAutoInvestPlan(id, request)
+            .map(Result::ok)
+            .orElseGet(() -> Result.<InvestmentAutoInvestPlanResponse>fail().code(404).message("定投计划不存在"));
+    }
+
+    @DeleteMapping("/auto-invest-plans/{id}")
+    @Operation(summary = "删除基金定投计划")
+    public Result<Void> deleteAutoInvestPlan(
+        @PathVariable("id") @NotNull Long id,
+        @RequestParam(name = "userId") @NotNull Long userId
+    ) {
+        if (!investmentService.deleteAutoInvestPlan(id, userId)) {
+            return Result.<Void>fail().code(404).message("定投计划不存在");
         }
         return Result.ok();
     }

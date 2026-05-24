@@ -395,6 +395,10 @@ export interface InvestmentPosition {
   includeInNetWorth: boolean
   status: string
   lastSyncedAt?: string | null
+  subscriptionStatus?: 'confirmed' | 'pending' | string | null
+  subscriptionAppliedDate?: string | null
+  subscriptionExpectedConfirmDate?: string | null
+  subscriptionConfirmedAt?: string | null
   remark?: string | null
   createdAt: string
   updatedAt: string
@@ -452,11 +456,53 @@ export interface InvestmentTransaction {
   feeAmount: number
   taxAmount: number
   currencyCode: string
+  fundingAccountId?: number | null
   tradeAt: string
   status: string
+  settlementStatus?: 'confirmed' | 'pending' | string | null
+  settlementAppliedDate?: string | null
+  settlementExpectedDate?: string | null
+  settlementConfirmedAt?: string | null
   remark?: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type InvestmentAutoInvestFrequency = 'daily' | 'weekly' | 'monthly'
+
+export interface InvestmentAutoInvestPlan {
+  id: number
+  userId: number
+  accountId: number
+  accountName?: string | null
+  positionId: number
+  productId: number
+  productName?: string | null
+  productSymbol?: string | null
+  fundingAccountId: number
+  fundingAccountName?: string | null
+  frequency: InvestmentAutoInvestFrequency | string
+  amount: number
+  currencyCode: string
+  nextExecuteDate: string
+  lastExecutedAt?: string | null
+  status: 'active' | 'paused' | 'cancelled' | string
+  remark?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaveInvestmentAutoInvestPlanParams {
+  userId: number
+  accountId: number
+  positionId: number
+  fundingAccountId: number
+  frequency: InvestmentAutoInvestFrequency
+  amount: number
+  currencyCode?: string
+  nextExecuteDate: string
+  status?: 'active' | 'paused' | 'cancelled'
+  remark?: string | null
 }
 
 export interface SaveInvestmentTransactionParams {
@@ -465,7 +511,7 @@ export interface SaveInvestmentTransactionParams {
   positionId: number
   productId: number
   tradeType: 'buy' | 'sell'
-  quantity: number
+  quantity?: number
   price?: number | null
   amount: number
   feeAmount?: number
@@ -473,6 +519,7 @@ export interface SaveInvestmentTransactionParams {
   currencyCode?: string
   tradeAt: string
   fundingAccountId?: number
+  subscriptionTimeSlot?: 'before_1500' | 'after_1500'
   remark?: string | null
 }
 
@@ -489,11 +536,12 @@ export interface SaveInvestmentPositionParams {
   fundingAccountId?: number
   productId?: number
   product?: SaveInvestmentProductParams
-  holdingQuantity: number
+  holdingQuantity?: number
   availableQuantity?: number
   frozenQuantity?: number
   costAmount: number
   currentPrice?: number
+  subscriptionTimeSlot?: 'before_1500' | 'after_1500'
   includeInNetWorth?: boolean
   status?: string
   remark?: string | null
@@ -713,6 +761,24 @@ export function getInvestmentTransactions(params: { userId: number; accountId?: 
 
 export function createInvestmentTransaction(params: SaveInvestmentTransactionParams) {
   return requestPost<InvestmentTransaction, SaveInvestmentTransactionParams>(financeRequest, '/api/finance/investments/transactions', params)
+}
+
+export function getInvestmentAutoInvestPlans(params: { userId: number; accountId?: number; positionId?: number; status?: string }) {
+  return requestGet<InvestmentAutoInvestPlan[]>(financeRequest, '/api/finance/investments/auto-invest-plans', { params })
+}
+
+export function createInvestmentAutoInvestPlan(params: SaveInvestmentAutoInvestPlanParams) {
+  return requestPost<InvestmentAutoInvestPlan, SaveInvestmentAutoInvestPlanParams>(financeRequest, '/api/finance/investments/auto-invest-plans', params)
+}
+
+export function updateInvestmentAutoInvestPlan(id: number, params: SaveInvestmentAutoInvestPlanParams) {
+  return requestPut<InvestmentAutoInvestPlan, SaveInvestmentAutoInvestPlanParams>(financeRequest, `/api/finance/investments/auto-invest-plans/${id}`, params)
+}
+
+export function deleteInvestmentAutoInvestPlan(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/investments/auto-invest-plans/${id}`, {
+    params: { userId },
+  })
 }
 
 export interface GoldAccountSummary {
