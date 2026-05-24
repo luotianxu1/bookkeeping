@@ -86,7 +86,7 @@
 
 .investment-detail-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -118,6 +118,11 @@
 
 .investment-detail-action-button.edit {
   color: var(--color-text-secondary);
+}
+
+.investment-detail-action-button.delete {
+  color: var(--color-danger);
+  border-color: #fecaca;
 }
 
 .investment-detail-message {

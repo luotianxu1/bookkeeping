@@ -4,6 +4,25 @@
   padding-bottom: var(--space-72);
 }
 
+.debt-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.debt-detail-delete-button {
+  min-height: 34px;
+  flex: 0 0 auto;
+  padding: 0 14px;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-12);
+  background: #fff5f5;
+  color: var(--color-danger);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
 .debt-detail-message {
   min-height: 88px;
   display: grid;

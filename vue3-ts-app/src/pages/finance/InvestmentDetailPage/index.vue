@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 投资详情页：通过后端聚合接口展示持仓、实时行情和走势，并支持加仓、减仓、修改。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { ECharts } from 'echarts'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
@@ -13,6 +13,7 @@ import AmountText from '@/components/common/AmountText/index.vue'
 import {
   createInvestmentAutoInvestPlan,
   createInvestmentTransaction,
+  deleteInvestmentPosition,
   deleteInvestmentAutoInvestPlan,
   getAccounts,
   getInvestmentAutoInvestPlans,
@@ -32,6 +33,7 @@ import {
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const route = useRoute()
+const router = useRouter()
 const isLoading = ref(false)
 const pageError = ref('')
 const detail = ref<InvestmentAssetDetail | null>(null)
@@ -70,6 +72,9 @@ const autoInvestNextExecuteDate = ref('')
 const autoInvestRemark = ref('')
 const autoInvestError = ref('')
 const isSavingAutoInvest = ref(false)
+const showDeleteModal = ref(false)
+const isDeletingPosition = ref(false)
+const deleteError = ref('')
 let chart: ECharts | null = null
 
 const positionId = computed(() => {
@@ -762,6 +767,22 @@ function closeAutoInvestModal(force = false) {
   autoInvestError.value = ''
 }
 
+function openDeleteModal() {
+  if (!currentPosition.value || isDeletingPosition.value) {
+    return
+  }
+  deleteError.value = ''
+  showDeleteModal.value = true
+}
+
+function closeDeleteModal(force = false) {
+  if (isDeletingPosition.value && !force) {
+    return
+  }
+  showDeleteModal.value = false
+  deleteError.value = ''
+}
+
 async function saveAutoInvestPlan() {
   if (isSavingAutoInvest.value || !currentPosition.value) {
     return
@@ -871,6 +892,34 @@ async function removeAutoInvestPlan(plan: InvestmentAutoInvestPlan) {
     showFeedback(error instanceof Error ? error.message : '删除定投计划失败', 'error')
   } finally {
     isSavingAutoInvest.value = false
+  }
+}
+
+async function confirmDeletePosition() {
+  if (!currentPosition.value || isDeletingPosition.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    deleteError.value = '请先登录后再删除投资资产'
+    return
+  }
+
+  isDeletingPosition.value = true
+  deleteError.value = ''
+
+  try {
+    await deleteInvestmentPosition(currentPosition.value.id, currentUser.id)
+    closeDeleteModal(true)
+    showFeedback('删除成功', 'success')
+    await router.push(backTo.value)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '投资资产删除失败'
+    deleteError.value = message
+    showFeedback(message, 'error')
+  } finally {
+    isDeletingPosition.value = false
   }
 }
 
@@ -1464,6 +1513,7 @@ function formatAmountLabel(entry: InvestmentTransaction) {
           定投
         </button>
         <button class="investment-detail-action-button edit" type="button" @click="openEditModal">修改</button>
+        <button class="investment-detail-action-button delete" type="button" :disabled="isDeletingPosition" @click="openDeleteModal">删除</button>
       </section>
 
       <section class="investment-detail-card" aria-label="行情走势">
@@ -1777,6 +1827,32 @@ function formatAmountLabel(entry: InvestmentTransaction) {
           </CommonButton>
           <CommonButton variant="primary" :disabled="isSavingAutoInvest" @click="saveAutoInvestPlan">
             {{ isSavingAutoInvest ? '保存中...' : '保存计划' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+
+    <CommonModal
+      v-model="showDeleteModal"
+      title="删除投资资产"
+      size="compact"
+      :close-on-overlay="!isDeletingPosition"
+      @close="closeDeleteModal"
+    >
+      <div class="investment-detail-modal-form">
+        <p class="investment-detail-description">
+          删除后该资产的持仓与交易记录会一并移除，确认删除“{{ detail?.name || detail?.position.productName || '当前资产' }}”吗？
+        </p>
+        <p v-if="deleteError" class="investment-detail-modal-error">{{ deleteError }}</p>
+      </div>
+
+      <template #footer>
+        <div class="investment-detail-modal-actions">
+          <CommonButton variant="secondary" :disabled="isDeletingPosition" @click="closeDeleteModal">
+            取消
+          </CommonButton>
+          <CommonButton variant="primary" :disabled="isDeletingPosition" @click="confirmDeletePosition">
+            {{ isDeletingPosition ? '删除中...' : '确认删除' }}
           </CommonButton>
         </div>
       </template>
