@@ -47,6 +47,10 @@ CREATE TABLE IF NOT EXISTS investment_positions (
   cumulative_profit_rate DECIMAL(10, 4) NOT NULL DEFAULT 0.0000 COMMENT '累计盈亏率，百分比值',
   include_in_net_worth TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否计入总资产',
   status ENUM('active', 'closed', 'disabled') NOT NULL DEFAULT 'active' COMMENT '持仓状态：active持仓中，closed已清仓',
+  subscription_status ENUM('confirmed', 'pending') NOT NULL DEFAULT 'confirmed' COMMENT '基金申购状态：confirmed已确认，pending待确认',
+  subscription_applied_date DATE NULL COMMENT '基金申购申请日',
+  subscription_expected_confirm_date DATE NULL COMMENT '基金预计确认日期',
+  subscription_confirmed_at DATETIME(3) NULL COMMENT '基金申购确认时间',
   last_synced_at DATETIME(3) NULL COMMENT '行情或估值最近同步时间',
   remark VARCHAR(500) NULL COMMENT '备注',
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
@@ -81,8 +85,13 @@ CREATE TABLE IF NOT EXISTS investment_transactions (
   fee_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '手续费',
   tax_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '税费',
   currency_code CHAR(3) NOT NULL DEFAULT 'CNY' COMMENT '币种编码',
+  funding_account_id BIGINT UNSIGNED NULL COMMENT '关联资金账户ID',
   trade_at DATETIME(3) NOT NULL COMMENT '交易时间',
   status ENUM('normal', 'voided') NOT NULL DEFAULT 'normal' COMMENT '状态：normal正常，voided已作废',
+  settlement_status ENUM('confirmed', 'pending') NOT NULL DEFAULT 'confirmed' COMMENT '基金交易结算状态：confirmed已确认，pending待确认',
+  settlement_applied_date DATE NULL COMMENT '基金交易申请日',
+  settlement_expected_date DATE NULL COMMENT '基金交易预计确认日',
+  settlement_confirmed_at DATETIME(3) NULL COMMENT '基金交易确认时间',
   remark VARCHAR(500) NULL COMMENT '备注',
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
@@ -92,6 +101,8 @@ CREATE TABLE IF NOT EXISTS investment_transactions (
   KEY idx_investment_transactions_position_time (position_id, trade_at),
   KEY idx_investment_transactions_product_time (product_id, trade_at),
   KEY idx_investment_transactions_user_type_time (user_id, trade_type, trade_at),
+  KEY idx_investment_transactions_funding_status (funding_account_id, settlement_status),
+  KEY idx_investment_transactions_settlement_date (settlement_status, settlement_expected_date),
   CONSTRAINT fk_investment_transactions_user
     FOREIGN KEY (user_id) REFERENCES users (id),
   CONSTRAINT fk_investment_transactions_account
@@ -100,6 +111,8 @@ CREATE TABLE IF NOT EXISTS investment_transactions (
     FOREIGN KEY (position_id) REFERENCES investment_positions (id),
   CONSTRAINT fk_investment_transactions_product
     FOREIGN KEY (product_id) REFERENCES investment_products (id),
+  CONSTRAINT fk_investment_transactions_funding_account
+    FOREIGN KEY (funding_account_id) REFERENCES accounts (id),
   CONSTRAINT chk_investment_transactions_amount_positive
     CHECK (amount > 0),
   CONSTRAINT chk_investment_transactions_quantity_nonnegative

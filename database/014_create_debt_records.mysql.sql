@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS debt_records (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '债务记录ID',
   user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID',
   account_id BIGINT UNSIGNED NOT NULL COMMENT '债务账户ID',
+  funding_account_id BIGINT UNSIGNED NULL COMMENT '关联现金账户ID',
   direction ENUM('payable', 'receivable') NOT NULL COMMENT '债务方向：借入/借出',
   amount DECIMAL(18, 2) NOT NULL COMMENT '债务金额，统一存正数',
   currency_code CHAR(3) NOT NULL DEFAULT 'CNY' COMMENT '币种编码',
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS debt_records (
   KEY idx_debt_records_user_time (user_id, occurred_at),
   KEY idx_debt_records_account_time (account_id, occurred_at),
   KEY idx_debt_records_account_status (account_id, status),
+  KEY idx_debt_records_funding_account_status (funding_account_id, status),
   CONSTRAINT fk_debt_records_user
     FOREIGN KEY (user_id) REFERENCES users (id),
   CONSTRAINT fk_debt_records_account

@@ -1,3 +1,7 @@
+USE bookkeeping_app;
+
+SET NAMES utf8mb4;
+
 CREATE TABLE IF NOT EXISTS investment_auto_invest_plans (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '定投计划ID',
   user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID',
@@ -5,7 +9,7 @@ CREATE TABLE IF NOT EXISTS investment_auto_invest_plans (
   position_id BIGINT UNSIGNED NOT NULL COMMENT '投资持仓ID',
   product_id BIGINT UNSIGNED NOT NULL COMMENT '投资产品ID',
   funding_account_id BIGINT UNSIGNED NOT NULL COMMENT '扣款资金账户ID',
-  frequency ENUM('weekly', 'monthly') NOT NULL COMMENT '定投周期',
+  frequency ENUM('daily', 'weekly', 'monthly') NOT NULL COMMENT '定投周期',
   amount DECIMAL(18, 2) NOT NULL COMMENT '定投金额',
   currency_code CHAR(3) NOT NULL DEFAULT 'CNY' COMMENT '币种编码',
   next_execute_date DATE NOT NULL COMMENT '下次执行日期',

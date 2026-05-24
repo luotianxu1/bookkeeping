@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '账户ID',
   user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID',
   account_type_id BIGINT UNSIGNED NOT NULL COMMENT '账户类型ID',
+  contact_id BIGINT UNSIGNED NULL COMMENT '关联联系人ID',
+  debt_direction ENUM('payable', 'receivable') NULL COMMENT '债务方向：借入/借出',
   name VARCHAR(80) NOT NULL COMMENT '账户名称，例如 钱包、招商银行卡、基金账户',
   icon VARCHAR(32) NULL COMMENT '账户图标字符串编码',
   color VARCHAR(32) NULL COMMENT '账户颜色',
@@ -25,6 +27,8 @@ CREATE TABLE IF NOT EXISTS accounts (
   UNIQUE KEY uk_accounts_user_type_name (user_id, account_type_id, name),
   KEY idx_accounts_user_status_sort (user_id, status, sort_order),
   KEY idx_accounts_type (account_type_id),
+  KEY idx_accounts_contact (contact_id),
+  KEY idx_accounts_debt_direction (debt_direction),
   CONSTRAINT fk_accounts_user
     FOREIGN KEY (user_id) REFERENCES users (id),
   CONSTRAINT fk_accounts_type
