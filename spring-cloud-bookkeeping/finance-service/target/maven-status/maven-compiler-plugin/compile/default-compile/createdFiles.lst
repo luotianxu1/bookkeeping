@@ -1,3 +1,4 @@
+com/example/finance/service/MarketNewsService$CachedMarketNews.class
 com/example/finance/service/HumanRelationAccountService.class
 com/example/finance/entity/InvestmentDividendPlanEntity.class
 com/example/finance/dto/InvestmentAutoInvestPlanResponse.class
@@ -8,6 +9,7 @@ com/example/finance/dto/InvestmentAssetDetailResponse.class
 com/example/finance/entity/DebtRecordEntity.class
 com/example/finance/dto/GoldPriceResponse$JewelryGoldPrice.class
 com/example/finance/service/GoldPriceService$CachedChartPoints.class
+com/example/finance/dto/MarketNewsResponse.class
 com/example/finance/service/GoldPriceService.class
 com/example/finance/dto/InvestmentTransactionResponse.class
 com/example/finance/mapper/HumanRelationRecordMapper.class
@@ -22,6 +24,7 @@ com/example/finance/dto/InvestmentDividendResponse.class
 com/example/finance/dto/GoldPriceResponse$GoldMarketQuote.class
 com/example/finance/dto/InvestmentPositionRequest.class
 com/example/finance/controller/AccountTypeController.class
+com/example/finance/dto/MarketNewsResponse$MarketNewsItem.class
 com/example/finance/mapper/InvestmentPriceQuoteMapper.class
 com/example/finance/dto/InvestmentSummaryResponse.class
 com/example/finance/entity/HumanRelationRecordEntity.class
@@ -38,6 +41,7 @@ com/example/finance/dto/AccountSortOrderRequest$AccountSortOrderItem.class
 com/example/finance/entity/AccountEntity.class
 com/example/finance/entity/CategoryEntity.class
 com/example/finance/dto/InvestmentChartPointResponse.class
+com/example/finance/service/MarketNewsService$CategorySpec.class
 com/example/finance/entity/InvestmentTransactionEntity.class
 com/example/finance/service/InvestmentService$FundProfitForecastMetrics.class
 com/example/finance/mapper/DebtRecordMapper.class
@@ -48,6 +52,7 @@ com/example/finance/service/GoldPriceService$CachedGoldPrice.class
 com/example/finance/dto/TransactionRequest.class
 com/example/finance/dto/TransactionResponse.class
 com/example/finance/service/MonthlyBudgetService.class
+com/example/finance/controller/MarketNewsController.class
 com/example/finance/service/GoldAccountService$PositionCostState.class
 com/example/finance/controller/CategoryController.class
 com/example/finance/task/FundQuoteSyncTask.class
@@ -81,6 +86,7 @@ com/example/finance/dto/HumanRelationSummaryResponse.class
 com/example/finance/controller/GoldPriceController.class
 com/example/finance/entity/InvestmentAutoInvestPlanEntity.class
 com/example/finance/dto/DebtRecordResponse.class
+com/example/finance/service/MarketNewsService.class
 com/example/finance/controller/GoldAccountController.class
 com/example/finance/service/TransactionService.class
 com/example/finance/entity/MonthlyBudgetEntity.class
