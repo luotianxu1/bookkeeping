@@ -24,6 +24,9 @@
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/DebtRecordResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/ExchangeRateResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/FinanceOverviewResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/FundProfitForecastAccountResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/FundProfitForecastHoldingResponse.java
+/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/FundProfitForecastResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/GoldAccountHoldingResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/GoldAccountSummaryResponse.java
 /Users/luotianxu/Documents/New project/spring-cloud-bookkeeping/finance-service/src/main/java/com/example/finance/dto/GoldLiquidationRecordResponse.java

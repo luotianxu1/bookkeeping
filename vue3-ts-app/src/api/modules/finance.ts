@@ -367,6 +367,51 @@ export interface InvestmentSummary {
   lastSyncedAt?: string | null
 }
 
+export interface FundProfitForecastAccount {
+  accountId: number
+  accountName: string
+  holdingAmount: number
+  estimateProfit: number
+  estimateProfitRate: number
+  totalProfit: number
+  totalProfitRate: number
+  fundCount: number
+  estimatedAt?: string | null
+}
+
+export interface FundProfitForecastHolding {
+  accountId: number
+  accountName?: string | null
+  positionId: number
+  productId: number
+  productName: string
+  productSymbol: string
+  unitName?: string | null
+  holdingQuantity: number
+  costAmount: number
+  holdingAmount: number
+  estimateProfit: number
+  estimateProfitRate: number
+  totalProfit: number
+  totalProfitRate: number
+  estimatedNetValue: number
+  officialNetValue: number
+  estimatedAt?: string | null
+}
+
+export interface FundProfitForecast {
+  userId: number
+  holdingAmount: number
+  estimateProfit: number
+  estimateProfitRate: number
+  totalProfit: number
+  totalProfitRate: number
+  fundCount: number
+  estimatedAt?: string | null
+  accounts: FundProfitForecastAccount[]
+  holdings: FundProfitForecastHolding[]
+}
+
 export interface InvestmentPosition {
   id: number
   userId: number
@@ -727,6 +772,10 @@ export function createInvestmentProduct(params: SaveInvestmentProductParams) {
 
 export function getInvestmentSummary(params: { userId: number; accountId?: number }) {
   return requestGet<InvestmentSummary>(financeRequest, '/api/finance/investments/summary', { params })
+}
+
+export function getFundProfitForecast(params: { userId: number; accountId?: number }) {
+  return requestGet<FundProfitForecast>(financeRequest, '/api/finance/investments/fund-profit-forecast', { params })
 }
 
 export function getInvestmentPositions(params: InvestmentPositionQuery) {

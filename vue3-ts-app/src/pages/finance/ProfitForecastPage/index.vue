@@ -1,112 +1,221 @@
 <script setup lang="ts">
-// 收益预测页：展示当日预估收益、累计收益和累计收益率。
-import { computed } from 'vue'
+// 收益预测页：展示基金盘中预估收益，并支持按投资账户查看。
+import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import { getFundProfitForecast, type FundProfitForecast, type FundProfitForecastAccount, type FundProfitForecastHolding } from '@/api/modules/finance'
+import { getStoredCurrentUser } from '@/utils/current-user'
 
-interface HoldingRow {
-  name: string
-  holdingAmount: string
-  estimateProfit: string
-  estimateRate: string
-  totalProfit: string
-  totalRate: string
+type ForecastMetrics = Pick<
+  FundProfitForecast,
+  'holdingAmount' | 'estimateProfit' | 'estimateProfitRate' | 'estimatedAt'
+>
+
+const selectedAccountId = ref('all')
+const forecast = ref<FundProfitForecast | null>(null)
+const isLoading = ref(false)
+const pageError = ref('')
+
+const emptyMetrics: ForecastMetrics = {
+  holdingAmount: 0,
+  estimateProfit: 0,
+  estimateProfitRate: 0,
+  estimatedAt: null,
 }
 
-const summary = {
-  estimateProfit: '+ 126.80',
-  estimateRate: '+0.84%',
-  totalProfit: '+ 8,640',
-  totalRate: '+12.36%',
-}
-
-const holdingRows: HoldingRow[] = [
-  {
-    name: '易方达蓝筹精选',
-    holdingAmount: '52,300',
-    estimateProfit: '+46.20',
-    estimateRate: '+0.92%',
-    totalProfit: '+3,420',
-    totalRate: '+8.74%',
-  },
-  {
-    name: '招商中证白酒',
-    holdingAmount: '19,800',
-    estimateProfit: '-12.60',
-    estimateRate: '-0.31%',
-    totalProfit: '-640',
-    totalRate: '-3.13%',
-  },
-  {
-    name: '广发纳斯达克100',
-    holdingAmount: '41,600',
-    estimateProfit: '+58.90',
-    estimateRate: '+1.14%',
-    totalProfit: '+5,260',
-    totalRate: '+14.22%',
-  },
-  {
-    name: '华夏上证50ETF联接',
-    holdingAmount: '28,900',
-    estimateProfit: '+34.30',
-    estimateRate: '+0.67%',
-    totalProfit: '+1,980',
-    totalRate: '+7.21%',
-  },
-]
-
-const currentTimeText = computed(() => {
-  const now = new Date()
-  const hh = String(now.getHours()).padStart(2, '0')
-  const mm = String(now.getMinutes()).padStart(2, '0')
-  return `${hh}:${mm}`
+const accountOptions = computed(() => {
+  const options = [{ label: '全部账户', value: 'all' }]
+  for (const account of forecast.value?.accounts ?? []) {
+    options.push({
+      label: `${account.accountName}（${account.fundCount}只）`,
+      value: String(account.accountId),
+    })
+  }
+  return options
 })
+const selectedAccountLabel = computed(() =>
+  accountOptions.value.find((option) => option.value === selectedAccountId.value)?.label ?? '全部账户',
+)
+
+const selectedAccount = computed<FundProfitForecastAccount | null>(() => {
+  if (selectedAccountId.value === 'all') {
+    return null
+  }
+
+  return forecast.value?.accounts.find((account) => String(account.accountId) === selectedAccountId.value) ?? null
+})
+
+const visibleSummary = computed<ForecastMetrics>(() => {
+  if (!forecast.value) {
+    return emptyMetrics
+  }
+
+  return selectedAccount.value ?? forecast.value
+})
+
+const visibleHoldings = computed<FundProfitForecastHolding[]>(() => {
+  const items = forecast.value?.holdings ?? []
+  if (selectedAccountId.value === 'all') {
+    return items
+  }
+
+  return items.filter((item) => String(item.accountId) === selectedAccountId.value)
+})
+
+const hasInvestmentAccounts = computed(() => (forecast.value?.accounts.length ?? 0) > 0)
+const summaryTitle = computed(() => (
+  selectedAccount.value
+    ? `${selectedAccount.value.accountName}当日收益预测`
+    : '持仓基金当日收益预测'
+))
+const summaryHint = computed(() => {
+  const timeText = formatDateTime(visibleSummary.value.estimatedAt)
+  return timeText ? `按开盘时盘中估值实时预测（最近更新 ${timeText}）` : '按开盘时盘中估值实时预测'
+})
+const emptyMessage = computed(() => {
+  if (!hasInvestmentAccounts.value) {
+    return '暂无投资账户'
+  }
+
+  return selectedAccount.value ? '该账户暂无基金持仓' : '暂无基金持仓'
+})
+
+onMounted(() => {
+  void loadForecast()
+})
+
+async function loadForecast() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    pageError.value = '请先登录后查看收益预测'
+    return
+  }
+
+  isLoading.value = true
+  pageError.value = ''
+
+  try {
+    const data = await getFundProfitForecast({ userId: currentUser.id })
+    forecast.value = data
+
+    const optionValues = new Set(data.accounts.map((account) => String(account.accountId)))
+    if (selectedAccountId.value !== 'all' && !optionValues.has(selectedAccountId.value)) {
+      selectedAccountId.value = 'all'
+    }
+  } catch (error) {
+    pageError.value = error instanceof Error ? error.message : '收益预测加载失败'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+function formatNumber(value: number, digits = 2) {
+  return new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(Math.abs(value))
+}
+
+function formatSignedCurrency(value: number) {
+  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+  return `${sign}¥${formatNumber(value)}`
+}
+
+function formatSignedRate(value: number) {
+  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+  return `${sign}${formatNumber(value)}%`
+}
+
+function formatCurrency(value: number) {
+  return `¥${formatNumber(value)}`
+}
+
+function formatHoldingMeta(item: FundProfitForecastHolding) {
+  return formatCurrency(Number(item.holdingAmount ?? 0))
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) {
+    return ''
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}
 </script>
 
 <template>
   <section class="profit-forecast-page" aria-label="收益预测">
     <PageHeader title="收益预测" back-label="返回更多功能" />
 
-    <section class="summary-card" aria-label="收益预测汇总">
-      <p class="summary-title">持仓基金当日收益预测</p>
-      <div class="summary-row">
-        <AmountText tag="strong" :value="summary.estimateProfit" />
-        <AmountText tag="span" :value="`预计 ${summary.estimateRate}`" />
-      </div>
-      <div class="summary-row summary-row--total">
-        <AmountText tag="strong" :value="`累计 ${summary.totalProfit}`" />
-        <AmountText tag="span" :value="`累计收益率 ${summary.totalRate}`" />
-      </div>
-      <p class="summary-hint">按当前时间估算净值实时预测（{{ currentTimeText }}）</p>
-    </section>
+    <p v-if="pageError" class="profit-forecast-message profit-forecast-message-error">
+      {{ pageError }}
+    </p>
+    <CommonLoading v-else-if="isLoading" />
 
-    <section class="holding-card" aria-label="持仓收益预测">
-      <header class="holding-header">
-        <span class="holding-spacer" />
-        <div class="holding-header-right">
-          <span>预估收益</span>
-          <span>累计收益</span>
+    <template v-else>
+      <section class="summary-card" aria-label="收益预测汇总">
+        <div class="summary-top">
+          <p class="summary-title">{{ summaryTitle }}</p>
+          <label class="summary-account-pill">
+            <span class="summary-account-pill-text">{{ selectedAccountLabel }}</span>
+            <select v-model="selectedAccountId" class="summary-account-pill-select" aria-label="查看账户">
+              <option v-for="option in accountOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
         </div>
-      </header>
-
-      <article v-for="item in holdingRows" :key="item.name" class="holding-row">
-        <div class="holding-left">
-          <p class="holding-name">{{ item.name }}</p>
-          <AmountText tag="p" class="holding-amount" :value="item.holdingAmount" />
+        <div class="summary-row">
+          <AmountText tag="strong" :value="formatSignedCurrency(visibleSummary.estimateProfit)" />
         </div>
+        <div class="summary-row summary-row--headline">
+          <AmountText tag="span" :value="`预计 ${formatSignedRate(visibleSummary.estimateProfitRate)}`" />
+          <span>持仓市值 {{ formatCurrency(visibleSummary.holdingAmount) }}</span>
+        </div>
+        <p class="summary-hint">{{ summaryHint }}</p>
+      </section>
 
-        <div class="holding-right">
-          <div class="value-column">
-            <AmountText tag="strong" :value="item.estimateProfit" />
-            <AmountText tag="span" :value="item.estimateRate" />
+      <section class="holding-card" aria-label="持仓收益预测">
+        <header class="holding-header">
+          <span class="holding-header-title">
+            {{ selectedAccount ? `${selectedAccount.accountName}基金明细` : '全部基金明细' }}
+          </span>
+          <div class="holding-header-right">
+            <span>预估收益</span>
           </div>
-          <div class="value-column">
-            <AmountText tag="strong" :value="item.totalProfit" />
-            <AmountText tag="span" :value="item.totalRate" />
+        </header>
+
+        <p v-if="visibleHoldings.length === 0" class="holding-empty">
+          {{ emptyMessage }}
+        </p>
+
+        <article v-for="item in visibleHoldings" :key="item.positionId" v-else class="holding-row">
+          <div class="holding-left">
+            <p class="holding-name">{{ item.productName }}</p>
+            <AmountText tag="p" class="holding-amount" :value="formatHoldingMeta(item)" tone="inherit" />
           </div>
-        </div>
-      </article>
-    </section>
+
+          <div class="holding-right">
+            <div class="value-column">
+              <AmountText tag="strong" :value="formatSignedCurrency(item.estimateProfit)" />
+              <AmountText tag="span" class="value-rate" :value="formatSignedRate(item.estimateProfitRate)" />
+            </div>
+          </div>
+        </article>
+      </section>
+    </template>
   </section>
 </template>
 

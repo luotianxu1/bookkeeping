@@ -90,21 +90,79 @@
 }
 
 .summary-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.summary-head-main {
+  min-width: 0;
   display: grid;
   gap: var(--space-2);
 }
 
-.summary-head span {
+.summary-head-main span {
   color: var(--color-finance-subtitle);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
 
-.summary-head strong {
+.summary-head-main strong {
   color: #facc15;
   font-size: var(--font-size-36);
   line-height: 1.1;
   font-weight: 700;
+}
+
+.gold-price-chip {
+  flex: 0 0 auto;
+  width: fit-content;
+  min-height: 44px;
+  padding: 8px 12px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 252, 235, 0.92);
+}
+
+.gold-price-chip-label {
+  color: #a16207;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.gold-price-chip-value {
+  color: #7c2d12 !important;
+  font-size: var(--font-size-16) !important;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.gold-price-chip-time {
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+@media (max-width: 420px) {
+  .summary-head {
+    gap: var(--space-8);
+  }
+
+  .summary-head-main strong {
+    font-size: var(--font-size-32);
+  }
+
+  .gold-price-chip {
+    padding: 7px 10px;
+  }
+
+  .gold-price-chip-value {
+    font-size: var(--font-size-14) !important;
+  }
 }
 
 .summary-grid {

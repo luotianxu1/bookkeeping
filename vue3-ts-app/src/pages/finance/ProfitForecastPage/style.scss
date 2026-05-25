@@ -3,6 +3,16 @@
   gap: var(--space-6);
 }
 
+.profit-forecast-message {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-13);
+}
+
+.profit-forecast-message-error {
+  color: var(--color-danger);
+}
+
 .summary-card,
 .holding-card {
   display: grid;
@@ -11,6 +21,57 @@
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-12);
   background: var(--color-white);
+}
+
+.summary-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.summary-account-pill {
+  position: relative;
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 28px 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(29, 78, 216, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.summary-account-pill::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-65%) rotate(45deg);
+  pointer-events: none;
+}
+
+.summary-account-pill-text {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-account-pill-select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .summary-title {
@@ -27,6 +88,10 @@
   gap: var(--space-6);
 }
 
+.summary-row--headline {
+  align-items: center;
+}
+
 .summary-row strong {
   font-size: var(--font-size-30);
   line-height: 1;
@@ -37,12 +102,8 @@
   font-weight: 600;
 }
 
-.summary-row--total strong {
-  font-size: var(--font-size-14);
-}
-
-.summary-row--total span {
-  font-size: var(--font-size-12);
+.summary-row--headline span {
+  color: var(--color-text-muted);
 }
 
 .summary-hint {
@@ -58,19 +119,19 @@
   justify-content: space-between;
 }
 
-.holding-spacer {
-  width: 120px;
-  height: var(--space-1);
+.holding-header-title {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
 }
 
 .holding-header-right {
   display: flex;
   justify-content: flex-end;
-  gap: var(--space-10);
 }
 
 .holding-header-right span {
-  width: var(--space-72);
+  width: 76px;
   text-align: right;
   color: var(--color-text-muted);
   font-size: var(--font-size-12);
@@ -111,27 +172,34 @@
 
 .holding-right {
   display: flex;
-  gap: var(--space-10);
+}
+
+.holding-empty {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+  text-align: center;
+  padding: var(--space-10) 0;
 }
 
 .value-column {
-  width: var(--space-72);
+  width: 76px;
   display: grid;
   gap: var(--space-2);
   justify-items: end;
 }
 
-.value-column strong,
-.value-column span {
-  font-size: var(--font-size-12);
-}
-
 .value-column strong {
+  font-size: var(--font-size-16);
   font-weight: 600;
+  line-height: 1.2;
 }
 
-.value-column span {
+.value-rate {
+  font-size: var(--font-size-12);
   font-weight: 500;
+  line-height: 1.2;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -141,14 +209,23 @@
     background: var(--color-dark-card-bg);
   }
 
+  .summary-account-pill {
+    border-color: rgba(148, 163, 184, 0.22);
+    background-color: rgba(15, 23, 42, 0.24);
+    color: var(--color-brand-light, #93c5fd);
+  }
+
   .holding-name {
     color: var(--color-bg-page);
   }
 
   .summary-title,
   .summary-hint,
+  .holding-header-title,
   .holding-amount,
-  .holding-header-right span {
+  .holding-header-right span,
+  .summary-row--headline span,
+  .holding-empty {
     color: var(--color-dark-text-muted);
   }
 

@@ -7,6 +7,9 @@ import com.example.finance.dto.InvestmentAutoInvestPlanRequest;
 import com.example.finance.dto.InvestmentAutoInvestPlanResponse;
 import com.example.finance.dto.InvestmentChartPointResponse;
 import com.example.finance.dto.InvestmentDetailStatResponse;
+import com.example.finance.dto.FundProfitForecastAccountResponse;
+import com.example.finance.dto.FundProfitForecastHoldingResponse;
+import com.example.finance.dto.FundProfitForecastResponse;
 import com.example.finance.dto.InvestmentPositionRequest;
 import com.example.finance.dto.InvestmentPositionResponse;
 import com.example.finance.dto.InvestmentProductRequest;
@@ -56,7 +59,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,6 +88,7 @@ public class InvestmentService {
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_UNIT_NAME = "份";
     private static final String ACTIVE_STATUS = "active";
+    private static final String INVESTMENT_ACCOUNT_TYPE_CODE = "investment";
     private static final String NORMAL_STATUS = "normal";
     private static final String VOIDED_STATUS = "voided";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
@@ -105,6 +111,8 @@ public class InvestmentService {
     private static final LocalTime FUND_SUBSCRIPTION_CUTOFF_TIME = LocalTime.of(15, 0);
     private static final Set<String> POSITION_ACCOUNT_TYPE_CODES = Set.of("investment", "gold");
     private static final DateTimeFormatter NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private static final DateTimeFormatter FUND_ESTIMATE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final DateTimeFormatter FUND_ESTIMATE_TIME_WITH_SECOND_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final InvestmentProductMapper productMapper;
     private final InvestmentPositionMapper positionMapper;
@@ -172,7 +180,10 @@ public class InvestmentService {
             .orderByDesc(InvestmentPositionEntity::getMarketValue)
             .orderByDesc(InvestmentPositionEntity::getId);
 
-        List<InvestmentPositionEntity> positions = positionMapper.selectList(wrapper);
+        List<InvestmentPositionEntity> positions = filterPositionsByAccountType(
+            positionMapper.selectList(wrapper),
+            INVESTMENT_ACCOUNT_TYPE_CODE
+        );
         List<InvestmentPositionResponse> responses = toPositionResponses(positions);
         if (!StringUtils.hasText(productType)) {
             return responses;
@@ -315,10 +326,10 @@ public class InvestmentService {
     }
 
     public InvestmentSummaryResponse summary(Long userId, Long accountId) {
-        List<InvestmentPositionEntity> positions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+        List<InvestmentPositionEntity> positions = filterPositionsByAccountType(positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
             .eq(userId != null, InvestmentPositionEntity::getUserId, userId)
             .eq(accountId != null, InvestmentPositionEntity::getAccountId, accountId)
-            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS));
+            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)), INVESTMENT_ACCOUNT_TYPE_CODE);
         BigDecimal totalMarketValue = sum(positions, InvestmentPositionEntity::getMarketValue);
         BigDecimal holdingProfit = sum(positions, InvestmentPositionEntity::getHoldingProfit);
         BigDecimal cumulativeProfit = sum(positions, InvestmentPositionEntity::getCumulativeProfit);
@@ -338,6 +349,66 @@ public class InvestmentService {
             .filter(item -> item != null)
             .max(LocalDateTime::compareTo)
             .orElse(null));
+        return response;
+    }
+
+    public FundProfitForecastResponse fundProfitForecast(Long userId, Long accountId) {
+        List<AccountEntity> investmentAccounts = listActiveAccountsByTypeCode(userId, accountId, INVESTMENT_ACCOUNT_TYPE_CODE);
+        Map<Long, AccountEntity> accountMap = investmentAccounts.stream()
+            .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
+        Set<Long> accountIds = accountMap.keySet();
+
+        List<InvestmentPositionEntity> positions = accountIds.isEmpty()
+            ? Collections.emptyList()
+            : positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+                .eq(InvestmentPositionEntity::getUserId, userId)
+                .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)
+                .in(InvestmentPositionEntity::getAccountId, accountIds));
+
+        Map<Long, InvestmentProductEntity> products = positions.isEmpty()
+            ? Collections.emptyMap()
+            : productMapper.selectBatchIds(positions.stream()
+                .map(InvestmentPositionEntity::getProductId)
+                .collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
+
+        Map<String, JsonNode> estimateInfoBySymbol = new HashMap<>();
+        List<FundProfitForecastHoldingResponse> holdings = positions.stream()
+            .filter(position -> {
+                InvestmentProductEntity product = products.get(position.getProductId());
+                return product != null
+                    && FUND_PRODUCT_TYPE.equals(product.getProductType())
+                    && StringUtils.hasText(product.getSymbol());
+            })
+            .sorted(Comparator.comparing(InvestmentPositionEntity::getMarketValue, Comparator.nullsLast(BigDecimal::compareTo)).reversed())
+            .map(position -> buildFundProfitForecastHolding(
+                position,
+                accountMap.get(position.getAccountId()),
+                products.get(position.getProductId()),
+                estimateInfoBySymbol
+            ))
+            .toList();
+
+        Map<Long, List<FundProfitForecastHoldingResponse>> holdingsByAccountId = holdings.stream()
+            .collect(Collectors.groupingBy(FundProfitForecastHoldingResponse::getAccountId));
+
+        List<FundProfitForecastAccountResponse> accounts = investmentAccounts.stream()
+            .map(account -> buildFundProfitForecastAccount(account, holdingsByAccountId.getOrDefault(account.getId(), Collections.emptyList())))
+            .toList();
+
+        FundProfitForecastMetrics metrics = summarizeFundProfitForecast(holdings);
+        FundProfitForecastResponse response = new FundProfitForecastResponse();
+        response.setUserId(userId);
+        response.setHoldingAmount(metrics.holdingAmount());
+        response.setEstimateProfit(metrics.estimateProfit());
+        response.setEstimateProfitRate(metrics.estimateProfitRate());
+        response.setTotalProfit(metrics.totalProfit());
+        response.setTotalProfitRate(metrics.totalProfitRate());
+        response.setFundCount(metrics.fundCount());
+        response.setEstimatedAt(metrics.estimatedAt());
+        response.setAccounts(accounts);
+        response.setHoldings(holdings);
         return response;
     }
 
@@ -2574,6 +2645,245 @@ public class InvestmentService {
 
     private BigDecimal sum(List<InvestmentPositionEntity> positions, Function<InvestmentPositionEntity, BigDecimal> getter) {
         return positions.stream().map(getter).filter(item -> item != null).reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private List<InvestmentPositionEntity> filterPositionsByAccountType(List<InvestmentPositionEntity> positions, String accountTypeCode) {
+        if (positions.isEmpty() || !StringUtils.hasText(accountTypeCode)) {
+            return positions;
+        }
+
+        Set<Long> accountIds = positions.stream()
+            .map(InvestmentPositionEntity::getAccountId)
+            .filter(item -> item != null)
+            .collect(Collectors.toSet());
+        if (accountIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<Long, String> accountTypeCodes = loadAccountTypeCodesByAccountId(accountIds);
+
+        return positions.stream()
+            .filter(position -> accountTypeCode.equals(accountTypeCodes.get(position.getAccountId())))
+            .toList();
+    }
+
+    private List<AccountEntity> listActiveAccountsByTypeCode(Long userId, Long accountId, String accountTypeCode) {
+        List<AccountEntity> accounts = accountMapper.selectList(new LambdaQueryWrapper<AccountEntity>()
+            .eq(userId != null, AccountEntity::getUserId, userId)
+            .eq(accountId != null, AccountEntity::getId, accountId)
+            .eq(AccountEntity::getStatus, ACTIVE_STATUS)
+            .orderByAsc(AccountEntity::getSortOrder)
+            .orderByAsc(AccountEntity::getId));
+        if (accounts.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<Long, String> accountTypeCodes = loadAccountTypeCodesByAccountId(accounts.stream()
+            .map(AccountEntity::getId)
+            .collect(Collectors.toSet()));
+
+        return accounts.stream()
+            .filter(account -> accountTypeCode.equals(accountTypeCodes.get(account.getId())))
+            .toList();
+    }
+
+    private Map<Long, String> loadAccountTypeCodesByAccountId(Set<Long> accountIds) {
+        if (accountIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<AccountEntity> accounts = accountMapper.selectBatchIds(accountIds);
+        if (accounts.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Long, Long> accountTypeIdsByAccountId = accounts.stream()
+            .collect(Collectors.toMap(AccountEntity::getId, AccountEntity::getAccountTypeId));
+        Map<Long, String> typeCodesByTypeId = accountTypeMapper.selectBatchIds(new HashSet<>(accountTypeIdsByAccountId.values()))
+            .stream()
+            .collect(Collectors.toMap(AccountTypeEntity::getId, AccountTypeEntity::getCode));
+
+        return accountTypeIdsByAccountId.entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, entry -> typeCodesByTypeId.get(entry.getValue())));
+    }
+
+    private FundProfitForecastHoldingResponse buildFundProfitForecastHolding(
+        InvestmentPositionEntity position,
+        AccountEntity account,
+        InvestmentProductEntity product,
+        Map<String, JsonNode> estimateInfoBySymbol
+    ) {
+        JsonNode estimateInfo = estimateInfoBySymbol.computeIfAbsent(product.getSymbol(), this::fetchFundEstimateInfo);
+        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal officialNetValue = resolveOfficialFundNetValue(position, estimateInfo);
+        BigDecimal estimatedNetValue = resolveEstimatedFundNetValue(position, estimateInfo, officialNetValue);
+        BigDecimal holdingAmount = resolveEstimatedHoldingAmount(position, holdingQuantity, estimatedNetValue);
+        BigDecimal previousHoldingAmount = resolvePreviousHoldingAmount(position, holdingQuantity, officialNetValue, holdingAmount);
+        BigDecimal estimateProfit = holdingAmount.subtract(previousHoldingAmount).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalProfit = holdingAmount.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
+
+        FundProfitForecastHoldingResponse response = new FundProfitForecastHoldingResponse();
+        response.setAccountId(position.getAccountId());
+        response.setAccountName(account == null ? null : account.getName());
+        response.setPositionId(position.getId());
+        response.setProductId(position.getProductId());
+        response.setProductName(product.getName());
+        response.setProductSymbol(product.getSymbol());
+        response.setUnitName(product.getUnitName());
+        response.setHoldingQuantity(holdingQuantity);
+        response.setCostAmount(costAmount);
+        response.setHoldingAmount(holdingAmount);
+        response.setEstimateProfit(estimateProfit);
+        response.setEstimateProfitRate(rate(estimateProfit, previousHoldingAmount));
+        response.setTotalProfit(totalProfit);
+        response.setTotalProfitRate(rate(totalProfit, costAmount));
+        response.setEstimatedNetValue(estimatedNetValue);
+        response.setOfficialNetValue(officialNetValue);
+        response.setEstimatedAt(resolveFundEstimateTime(position, estimateInfo));
+        return response;
+    }
+
+    private FundProfitForecastAccountResponse buildFundProfitForecastAccount(
+        AccountEntity account,
+        List<FundProfitForecastHoldingResponse> holdings
+    ) {
+        FundProfitForecastMetrics metrics = summarizeFundProfitForecast(holdings);
+        FundProfitForecastAccountResponse response = new FundProfitForecastAccountResponse();
+        response.setAccountId(account.getId());
+        response.setAccountName(account.getName());
+        response.setHoldingAmount(metrics.holdingAmount());
+        response.setEstimateProfit(metrics.estimateProfit());
+        response.setEstimateProfitRate(metrics.estimateProfitRate());
+        response.setTotalProfit(metrics.totalProfit());
+        response.setTotalProfitRate(metrics.totalProfitRate());
+        response.setFundCount(metrics.fundCount());
+        response.setEstimatedAt(metrics.estimatedAt());
+        return response;
+    }
+
+    private FundProfitForecastMetrics summarizeFundProfitForecast(List<FundProfitForecastHoldingResponse> holdings) {
+        BigDecimal holdingAmount = holdings.stream()
+            .map(FundProfitForecastHoldingResponse::getHoldingAmount)
+            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal estimateProfit = holdings.stream()
+            .map(FundProfitForecastHoldingResponse::getEstimateProfit)
+            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalProfit = holdings.stream()
+            .map(FundProfitForecastHoldingResponse::getTotalProfit)
+            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal previousHoldingAmount = holdings.stream()
+            .map(item -> defaultZero(item.getHoldingAmount()).subtract(defaultZero(item.getEstimateProfit())).setScale(2, RoundingMode.HALF_UP))
+            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalCostAmount = holdings.stream()
+            .map(FundProfitForecastHoldingResponse::getCostAmount)
+            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+        LocalDateTime estimatedAt = holdings.stream()
+            .map(FundProfitForecastHoldingResponse::getEstimatedAt)
+            .filter(item -> item != null)
+            .max(LocalDateTime::compareTo)
+            .orElse(null);
+
+        return new FundProfitForecastMetrics(
+            holdingAmount,
+            estimateProfit,
+            rate(estimateProfit, previousHoldingAmount),
+            totalProfit,
+            rate(totalProfit, totalCostAmount),
+            holdings.size(),
+            estimatedAt
+        );
+    }
+
+    private BigDecimal resolveOfficialFundNetValue(InvestmentPositionEntity position, JsonNode estimateInfo) {
+        BigDecimal officialNetValue = safeDecimal(estimateInfo.path("dwjz").asText(null));
+        if (officialNetValue != null && officialNetValue.compareTo(BigDecimal.ZERO) > 0) {
+            return officialNetValue.setScale(6, RoundingMode.HALF_UP);
+        }
+
+        return defaultZero(position.getCurrentPrice()).setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveEstimatedFundNetValue(
+        InvestmentPositionEntity position,
+        JsonNode estimateInfo,
+        BigDecimal officialNetValue
+    ) {
+        BigDecimal estimatedNetValue = safeDecimal(estimateInfo.path("gsz").asText(null));
+        if (estimatedNetValue != null && estimatedNetValue.compareTo(BigDecimal.ZERO) > 0) {
+            return estimatedNetValue.setScale(6, RoundingMode.HALF_UP);
+        }
+
+        if (officialNetValue != null && officialNetValue.compareTo(BigDecimal.ZERO) > 0) {
+            return officialNetValue.setScale(6, RoundingMode.HALF_UP);
+        }
+
+        return defaultZero(position.getCurrentPrice()).setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveEstimatedHoldingAmount(
+        InvestmentPositionEntity position,
+        BigDecimal holdingQuantity,
+        BigDecimal estimatedNetValue
+    ) {
+        if (estimatedNetValue != null && estimatedNetValue.compareTo(BigDecimal.ZERO) > 0) {
+            return holdingQuantity.multiply(estimatedNetValue).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return defaultZero(position.getMarketValue()).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolvePreviousHoldingAmount(
+        InvestmentPositionEntity position,
+        BigDecimal holdingQuantity,
+        BigDecimal officialNetValue,
+        BigDecimal estimatedHoldingAmount
+    ) {
+        if (officialNetValue != null && officialNetValue.compareTo(BigDecimal.ZERO) > 0) {
+            return holdingQuantity.multiply(officialNetValue).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal fallback = defaultZero(position.getMarketValue())
+            .subtract(defaultZero(position.getDayProfit()))
+            .setScale(2, RoundingMode.HALF_UP);
+        if (fallback.compareTo(BigDecimal.ZERO) > 0) {
+            return fallback;
+        }
+
+        return defaultZero(estimatedHoldingAmount).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private LocalDateTime resolveFundEstimateTime(InvestmentPositionEntity position, JsonNode estimateInfo) {
+        String raw = estimateInfo.path("gztime").asText(null);
+        if (StringUtils.hasText(raw)) {
+            try {
+                return LocalDateTime.parse(raw, FUND_ESTIMATE_TIME_WITH_SECOND_FORMAT);
+            } catch (DateTimeParseException ignored) {
+                try {
+                    return LocalDateTime.parse(raw, FUND_ESTIMATE_TIME_FORMAT);
+                } catch (DateTimeParseException ignoredAgain) {
+                    // fall back to the latest synced time on the position
+                }
+            }
+        }
+
+        return position.getLastSyncedAt();
+    }
+
+    private record FundProfitForecastMetrics(
+        BigDecimal holdingAmount,
+        BigDecimal estimateProfit,
+        BigDecimal estimateProfitRate,
+        BigDecimal totalProfit,
+        BigDecimal totalProfitRate,
+        Integer fundCount,
+        LocalDateTime estimatedAt
+    ) {
     }
 
     private String generateTransactionNo() {

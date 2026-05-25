@@ -71,6 +71,7 @@ let requestVersion = 0
 
 const accountModalTitle = computed(() => (editingAccountId.value ? '修改黄金账户' : '新增黄金账户'))
 const realtimeGoldPrice = computed(() => Number(goldPrice.value?.spotGold?.price ?? 0))
+const realtimeGoldUpdatedAt = computed(() => formatGoldUpdatedAt(goldPrice.value?.updatedAt))
 const holdingsByAccountId = computed(() =>
   displayHoldings.value.reduce<Record<number, GoldAccountHolding>>((result, item) => {
     result[item.accountId] = mergeAccountHolding(result[item.accountId], item)
@@ -441,6 +442,23 @@ function formatHoldingMeta(weight: number | null | undefined, amount: number | n
   return `${formatCompactWeight(weight)}克 ${formatAmount(amount)}元`
 }
 
+function formatGoldUpdatedAt(value: string | null | undefined) {
+  if (!value) {
+    return '等待刷新'
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '刚刚更新'
+  }
+
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${month}-${day} ${hour}:${minute}`
+}
+
 function formatCreatedDate(value: string | null | undefined) {
   if (!value) {
     return '--'
@@ -521,8 +539,17 @@ function formatSignedAmount(value: number | null | undefined) {
     <template v-else>
       <section class="gold-account-summary">
         <div class="summary-head">
-          <span>总重量(克)</span>
-          <strong>{{ formatSummaryWeight(displaySummary.totalWeight) }}</strong>
+          <div class="summary-head-main">
+            <span>总重量(克)</span>
+            <strong>{{ formatSummaryWeight(displaySummary.totalWeight) }}</strong>
+          </div>
+          <div class="gold-price-chip" aria-label="当前实时金价">
+            <span class="gold-price-chip-label">实时金价</span>
+            <strong class="gold-price-chip-value">
+              {{ realtimeGoldPrice > 0 ? `${formatAmount(realtimeGoldPrice)} 元/克` : '--' }}
+            </strong>
+            <span class="gold-price-chip-time">{{ realtimeGoldUpdatedAt }}</span>
+          </div>
         </div>
 
         <div class="summary-grid">

@@ -12,6 +12,7 @@ import com.example.finance.dto.InvestmentProductResponse;
 import com.example.finance.dto.InvestmentSummaryResponse;
 import com.example.finance.dto.InvestmentTransactionRequest;
 import com.example.finance.dto.InvestmentTransactionResponse;
+import com.example.finance.dto.FundProfitForecastResponse;
 import com.example.finance.service.InvestmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -64,6 +65,15 @@ public class InvestmentController {
         @RequestParam(name = "accountId", required = false) Long accountId
     ) {
         return Result.ok(investmentService.summary(userId, accountId));
+    }
+
+    @GetMapping("/fund-profit-forecast")
+    @Operation(summary = "查询基金收益预测")
+    public Result<FundProfitForecastResponse> fundProfitForecast(
+        @RequestParam(name = "userId") @NotNull Long userId,
+        @RequestParam(name = "accountId", required = false) Long accountId
+    ) {
+        return Result.ok(investmentService.fundProfitForecast(userId, accountId));
     }
 
     @GetMapping("/positions")

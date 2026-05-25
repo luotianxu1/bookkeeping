@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 投资账户详情页：展示单个投资账户的汇总、持仓列表和新增持仓。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
@@ -65,7 +65,6 @@ const addAssetCurrentPrice = ref('')
 const addAssetSubscriptionTimeSlot = ref<'before_1500' | 'after_1500'>('before_1500')
 const isLookingUpProduct = ref(false)
 const productLookupMessage = ref('')
-let productLookupTimer: number | undefined
 let isFillingProduct = false
 
 const fundingAccountOptions = computed(() =>
@@ -81,11 +80,12 @@ const subscriptionTimeSlotOptions = [
 ]
 
 const holdings = computed(() => {
-  if (activeTab.value === 'A股') {
-    return positions.value.filter((item) => item.productType === 'stock')
-  }
+  const targetType = activeTab.value === 'A股' ? 'stock' : 'fund'
 
-  return positions.value.filter((item) => item.productType === 'fund')
+  return positions.value
+    .filter((item) => item.productType === targetType)
+    .slice()
+    .sort(compareHoldingsByProfitRate)
 })
 
 const isFundSubscriptionDraft = computed(() => addAssetCategory.value === 'fund')
@@ -121,7 +121,6 @@ watch(addAssetKeyword, (nextKeyword) => {
     return
   }
 
-  window.clearTimeout(productLookupTimer)
   const keyword = nextKeyword.trim()
   productLookupMessage.value = ''
 
@@ -129,18 +128,7 @@ watch(addAssetKeyword, (nextKeyword) => {
     return
   }
 
-  if (keyword.length < 2) {
-    clearProductFields()
-    return
-  }
-
-  productLookupTimer = window.setTimeout(() => {
-    lookupProductByKeyword(keyword)
-  }, 400)
-})
-
-onBeforeUnmount(() => {
-  window.clearTimeout(productLookupTimer)
+  clearProductFields()
 })
 
 function parseAccountId(value: unknown) {
@@ -459,6 +447,26 @@ function getAllocationPercent(position: InvestmentPosition) {
     return 0
   }
   return Math.min(Math.max(percent, 0), 100)
+}
+
+function compareHoldingsByProfitRate(a: InvestmentPosition, b: InvestmentPosition) {
+  const aPending = isPendingSubscription(a)
+  const bPending = isPendingSubscription(b)
+  if (aPending !== bPending) {
+    return aPending ? 1 : -1
+  }
+
+  const rateDiff = Number(b.cumulativeProfitRate ?? 0) - Number(a.cumulativeProfitRate ?? 0)
+  if (rateDiff !== 0) {
+    return rateDiff
+  }
+
+  const profitDiff = Number(b.cumulativeProfit ?? 0) - Number(a.cumulativeProfit ?? 0)
+  if (profitDiff !== 0) {
+    return profitDiff
+  }
+
+  return Number(b.marketValue ?? 0) - Number(a.marketValue ?? 0)
 }
 
 function isPendingSubscription(position: InvestmentPosition) {

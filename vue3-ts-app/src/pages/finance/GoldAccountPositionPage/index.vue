@@ -95,6 +95,7 @@ const scopedAccount = computed(() =>
   goldAccounts.value.find((account) => account.id === selectedAccountId.value) ?? null,
 )
 const realtimeGoldPrice = computed(() => Number(goldPrice.value?.spotGold?.price ?? 0))
+const realtimeGoldUpdatedAt = computed(() => formatGoldUpdatedAt(goldPrice.value?.updatedAt))
 const isCurrentAccountFixed = computed(() => isScopedToAccount.value && scopedAccount.value !== null)
 const displayHoldings = computed(() => holdings.value.map((item) => decorateHolding(item, realtimeGoldPrice.value)))
 const filteredHoldings = computed(() => {
@@ -707,6 +708,23 @@ function formatHoldingMeta(weight: number | null | undefined, amount: number | n
   return `${formatCompactWeight(weight)}克 ${formatAmount(amount)}元`
 }
 
+function formatGoldUpdatedAt(value: string | null | undefined) {
+  if (!value) {
+    return '等待刷新'
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '刚刚更新'
+  }
+
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${month}-${day} ${hour}:${minute}`
+}
+
 function getProfitToneClass(value: number | null | undefined) {
   return Number(value ?? 0) < 0 ? 'negative' : 'positive'
 }
@@ -774,18 +792,27 @@ function toApiDateTime(date: Date) {
     <template v-else>
       <section class="gold-position-summary">
         <div class="summary-head">
-          <span>总重量(克)</span>
-        </div>
-        <div class="summary-main">
-          <strong>{{ formatSummaryWeight(visibleSummary.totalWeight) }}</strong>
-          <RouterLink
-            class="liquidation-link"
-            :to="selectedAccountId
-              ? { path: '/finance/accounts/gold/liquidation', query: { accountId: String(selectedAccountId) } }
-              : '/finance/accounts/gold/liquidation'"
-          >
-            清仓记录
-          </RouterLink>
+          <div class="summary-head-main">
+            <span>总重量(克)</span>
+            <div class="summary-main">
+              <strong>{{ formatSummaryWeight(visibleSummary.totalWeight) }}</strong>
+              <RouterLink
+                class="liquidation-link"
+                :to="selectedAccountId
+                  ? { path: '/finance/accounts/gold/liquidation', query: { accountId: String(selectedAccountId) } }
+                  : '/finance/accounts/gold/liquidation'"
+              >
+                清仓记录
+              </RouterLink>
+            </div>
+          </div>
+          <div class="gold-price-chip" aria-label="当前实时金价">
+            <span class="gold-price-chip-label">实时金价</span>
+            <strong class="gold-price-chip-value">
+              {{ realtimeGoldPrice > 0 ? `${formatAmount(realtimeGoldPrice)} 元/克` : '--' }}
+            </strong>
+            <span class="gold-price-chip-time">{{ realtimeGoldUpdatedAt }}</span>
+          </div>
         </div>
 
         <div class="summary-grid">
