@@ -177,6 +177,29 @@ export interface ExchangeRate {
   source: string
 }
 
+export type MarketNewsCategory = 'all' | 'focus' | 'china' | 'stock' | 'commodity' | 'fund' | 'macro'
+
+export interface MarketNewsItem {
+  code: string
+  title: string
+  summary: string
+  url: string
+  publishedAt: string | null
+  commentCount: number
+  shareCount: number
+  relatedStockCount: number
+  highlight: boolean
+}
+
+export interface MarketNews {
+  categoryKey: MarketNewsCategory
+  categoryLabel: string
+  count: number
+  updatedAt: string
+  source: string
+  items: MarketNewsItem[]
+}
+
 export type TransactionType = 'expense' | 'income'
 
 export interface Transaction {
@@ -718,6 +741,10 @@ export function getExchangeRate(from: string, to: string) {
   return requestGet<ExchangeRate>(financeRequest, '/api/finance/exchange-rates', {
     params: { from, to },
   })
+}
+
+export function getMarketNews(params: { category?: MarketNewsCategory; limit?: number } = {}) {
+  return requestGet<MarketNews>(financeRequest, '/api/finance/market-news', { params })
 }
 
 export function createTransaction(params: CreateTransactionParams) {
