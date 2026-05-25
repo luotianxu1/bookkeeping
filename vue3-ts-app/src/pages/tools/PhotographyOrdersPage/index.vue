@@ -1,0 +1,642 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonInput from '@/components/common/CommonInput/index.vue'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import CommonModal from '@/components/common/CommonModal/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
+import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
+import PageHeader from '@/components/common/PageHeader/index.vue'
+import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
+import { getAccounts, type Account } from '@/api/modules/finance'
+import {
+  collectPhotographyOrderFinal,
+  createPhotographyOrder,
+  deletePhotographyOrder,
+  getPhotographyOrders,
+  type PhotographyOrder,
+  type PhotographyOrderType,
+} from '@/api/modules/tool'
+import { getStoredCurrentUser } from '@/utils/current-user'
+
+type TabKey = 'pending' | 'shot' | 'all'
+
+type TypeSummaryCard = {
+  key: PhotographyOrderType
+  label: string
+  accent: string
+}
+
+const tabOptions = [
+  { label: '未拍摄', value: 'pending' },
+  { label: '已拍摄', value: 'shot' },
+  { label: '全部', value: 'all' },
+]
+
+const typeOptions: Array<{ label: string; value: PhotographyOrderType }> = [
+  { label: '周岁', value: 'first_birthday' },
+  { label: '百天', value: 'hundred_days' },
+  { label: '订婚', value: 'engagement' },
+  { label: '答谢宴', value: 'thanks_banquet' },
+  { label: '婚礼', value: 'wedding' },
+  { label: '毕业照', value: 'graduation' },
+]
+
+const typeSummaryCards: TypeSummaryCard[] = [
+  { key: 'wedding', label: '婚礼', accent: 'brand' },
+  { key: 'graduation', label: '毕业照', accent: 'blue' },
+  { key: 'first_birthday', label: '周岁', accent: 'green' },
+]
+
+const activeTab = ref<TabKey>('pending')
+const orders = ref<PhotographyOrder[]>([])
+const cashAccounts = ref<Account[]>([])
+const expandedOrderId = ref<number | null>(null)
+
+const isLoading = ref(false)
+const isSaving = ref(false)
+const isCollecting = ref(false)
+const isDeleting = ref(false)
+const pageError = ref('')
+const createFormError = ref('')
+const collectFormError = ref('')
+
+const showCreateModal = ref(false)
+const showCollectModal = ref(false)
+const showDeleteModal = ref(false)
+const feedbackVisible = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
+
+const selectedOrder = ref<PhotographyOrder | null>(null)
+
+const formCustomerName = ref('')
+const formOrderType = ref<PhotographyOrderType>('first_birthday')
+const formShootAt = ref('')
+const formContactInfo = ref('')
+const formTotalAmount = ref('299')
+const formDepositAmount = ref('00')
+const formFinalAmount = ref('299')
+const formDepositAccountId = ref('')
+const formAddress = ref('')
+const formRemark = ref('')
+
+const collectFinalAccountId = ref('')
+
+const isBusy = computed(() => isLoading.value || isSaving.value || isCollecting.value || isDeleting.value)
+
+const filteredOrders = computed(() => {
+  const targetStatus = activeTab.value
+  const source = targetStatus === 'all'
+    ? orders.value
+    : orders.value.filter((order) => order.status === targetStatus)
+
+  return [...source].sort((left, right) => {
+    const leftTime = new Date(left.shootAt).getTime()
+    const rightTime = new Date(right.shootAt).getTime()
+    if (targetStatus === 'shot') {
+      return rightTime - leftTime
+    }
+    return leftTime - rightTime
+  })
+})
+
+const summary = computed(() => {
+  const totalOrders = orders.value.length
+  const depositReceived = orders.value.reduce((sum, order) => sum + Number(order.depositAmount ?? 0), 0)
+  const finalPending = orders.value.reduce((sum, order) => {
+    if (order.finalReceivedAt) {
+      return sum
+    }
+    return sum + Number(order.finalAmount ?? 0)
+  }, 0)
+
+  return {
+    totalOrders,
+    depositReceived,
+    finalPending,
+    typeCounts: typeSummaryCards.map((item) => ({
+      ...item,
+      count: orders.value.filter((order) => order.orderType === item.key).length,
+    })),
+  }
+})
+
+const cashAccountOptions = computed<CommonSelectOption[]>(() => {
+  if (cashAccounts.value.length === 0) {
+    return [{ label: '暂无现金账户', value: '', disabled: true }]
+  }
+
+  return cashAccounts.value.map((account) => ({
+    label: account.name,
+    value: String(account.id),
+  }))
+})
+
+onMounted(() => {
+  void loadPage()
+})
+
+async function loadPage() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    pageError.value = '请先登录后查看摄影订单'
+    return
+  }
+
+  isLoading.value = true
+  pageError.value = ''
+
+  try {
+    const [orderList, accountList] = await Promise.all([
+      getPhotographyOrders({ userId: currentUser.id, status: 'all' }),
+      getAccounts({ userId: currentUser.id, status: 'active' }),
+    ])
+
+    orders.value = orderList
+    cashAccounts.value = accountList.filter(isCashAccount)
+    hydrateDefaultAccounts()
+  } catch (error) {
+    pageError.value = error instanceof Error ? error.message : '摄影订单加载失败'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+function isCashAccount(account: Account) {
+  return account.accountTypeCode === 'cash' || account.accountTypeName?.includes('现金')
+}
+
+function hydrateDefaultAccounts() {
+  const firstCashAccount = cashAccounts.value[0]
+  if (!firstCashAccount) {
+    return
+  }
+
+  if (!formDepositAccountId.value) {
+    formDepositAccountId.value = String(firstCashAccount.id)
+  }
+  if (!collectFinalAccountId.value) {
+    collectFinalAccountId.value = String(firstCashAccount.id)
+  }
+}
+
+function openCreateModal() {
+  resetCreateForm()
+  createFormError.value = ''
+  showCreateModal.value = true
+}
+
+function closeCreateModal() {
+  if (isSaving.value) {
+    return
+  }
+  showCreateModal.value = false
+}
+
+function resetCreateForm() {
+  formCustomerName.value = ''
+  formOrderType.value = 'first_birthday'
+  formShootAt.value = buildDefaultDateTimeLocal()
+  formContactInfo.value = ''
+  formTotalAmount.value = '299'
+  formDepositAmount.value = '00'
+  formFinalAmount.value = '299'
+  formDepositAccountId.value = cashAccounts.value[0] ? String(cashAccounts.value[0].id) : ''
+  formAddress.value = ''
+  formRemark.value = ''
+}
+
+async function saveOrder() {
+  if (isSaving.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    createFormError.value = '请先登录后再新增订单'
+    return
+  }
+
+  const customerName = formCustomerName.value.trim()
+  const totalAmount = parseAmount(formTotalAmount.value)
+  const depositAmount = parseAmount(formDepositAmount.value)
+  const finalAmount = parseAmount(formFinalAmount.value)
+
+  if (!customerName) {
+    createFormError.value = '请输入客户姓名'
+    return
+  }
+  if (!formShootAt.value) {
+    createFormError.value = '请选择拍摄时间'
+    return
+  }
+  if (totalAmount <= 0) {
+    createFormError.value = '总金额必须大于0'
+    return
+  }
+  if (depositAmount < 0 || finalAmount < 0) {
+    createFormError.value = '金额不能小于0'
+    return
+  }
+  if (roundAmount(depositAmount + finalAmount) !== roundAmount(totalAmount)) {
+    createFormError.value = '订金与尾款之和必须等于总金额'
+    return
+  }
+  if (depositAmount > 0 && !formDepositAccountId.value) {
+    createFormError.value = '请选择订金收款账户'
+    return
+  }
+
+  isSaving.value = true
+  createFormError.value = ''
+
+  try {
+    await createPhotographyOrder({
+      userId: currentUser.id,
+      customerName,
+      contactInfo: nullableText(formContactInfo.value),
+      orderType: formOrderType.value,
+      shootAt: normalizeDateTimeLocal(formShootAt.value),
+      totalAmount,
+      depositAmount,
+      finalAmount,
+      depositAccountId: depositAmount > 0 && formDepositAccountId.value ? Number(formDepositAccountId.value) : null,
+      address: nullableText(formAddress.value),
+      remark: nullableText(formRemark.value),
+      sortOrder: getNextSortOrder(),
+    })
+
+    showCreateModal.value = false
+    showFeedback('新增摄影订单成功', 'success')
+    await loadPage()
+  } catch (error) {
+    createFormError.value = error instanceof Error ? error.message : '新增订单失败'
+    showFeedback(createFormError.value, 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
+function toggleOrder(orderId: number) {
+  expandedOrderId.value = expandedOrderId.value === orderId ? null : orderId
+}
+
+function openCollectModal(order: PhotographyOrder) {
+  selectedOrder.value = order
+  collectFormError.value = ''
+  collectFinalAccountId.value = String(order.finalAccountId ?? order.depositAccountId ?? cashAccounts.value[0]?.id ?? '')
+  showCollectModal.value = true
+}
+
+function closeCollectModal() {
+  if (isCollecting.value) {
+    return
+  }
+  showCollectModal.value = false
+  selectedOrder.value = null
+  collectFormError.value = ''
+}
+
+async function confirmCollectFinal() {
+  if (isCollecting.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    collectFormError.value = '请先登录后再收尾款'
+    return
+  }
+
+  const order = selectedOrder.value
+  if (!order) {
+    collectFormError.value = '未找到订单信息'
+    return
+  }
+
+  if (Number(order.finalAmount) > 0 && !collectFinalAccountId.value) {
+    collectFormError.value = '请选择尾款入账账户'
+    return
+  }
+
+  isCollecting.value = true
+  collectFormError.value = ''
+
+  try {
+    await collectPhotographyOrderFinal(order.id, {
+      userId: currentUser.id,
+      finalAccountId: Number(order.finalAmount) > 0 && collectFinalAccountId.value
+        ? Number(collectFinalAccountId.value)
+        : null,
+      occurredAt: normalizeDateTimeLocal(buildDefaultDateTimeLocal()),
+    })
+
+    showCollectModal.value = false
+    selectedOrder.value = null
+    expandedOrderId.value = null
+    showFeedback('尾款已入账', 'success')
+    await loadPage()
+  } catch (error) {
+    collectFormError.value = error instanceof Error ? error.message : '尾款入账失败'
+    showFeedback(collectFormError.value, 'error')
+  } finally {
+    isCollecting.value = false
+  }
+}
+
+function openDeleteModal(order: PhotographyOrder) {
+  selectedOrder.value = order
+  showDeleteModal.value = true
+}
+
+function closeDeleteModal() {
+  if (isDeleting.value) {
+    return
+  }
+  showDeleteModal.value = false
+  selectedOrder.value = null
+}
+
+async function confirmDeleteOrder() {
+  if (isDeleting.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  const order = selectedOrder.value
+  if (!currentUser || !order) {
+    return
+  }
+
+  isDeleting.value = true
+
+  try {
+    await deletePhotographyOrder(order.id, currentUser.id)
+    showDeleteModal.value = false
+    selectedOrder.value = null
+    expandedOrderId.value = null
+    showFeedback('订单删除成功', 'success')
+    await loadPage()
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : '删除订单失败', 'error')
+  } finally {
+    isDeleting.value = false
+  }
+}
+
+function getNextSortOrder() {
+  return orders.value.reduce((max, order) => Math.max(max, Number(order.sortOrder ?? 0)), 0) + 10
+}
+
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  feedbackVisible.value = true
+}
+
+function parseAmount(value: string) {
+  const normalized = Number(value.trim() || '0')
+  if (!Number.isFinite(normalized)) {
+    return 0
+  }
+  return roundAmount(normalized)
+}
+
+function roundAmount(value: number) {
+  return Number(value.toFixed(2))
+}
+
+function nullableText(value: string) {
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
+
+function normalizeDateTimeLocal(value: string) {
+  return value.length === 16 ? `${value}:00` : value
+}
+
+function buildDefaultDateTimeLocal() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hour = String(now.getHours()).padStart(2, '0')
+  const minute = String(now.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hour}:${minute}`
+}
+
+function formatDateTime(value: string) {
+  if (!value) {
+    return '--'
+  }
+
+  const [datePart = '', timePart = ''] = value.replace('T', ' ').split(' ')
+  const displayDate = datePart.replace(/-/g, '.')
+  return `${displayDate} ${timePart.slice(0, 5)}`
+}
+
+function formatCurrency(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0)
+  return `¥${amount.toLocaleString('zh-CN', {
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
+function orderTypeLabel(type: string) {
+  return typeOptions.find((option) => option.value === type)?.label ?? type
+}
+
+function depositStatusLabel(order: PhotographyOrder) {
+  return Number(order.depositAmount) > 0 ? '已付订金' : '未付订金'
+}
+
+function avatarLabel(name: string) {
+  return name.trim().slice(0, 1) || '摄'
+}
+
+function isFinalPaid(order: PhotographyOrder) {
+  return Boolean(order.finalReceivedAt)
+}
+</script>
+
+<template>
+  <section class="photography-orders-page" aria-label="摄影订单管理">
+    <PageHeader title="摄影订单" back-to="/tools" back-label="返回工具页" />
+
+    <section class="orders-summary-card" aria-label="摄影订单汇总">
+      <div class="orders-summary-head">
+        <strong>{{ summary.totalOrders }} 单</strong>
+        <span class="orders-summary-pill">{{ new Date().getMonth() + 1 }}月档期</span>
+      </div>
+      <p>已收订金 {{ formatCurrency(summary.depositReceived) }} · 待收尾款 {{ formatCurrency(summary.finalPending) }}</p>
+      <div class="orders-summary-types">
+        <article
+          v-for="item in summary.typeCounts"
+          :key="item.key"
+          :class="['orders-summary-type', `orders-summary-type--${item.accent}`]"
+        >
+          <strong>{{ item.label }} {{ item.count }}</strong>
+        </article>
+      </div>
+    </section>
+
+    <SegmentedControl
+      v-model="activeTab"
+      :options="tabOptions"
+      label="摄影订单状态切换"
+      variant="brand"
+    />
+
+    <CommonLoading v-if="isBusy" text="处理中..." />
+    <CommonFeedback v-model="feedbackVisible" :message="feedbackMessage" :type="feedbackType" />
+
+    <p v-if="pageError" class="orders-page-error">{{ pageError }}</p>
+    <p v-else-if="filteredOrders.length === 0" class="orders-empty">暂无摄影订单</p>
+
+    <section v-else class="orders-list" aria-label="摄影订单列表">
+      <article
+        v-for="order in filteredOrders"
+        :key="order.id"
+        :class="['order-card', { 'order-card-expanded': expandedOrderId === order.id }]"
+        @click="toggleOrder(order.id)"
+      >
+        <div class="order-card-top">
+          <div class="order-card-customer">
+            <span class="order-card-avatar">{{ avatarLabel(order.customerName) }}</span>
+            <div>
+              <strong>{{ order.customerName }}</strong>
+              <p>{{ formatDateTime(order.shootAt) }}</p>
+            </div>
+          </div>
+
+          <div class="order-card-meta">
+            <span class="order-card-type">{{ orderTypeLabel(order.orderType) }}</span>
+            <span class="order-card-deposit">{{ depositStatusLabel(order) }}</span>
+          </div>
+        </div>
+
+        <div class="order-card-amounts">
+          <div class="order-card-amount">
+            <span>总金额</span>
+            <strong>{{ formatCurrency(order.totalAmount) }}</strong>
+          </div>
+          <div class="order-card-amount">
+            <span>订金</span>
+            <strong>{{ formatCurrency(order.depositAmount) }}</strong>
+          </div>
+          <div class="order-card-amount">
+            <span>尾款</span>
+            <strong>{{ formatCurrency(order.finalAmount) }}</strong>
+          </div>
+        </div>
+
+        <div class="order-card-bottom">
+          <p v-if="order.address">地址：{{ order.address }}</p>
+          <p v-if="order.contactInfo">联系方式：{{ order.contactInfo }}</p>
+          <p v-if="order.remark">{{ order.remark }}</p>
+        </div>
+
+        <div v-if="expandedOrderId === order.id" class="order-card-actions" @click.stop>
+          <button class="order-card-action order-card-action-delete" type="button" @click="openDeleteModal(order)">
+            删除
+          </button>
+          <button
+            class="order-card-action order-card-action-primary"
+            type="button"
+            :disabled="isFinalPaid(order)"
+            @click="openCollectModal(order)"
+          >
+            {{ isFinalPaid(order) ? '已收尾款' : '收尾款' }}
+          </button>
+        </div>
+      </article>
+    </section>
+
+    <FloatingAddButton aria-label="新增摄影订单" storage-key="photography-order" @click="openCreateModal" />
+
+    <CommonModal v-model="showCreateModal" title="新增摄影订单" size="compact" @close="createFormError = ''">
+      <div class="order-form">
+        <p class="order-form-intro">快速记录客户、档期和收款进度</p>
+        <CommonInput v-model="formCustomerName" label="客户姓名" placeholder="请输入客户昵称或宝宝姓名" />
+        <CommonSelect v-model="formOrderType" label="订单类型" :options="typeOptions" />
+        <CommonInput v-model="formShootAt" label="拍摄时间" input-type="datetime-local" />
+        <CommonInput v-model="formContactInfo" label="联系方式" placeholder="138****2001 / 微信同号" />
+        <CommonInput v-model="formTotalAmount" label="总金额" placeholder="¥ 299" input-mode="decimal" />
+
+        <div class="order-form-split">
+          <CommonInput v-model="formDepositAmount" label="订金" placeholder="¥ 00" input-mode="decimal" />
+          <CommonInput v-model="formFinalAmount" label="尾款" placeholder="¥ 299" input-mode="decimal" />
+        </div>
+
+        <CommonSelect v-model="formDepositAccountId" label="收款账户" :options="cashAccountOptions" />
+        <CommonInput v-model="formAddress" label="地址" placeholder="请输入拍摄地址" />
+
+        <label class="order-form-field">
+          <span>备注</span>
+          <textarea v-model="formRemark" placeholder="服装两套，外景在公园，需提前沟通天气"></textarea>
+        </label>
+
+        <p v-if="createFormError" class="order-form-error">{{ createFormError }}</p>
+      </div>
+
+      <template #footer>
+        <div class="orders-modal-actions">
+          <CommonButton variant="secondary" :disabled="isSaving" @click="closeCreateModal">取消</CommonButton>
+          <CommonButton :disabled="isSaving" @click="saveOrder">
+            {{ isSaving ? '保存中...' : '保存订单' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+
+    <CommonModal v-model="showCollectModal" title="确认收尾款" size="compact" @close="collectFormError = ''">
+      <div v-if="selectedOrder" class="collect-modal">
+        <p class="collect-modal-subtitle">
+          {{ selectedOrder.customerName }} · {{ orderTypeLabel(selectedOrder.orderType) }} · {{ formatDateTime(selectedOrder.shootAt) }}
+        </p>
+        <section class="collect-amount-card">
+          <span>待收尾款</span>
+          <strong>{{ formatCurrency(selectedOrder.finalAmount) }}</strong>
+        </section>
+        <CommonSelect
+          v-if="Number(selectedOrder.finalAmount) > 0"
+          v-model="collectFinalAccountId"
+          label="入账账户"
+          :options="cashAccountOptions"
+        />
+        <p class="collect-modal-tip">确认前可切换尾款入账账户，确认后会记录本次尾款收款，并将该订单归入已拍摄。</p>
+        <p v-if="collectFormError" class="order-form-error">{{ collectFormError }}</p>
+      </div>
+
+      <template #footer>
+        <div class="orders-modal-actions">
+          <CommonButton variant="secondary" :disabled="isCollecting" @click="closeCollectModal">取消</CommonButton>
+          <CommonButton :disabled="isCollecting" @click="confirmCollectFinal">
+            {{ isCollecting ? '提交中...' : '确认收款' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+
+    <CommonModal v-model="showDeleteModal" title="删除订单" size="compact">
+      <div class="delete-modal">
+        <p class="delete-modal-title">是否确认删除？</p>
+        <p class="delete-modal-tip">订单、订金和尾款记录会一并删除，请谨慎操作。</p>
+      </div>
+
+      <template #footer>
+        <div class="orders-modal-actions">
+          <CommonButton variant="secondary" :disabled="isDeleting" @click="closeDeleteModal">取消</CommonButton>
+          <CommonButton class="orders-modal-danger" :disabled="isDeleting" @click="confirmDeleteOrder">
+            {{ isDeleting ? '删除中...' : '确认删除' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+  </section>
+</template>
+
+<style scoped lang="scss" src="./style.scss"></style>

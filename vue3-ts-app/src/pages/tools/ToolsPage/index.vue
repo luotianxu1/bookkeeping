@@ -15,6 +15,7 @@ const toolItems: ToolItem[] = [
   { key: 'anniversary', title: '纪念日', short: '纪', tone: 'purple' },
   { key: 'calendar', title: '日历', short: '历', tone: 'sky' },
   { key: 'checkin', title: '打卡', short: '打', tone: 'green' },
+  { key: 'photography-orders', title: '摄影订单', short: '摄', tone: 'blue', featured: true, to: '/tools/photography-orders' },
   { key: 'contacts', title: '联系人', short: '联', tone: 'orange', featured: true, to: '/tools/contacts' },
 ]
 </script>
