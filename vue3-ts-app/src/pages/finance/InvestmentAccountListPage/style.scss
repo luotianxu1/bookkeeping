@@ -98,6 +98,14 @@
   justify-items: end;
 }
 
+.investment-list-summary-side :deep(.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.investment-list-summary-side :deep(.amount-text--negative) {
+  color: var(--color-success);
+}
+
 .investment-list-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -123,6 +131,14 @@
   color: var(--color-text-primary);
   font-size: var(--font-size-14);
   font-weight: 700;
+}
+
+.investment-list-metric-item :deep(.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.investment-list-metric-item :deep(.amount-text--negative) {
+  color: var(--color-success);
 }
 
 .investment-account-list {
@@ -180,6 +196,14 @@
   color: var(--color-text-primary);
   font-size: var(--font-size-16);
   font-weight: 700;
+}
+
+.investment-account-list-card-side :deep(.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.investment-account-list-card-side :deep(.amount-text--negative) {
+  color: var(--color-success);
 }
 
 .investment-account-list-card-side span,

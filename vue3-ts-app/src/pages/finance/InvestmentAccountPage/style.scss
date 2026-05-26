@@ -331,11 +331,15 @@
   gap: var(--space-6);
 }
 
+.holding-title-row {
+  width: 100%;
+  min-width: 0;
+}
+
 .holding-left {
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: var(--space-6);
 }
 
 .holding-left.compact {
@@ -359,17 +363,26 @@
 .holding-title {
   display: flex;
   align-items: center;
+  width: 100%;
   gap: var(--space-6);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .holding-title strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text-primary);
   font-size: var(--font-size-12);
   font-weight: 700;
 }
 
 .holding-title span {
+  flex: 0 0 auto;
+  white-space: nowrap;
   color: var(--color-text-muted);
   font-size: 9px;
   font-weight: 500;
@@ -399,6 +412,14 @@
   color: var(--color-text-tertiary);
   font-size: var(--font-size-12);
   font-weight: 500;
+}
+
+.holding-tags :deep(.holding-market-value.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.holding-tags :deep(.holding-market-value.amount-text--negative) {
+  color: var(--color-success);
 }
 
 .holding-right span {
@@ -530,6 +551,14 @@
   color: var(--color-brand-strong);
   font-size: var(--font-size-12);
   font-weight: 600;
+}
+
+.holding-pending-amount :deep(.holding-pending-amount-value.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.holding-pending-amount :deep(.holding-pending-amount-value.amount-text--negative) {
+  color: var(--color-success);
 }
 
 .holding-pnl-line {

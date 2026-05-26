@@ -546,7 +546,7 @@ function getHoldingTotalProfitRate(position: InvestmentPosition) {
 }
 
 function getHoldingBottomValue(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? formatCurrency(position.costAmount, 0) : formatCurrency(getHoldingTotalProfit(position), 0)
+  return isPendingSubscription(position) ? formatCurrency(position.costAmount, 0) : formatCurrency(getHoldingTotalProfit(position))
 }
 
 function getHoldingBottomRate(position: InvestmentPosition) {
@@ -623,16 +623,19 @@ function showFeedback(message: string, type: 'success' | 'error') {
           class="investment-holding-card"
           @click="openInvestmentDetail(holding.id)"
         >
+          <div class="holding-title-row">
+            <div class="holding-title">
+              <strong>{{ holding.productName }}</strong>
+              <span v-if="getHoldingStatusText(holding)">{{ getHoldingStatusText(holding) }}</span>
+            </div>
+          </div>
+
           <div class="holding-row top">
             <div class="holding-left">
-              <div class="holding-title">
-                <strong>{{ holding.productName }}</strong>
-                <span v-if="getHoldingStatusText(holding)">{{ getHoldingStatusText(holding) }}</span>
-              </div>
               <div class="holding-tags">
                 <span class="holding-tag">{{ getProductTag(holding) }}</span>
                 <span v-if="shouldShowPendingTag(holding)" class="holding-tag is-pending">待确认</span>
-                <span class="holding-market-value">{{ formatCurrency(holding.marketValue, 0) }}</span>
+                <AmountText tag="span" class="holding-market-value" :value="formatCurrency(holding.marketValue, 0)" />
               </div>
             </div>
             <div class="holding-right">
@@ -671,7 +674,12 @@ function showFeedback(message: string, type: 'success' | 'error') {
           </div>
 
           <p v-if="getHoldingPendingAmount(holding) > 0" class="holding-pending-amount">
-            待确认金额 {{ formatCurrency(getHoldingPendingAmount(holding)) }}
+            待确认金额
+            <AmountText
+              tag="span"
+              class="holding-pending-amount-value"
+              :value="formatCurrency(getHoldingPendingAmount(holding))"
+            />
           </p>
 
           <div class="holding-divider"></div>

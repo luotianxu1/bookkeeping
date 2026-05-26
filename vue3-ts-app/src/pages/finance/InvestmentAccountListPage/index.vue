@@ -376,7 +376,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <span>{{ metric.label }}</span>
               <AmountText
                 tag="strong"
-                tone="inherit"
+                :tone="metric.isCount ? 'inherit' : 'auto'"
                 :value="formatMetricValue(metric.value, metric.isRate, metric.isCount)"
               />
             </div>
@@ -403,7 +403,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <strong>{{ card.name }}</strong>
             </div>
             <div class="investment-account-list-card-side">
-              <AmountText tag="strong" :value="formatCurrency(card.marketValue)" tone="inherit" />
+              <AmountText tag="strong" :value="formatCurrency(card.marketValue)" />
             </div>
           </div>
 
@@ -419,7 +419,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 <AmountText
                   tag="strong"
                   class="investment-account-list-card-profit-value"
-                  :value="card.dayProfit"
+                  :value="formatSignedCurrency(card.dayProfit)"
                   show-sign
                   show-unit
                 />
