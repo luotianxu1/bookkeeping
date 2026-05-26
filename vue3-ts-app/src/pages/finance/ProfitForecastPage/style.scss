@@ -106,6 +106,40 @@
   color: var(--color-text-muted);
 }
 
+.summary-rate-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.summary-rate-label {
+  color: var(--color-text-primary);
+}
+
+.summary-profit.amount-text--positive,
+.summary-rate.amount-text--positive,
+.value-profit.amount-text--positive,
+.value-rate.amount-text--positive {
+  color: var(--color-danger);
+}
+
+.summary-profit.amount-text--negative,
+.summary-rate.amount-text--negative,
+.value-profit.amount-text--negative,
+.value-rate.amount-text--negative {
+  color: var(--color-success);
+}
+
+.summary-profit.amount-text--neutral,
+.value-profit.amount-text--neutral {
+  color: inherit;
+}
+
+.summary-rate.amount-text--neutral,
+.value-rate.amount-text--neutral {
+  color: var(--color-text-muted);
+}
+
 .summary-hint {
   margin: 0;
   color: var(--color-text-subtle);

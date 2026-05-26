@@ -44,6 +44,19 @@
   appearance: none;
 }
 
+.segmented-control-item-inner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.segmented-control-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
 .segmented-control-item.active {
   color: var(--color-white);
 }

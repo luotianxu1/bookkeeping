@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
@@ -7,6 +8,7 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
+import MonthPicker from '@/components/common/MonthPicker/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import { getAccounts, type Account } from '@/api/modules/finance'
@@ -26,6 +28,7 @@ type TypeSummaryCard = {
   key: PhotographyOrderType
   label: string
   accent: string
+  count: number
 }
 
 const tabOptions = [
@@ -43,13 +46,11 @@ const typeOptions: Array<{ label: string; value: PhotographyOrderType }> = [
   { label: '毕业照', value: 'graduation' },
 ]
 
-const typeSummaryCards: TypeSummaryCard[] = [
-  { key: 'wedding', label: '婚礼', accent: 'brand' },
-  { key: 'graduation', label: '毕业照', accent: 'blue' },
-  { key: 'first_birthday', label: '周岁', accent: 'green' },
-]
+const summaryAccents = ['brand', 'blue', 'green'] as const
 
 const activeTab = ref<TabKey>('pending')
+const selectedMonth = ref(buildCurrentMonth())
+const router = useRouter()
 const orders = ref<PhotographyOrder[]>([])
 const cashAccounts = ref<Account[]>([])
 const expandedOrderId = ref<number | null>(null)
@@ -75,8 +76,7 @@ const formCustomerName = ref('')
 const formOrderType = ref<PhotographyOrderType>('first_birthday')
 const formShootAt = ref('')
 const formContactInfo = ref('')
-const formTotalAmount = ref('299')
-const formDepositAmount = ref('00')
+const formDepositAmount = ref('100')
 const formFinalAmount = ref('299')
 const formDepositAccountId = ref('')
 const formAddress = ref('')
@@ -85,12 +85,23 @@ const formRemark = ref('')
 const collectFinalAccountId = ref('')
 
 const isBusy = computed(() => isLoading.value || isSaving.value || isCollecting.value || isDeleting.value)
+const selectedMonthOrders = computed(() => {
+  const [yearText = '', monthText = ''] = selectedMonth.value.split('-')
+  const targetYear = Number(yearText)
+  const targetMonth = Number(monthText) - 1
+
+  return orders.value.filter((order) => {
+    const shootAt = new Date(order.shootAt)
+    return shootAt.getFullYear() === targetYear && shootAt.getMonth() === targetMonth
+  })
+})
 
 const filteredOrders = computed(() => {
   const targetStatus = activeTab.value
+  const now = Date.now()
   const source = targetStatus === 'all'
-    ? orders.value
-    : orders.value.filter((order) => order.status === targetStatus)
+    ? selectedMonthOrders.value
+    : selectedMonthOrders.value.filter((order) => isShotByTime(order, now) === (targetStatus === 'shot'))
 
   return [...source].sort((left, right) => {
     const leftTime = new Date(left.shootAt).getTime()
@@ -103,23 +114,39 @@ const filteredOrders = computed(() => {
 })
 
 const summary = computed(() => {
-  const totalOrders = orders.value.length
-  const depositReceived = orders.value.reduce((sum, order) => sum + Number(order.depositAmount ?? 0), 0)
-  const finalPending = orders.value.reduce((sum, order) => {
+  const totalOrders = selectedMonthOrders.value.length
+  const depositReceived = selectedMonthOrders.value.reduce((sum, order) => sum + Number(order.depositAmount ?? 0), 0)
+  const finalPending = selectedMonthOrders.value.reduce((sum, order) => {
     if (order.finalReceivedAt) {
       return sum
     }
     return sum + Number(order.finalAmount ?? 0)
   }, 0)
+  const typeCounts = typeOptions
+    .map((item) => {
+      const count = selectedMonthOrders.value.filter((order) => order.orderType === item.value).length
+
+      return count > 0
+        ? {
+            key: item.value,
+            label: item.label,
+            count,
+          }
+        : null
+    })
+    .filter((item): item is Omit<TypeSummaryCard, 'accent'> => item !== null)
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 3)
+    .map((item, index) => ({
+      ...item,
+      accent: summaryAccents[index] ?? summaryAccents[summaryAccents.length - 1],
+    }))
 
   return {
     totalOrders,
     depositReceived,
     finalPending,
-    typeCounts: typeSummaryCards.map((item) => ({
-      ...item,
-      count: orders.value.filter((order) => order.orderType === item.key).length,
-    })),
+    typeCounts,
   }
 })
 
@@ -200,8 +227,7 @@ function resetCreateForm() {
   formOrderType.value = 'first_birthday'
   formShootAt.value = buildDefaultDateTimeLocal()
   formContactInfo.value = ''
-  formTotalAmount.value = '299'
-  formDepositAmount.value = '00'
+  formDepositAmount.value = '100'
   formFinalAmount.value = '299'
   formDepositAccountId.value = cashAccounts.value[0] ? String(cashAccounts.value[0].id) : ''
   formAddress.value = ''
@@ -220,9 +246,9 @@ async function saveOrder() {
   }
 
   const customerName = formCustomerName.value.trim()
-  const totalAmount = parseAmount(formTotalAmount.value)
   const depositAmount = parseAmount(formDepositAmount.value)
   const finalAmount = parseAmount(formFinalAmount.value)
+  const totalAmount = roundAmount(depositAmount + finalAmount)
 
   if (!customerName) {
     createFormError.value = '请输入客户姓名'
@@ -238,10 +264,6 @@ async function saveOrder() {
   }
   if (depositAmount < 0 || finalAmount < 0) {
     createFormError.value = '金额不能小于0'
-    return
-  }
-  if (roundAmount(depositAmount + finalAmount) !== roundAmount(totalAmount)) {
-    createFormError.value = '订金与尾款之和必须等于总金额'
     return
   }
   if (depositAmount > 0 && !formDepositAccountId.value) {
@@ -390,6 +412,11 @@ function getNextSortOrder() {
   return orders.value.reduce((max, order) => Math.max(max, Number(order.sortOrder ?? 0)), 0) + 10
 }
 
+function isShotByTime(order: PhotographyOrder, now = Date.now()) {
+  const shootAt = new Date(order.shootAt).getTime()
+  return Number.isFinite(shootAt) && shootAt <= now
+}
+
 function showFeedback(message: string, type: 'success' | 'error') {
   feedbackMessage.value = message
   feedbackType.value = type
@@ -450,7 +477,18 @@ function orderTypeLabel(type: string) {
 }
 
 function depositStatusLabel(order: PhotographyOrder) {
+  if (isShotByTime(order)) {
+    return '已拍摄'
+  }
   return Number(order.depositAmount) > 0 ? '已付订金' : '未付订金'
+}
+
+function depositStatusClass(order: PhotographyOrder) {
+  return isShotByTime(order) ? 'order-card-deposit--shot' : 'order-card-deposit--pending'
+}
+
+function amountTextClass(value: number | string | null | undefined) {
+  return Number(value ?? 0) === 0 ? 'is-zero' : ''
 }
 
 function avatarLabel(name: string) {
@@ -460,16 +498,30 @@ function avatarLabel(name: string) {
 function isFinalPaid(order: PhotographyOrder) {
   return Boolean(order.finalReceivedAt)
 }
+
+function openOverview() {
+  const [year = String(new Date().getFullYear()), month = String(new Date().getMonth() + 1).padStart(2, '0')] = selectedMonth.value.split('-')
+  void router.push(`/tools/photography-orders/overview?view=calendar&anchor=${year}-${month}`)
+}
+
+function buildCurrentMonth() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
 </script>
 
 <template>
   <section class="photography-orders-page" aria-label="摄影订单管理">
     <PageHeader title="摄影订单" back-to="/tools" back-label="返回工具页" />
 
+    <MonthPicker :model-value="selectedMonth" @update:model-value="selectedMonth = $event" />
+
     <section class="orders-summary-card" aria-label="摄影订单汇总">
       <div class="orders-summary-head">
         <strong>{{ summary.totalOrders }} 单</strong>
-        <span class="orders-summary-pill">{{ new Date().getMonth() + 1 }}月档期</span>
+        <button type="button" class="orders-summary-pill" @click="openOverview">
+          {{ Number(selectedMonth.split('-')[1] || '0') }}月订单
+        </button>
       </div>
       <p>已收订金 {{ formatCurrency(summary.depositReceived) }} · 待收尾款 {{ formatCurrency(summary.finalPending) }}</p>
       <div class="orders-summary-types">
@@ -514,22 +566,18 @@ function isFinalPaid(order: PhotographyOrder) {
 
           <div class="order-card-meta">
             <span class="order-card-type">{{ orderTypeLabel(order.orderType) }}</span>
-            <span class="order-card-deposit">{{ depositStatusLabel(order) }}</span>
+            <span :class="['order-card-deposit', depositStatusClass(order)]">{{ depositStatusLabel(order) }}</span>
           </div>
         </div>
 
         <div class="order-card-amounts">
           <div class="order-card-amount">
-            <span>总金额</span>
-            <strong>{{ formatCurrency(order.totalAmount) }}</strong>
-          </div>
-          <div class="order-card-amount">
             <span>订金</span>
-            <strong>{{ formatCurrency(order.depositAmount) }}</strong>
+            <strong :class="amountTextClass(order.depositAmount)">{{ formatCurrency(order.depositAmount) }}</strong>
           </div>
           <div class="order-card-amount">
             <span>尾款</span>
-            <strong>{{ formatCurrency(order.finalAmount) }}</strong>
+            <strong :class="amountTextClass(order.finalAmount)">{{ formatCurrency(order.finalAmount) }}</strong>
           </div>
         </div>
 
@@ -559,15 +607,13 @@ function isFinalPaid(order: PhotographyOrder) {
 
     <CommonModal v-model="showCreateModal" title="新增摄影订单" size="compact" @close="createFormError = ''">
       <div class="order-form">
-        <p class="order-form-intro">快速记录客户、档期和收款进度</p>
         <CommonInput v-model="formCustomerName" label="客户姓名" placeholder="请输入客户昵称或宝宝姓名" />
         <CommonSelect v-model="formOrderType" label="订单类型" :options="typeOptions" />
         <CommonInput v-model="formShootAt" label="拍摄时间" input-type="datetime-local" />
         <CommonInput v-model="formContactInfo" label="联系方式" placeholder="138****2001 / 微信同号" />
-        <CommonInput v-model="formTotalAmount" label="总金额" placeholder="¥ 299" input-mode="decimal" />
 
         <div class="order-form-split">
-          <CommonInput v-model="formDepositAmount" label="订金" placeholder="¥ 00" input-mode="decimal" />
+          <CommonInput v-model="formDepositAmount" label="订金" placeholder="¥ 100" input-mode="decimal" />
           <CommonInput v-model="formFinalAmount" label="尾款" placeholder="¥ 299" input-mode="decimal" />
         </div>
 

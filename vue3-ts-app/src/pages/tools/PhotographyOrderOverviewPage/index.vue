@@ -1,0 +1,716 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import type { ECharts, EChartsCoreOption } from 'echarts'
+import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import MonthPicker from '@/components/common/MonthPicker/index.vue'
+import PageHeader from '@/components/common/PageHeader/index.vue'
+import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
+import YearPicker from '@/components/common/YearPicker/index.vue'
+import {
+  getPhotographyOrderOverview,
+  type PhotographyOrder,
+  type PhotographyOrderOverview,
+  type PhotographyOrderOverviewBucket,
+  type PhotographyOrderOverviewView,
+} from '@/api/modules/tool'
+import { getStoredCurrentUser } from '@/utils/current-user'
+
+const route = useRoute()
+const router = useRouter()
+
+const viewOptions = [
+  { label: '日视图', value: 'calendar', icon: 'calendar-day' },
+  { label: '月视图', value: 'month', icon: 'calendar-month' },
+  { label: '年视图', value: 'year', icon: 'calendar-year' },
+] as const
+
+const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
+
+const viewMode = ref<PhotographyOrderOverviewView>(resolveInitialView())
+const calendarMonth = ref(resolveInitialMonth())
+const calendarSelectedDate = ref<string | null>(resolveInitialDate())
+const monthYear = ref(resolveInitialYear())
+const yearWindowEnd = ref(resolveInitialYear())
+
+const overview = ref<PhotographyOrderOverview | null>(null)
+const calendarBuckets = ref<PhotographyOrderOverviewBucket[]>([])
+const calendarOrders = ref<PhotographyOrder[]>([])
+const calendarActiveDate = ref<string | null>(resolveInitialDate())
+const isLoading = ref(false)
+const pageError = ref('')
+
+const lineChartRef = ref<HTMLDivElement | null>(null)
+const pieChartRef = ref<HTMLDivElement | null>(null)
+const revenuePieChartRef = ref<HTMLDivElement | null>(null)
+let echartsLib: (typeof import('echarts')) | null = null
+let lineChart: ECharts | null = null
+let pieChart: ECharts | null = null
+let revenuePieChart: ECharts | null = null
+let requestSerial = 0
+
+const summary = computed(() => overview.value?.summary ?? null)
+const orders = computed(() => (viewMode.value === 'calendar' ? calendarOrders.value : overview.value?.orders ?? []))
+const trendPoints = computed(() => overview.value?.trendPoints ?? [])
+const typeStats = computed(() => overview.value?.typeStats ?? [])
+const buckets = computed(() => (viewMode.value === 'calendar' ? calendarBuckets.value : overview.value?.buckets ?? []))
+const selectedCalendarDate = computed(() => (
+  viewMode.value === 'calendar'
+    ? calendarActiveDate.value
+    : overview.value?.selectedValue ?? calendarSelectedDate.value ?? null
+))
+const showCalendarOrders = computed(() => viewMode.value === 'calendar' && orders.value.length > 0)
+const calendarFocusLabel = computed(() => (
+  viewMode.value === 'calendar' && selectedCalendarDate.value
+    ? formatDateLabel(selectedCalendarDate.value)
+    : ''
+))
+
+const periodTitle = computed(() => {
+  if (!overview.value) return '订单列表'
+  if (viewMode.value === 'calendar') {
+    return selectedCalendarDate.value ? `${formatDateLabel(selectedCalendarDate.value)}订单列表` : '当天订单列表'
+  }
+  if (viewMode.value === 'month') {
+    return `${overview.value.selectedValue}年订单列表`
+  }
+  return `${overview.value.selectedValue}订单列表`
+})
+
+const bucketSectionTitle = computed(() => {
+  if (viewMode.value === 'calendar') return '拍摄日历'
+  if (viewMode.value === 'month') return '全年月份概览'
+  return '近5年年份概览'
+})
+
+const trendChartSubtitle = computed(() => {
+  if (viewMode.value === 'calendar') return '按当前视角展示当天总收益'
+  if (viewMode.value === 'month') return '按当前视角展示当月总收益'
+  return '按当前视角展示当年总收益'
+})
+
+const trendSeriesName = computed(() => {
+  if (viewMode.value === 'calendar') return '当天总收益'
+  if (viewMode.value === 'month') return '当月总收益'
+  return '当年总收益'
+})
+
+const lineHasData = computed(() => trendPoints.value.some((item) => Number(item.contractAmount) > 0 || Number(item.orderCount) > 0))
+const quantityPieHasData = computed(() => typeStats.value.some((item) => Number(item.orderCount) > 0))
+const revenuePieHasData = computed(() => typeStats.value.some((item) => Number(item.contractAmount) > 0))
+
+onMounted(() => {
+  void loadOverview()
+  window.addEventListener('resize', handleResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  lineChart?.dispose()
+  pieChart?.dispose()
+  revenuePieChart?.dispose()
+  lineChart = null
+  pieChart = null
+  revenuePieChart = null
+})
+
+watch(viewMode, () => {
+  void loadOverview()
+})
+
+watch(calendarMonth, () => {
+  if (viewMode.value === 'calendar') {
+    void loadOverview()
+  }
+})
+
+watch(monthYear, () => {
+  if (viewMode.value === 'month') {
+    void loadOverview()
+  }
+})
+
+watch(yearWindowEnd, () => {
+  if (viewMode.value === 'year') {
+    void loadOverview()
+  }
+})
+
+watch(
+  () => overview.value,
+  async () => {
+    await nextTick()
+    await ensureCharts()
+    renderLineChart()
+    renderQuantityPieChart()
+    renderRevenuePieChart()
+  },
+  { deep: true },
+)
+
+async function loadOverview() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    pageError.value = '请先登录后查看订单总览'
+    return
+  }
+
+  const currentRequest = ++requestSerial
+  isLoading.value = true
+  pageError.value = ''
+
+  try {
+    const response = await getPhotographyOrderOverview(buildQuery(currentUser.id))
+    if (currentRequest !== requestSerial) {
+      return
+    }
+
+    overview.value = response
+
+    if (viewMode.value === 'calendar') {
+      calendarBuckets.value = response.buckets ?? []
+      calendarOrders.value = response.orders ?? []
+      calendarActiveDate.value = response.selectedValue ?? null
+      if (calendarMonth.value !== response.anchor) {
+        calendarMonth.value = response.anchor
+      }
+      if (calendarSelectedDate.value !== (response.selectedValue ?? null)) {
+        calendarSelectedDate.value = response.selectedValue ?? null
+      }
+    } else if (viewMode.value === 'month') {
+      if (String(monthYear.value) !== response.anchor) {
+        monthYear.value = Number(response.anchor)
+      }
+    } else if (String(yearWindowEnd.value) !== response.anchor) {
+      yearWindowEnd.value = Number(response.anchor)
+    }
+
+    void router.replace({
+      query: buildRouteQuery(),
+    })
+  } catch (error) {
+    if (currentRequest !== requestSerial) {
+      return
+    }
+    pageError.value = error instanceof Error ? error.message : '订单总览加载失败'
+  } finally {
+    if (currentRequest === requestSerial) {
+      isLoading.value = false
+    }
+  }
+}
+
+async function loadCalendarOrders() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser || viewMode.value !== 'calendar') {
+    return
+  }
+
+  const currentRequest = ++requestSerial
+
+  try {
+    const response = await getPhotographyOrderOverview({
+      userId: currentUser.id,
+      view: 'calendar',
+      anchor: calendarMonth.value,
+      selectedDate: calendarSelectedDate.value ?? undefined,
+    })
+    if (currentRequest !== requestSerial) {
+      return
+    }
+
+    calendarBuckets.value = response.buckets ?? []
+    calendarOrders.value = response.orders ?? []
+    calendarActiveDate.value = response.selectedValue ?? null
+    if (calendarSelectedDate.value !== (response.selectedValue ?? null)) {
+      calendarSelectedDate.value = response.selectedValue ?? null
+    }
+
+    void router.replace({
+      query: buildRouteQuery(),
+    })
+  } catch (error) {
+    if (currentRequest !== requestSerial) {
+      return
+    }
+    pageError.value = error instanceof Error ? error.message : '订单列表加载失败'
+  }
+}
+
+function buildQuery(userId: number) {
+  if (viewMode.value === 'calendar') {
+    return {
+      userId,
+      view: 'calendar' as const,
+      anchor: calendarMonth.value,
+      selectedDate: calendarSelectedDate.value ?? undefined,
+    }
+  }
+  if (viewMode.value === 'month') {
+    return {
+      userId,
+      view: 'month' as const,
+      anchor: String(monthYear.value),
+    }
+  }
+  return {
+    userId,
+    view: 'year' as const,
+    anchor: String(yearWindowEnd.value),
+  }
+}
+
+function buildRouteQuery() {
+  if (viewMode.value === 'calendar') {
+    return {
+      view: 'calendar',
+      anchor: calendarMonth.value,
+      selectedDate: calendarSelectedDate.value ?? undefined,
+    }
+  }
+  if (viewMode.value === 'month') {
+    return {
+      view: 'month',
+      anchor: String(monthYear.value),
+    }
+  }
+  return {
+    view: 'year',
+    anchor: String(yearWindowEnd.value),
+  }
+}
+
+function handleBucketClick(bucket: PhotographyOrderOverviewBucket) {
+  if (viewMode.value === 'calendar') {
+    if (bucket.orderCount <= 0) {
+      return
+    }
+    const nextMonth = bucket.key.slice(0, 7)
+    if (calendarMonth.value !== nextMonth) {
+      calendarMonth.value = nextMonth
+    }
+    if (calendarSelectedDate.value !== bucket.key) {
+      calendarSelectedDate.value = bucket.key
+    }
+    void loadCalendarOrders()
+    return
+  }
+
+  if (viewMode.value === 'month') {
+    viewMode.value = 'calendar'
+    calendarMonth.value = bucket.key.slice(0, 7)
+    calendarSelectedDate.value = bucket.key
+    return
+  }
+
+  viewMode.value = 'month'
+  monthYear.value = Number(bucket.key)
+}
+
+function resolveInitialView(): PhotographyOrderOverviewView {
+  const raw = String(route.query.view ?? '').trim().toLowerCase()
+  if (raw === 'month' || raw === 'year') {
+    return raw
+  }
+  return 'calendar'
+}
+
+function resolveInitialMonth() {
+  const raw = String(route.query.anchor ?? '')
+  if (resolveInitialView() === 'calendar' && /^\d{4}-\d{2}$/.test(raw)) {
+    return raw
+  }
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function resolveInitialDate() {
+  const raw = String(route.query.selectedDate ?? '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw
+  }
+  return null
+}
+
+function resolveInitialYear() {
+  const raw = Number(route.query.anchor)
+  return Number.isFinite(raw) && raw > 2000 ? raw : new Date().getFullYear()
+}
+
+function formatCurrency(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0)
+  return `¥${amount.toLocaleString('zh-CN', {
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`
+}
+
+function formatDateLabel(value: string | null | undefined) {
+  if (!value) return ''
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!matched) return value
+  return `${Number(matched[2])}月${Number(matched[3])}日`
+}
+
+function formatDateTime(value: string) {
+  const [datePart = '', timePart = ''] = value.replace('T', ' ').split(' ')
+  return `${datePart.replace(/-/g, '.')} ${timePart.slice(0, 5)}`
+}
+
+function orderTypeLabel(type: string) {
+  return {
+    first_birthday: '周岁',
+    hundred_days: '百天',
+    engagement: '订婚',
+    thanks_banquet: '答谢宴',
+    wedding: '婚礼',
+    graduation: '毕业照',
+  }[type] ?? type
+}
+
+function receivedAmount(order: PhotographyOrder) {
+  let total = 0
+  if (order.depositReceivedAt) {
+    total += Number(order.depositAmount ?? 0)
+  }
+  if (order.finalReceivedAt) {
+    total += Number(order.finalAmount ?? 0)
+  }
+  return total
+}
+
+function statusLabel(order: PhotographyOrder) {
+  return order.status === 'shot' ? '已拍摄' : '未拍摄'
+}
+
+function typeAccent(type: string) {
+  return {
+    wedding: '#F97316',
+    graduation: '#2563EB',
+    first_birthday: '#0F766E',
+    hundred_days: '#14B8A6',
+    engagement: '#EC4899',
+    thanks_banquet: '#8B5CF6',
+  }[type] ?? '#1D4ED8'
+}
+
+function amountTextClass(value: number | string | null | undefined) {
+  return Number(value ?? 0) === 0 ? 'is-zero' : ''
+}
+
+function resolveDisplayedTrendPoints() {
+  return trendPoints.value
+}
+
+async function ensureCharts() {
+  if (!echartsLib) {
+    echartsLib = await import('echarts')
+  }
+  if (lineChart && lineChartRef.value && lineChart.getDom() !== lineChartRef.value) {
+    lineChart.dispose()
+    lineChart = null
+  }
+  if (pieChart && pieChartRef.value && pieChart.getDom() !== pieChartRef.value) {
+    pieChart.dispose()
+    pieChart = null
+  }
+  if (revenuePieChart && revenuePieChartRef.value && revenuePieChart.getDom() !== revenuePieChartRef.value) {
+    revenuePieChart.dispose()
+    revenuePieChart = null
+  }
+  if (lineChartRef.value && !lineChart) {
+    lineChart = echartsLib.init(lineChartRef.value)
+  }
+  if (pieChartRef.value && !pieChart) {
+    pieChart = echartsLib.init(pieChartRef.value)
+  }
+  if (revenuePieChartRef.value && !revenuePieChart) {
+    revenuePieChart = echartsLib.init(revenuePieChartRef.value)
+  }
+}
+
+function renderLineChart() {
+  if (!lineChart) return
+
+  const displayedTrendPoints = resolveDisplayedTrendPoints()
+  const labels = displayedTrendPoints.map((item) => item.label)
+  const incomeValues = displayedTrendPoints.map((item) => Number(item.contractAmount ?? 0))
+
+  const option: EChartsCoreOption = {
+    grid: { left: 28, right: 18, top: 28, bottom: 28, containLabel: true },
+    tooltip: { trigger: 'axis' },
+    legend: {
+      top: 0,
+      right: 0,
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { color: '#64748B', fontSize: 11 },
+    },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLine: { lineStyle: { color: '#D9E5FF' } },
+      axisLabel: { color: '#64748B', fontSize: 11 },
+    },
+    yAxis: [
+      {
+        type: 'value',
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: '#EDF2FB' } },
+        axisLabel: {
+          color: '#64748B',
+          fontSize: 11,
+          formatter: (value: number) => `¥${value}`,
+        },
+      },
+    ],
+    series: [
+      {
+        name: trendSeriesName.value,
+        type: 'bar',
+        data: incomeValues,
+        barMaxWidth: 18,
+        itemStyle: { color: '#dc2626', borderRadius: [8, 8, 0, 0] },
+        emphasis: { itemStyle: { color: '#b91c1c' } },
+      },
+    ],
+  }
+
+  lineChart.setOption(option, true)
+}
+
+function buildPieOption(valueGetter: (item: (typeof typeStats.value)[number]) => number): EChartsCoreOption {
+  return {
+    tooltip: { trigger: 'item' },
+    series: [
+      {
+        type: 'pie',
+        radius: ['58%', '78%'],
+        center: ['50%', '48%'],
+        avoidLabelOverlap: false,
+        label: { show: false },
+        emphasis: { scale: true },
+        data: typeStats.value.map((item) => ({
+          name: item.label,
+          value: valueGetter(item),
+          itemStyle: { color: typeAccent(item.type) },
+        })),
+      },
+    ],
+  }
+}
+
+function renderQuantityPieChart() {
+  if (!pieChart) return
+
+  pieChart.setOption(buildPieOption((item) => Number(item.orderCount || 0)), true)
+}
+
+function renderRevenuePieChart() {
+  if (!revenuePieChart) return
+
+  revenuePieChart.setOption(buildPieOption((item) => Number(item.contractAmount || 0)), true)
+}
+
+function handleResize() {
+  lineChart?.resize()
+  pieChart?.resize()
+  revenuePieChart?.resize()
+}
+</script>
+
+<template>
+  <section class="photography-order-overview-page" aria-label="摄影订单总览">
+    <PageHeader title="订单总览" back-to="/tools/photography-orders" back-label="返回订单页" />
+
+    <SegmentedControl v-model="viewMode" :options="viewOptions" label="订单总览视图切换" variant="brand" />
+
+    <section class="overview-hero">
+      <div class="overview-picker-row">
+        <MonthPicker
+          v-if="viewMode === 'calendar'"
+          :model-value="calendarMonth"
+          @update:model-value="calendarMonth = $event"
+        />
+        <YearPicker
+          v-else-if="viewMode === 'month'"
+          :model-value="monthYear"
+          @update:model-value="monthYear = $event"
+        />
+        <YearPicker
+          v-else
+          :model-value="yearWindowEnd"
+          @update:model-value="yearWindowEnd = $event"
+        />
+
+        <span v-if="calendarFocusLabel" class="overview-focus-chip">
+          {{ calendarFocusLabel }}
+        </span>
+        <span v-else-if="viewMode === 'year'" class="overview-focus-chip">
+          近5年窗口
+        </span>
+      </div>
+
+      <div class="overview-stats-grid">
+        <article class="overview-stat-card">
+          <span>总单数</span>
+          <strong>{{ summary?.totalOrders ?? 0 }}</strong>
+          <p>已拍摄 {{ summary?.shotOrders ?? 0 }} · 未拍摄 {{ summary?.pendingOrders ?? 0 }}</p>
+        </article>
+        <article class="overview-stat-card">
+          <span>已收金额</span>
+          <strong :class="amountTextClass(summary?.totalReceivedAmount)">{{ formatCurrency(summary?.totalReceivedAmount) }}</strong>
+          <p>订金 {{ formatCurrency(summary?.depositIncome) }} · 尾款 {{ formatCurrency(summary?.finalIncome) }}</p>
+        </article>
+      </div>
+    </section>
+
+    <CommonLoading v-if="isLoading" text="总览加载中..." />
+    <p v-else-if="pageError" class="overview-page-error">{{ pageError }}</p>
+
+    <template v-else>
+      <section class="overview-panel">
+        <div class="overview-panel-head">
+          <strong>{{ bucketSectionTitle }}</strong>
+          <span v-if="viewMode === 'calendar'">点击日期查看当天订单</span>
+          <span v-else-if="viewMode === 'month'">点击某一天可切换到日历视图</span>
+          <span v-else>点击某个月可切换到月视图</span>
+        </div>
+
+        <div v-if="viewMode === 'calendar'" class="calendar-weekdays">
+          <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
+        </div>
+
+        <div :class="viewMode === 'calendar' ? 'calendar-grid' : 'bucket-grid'">
+          <button
+            v-for="bucket in buckets"
+            :key="bucket.key"
+            type="button"
+            :class="[
+              'bucket-card',
+              `bucket-card--${viewMode}`,
+              {
+                'is-selected': bucket.selected,
+                'is-muted': !bucket.currentScope,
+                'is-active': bucket.orderCount > 0,
+              },
+            ]"
+            @click="handleBucketClick(bucket)"
+          >
+            <template v-if="viewMode === 'calendar'">
+              <div class="calendar-card-center">
+                <strong>{{ bucket.label }}</strong>
+                <span v-if="bucket.orderCount > 0" class="calendar-card-dot" aria-hidden="true"></span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="bucket-card-head">
+                <strong>{{ bucket.label }}</strong>
+              </div>
+              <div class="bucket-card-metrics">
+                <span>{{ bucket.orderCount }} 单</span>
+                <b :class="amountTextClass(bucket.totalIncome)">{{ formatCurrency(bucket.totalIncome) }}</b>
+              </div>
+            </template>
+          </button>
+        </div>
+      </section>
+
+      <section v-if="showCalendarOrders" class="overview-orders-panel">
+        <div class="overview-panel-head">
+          <strong>{{ periodTitle }}</strong>
+          <span>{{ orders.length }} 单</span>
+        </div>
+
+        <p v-if="orders.length === 0" class="overview-empty">当前周期暂无订单</p>
+
+        <div v-else class="overview-order-list">
+          <article v-for="order in orders" :key="order.id" class="overview-order-card">
+            <div class="overview-order-head">
+              <div>
+                <strong>{{ order.customerName }}</strong>
+                <p>{{ formatDateTime(order.shootAt) }}</p>
+              </div>
+              <div class="overview-order-tags">
+                <span class="overview-order-tag" :style="{ color: typeAccent(order.orderType), backgroundColor: `${typeAccent(order.orderType)}14` }">
+                  {{ orderTypeLabel(order.orderType) }}
+                </span>
+                <span class="overview-order-tag overview-order-tag--status">
+                  {{ statusLabel(order) }}
+                </span>
+              </div>
+            </div>
+
+            <div class="overview-order-metrics">
+              <div>
+                <span>已收收入</span>
+                <strong :class="['income', amountTextClass(receivedAmount(order))]">{{ formatCurrency(receivedAmount(order)) }}</strong>
+              </div>
+            </div>
+
+            <div class="overview-order-foot">
+              <p v-if="order.address">地址：{{ order.address }}</p>
+              <p v-if="order.contactInfo">联系方式：{{ order.contactInfo }}</p>
+              <p v-if="order.remark">备注：{{ order.remark }}</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="overview-charts-grid">
+        <article class="chart-card chart-card--wide">
+          <div class="chart-card-head">
+            <div>
+              <strong>收益趋势</strong>
+              <p>{{ trendChartSubtitle }}</p>
+            </div>
+          </div>
+          <div v-if="!lineHasData" class="chart-empty">当前周期还没有可展示的趋势数据</div>
+          <div v-else ref="lineChartRef" class="chart-surface"></div>
+        </article>
+
+        <article class="chart-card">
+          <div class="chart-card-head">
+            <div>
+              <strong>分类分布</strong>
+              <p>按订单类型汇总订单数量分布</p>
+            </div>
+          </div>
+          <div v-if="!quantityPieHasData" class="chart-empty">当前周期暂无分类分布数据</div>
+          <div v-else ref="pieChartRef" class="chart-surface chart-surface--pie"></div>
+          <div v-if="quantityPieHasData" class="type-legend">
+            <article v-for="item in typeStats" :key="item.type" class="type-legend-item">
+              <span class="type-dot" :style="{ backgroundColor: typeAccent(item.type) }"></span>
+              <div>
+                <strong>{{ item.label }}</strong>
+                <p>{{ item.orderCount }} 单</p>
+              </div>
+            </article>
+          </div>
+        </article>
+
+        <article class="chart-card">
+          <div class="chart-card-head">
+            <div>
+              <strong>收益类型</strong>
+              <p>按订单类型汇总拍摄总金额</p>
+            </div>
+          </div>
+          <div v-if="!revenuePieHasData" class="chart-empty">当前周期暂无收益类型数据</div>
+          <div v-else ref="revenuePieChartRef" class="chart-surface chart-surface--pie"></div>
+          <div v-if="revenuePieHasData" class="type-legend">
+            <article v-for="item in typeStats" :key="`revenue-${item.type}`" class="type-legend-item">
+              <span class="type-dot" :style="{ backgroundColor: typeAccent(item.type) }"></span>
+              <div>
+                <strong>{{ item.label }}</strong>
+                <p>{{ formatCurrency(item.contractAmount) }}</p>
+              </div>
+            </article>
+          </div>
+        </article>
+      </section>
+    </template>
+  </section>
+</template>
+
+<style scoped lang="scss" src="./style.scss"></style>

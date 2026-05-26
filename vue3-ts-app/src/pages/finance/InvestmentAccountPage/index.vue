@@ -473,11 +473,21 @@ function isPendingSubscription(position: InvestmentPosition) {
   return position.subscriptionStatus === 'pending'
 }
 
+function hasConfirmedHoldingQuantity(position: InvestmentPosition) {
+  const quantity = Number(position.holdingQuantity ?? 0)
+  return Number.isFinite(quantity) && quantity > 0
+}
+
+function shouldShowPendingTag(position: InvestmentPosition) {
+  return isPendingSubscription(position) && hasConfirmedHoldingQuantity(position)
+}
+
 function getHoldingStatusText(position: InvestmentPosition) {
-  if (!isPendingSubscription(position)) {
+  if (!isPendingSubscription(position) || hasConfirmedHoldingQuantity(position)) {
     return formatQuantity(position.holdingQuantity, position.unitName)
   }
-  return `待确认 · ${position.subscriptionExpectedConfirmDate || '--'}`
+
+  return ''
 }
 
 function getHoldingActionLabel(position: InvestmentPosition) {
@@ -548,8 +558,8 @@ function showFeedback(message: string, type: 'success' | 'error') {
           </div>
           <div class="investment-summary-side">
             <span>今日盈亏</span>
-            <AmountText tag="strong" :value="formatAmount(summary.dayProfit)" />
-            <AmountText tag="span" :value="`${formatAmount(summary.dayProfitRate)}%`" />
+            <AmountText tag="strong" class="investment-summary-profit" :value="formatAmount(summary.dayProfit)" />
+            <AmountText tag="span" class="investment-summary-rate" :value="`${formatAmount(summary.dayProfitRate)}%`" />
           </div>
         </div>
 
@@ -559,6 +569,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <span>{{ metric.label }}</span>
               <AmountText
                 tag="strong"
+                class="investment-metric-value"
                 :value="metric.isRate ? `${formatAmount(metric.value)}%` : formatAmount(metric.value)"
               />
             </div>
@@ -580,17 +591,24 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <div class="holding-left">
               <div class="holding-title">
                 <strong>{{ holding.productName }}</strong>
-                <span>{{ getHoldingStatusText(holding) }}</span>
+                <span v-if="getHoldingStatusText(holding)">{{ getHoldingStatusText(holding) }}</span>
               </div>
               <div class="holding-tags">
                 <span class="holding-tag">{{ getProductTag(holding) }}</span>
-                <span v-if="isPendingSubscription(holding)" class="holding-tag is-pending">待确认</span>
+                <span v-if="shouldShowPendingTag(holding)" class="holding-tag is-pending">待确认</span>
                 <span class="holding-market-value">{{ formatCurrency(holding.marketValue, 0) }}</span>
               </div>
             </div>
             <div class="holding-right">
-              <span>{{ getHoldingActionLabel(holding) }}</span>
-              <AmountText tag="strong" :value="getHoldingActionValue(holding)" />
+              <div class="holding-inline-field">
+                <span>{{ getHoldingActionLabel(holding) }}</span>
+                <AmountText
+                  tag="strong"
+                  class="holding-action-value"
+                  :tone="isPendingSubscription(holding) ? 'inherit' : 'auto'"
+                  :value="getHoldingActionValue(holding)"
+                />
+              </div>
             </div>
           </div>
 
@@ -600,8 +618,10 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <span>{{ getHoldingPriceText(holding) }}</span>
             </div>
             <div class="holding-right compact">
-              <span>成本价</span>
-              <AmountText tag="strong" tone="inherit" :value="formatPrice(holding.avgCostPrice)" />
+              <div class="holding-inline-field">
+                <span>成本价</span>
+                <AmountText tag="strong" tone="inherit" :value="formatPrice(holding.avgCostPrice)" />
+              </div>
             </div>
           </div>
 
@@ -613,9 +633,11 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
           <div class="holding-row bottom">
             <div class="holding-left compact">
-              <span>{{ getHoldingBottomLabel(holding) }}</span>
+              <div class="holding-inline-field holding-inline-field--profit">
+                <span>{{ getHoldingBottomLabel(holding) }}</span>
+                <AmountText tag="strong" class="holding-pnl-value" :value="getHoldingBottomValue(holding)" />
+              </div>
               <div class="holding-pnl-line">
-                <AmountText tag="strong" :value="getHoldingBottomValue(holding)" />
                 <AmountText tag="span" class="holding-pnl-rate" :value="getHoldingBottomRate(holding)" />
               </div>
             </div>

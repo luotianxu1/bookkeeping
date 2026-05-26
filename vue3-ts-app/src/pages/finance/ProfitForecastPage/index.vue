@@ -11,6 +11,7 @@ type ForecastMetrics = Pick<
   FundProfitForecast,
   'holdingAmount' | 'estimateProfit' | 'estimateProfitRate' | 'estimatedAt'
 >
+type ProfitTone = 'positive' | 'negative' | 'neutral'
 
 const selectedAccountId = ref('all')
 const forecast = ref<FundProfitForecast | null>(null)
@@ -135,6 +136,18 @@ function formatHoldingMeta(item: FundProfitForecastHolding) {
   return formatCurrency(Number(item.holdingAmount ?? 0))
 }
 
+function getProfitTone(value: number): ProfitTone {
+  if (value > 0) {
+    return 'positive'
+  }
+
+  if (value < 0) {
+    return 'negative'
+  }
+
+  return 'neutral'
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
     return ''
@@ -178,10 +191,23 @@ function formatDateTime(value: string | null | undefined) {
           </label>
         </div>
         <div class="summary-row">
-          <AmountText tag="strong" :value="formatSignedCurrency(visibleSummary.estimateProfit)" />
+          <AmountText
+            tag="strong"
+            class="summary-profit"
+            :value="formatSignedCurrency(visibleSummary.estimateProfit)"
+            :tone="getProfitTone(visibleSummary.estimateProfit)"
+          />
         </div>
         <div class="summary-row summary-row--headline">
-          <AmountText tag="span" :value="`预计 ${formatSignedRate(visibleSummary.estimateProfitRate)}`" />
+          <span class="summary-rate-group">
+            <span class="summary-rate-label">预计</span>
+            <AmountText
+              tag="span"
+              class="summary-rate"
+              :value="formatSignedRate(visibleSummary.estimateProfitRate)"
+              :tone="getProfitTone(visibleSummary.estimateProfitRate)"
+            />
+          </span>
           <span>持仓市值 {{ formatCurrency(visibleSummary.holdingAmount) }}</span>
         </div>
         <p class="summary-hint">{{ summaryHint }}</p>
@@ -209,8 +235,18 @@ function formatDateTime(value: string | null | undefined) {
 
           <div class="holding-right">
             <div class="value-column">
-              <AmountText tag="strong" :value="formatSignedCurrency(item.estimateProfit)" />
-              <AmountText tag="span" class="value-rate" :value="formatSignedRate(item.estimateProfitRate)" />
+              <AmountText
+                tag="strong"
+                class="value-profit"
+                :value="formatSignedCurrency(item.estimateProfit)"
+                :tone="getProfitTone(item.estimateProfit)"
+              />
+              <AmountText
+                tag="span"
+                class="value-rate"
+                :value="formatSignedRate(item.estimateProfitRate)"
+                :tone="getProfitTone(item.estimateProfitRate)"
+              />
             </div>
           </div>
         </article>

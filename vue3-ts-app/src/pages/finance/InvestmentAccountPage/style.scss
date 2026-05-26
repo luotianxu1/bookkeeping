@@ -233,6 +233,38 @@
   font-weight: 700;
 }
 
+.investment-summary-rate {
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.investment-summary-side :deep(.investment-summary-profit.amount-text--positive),
+.investment-summary-side :deep(.investment-summary-rate.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.investment-summary-side :deep(.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.investment-summary-side :deep(.investment-summary-profit.amount-text--negative),
+.investment-summary-side :deep(.investment-summary-rate.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.investment-summary-side :deep(.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.investment-summary-side :deep(.investment-summary-profit.amount-text--neutral),
+.investment-summary-side :deep(.investment-summary-rate.amount-text--neutral) {
+  color: var(--color-text-primary);
+}
+
+.investment-summary-side :deep(.amount-text--neutral) {
+  color: var(--color-text-primary);
+}
+
 .investment-metrics {
   min-height: var(--space-24);
   display: flex;
@@ -259,6 +291,18 @@
   font-weight: 700;
 }
 
+.investment-metric-item :deep(.investment-metric-value.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.investment-metric-item :deep(.investment-metric-value.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.investment-metric-item :deep(.investment-metric-value.amount-text--neutral) {
+  color: var(--color-text-muted);
+}
+
 .investment-metric-divider {
   width: var(--space-1);
   height: var(--space-20);
@@ -272,7 +316,7 @@
 
 .investment-holding-card {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-4);
   padding: 10px 10px 14px;
   border: 1px solid var(--color-danger-soft);
   border-radius: var(--radius-18);
@@ -281,7 +325,6 @@
 }
 
 .holding-row {
-  min-height: 34px;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -317,6 +360,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-6);
+  flex-wrap: wrap;
 }
 
 .holding-title strong {
@@ -369,6 +413,18 @@
   font-weight: 700;
 }
 
+.holding-right :deep(.holding-action-value.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.holding-right :deep(.holding-action-value.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.holding-right :deep(.holding-action-value.amount-text--neutral) {
+  color: var(--color-text-primary);
+}
+
 .holding-left.compact strong {
   color: var(--color-text-primary);
   font-size: var(--font-size-14);
@@ -385,6 +441,22 @@
   color: var(--color-text-tertiary);
   font-size: var(--font-size-14);
   font-weight: 500;
+}
+
+.holding-inline-field {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.holding-right.compact .holding-inline-field {
+  justify-content: flex-end;
+}
+
+.holding-pnl-value {
+  font-size: var(--font-size-14);
+  font-weight: 700;
 }
 
 .holding-price-line {
@@ -424,12 +496,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-6);
-}
-
-.holding-pnl-line strong {
-  color: var(--color-success);
-  font-size: var(--font-size-14);
-  font-weight: 700;
 }
 
 .holding-pnl-rate {
@@ -536,6 +602,15 @@
 
   .holding-pending-amount {
     color: #7ba0ff;
+  }
+
+  .investment-summary-side :deep(.investment-summary-rate.amount-text--neutral),
+  .investment-summary-side :deep(.amount-text--neutral) {
+    color: var(--color-bg-page);
+  }
+
+  .investment-metric-item :deep(.investment-metric-value.amount-text--neutral) {
+    color: var(--color-dark-text-muted);
   }
 
   .holding-allocation-track {

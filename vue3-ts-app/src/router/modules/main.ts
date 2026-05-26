@@ -4,6 +4,7 @@ import LoginPage from '@/pages/login/LoginPage/index.vue'
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage/index.vue'
 import ProfilePage from '@/pages/profile/ProfilePage/index.vue'
 import ContactsPage from '@/pages/tools/ContactsPage/index.vue'
+import PhotographyOrderOverviewPage from '@/pages/tools/PhotographyOrderOverviewPage/index.vue'
 import PhotographyOrdersPage from '@/pages/tools/PhotographyOrdersPage/index.vue'
 import ToolsPage from '@/pages/tools/ToolsPage/index.vue'
 
@@ -42,6 +43,15 @@ export const mainRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'tools',
       title: '摄影订单',
+    },
+  },
+  {
+    path: '/tools/photography-orders/overview',
+    name: 'tools-photography-orders-overview',
+    component: PhotographyOrderOverviewPage,
+    meta: {
+      section: 'tools',
+      title: '订单总览',
     },
   },
   {

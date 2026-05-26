@@ -92,6 +92,73 @@ export interface CollectPhotographyOrderFinalParams {
   occurredAt?: string | null
 }
 
+export type PhotographyOrderOverviewView = 'calendar' | 'month' | 'year'
+
+export interface PhotographyOrderOverviewSummary {
+  totalOrders: number
+  shotOrders: number
+  pendingOrders: number
+  totalContractAmount: number
+  totalReceivedAmount: number
+  totalDepositAmount: number
+  totalFinalAmount: number
+  depositIncome: number
+  finalIncome: number
+  pendingFinalAmount: number
+  averageContractAmount: number
+}
+
+export interface PhotographyOrderOverviewTrendPoint {
+  key: string
+  label: string
+  orderCount: number
+  shotCount: number
+  pendingCount: number
+  totalIncome: number
+  contractAmount: number
+}
+
+export interface PhotographyOrderOverviewTypeStat {
+  type: PhotographyOrderType | string
+  label: string
+  orderCount: number
+  totalIncome: number
+  contractAmount: number
+}
+
+export interface PhotographyOrderOverviewBucket {
+  key: string
+  label: string
+  subLabel?: string | null
+  orderCount: number
+  shotCount: number
+  pendingCount: number
+  totalIncome: number
+  contractAmount: number
+  selected: boolean
+  currentScope: boolean
+}
+
+export interface PhotographyOrderOverview {
+  view: PhotographyOrderOverviewView | string
+  anchor: string
+  selectedValue?: string | null
+  title: string
+  subtitle: string
+  summary: PhotographyOrderOverviewSummary
+  trendPoints: PhotographyOrderOverviewTrendPoint[]
+  typeStats: PhotographyOrderOverviewTypeStat[]
+  buckets: PhotographyOrderOverviewBucket[]
+  orders: PhotographyOrder[]
+}
+
+export interface PhotographyOrderOverviewQuery {
+  userId: number
+  view: PhotographyOrderOverviewView
+  anchor?: string
+  selectedDate?: string | null
+}
+
 export function getContacts(params: ContactQuery) {
   return requestGet<Contact[]>(toolRequest, '/api/tools/contacts', { params })
 }
@@ -114,6 +181,10 @@ export function deleteContact(id: number) {
 
 export function getPhotographyOrders(params: PhotographyOrderQuery) {
   return requestGet<PhotographyOrder[]>(toolRequest, '/api/tools/photography-orders', { params })
+}
+
+export function getPhotographyOrderOverview(params: PhotographyOrderOverviewQuery) {
+  return requestGet<PhotographyOrderOverview>(toolRequest, '/api/tools/photography-orders/overview', { params })
 }
 
 export function getPhotographyOrder(id: number) {

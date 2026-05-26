@@ -2,6 +2,11 @@ package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.tool.dto.PhotographyOrderCollectFinalRequest;
+import com.example.tool.dto.PhotographyOrderOverviewBucketResponse;
+import com.example.tool.dto.PhotographyOrderOverviewResponse;
+import com.example.tool.dto.PhotographyOrderOverviewSummaryResponse;
+import com.example.tool.dto.PhotographyOrderOverviewTrendPointResponse;
+import com.example.tool.dto.PhotographyOrderOverviewTypeStatResponse;
 import com.example.tool.dto.PhotographyOrderRequest;
 import com.example.tool.dto.PhotographyOrderResponse;
 import com.example.tool.entity.AccountEntity;
@@ -20,12 +25,18 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.YearMonth;
+import java.time.format.TextStyle;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -40,6 +51,9 @@ public class PhotographyOrderService {
     private static final String STATUS_PENDING = "pending";
     private static final String STATUS_SHOT = "shot";
     private static final String STATUS_ALL = "all";
+    private static final String OVERVIEW_VIEW_CALENDAR = "calendar";
+    private static final String OVERVIEW_VIEW_MONTH = "month";
+    private static final String OVERVIEW_VIEW_YEAR = "year";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String CATEGORY_TYPE_INCOME = "income";
     private static final String PHOTOGRAPHY_CATEGORY_NAME = "摄影收入";
@@ -102,6 +116,25 @@ public class PhotographyOrderService {
             return Optional.empty();
         }
         return toResponses(List.of(entity)).stream().findFirst();
+    }
+
+    public PhotographyOrderOverviewResponse overview(Long userId, String view, String anchor, String selectedDate) {
+        if (userId == null) {
+            throw new IllegalArgumentException("用户不能为空");
+        }
+
+        List<PhotographyOrderEntity> entities = photographyOrderMapper.selectList(new LambdaQueryWrapper<PhotographyOrderEntity>()
+            .eq(PhotographyOrderEntity::getUserId, userId)
+            .orderByAsc(PhotographyOrderEntity::getShootAt)
+            .orderByAsc(PhotographyOrderEntity::getSortOrder)
+            .orderByDesc(PhotographyOrderEntity::getId));
+
+        String normalizedView = normalizeOverviewView(view);
+        return switch (normalizedView) {
+            case OVERVIEW_VIEW_YEAR -> buildYearOverview(entities, anchor);
+            case OVERVIEW_VIEW_MONTH -> buildMonthOverview(entities, anchor);
+            default -> buildCalendarOverview(entities, anchor, selectedDate);
+        };
     }
 
     @Transactional
@@ -203,6 +236,19 @@ public class PhotographyOrderService {
 
     private boolean shouldFilterStatus(String status) {
         return StringUtils.hasText(status) && !STATUS_ALL.equalsIgnoreCase(status.trim());
+    }
+
+    private String normalizeOverviewView(String view) {
+        if (!StringUtils.hasText(view)) {
+            return OVERVIEW_VIEW_CALENDAR;
+        }
+        String normalized = view.trim().toLowerCase(Locale.ROOT);
+        if (!OVERVIEW_VIEW_CALENDAR.equals(normalized)
+            && !OVERVIEW_VIEW_MONTH.equals(normalized)
+            && !OVERVIEW_VIEW_YEAR.equals(normalized)) {
+            throw new IllegalArgumentException("总览视图不支持");
+        }
+        return normalized;
     }
 
     private String normalizeStatus(String status) {
@@ -410,6 +456,352 @@ public class PhotographyOrderService {
 
     private String trimNullable(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private PhotographyOrderOverviewResponse buildCalendarOverview(
+        List<PhotographyOrderEntity> entities,
+        String anchor,
+        String selectedDate
+    ) {
+        YearMonth month = parseYearMonth(anchor, YearMonth.now());
+        LocalDate targetDate = parseLocalDate(selectedDate, null);
+        if (targetDate != null && !YearMonth.from(targetDate).equals(month)) {
+            targetDate = null;
+        }
+        final LocalDate selectedTargetDate = targetDate;
+
+        List<PhotographyOrderEntity> monthOrders = entities.stream()
+            .filter(entity -> isInMonth(entity, month))
+            .toList();
+        List<PhotographyOrderEntity> periodOrders = selectedTargetDate == null
+            ? List.of()
+            : monthOrders.stream()
+                .filter(entity -> isInDate(entity, selectedTargetDate))
+                .toList();
+
+        PhotographyOrderOverviewResponse response = new PhotographyOrderOverviewResponse();
+        response.setView(OVERVIEW_VIEW_CALENDAR);
+        response.setAnchor(month.toString());
+        response.setSelectedValue(selectedTargetDate == null ? null : selectedTargetDate.toString());
+        response.setTitle(month.getMonthValue() + "月订单总览");
+        response.setSubtitle("点击有订单的日期查看当天订单");
+        response.setSummary(buildSummary(monthOrders));
+        response.setTrendPoints(buildDailyTrendPoints(monthOrders, month));
+        response.setTypeStats(buildTypeStats(monthOrders));
+        response.setBuckets(buildCalendarBuckets(monthOrders, month, selectedTargetDate));
+        response.setOrders(toResponses(periodOrders));
+        return response;
+    }
+
+    private PhotographyOrderOverviewResponse buildMonthOverview(List<PhotographyOrderEntity> entities, String anchor) {
+        int year = parseYear(anchor, LocalDate.now().getYear());
+        List<PhotographyOrderEntity> periodOrders = entities.stream()
+            .filter(entity -> entity.getShootAt() != null && entity.getShootAt().getYear() == year)
+            .toList();
+
+        PhotographyOrderOverviewResponse response = new PhotographyOrderOverviewResponse();
+        response.setView(OVERVIEW_VIEW_MONTH);
+        response.setAnchor(String.valueOf(year));
+        response.setSelectedValue(String.valueOf(year));
+        response.setTitle(year + "年月度总览");
+        response.setSubtitle("查看全年 12 个月的档期分布与收入变化");
+        response.setSummary(buildSummary(periodOrders));
+        response.setTrendPoints(buildYearTrendPoints(periodOrders, year));
+        response.setTypeStats(buildTypeStats(periodOrders));
+        response.setBuckets(buildYearBuckets(periodOrders, year));
+        response.setOrders(toResponses(periodOrders));
+        return response;
+    }
+
+    private PhotographyOrderOverviewResponse buildYearOverview(List<PhotographyOrderEntity> entities, String anchor) {
+        int endYear = parseYear(anchor, LocalDate.now().getYear());
+        int startYear = endYear - 4;
+        List<PhotographyOrderEntity> periodOrders = entities.stream()
+            .filter(entity -> entity.getShootAt() != null
+                && entity.getShootAt().getYear() >= startYear
+                && entity.getShootAt().getYear() <= endYear)
+            .toList();
+
+        PhotographyOrderOverviewResponse response = new PhotographyOrderOverviewResponse();
+        response.setView(OVERVIEW_VIEW_YEAR);
+        response.setAnchor(String.valueOf(endYear));
+        response.setSelectedValue(startYear + "-" + endYear);
+        response.setTitle("近5年订单总览");
+        response.setSubtitle(startYear + " - " + endYear + " 的收入趋势与类型分布");
+        response.setSummary(buildSummary(periodOrders));
+        response.setTrendPoints(buildFiveYearTrendPoints(periodOrders, startYear, endYear));
+        response.setTypeStats(buildTypeStats(periodOrders));
+        response.setBuckets(buildFiveYearBuckets(periodOrders, startYear, endYear));
+        response.setOrders(toResponses(periodOrders));
+        return response;
+    }
+
+    private PhotographyOrderOverviewSummaryResponse buildSummary(List<PhotographyOrderEntity> entities) {
+        PhotographyOrderOverviewSummaryResponse response = new PhotographyOrderOverviewSummaryResponse();
+        BigDecimal totalContractAmount = sumAmount(entities, PhotographyOrderEntity::getTotalAmount);
+        BigDecimal totalDepositAmount = sumAmount(entities, PhotographyOrderEntity::getDepositAmount);
+        BigDecimal totalFinalAmount = sumAmount(entities, PhotographyOrderEntity::getFinalAmount);
+        BigDecimal depositIncome = sumReceivedDeposit(entities);
+        BigDecimal finalIncome = sumReceivedFinal(entities);
+        BigDecimal totalReceivedAmount = depositIncome.add(finalIncome).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal pendingFinalAmount = sumPendingFinal(entities);
+
+        response.setTotalOrders(entities.size());
+        response.setShotOrders((int) entities.stream().filter(entity -> STATUS_SHOT.equals(entity.getStatus())).count());
+        response.setPendingOrders((int) entities.stream().filter(entity -> STATUS_PENDING.equals(entity.getStatus())).count());
+        response.setTotalContractAmount(totalContractAmount);
+        response.setTotalReceivedAmount(totalReceivedAmount);
+        response.setTotalDepositAmount(totalDepositAmount);
+        response.setTotalFinalAmount(totalFinalAmount);
+        response.setDepositIncome(depositIncome);
+        response.setFinalIncome(finalIncome);
+        response.setPendingFinalAmount(pendingFinalAmount);
+        response.setAverageContractAmount(entities.isEmpty()
+            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+            : totalContractAmount.divide(BigDecimal.valueOf(entities.size()), 2, RoundingMode.HALF_UP));
+        return response;
+    }
+
+    private List<PhotographyOrderOverviewTrendPointResponse> buildDailyTrendPoints(
+        List<PhotographyOrderEntity> entities,
+        YearMonth month
+    ) {
+        return month.atDay(1).datesUntil(month.plusMonths(1).atDay(1))
+            .map(date -> buildTrendPoint(
+                date.toString(),
+                String.valueOf(date.getDayOfMonth()),
+                entities.stream().filter(entity -> isInDate(entity, date)).toList()
+            ))
+            .toList();
+    }
+
+    private List<PhotographyOrderOverviewTrendPointResponse> buildYearTrendPoints(List<PhotographyOrderEntity> entities, int year) {
+        return Stream.iterate(YearMonth.of(year, 1), current -> current.plusMonths(1))
+            .limit(12)
+            .map(month -> buildTrendPoint(
+                month.toString(),
+                month.getMonthValue() + "月",
+                entities.stream().filter(entity -> isInMonth(entity, month)).toList()
+            ))
+            .toList();
+    }
+
+    private List<PhotographyOrderOverviewTrendPointResponse> buildFiveYearTrendPoints(
+        List<PhotographyOrderEntity> entities,
+        int startYear,
+        int endYear
+    ) {
+        return Stream.iterate(startYear, year -> year + 1)
+            .limit(endYear - startYear + 1L)
+            .map(year -> buildTrendPoint(
+                String.valueOf(year),
+                year + "年",
+                entities.stream()
+                    .filter(entity -> entity.getShootAt() != null && entity.getShootAt().getYear() == year)
+                    .toList()
+            ))
+            .toList();
+    }
+
+    private PhotographyOrderOverviewTrendPointResponse buildTrendPoint(
+        String key,
+        String label,
+        List<PhotographyOrderEntity> entities
+    ) {
+        PhotographyOrderOverviewTrendPointResponse response = new PhotographyOrderOverviewTrendPointResponse();
+        response.setKey(key);
+        response.setLabel(label);
+        response.setOrderCount(entities.size());
+        response.setShotCount((int) entities.stream().filter(entity -> STATUS_SHOT.equals(entity.getStatus())).count());
+        response.setPendingCount((int) entities.stream().filter(entity -> STATUS_PENDING.equals(entity.getStatus())).count());
+        response.setTotalIncome(sumReceivedAmount(entities));
+        response.setContractAmount(sumAmount(entities, PhotographyOrderEntity::getTotalAmount));
+        return response;
+    }
+
+    private List<PhotographyOrderOverviewTypeStatResponse> buildTypeStats(List<PhotographyOrderEntity> entities) {
+        return ORDER_TYPES.stream()
+            .map(orderType -> {
+                List<PhotographyOrderEntity> typeOrders = entities.stream()
+                    .filter(entity -> orderType.equals(entity.getOrderType()))
+                    .toList();
+                if (typeOrders.isEmpty()) {
+                    return null;
+                }
+                PhotographyOrderOverviewTypeStatResponse response = new PhotographyOrderOverviewTypeStatResponse();
+                response.setType(orderType);
+                response.setLabel(toOrderTypeLabel(orderType));
+                response.setOrderCount(typeOrders.size());
+                response.setTotalIncome(sumReceivedAmount(typeOrders));
+                response.setContractAmount(sumAmount(typeOrders, PhotographyOrderEntity::getTotalAmount));
+                return response;
+            })
+            .filter(item -> item != null)
+            .sorted(Comparator.comparing(PhotographyOrderOverviewTypeStatResponse::getOrderCount).reversed())
+            .toList();
+    }
+
+    private List<PhotographyOrderOverviewBucketResponse> buildCalendarBuckets(
+        List<PhotographyOrderEntity> entities,
+        YearMonth month,
+        LocalDate selectedDate
+    ) {
+        LocalDate start = month.atDay(1).with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+        LocalDate end = month.atEndOfMonth().with(TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SUNDAY));
+        return start.datesUntil(end.plusDays(1))
+            .map(date -> buildBucket(
+                date.toString(),
+                String.valueOf(date.getDayOfMonth()),
+                toWeekdayShortLabel(date),
+                entities.stream().filter(entity -> isInDate(entity, date)).toList(),
+                date.equals(selectedDate),
+                YearMonth.from(date).equals(month)
+            ))
+            .toList();
+    }
+
+    private List<PhotographyOrderOverviewBucketResponse> buildMonthBuckets(
+        List<PhotographyOrderEntity> entities,
+        YearMonth month
+    ) {
+        return month.atDay(1).datesUntil(month.plusMonths(1).atDay(1))
+            .map(date -> buildBucket(
+                date.toString(),
+                String.valueOf(date.getDayOfMonth()),
+                toWeekdayShortLabel(date),
+                entities.stream().filter(entity -> isInDate(entity, date)).toList(),
+                false,
+                true
+            ))
+            .toList();
+    }
+
+    private List<PhotographyOrderOverviewBucketResponse> buildYearBuckets(List<PhotographyOrderEntity> entities, int year) {
+        return Stream.iterate(YearMonth.of(year, 1), current -> current.plusMonths(1))
+            .limit(12)
+            .map(month -> buildBucket(
+                month.toString(),
+                month.getMonthValue() + "月",
+                month.getMonth().getDisplayName(TextStyle.SHORT, Locale.CHINA),
+                entities.stream().filter(entity -> isInMonth(entity, month)).toList(),
+                false,
+                true
+            ))
+            .toList();
+    }
+
+    private List<PhotographyOrderOverviewBucketResponse> buildFiveYearBuckets(
+        List<PhotographyOrderEntity> entities,
+        int startYear,
+        int endYear
+    ) {
+        return Stream.iterate(startYear, year -> year + 1)
+            .limit(endYear - startYear + 1L)
+            .map(year -> buildBucket(
+                String.valueOf(year),
+                year + "年",
+                null,
+                entities.stream()
+                    .filter(entity -> entity.getShootAt() != null && entity.getShootAt().getYear() == year)
+                    .toList(),
+                false,
+                true
+            ))
+            .toList();
+    }
+
+    private PhotographyOrderOverviewBucketResponse buildBucket(
+        String key,
+        String label,
+        String subLabel,
+        List<PhotographyOrderEntity> entities,
+        boolean selected,
+        boolean currentScope
+    ) {
+        PhotographyOrderOverviewBucketResponse response = new PhotographyOrderOverviewBucketResponse();
+        response.setKey(key);
+        response.setLabel(label);
+        response.setSubLabel(subLabel);
+        response.setOrderCount(entities.size());
+        response.setShotCount((int) entities.stream().filter(entity -> STATUS_SHOT.equals(entity.getStatus())).count());
+        response.setPendingCount((int) entities.stream().filter(entity -> STATUS_PENDING.equals(entity.getStatus())).count());
+        response.setTotalIncome(sumReceivedAmount(entities));
+        response.setContractAmount(sumAmount(entities, PhotographyOrderEntity::getTotalAmount));
+        response.setSelected(selected);
+        response.setCurrentScope(currentScope);
+        return response;
+    }
+
+    private BigDecimal sumAmount(List<PhotographyOrderEntity> entities, Function<PhotographyOrderEntity, BigDecimal> getter) {
+        return entities.stream()
+            .map(getter)
+            .filter(item -> item != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal sumReceivedDeposit(List<PhotographyOrderEntity> entities) {
+        return entities.stream()
+            .filter(entity -> entity.getDepositReceivedAt() != null)
+            .map(entity -> entity.getDepositAmount() == null ? BigDecimal.ZERO : entity.getDepositAmount())
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal sumReceivedFinal(List<PhotographyOrderEntity> entities) {
+        return entities.stream()
+            .filter(entity -> entity.getFinalReceivedAt() != null)
+            .map(entity -> entity.getFinalAmount() == null ? BigDecimal.ZERO : entity.getFinalAmount())
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal sumPendingFinal(List<PhotographyOrderEntity> entities) {
+        return entities.stream()
+            .filter(entity -> entity.getFinalReceivedAt() == null)
+            .map(entity -> entity.getFinalAmount() == null ? BigDecimal.ZERO : entity.getFinalAmount())
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal sumReceivedAmount(List<PhotographyOrderEntity> entities) {
+        return sumReceivedDeposit(entities).add(sumReceivedFinal(entities)).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private boolean isInMonth(PhotographyOrderEntity entity, YearMonth month) {
+        return entity.getShootAt() != null && YearMonth.from(entity.getShootAt()).equals(month);
+    }
+
+    private boolean isInDate(PhotographyOrderEntity entity, LocalDate date) {
+        return entity.getShootAt() != null && entity.getShootAt().toLocalDate().equals(date);
+    }
+
+    private YearMonth parseYearMonth(String anchor, YearMonth fallback) {
+        try {
+            return StringUtils.hasText(anchor) ? YearMonth.parse(anchor.trim()) : fallback;
+        } catch (Exception ex) {
+            return fallback;
+        }
+    }
+
+    private int parseYear(String anchor, int fallback) {
+        try {
+            return StringUtils.hasText(anchor) ? Integer.parseInt(anchor.trim()) : fallback;
+        } catch (Exception ex) {
+            return fallback;
+        }
+    }
+
+    private LocalDate parseLocalDate(String value, LocalDate fallback) {
+        try {
+            return StringUtils.hasText(value) ? LocalDate.parse(value.trim()) : fallback;
+        } catch (Exception ex) {
+            return fallback;
+        }
+    }
+
+    private String toWeekdayShortLabel(LocalDate date) {
+        return date.getDayOfWeek().getDisplayName(TextStyle.NARROW, Locale.CHINA);
     }
 
     private List<PhotographyOrderResponse> toResponses(List<PhotographyOrderEntity> entities) {

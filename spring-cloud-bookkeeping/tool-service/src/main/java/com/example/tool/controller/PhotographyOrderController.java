@@ -2,6 +2,7 @@ package com.example.tool.controller;
 
 import com.example.common.result.Result;
 import com.example.tool.dto.PhotographyOrderCollectFinalRequest;
+import com.example.tool.dto.PhotographyOrderOverviewResponse;
 import com.example.tool.dto.PhotographyOrderRequest;
 import com.example.tool.dto.PhotographyOrderResponse;
 import com.example.tool.service.PhotographyOrderService;
@@ -49,6 +50,17 @@ public class PhotographyOrderController {
         return photographyOrderService.getById(id)
             .map(Result::ok)
             .orElseGet(() -> Result.<PhotographyOrderResponse>fail().code(404).message("摄影订单不存在"));
+    }
+
+    @GetMapping("/overview")
+    @Operation(summary = "查询摄影订单总览")
+    public Result<PhotographyOrderOverviewResponse> overview(
+        @RequestParam("userId") @NotNull Long userId,
+        @RequestParam(name = "view", required = false) String view,
+        @RequestParam(name = "anchor", required = false) String anchor,
+        @RequestParam(name = "selectedDate", required = false) String selectedDate
+    ) {
+        return Result.ok(photographyOrderService.overview(userId, view, anchor, selectedDate));
     }
 
     @PostMapping
