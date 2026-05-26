@@ -184,7 +184,6 @@
 
 .investment-account-list-card-side span,
 .investment-account-list-card-metrics span,
-.investment-account-list-card-profit span,
 .investment-account-list-card-arrow {
   margin: 0;
   color: var(--color-text-secondary);
@@ -219,6 +218,36 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+.investment-account-list-card-profit-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.investment-account-list-card-profit-item > span {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-account-list-card-profit-value {
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.investment-account-list-card-profit :deep(.investment-account-list-card-profit-value.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.investment-account-list-card-profit :deep(.investment-account-list-card-profit-value.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.investment-account-list-card-profit :deep(.investment-account-list-card-profit-value.amount-text--neutral) {
+  color: var(--color-text-primary);
 }
 
 .investment-account-list-card-actions {

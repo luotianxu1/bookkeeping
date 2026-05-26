@@ -101,11 +101,20 @@ const pendingAmountsByPositionId = computed(() => {
   return pendingMap
 })
 
+const totalSummaryProfit = computed(() => Number(summary.value.cumulativeProfit ?? 0) + Number(summary.value.holdingProfit ?? 0))
+const totalSummaryProfitRate = computed(() => {
+  const currentCostAmount = Number(summary.value.totalMarketValue ?? 0) - Number(summary.value.holdingProfit ?? 0)
+  if (!Number.isFinite(currentCostAmount) || currentCostAmount <= 0) {
+    return 0
+  }
+  return (totalSummaryProfit.value / currentCostAmount) * 100
+})
+
 const summaryMetrics = computed(() => [
   { label: '持仓盈亏', value: summary.value.holdingProfit },
   { label: '持仓盈亏率', value: summary.value.holdingProfitRate, isRate: true },
-  { label: '累计盈亏', value: summary.value.cumulativeProfit },
-  { label: '累计盈亏率', value: summary.value.cumulativeProfitRate, isRate: true },
+  { label: '累计盈亏', value: totalSummaryProfit.value },
+  { label: '累计盈亏率', value: totalSummaryProfitRate.value, isRate: true },
 ])
 
 onMounted(() => {
@@ -456,12 +465,12 @@ function compareHoldingsByProfitRate(a: InvestmentPosition, b: InvestmentPositio
     return aPending ? 1 : -1
   }
 
-  const rateDiff = Number(b.cumulativeProfitRate ?? 0) - Number(a.cumulativeProfitRate ?? 0)
+  const rateDiff = getHoldingTotalProfitRate(b) - getHoldingTotalProfitRate(a)
   if (rateDiff !== 0) {
     return rateDiff
   }
 
-  const profitDiff = Number(b.cumulativeProfit ?? 0) - Number(a.cumulativeProfit ?? 0)
+  const profitDiff = getHoldingTotalProfit(b) - getHoldingTotalProfit(a)
   if (profitDiff !== 0) {
     return profitDiff
   }
@@ -498,6 +507,21 @@ function getHoldingActionValue(position: InvestmentPosition) {
   return isPendingSubscription(position) ? formatCurrency(position.costAmount) : formatAmount(position.dayProfit)
 }
 
+function getHoldingActionRate(position: InvestmentPosition) {
+  return isPendingSubscription(position) ? '' : `${formatAmount(position.dayProfitRate)}%`
+}
+
+function getHoldingActionTone(position: InvestmentPosition) {
+  if (isPendingSubscription(position)) {
+    return 'inherit' as const
+  }
+  const dayProfit = Number(position.dayProfit ?? 0)
+  if (!Number.isFinite(dayProfit) || dayProfit === 0) {
+    return 'neutral' as const
+  }
+  return dayProfit > 0 ? 'positive' as const : 'negative' as const
+}
+
 function getHoldingPriceText(position: InvestmentPosition) {
   if (isPendingSubscription(position)) {
     return `预计确认 ${position.subscriptionExpectedConfirmDate || '--'}`
@@ -509,12 +533,24 @@ function getHoldingBottomLabel(position: InvestmentPosition) {
   return isPendingSubscription(position) ? '申购金额' : '累计盈亏'
 }
 
+function getHoldingTotalProfit(position: InvestmentPosition) {
+  return Number(position.cumulativeProfit ?? 0) + Number(position.holdingProfit ?? 0)
+}
+
+function getHoldingTotalProfitRate(position: InvestmentPosition) {
+  const costAmount = Number(position.costAmount ?? 0)
+  if (!Number.isFinite(costAmount) || costAmount <= 0) {
+    return 0
+  }
+  return (getHoldingTotalProfit(position) / costAmount) * 100
+}
+
 function getHoldingBottomValue(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? formatCurrency(position.costAmount, 0) : formatCurrency(position.cumulativeProfit, 0)
+  return isPendingSubscription(position) ? formatCurrency(position.costAmount, 0) : formatCurrency(getHoldingTotalProfit(position), 0)
 }
 
 function getHoldingBottomRate(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? '待确认' : `${formatAmount(position.cumulativeProfitRate)}%`
+  return isPendingSubscription(position) ? '待确认' : `${formatAmount(getHoldingTotalProfitRate(position))}%`
 }
 
 function getHoldingPendingAmount(position: InvestmentPosition) {
@@ -602,12 +638,21 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <div class="holding-right">
               <div class="holding-inline-field">
                 <span>{{ getHoldingActionLabel(holding) }}</span>
-                <AmountText
-                  tag="strong"
-                  class="holding-action-value"
-                  :tone="isPendingSubscription(holding) ? 'inherit' : 'auto'"
-                  :value="getHoldingActionValue(holding)"
-                />
+                <div class="holding-action-group">
+                  <AmountText
+                    tag="strong"
+                    class="holding-action-value"
+                    :tone="getHoldingActionTone(holding)"
+                    :value="getHoldingActionValue(holding)"
+                  />
+                  <AmountText
+                    v-if="!isPendingSubscription(holding)"
+                    tag="span"
+                    class="holding-action-rate"
+                    :tone="getHoldingActionTone(holding)"
+                    :value="getHoldingActionRate(holding)"
+                  />
+                </div>
               </div>
             </div>
           </div>

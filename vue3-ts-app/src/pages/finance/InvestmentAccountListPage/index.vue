@@ -33,7 +33,7 @@ type InvestmentAccountCard = {
   stockCount: number
   fundCount: number
   dayProfit: number
-  cumulativeProfit: number
+  totalProfit: number
 }
 
 type DeleteTarget = {
@@ -107,15 +107,20 @@ const investmentAccountCards = computed<InvestmentAccountCard[]>(() =>
       stockCount,
       fundCount,
       dayProfit: accountPositions.reduce((total, position) => total + Number(position.dayProfit ?? 0), 0),
-      cumulativeProfit: accountPositions.reduce((total, position) => total + Number(position.cumulativeProfit ?? 0), 0),
+      totalProfit: accountPositions.reduce(
+        (total, position) => total + Number(position.cumulativeProfit ?? 0) + Number(position.holdingProfit ?? 0),
+        0,
+      ),
     }
   }),
 )
 
+const totalSummaryProfit = computed(() => Number(summary.value.cumulativeProfit ?? 0) + Number(summary.value.holdingProfit ?? 0))
+
 const summaryMetrics = computed(() => [
   { label: '今日盈亏', value: summary.value.dayProfit, isRate: false },
   { label: '持仓盈亏', value: summary.value.holdingProfit, isRate: false },
-  { label: '累计盈亏', value: summary.value.cumulativeProfit, isRate: false },
+  { label: '累计盈亏', value: totalSummaryProfit.value, isRate: false },
   { label: '账户数', value: accounts.value.length, isRate: false, isCount: true },
 ])
 
@@ -409,8 +414,26 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
           <div class="investment-account-list-card-bottom">
             <div class="investment-account-list-card-profit">
-              <span>今日盈亏 {{ formatSignedCurrency(card.dayProfit) }}</span>
-              <span>累计盈亏 {{ formatSignedCurrency(card.cumulativeProfit) }}</span>
+              <div class="investment-account-list-card-profit-item">
+                <span>今日盈亏</span>
+                <AmountText
+                  tag="strong"
+                  class="investment-account-list-card-profit-value"
+                  :value="card.dayProfit"
+                  show-sign
+                  show-unit
+                />
+              </div>
+              <div class="investment-account-list-card-profit-item">
+                <span>累计盈亏</span>
+                <AmountText
+                  tag="strong"
+                  class="investment-account-list-card-profit-value"
+                  :value="card.totalProfit"
+                  show-sign
+                  show-unit
+                />
+              </div>
             </div>
             <div v-if="isManageMode" class="investment-account-list-card-actions">
               <button

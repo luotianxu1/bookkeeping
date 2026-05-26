@@ -413,7 +413,24 @@
   font-weight: 700;
 }
 
+.holding-action-group {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.holding-action-rate {
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
 .holding-right :deep(.holding-action-value.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.holding-right :deep(.holding-action-rate.amount-text--positive) {
   color: var(--color-danger);
 }
 
@@ -421,7 +438,15 @@
   color: var(--color-success);
 }
 
+.holding-right :deep(.holding-action-rate.amount-text--negative) {
+  color: var(--color-success);
+}
+
 .holding-right :deep(.holding-action-value.amount-text--neutral) {
+  color: var(--color-text-primary);
+}
+
+.holding-right :deep(.holding-action-rate.amount-text--neutral) {
   color: var(--color-text-primary);
 }
 
@@ -457,6 +482,21 @@
 .holding-pnl-value {
   font-size: var(--font-size-14);
   font-weight: 700;
+}
+
+.holding-left.compact :deep(.holding-pnl-value.amount-text--positive),
+.holding-left.compact :deep(.holding-pnl-rate.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.holding-left.compact :deep(.holding-pnl-value.amount-text--negative),
+.holding-left.compact :deep(.holding-pnl-rate.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.holding-left.compact :deep(.holding-pnl-value.amount-text--neutral),
+.holding-left.compact :deep(.holding-pnl-rate.amount-text--neutral) {
+  color: var(--color-text-primary);
 }
 
 .holding-price-line {

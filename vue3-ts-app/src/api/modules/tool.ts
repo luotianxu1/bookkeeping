@@ -1,5 +1,42 @@
 import { requestDelete, requestGet, requestPost, requestPut, toolRequest } from '@/api/request'
 
+export type TodoStatus = 'pending' | 'completed'
+export type TodoDueScope = 'all' | 'today'
+
+export interface TodoItem {
+  id: number
+  userId: number
+  title: string
+  dueAt: string
+  remark?: string | null
+  sortOrder: number
+  status: TodoStatus | string
+  completedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TodoItemQuery {
+  userId?: number
+  status?: TodoStatus | 'all'
+  dueScope?: TodoDueScope
+  keyword?: string
+}
+
+export interface SaveTodoItemParams {
+  userId: number
+  title: string
+  dueAt: string
+  remark?: string | null
+  sortOrder?: number
+  status?: TodoStatus | string
+}
+
+export interface UpdateTodoItemStatusParams {
+  userId: number
+  status: TodoStatus
+}
+
 export type ContactStatus = 'active' | 'archived'
 
 export interface Contact {
@@ -157,6 +194,32 @@ export interface PhotographyOrderOverviewQuery {
   view: PhotographyOrderOverviewView
   anchor?: string
   selectedDate?: string | null
+}
+
+export function getTodoItems(params: TodoItemQuery) {
+  return requestGet<TodoItem[]>(toolRequest, '/api/tools/todo-items', { params })
+}
+
+export function getTodoItem(id: number) {
+  return requestGet<TodoItem>(toolRequest, `/api/tools/todo-items/${id}`)
+}
+
+export function createTodoItem(params: SaveTodoItemParams) {
+  return requestPost<TodoItem, SaveTodoItemParams>(toolRequest, '/api/tools/todo-items', params)
+}
+
+export function updateTodoItem(id: number, params: SaveTodoItemParams) {
+  return requestPut<TodoItem, SaveTodoItemParams>(toolRequest, `/api/tools/todo-items/${id}`, params)
+}
+
+export function updateTodoItemStatus(id: number, params: UpdateTodoItemStatusParams) {
+  return requestPut<TodoItem, UpdateTodoItemStatusParams>(toolRequest, `/api/tools/todo-items/${id}/status`, params)
+}
+
+export function deleteTodoItem(id: number, userId: number) {
+  return requestDelete<void>(toolRequest, `/api/tools/todo-items/${id}`, {
+    params: { userId },
+  })
 }
 
 export function getContacts(params: ContactQuery) {

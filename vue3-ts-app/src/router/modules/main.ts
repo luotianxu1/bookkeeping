@@ -6,6 +6,7 @@ import ProfilePage from '@/pages/profile/ProfilePage/index.vue'
 import ContactsPage from '@/pages/tools/ContactsPage/index.vue'
 import PhotographyOrderOverviewPage from '@/pages/tools/PhotographyOrderOverviewPage/index.vue'
 import PhotographyOrdersPage from '@/pages/tools/PhotographyOrdersPage/index.vue'
+import TodoPage from '@/pages/tools/TodoPage/index.vue'
 import ToolsPage from '@/pages/tools/ToolsPage/index.vue'
 
 export const mainRoutes: RouteRecordRaw[] = [
@@ -52,6 +53,15 @@ export const mainRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'tools',
       title: '订单总览',
+    },
+  },
+  {
+    path: '/tools/todo-items',
+    name: 'tools-todo-items',
+    component: TodoPage,
+    meta: {
+      section: 'tools',
+      title: '代办事项',
     },
   },
   {

@@ -53,6 +53,10 @@ const signText = computed(() => {
   if (props.tone === 'negative') return '-'
   if (trimmedText.value.startsWith('+')) return '+'
   if (trimmedText.value.startsWith('-')) return '-'
+  if (numericValue.value !== null) {
+    if (numericValue.value > 0) return '+'
+    if (numericValue.value < 0) return '-'
+  }
   return ''
 })
 
@@ -66,6 +70,10 @@ const valueText = computed(() => {
   if (props.showUnit) {
     const escapedUnit = props.unit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     normalized = normalized.replace(new RegExp(`^${escapedUnit}\\s*`), '')
+  }
+
+  if (numericValue.value !== null) {
+    normalized = normalized.replace(/^[+-]/, '').trimStart()
   }
 
   return normalized
