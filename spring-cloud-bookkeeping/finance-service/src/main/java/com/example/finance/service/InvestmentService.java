@@ -1117,7 +1117,7 @@ public class InvestmentService {
                 if (confirmedPrice.compareTo(BigDecimal.ZERO) <= 0) {
                     throw new IllegalArgumentException("基金净值数据无效，暂无法确认份额");
                 }
-                BigDecimal quantity = amount.divide(confirmedPrice, 6, RoundingMode.HALF_UP);
+                BigDecimal quantity = scaleFundQuantity(amount.divide(confirmedPrice, 6, RoundingMode.HALF_UP));
                 applyBuyTransaction(position, quantity, confirmedPrice, amount, feeAmount, taxAmount);
 
                 InvestmentTransactionEntity entity = buildConfirmedFundTransactionEntity(
@@ -1156,7 +1156,7 @@ public class InvestmentService {
         }
 
         if ("sell".equals(request.getTradeType())) {
-            BigDecimal quantity = defaultZero(request.getQuantity()).setScale(6, RoundingMode.HALF_UP);
+            BigDecimal quantity = scaleFundQuantity(defaultZero(request.getQuantity()));
             if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
                 throw new IllegalArgumentException("赎回份额必须大于0");
             }
@@ -1883,8 +1883,10 @@ public class InvestmentService {
             }
 
             if ("buy".equals(transaction.getTradeType())) {
-                BigDecimal quantity = defaultZero(transaction.getAmount()).setScale(2, RoundingMode.HALF_UP)
-                    .divide(confirmedPrice, 6, RoundingMode.HALF_UP);
+                BigDecimal quantity = scaleFundQuantity(
+                    defaultZero(transaction.getAmount()).setScale(2, RoundingMode.HALF_UP)
+                        .divide(confirmedPrice, 6, RoundingMode.HALF_UP)
+                );
                 applyBuyTransaction(
                     position,
                     quantity,
@@ -2057,6 +2059,10 @@ public class InvestmentService {
         ).setScale(6, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal scaleFundQuantity(BigDecimal quantity) {
+        return defaultZero(quantity).setScale(2, RoundingMode.HALF_UP);
+    }
+
     private void confirmPendingFundSubscription(
         InvestmentPositionEntity position,
         InvestmentPriceQuoteEntity appliedQuote,
@@ -2069,7 +2075,7 @@ public class InvestmentService {
         }
 
         BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal quantity = costAmount.divide(confirmedPrice, 6, RoundingMode.HALF_UP);
+        BigDecimal quantity = scaleFundQuantity(costAmount.divide(confirmedPrice, 6, RoundingMode.HALF_UP));
         position.setHoldingQuantity(quantity);
         position.setAvailableQuantity(quantity);
         position.setFrozenQuantity(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));

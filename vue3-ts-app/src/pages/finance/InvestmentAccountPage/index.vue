@@ -118,8 +118,8 @@ const totalSummaryProfitRate = computed(() => {
 const summaryMetrics = computed(() => [
   { label: '持仓盈亏', value: summary.value.holdingProfit },
   { label: '持仓盈亏率', value: summary.value.holdingProfitRate, isRate: true },
-  { label: '累计盈亏', value: totalSummaryProfit.value },
-  { label: '累计盈亏率', value: totalSummaryProfitRate.value, isRate: true },
+  { label: '累计总收益', value: totalSummaryProfit.value },
+  { label: '累计总收益率', value: totalSummaryProfitRate.value, isRate: true },
 ])
 
 onMounted(() => {
@@ -478,14 +478,14 @@ function compareHoldingsByProfitRate(a: InvestmentPosition, b: InvestmentPositio
     return aPending ? 1 : -1
   }
 
-  const rateDiff = getHoldingTotalProfitRate(b) - getHoldingTotalProfitRate(a)
-  if (rateDiff !== 0) {
-    return rateDiff
-  }
-
   const profitDiff = getHoldingTotalProfit(b) - getHoldingTotalProfit(a)
   if (profitDiff !== 0) {
     return profitDiff
+  }
+
+  const rateDiff = getHoldingTotalProfitRate(b) - getHoldingTotalProfitRate(a)
+  if (rateDiff !== 0) {
+    return rateDiff
   }
 
   return Number(b.marketValue ?? 0) - Number(a.marketValue ?? 0)
@@ -545,7 +545,7 @@ function getHoldingPriceText(position: InvestmentPosition) {
 }
 
 function getHoldingBottomLabel(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? '申购金额' : '累计盈亏'
+  return isPendingSubscription(position) ? '申购金额' : '累计总收益'
 }
 
 function getHoldingTotalProfit(position: InvestmentPosition) {

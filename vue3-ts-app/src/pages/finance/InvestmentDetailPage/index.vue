@@ -711,7 +711,9 @@ function openEditModal() {
     return
   }
   editPrice.value = isPendingSubscription.value ? '' : String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
-  editHoldingQuantity.value = String(Number(position.holdingQuantity ?? 0) || '')
+  editHoldingQuantity.value = isFundPosition.value
+    ? formatEditableFundQuantity(position.holdingQuantity)
+    : String(Number(position.holdingQuantity ?? 0) || '')
   editCostPrice.value = String(Number(position.avgCostPrice ?? 0) || '')
   editIncludeInNetWorth.value = Boolean(position.includeInNetWorth)
   editRemark.value = position.remark || ''
@@ -1086,13 +1088,13 @@ async function submitEdit() {
       ? Number((holdingQuantity * costPrice).toFixed(2))
       : Number(currentPosition.value.costAmount)
     const nextAvailableQuantity = isEditingFundPosition
-      ? Number((holdingQuantity - frozenQuantity).toFixed(6))
+      ? Number((holdingQuantity - frozenQuantity).toFixed(2))
       : Number(currentPosition.value.availableQuantity)
     await updateInvestmentPosition(currentPosition.value.id, {
       userId: currentUser.id,
       accountId: currentPosition.value.accountId,
       productId: currentPosition.value.productId,
-      holdingQuantity: nextHoldingQuantity,
+      holdingQuantity: isEditingFundPosition ? Number(nextHoldingQuantity.toFixed(2)) : nextHoldingQuantity,
       availableQuantity: nextAvailableQuantity,
       frozenQuantity,
       costAmount: nextCostAmount,
@@ -1430,6 +1432,14 @@ function formatDate(timestamp: number) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function formatEditableFundQuantity(value?: number | null) {
+  const numeric = Number(value ?? 0)
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return ''
+  }
+  return numeric.toFixed(2)
 }
 
 function formatTencentTime(raw?: string) {
@@ -1919,6 +1929,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
               class="investment-detail-field-control investment-detail-number-control"
               type="number"
               inputmode="decimal"
+              step="0.01"
               placeholder="请输入当前份额"
             />
           </label>

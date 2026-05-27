@@ -120,7 +120,7 @@ const totalSummaryProfit = computed(() => Number(summary.value.cumulativeProfit 
 const summaryMetrics = computed(() => [
   { label: '今日盈亏', value: summary.value.dayProfit, isRate: false },
   { label: '持仓盈亏', value: summary.value.holdingProfit, isRate: false },
-  { label: '累计盈亏', value: totalSummaryProfit.value, isRate: false },
+  { label: '累计总收益', value: totalSummaryProfit.value, isRate: false },
   { label: '账户数', value: accounts.value.length, isRate: false, isCount: true },
 ])
 
@@ -425,7 +425,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 />
               </div>
               <div class="investment-account-list-card-profit-item">
-                <span>累计盈亏</span>
+                <span>累计总收益</span>
                 <AmountText
                   tag="strong"
                   class="investment-account-list-card-profit-value"
