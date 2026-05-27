@@ -66,6 +66,33 @@ export interface SaveContactParams {
   status?: ContactStatus | string
 }
 
+export type AnniversaryScope = 'all' | 'month' | 'expired'
+
+export interface Anniversary {
+  id: number
+  userId: number
+  title: string
+  anniversaryDate: string
+  remark?: string | null
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AnniversaryQuery {
+  userId?: number
+  scope?: AnniversaryScope
+  keyword?: string
+}
+
+export interface SaveAnniversaryParams {
+  userId: number
+  title: string
+  anniversaryDate: string
+  remark?: string | null
+  sortOrder?: number
+}
+
 export type PhotographyOrderStatus = 'pending' | 'shot'
 export type PhotographyOrderType =
   | 'first_birthday'
@@ -240,6 +267,28 @@ export function updateContact(id: number, params: SaveContactParams) {
 
 export function deleteContact(id: number) {
   return requestDelete<void>(toolRequest, `/api/tools/contacts/${id}`)
+}
+
+export function getAnniversaries(params: AnniversaryQuery) {
+  return requestGet<Anniversary[]>(toolRequest, '/api/tools/anniversaries', { params })
+}
+
+export function getAnniversary(id: number) {
+  return requestGet<Anniversary>(toolRequest, `/api/tools/anniversaries/${id}`)
+}
+
+export function createAnniversary(params: SaveAnniversaryParams) {
+  return requestPost<Anniversary, SaveAnniversaryParams>(toolRequest, '/api/tools/anniversaries', params)
+}
+
+export function updateAnniversary(id: number, params: SaveAnniversaryParams) {
+  return requestPut<Anniversary, SaveAnniversaryParams>(toolRequest, `/api/tools/anniversaries/${id}`, params)
+}
+
+export function deleteAnniversary(id: number, userId: number) {
+  return requestDelete<void>(toolRequest, `/api/tools/anniversaries/${id}`, {
+    params: { userId },
+  })
 }
 
 export function getPhotographyOrders(params: PhotographyOrderQuery) {

@@ -402,17 +402,6 @@ function openInvestmentDetail(positionId: number) {
   router.push({ path: '/finance/accounts/investment/detail', query: { positionId } })
 }
 
-function getProductTag(position: InvestmentPosition) {
-  const map: Record<string, string> = {
-    stock: 'A股',
-    fund: '基金',
-    bond: '债券',
-    gold: '黄金',
-    other: '其他',
-  }
-  return map[position.productType || 'other'] ?? '其他'
-}
-
 function formatCurrency(value: number, digits = 2) {
   const numeric = Number(value)
   const sign = numeric < 0 ? '-' : ''
@@ -633,7 +622,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
           <div class="holding-row top">
             <div class="holding-left">
               <div class="holding-tags">
-                <span class="holding-tag">{{ getProductTag(holding) }}</span>
                 <span v-if="shouldShowPendingTag(holding)" class="holding-tag is-pending">待确认</span>
                 <AmountText tag="span" class="holding-market-value" :value="formatCurrency(holding.marketValue, 0)" />
               </div>

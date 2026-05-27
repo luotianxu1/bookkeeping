@@ -136,6 +136,11 @@ function formatHoldingMeta(item: FundProfitForecastHolding) {
   return formatCurrency(Number(item.holdingAmount ?? 0))
 }
 
+function formatHoldingUpdatedAt(item: FundProfitForecastHolding) {
+  const timeText = formatDateTime(item.estimatedAt)
+  return timeText ? `更新 ${timeText}` : '更新时间待确认'
+}
+
 function getProfitTone(value: number): ProfitTone {
   if (value > 0) {
     return 'positive'
@@ -231,6 +236,7 @@ function formatDateTime(value: string | null | undefined) {
           <div class="holding-left">
             <p class="holding-name">{{ item.productName }}</p>
             <AmountText tag="p" class="holding-amount" :value="formatHoldingMeta(item)" tone="inherit" />
+            <p class="holding-update">{{ formatHoldingUpdatedAt(item) }}</p>
           </div>
 
           <div class="holding-right">

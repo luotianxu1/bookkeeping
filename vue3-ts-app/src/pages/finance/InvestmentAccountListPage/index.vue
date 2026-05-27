@@ -429,7 +429,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 <AmountText
                   tag="strong"
                   class="investment-account-list-card-profit-value"
-                  :value="card.totalProfit"
+                  :value="formatSignedCurrency(card.totalProfit)"
                   show-sign
                   show-unit
                 />

@@ -12,7 +12,7 @@ type ToolItem = {
 
 const toolItems: ToolItem[] = [
   { key: 'todo', title: '代办事项', short: '办', tone: 'blue', featured: true, to: '/tools/todo-items' },
-  { key: 'anniversary', title: '纪念日', short: '纪', tone: 'purple' },
+  { key: 'anniversary', title: '纪念日', short: '纪', tone: 'purple', featured: true, to: '/tools/anniversaries' },
   { key: 'calendar', title: '日历', short: '历', tone: 'sky' },
   { key: 'checkin', title: '打卡', short: '打', tone: 'green' },
   { key: 'photography-orders', title: '摄影订单', short: '摄', tone: 'blue', featured: true, to: '/tools/photography-orders' },

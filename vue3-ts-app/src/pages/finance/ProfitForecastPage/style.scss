@@ -204,6 +204,13 @@
   font-weight: 500;
 }
 
+.holding-update {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .holding-right {
   display: flex;
 }
@@ -257,6 +264,7 @@
   .summary-hint,
   .holding-header-title,
   .holding-amount,
+  .holding-update,
   .holding-header-right span,
   .summary-row--headline span,
   .holding-empty {

@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import LoginPage from '@/pages/login/LoginPage/index.vue'
 import PlaceholderPage from '@/pages/placeholder/PlaceholderPage/index.vue'
 import ProfilePage from '@/pages/profile/ProfilePage/index.vue'
+import AnniversaryPage from '@/pages/tools/AnniversaryPage/index.vue'
 import ContactsPage from '@/pages/tools/ContactsPage/index.vue'
 import PhotographyOrderOverviewPage from '@/pages/tools/PhotographyOrderOverviewPage/index.vue'
 import PhotographyOrdersPage from '@/pages/tools/PhotographyOrdersPage/index.vue'
@@ -35,6 +36,15 @@ export const mainRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'tools',
       title: '工具',
+    },
+  },
+  {
+    path: '/tools/anniversaries',
+    name: 'tools-anniversaries',
+    component: AnniversaryPage,
+    meta: {
+      section: 'tools',
+      title: '纪念日',
     },
   },
   {

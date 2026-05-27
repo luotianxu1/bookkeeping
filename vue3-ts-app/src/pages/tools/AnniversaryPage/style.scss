@@ -1,0 +1,286 @@
+.anniversary-page {
+  min-height: calc(100dvh - 142px);
+  display: grid;
+  align-content: start;
+  gap: var(--space-12);
+  padding-bottom: 120px;
+  color: var(--color-text-primary);
+}
+
+.anniversary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.anniversary-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.anniversary-header-left h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+.anniversary-back {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.anniversary-hero {
+  display: grid;
+  gap: var(--space-10);
+  padding: 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  box-shadow: 0 10px 24px rgba(29, 78, 216, 0.12);
+}
+
+.anniversary-hero-content {
+  display: grid;
+  gap: 6px;
+}
+
+.anniversary-hero h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  color: #0f172a;
+}
+
+.anniversary-hero p {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.anniversary-tabs {
+  padding: 4px;
+  border: 1px solid #dde3ee;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.anniversary-tabs :deep(.segmented-control) {
+  min-height: 42px;
+  padding: 0;
+  border-radius: 12px;
+  background: transparent;
+}
+
+.anniversary-tabs :deep(.segmented-control-indicator) {
+  top: 0;
+  left: 0;
+  width: calc(100% / var(--count));
+  height: 100%;
+  border-radius: 12px;
+}
+
+.anniversary-tabs :deep(.segmented-control-item) {
+  min-height: 42px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.anniversary-message {
+  margin: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--color-bg-card);
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.anniversary-message-error {
+  color: #b91c1c;
+  background: rgba(254, 242, 242, 0.9);
+}
+
+.anniversary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.anniversary-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+
+.anniversary-card.expanded {
+  border-color: #bfdbfe;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.14);
+}
+
+.anniversary-card.tone-expired {
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.anniversary-card.tone-today {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.anniversary-card-main {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.anniversary-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.anniversary-card-top h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+.anniversary-chip {
+  flex-shrink: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.anniversary-chip.tone-upcoming {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.anniversary-chip.tone-expired {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.anniversary-chip.tone-today {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.anniversary-card-note,
+.anniversary-card-remark {
+  margin: 0;
+}
+
+.anniversary-card-note {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.anniversary-card-remark {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #475569;
+}
+
+.anniversary-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.anniversary-action {
+  min-height: 38px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.anniversary-action.danger {
+  border-color: #fecaca;
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.anniversary-form {
+  display: grid;
+  gap: 14px;
+}
+
+.anniversary-form-error {
+  margin: 0;
+  font-size: 13px;
+  color: #dc2626;
+}
+
+.anniversary-remark-field {
+  display: grid;
+  gap: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.anniversary-remark-field textarea {
+  width: 100%;
+  min-height: 88px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.anniversary-remark-field textarea::placeholder {
+  color: #9ca3af;
+}
+
+.anniversary-remark-field textarea:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.anniversary-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.anniversary-delete-content {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+}
+
+.anniversary-delete-content p,
+.anniversary-delete-content span {
+  margin: 0;
+}
+
+@media (max-width: 420px) {
+  .anniversary-header-left h1,
+  .anniversary-hero h2 {
+    font-size: 22px;
+  }
+}
