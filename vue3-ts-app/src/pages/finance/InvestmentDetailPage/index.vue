@@ -964,7 +964,7 @@ async function submitTrade() {
     tradeError.value = ''
 
     try {
-      await createInvestmentTransaction({
+      const transaction = await createInvestmentTransaction({
         userId: currentUser.id,
         accountId: currentPosition.value.accountId,
         positionId: currentPosition.value.id,
@@ -982,7 +982,7 @@ async function submitTrade() {
         remark: tradeRemark.value.trim() || null,
       })
       closeTradeModal(true)
-      showFeedback(currentTradeAction.value === 'buy' ? '基金加仓申请已提交，待确认后更新份额' : '基金减仓申请已提交，待确认后更新到账金额', 'success')
+      showFeedback(getFundTransactionSubmitMessage(transaction), 'success')
       await loadDetail()
     } catch (error) {
       const message = error instanceof Error ? error.message : `${tradeModalTitle.value}失败`
@@ -1470,6 +1470,30 @@ function formatAmountLabel(entry: InvestmentTransaction) {
   }
   return `金额 ${formatCurrency(Number(entry.amount))}`
 }
+
+function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
+  if (entry.tradeType === 'sell') {
+    const appliedDate = entry.settlementAppliedDate || '--'
+    const expectedDate = entry.settlementExpectedDate || appliedDate
+    if (entry.settlementStatus === 'confirmed') {
+      return '基金减仓已按确认净值结算，到账金额已更新'
+    }
+    if (expectedDate === appliedDate) {
+      return `基金减仓申请已提交，将按 ${appliedDate} 净值确认到账金额`
+    }
+    return `基金减仓申请已提交，将按 ${appliedDate} 净值确认，预计 ${expectedDate} 完成到账`
+  }
+
+  if (entry.settlementStatus === 'confirmed') {
+    return '基金加仓已按最新净值确认，份额已更新'
+  }
+  const appliedDate = entry.settlementAppliedDate || '--'
+  const expectedDate = entry.settlementExpectedDate || appliedDate
+  if (expectedDate === appliedDate) {
+    return `基金加仓申请已提交，将按 ${appliedDate} 净值确认份额`
+  }
+  return `基金加仓申请已提交，将按 ${appliedDate} 净值确认，预计 ${expectedDate} 完成`
+}
 </script>
 
 <template>
@@ -1912,7 +1936,7 @@ function formatAmountLabel(entry: InvestmentTransaction) {
         </div>
 
         <p v-if="isPendingSubscription" class="investment-detail-description">
-          场外基金申购待确认时不支持手动修改价格，系统会在确认净值后自动生成份额和成本价。
+          场外基金待确认时不支持手动修改价格；若目标申购日净值已同步，系统会直接确认份额和成本价，否则会在净值同步后自动完成。
         </p>
 
         <p v-if="isFundPosition && !isPendingSubscription" class="investment-detail-description">

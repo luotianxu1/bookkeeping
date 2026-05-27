@@ -1042,9 +1042,9 @@ public class InvestmentService {
     ) {
         JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
         BigDecimal officialPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
-        LocalDate appliedDate = resolveFundSubscriptionTradeDate(request.getSubscriptionTimeSlot(), LocalDate.now());
-        int confirmDelayDays = resolveFundConfirmDelayDays(baseInfo, product);
-        LocalDate expectedConfirmDate = addTradingDays(appliedDate, confirmDelayDays);
+        LocalDateTime tradeAt = request.getTradeAt() == null ? LocalDateTime.now() : request.getTradeAt();
+        LocalDate appliedDate = resolveFundSubscriptionTradeDate(request.getSubscriptionTimeSlot(), tradeAt);
+        LocalDate expectedConfirmDate = resolveFundExpectedConfirmDate(appliedDate, baseInfo, product);
         BigDecimal costAmount = defaultZero(request.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
         if (costAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("申购金额必须大于0");
@@ -1073,13 +1073,19 @@ public class InvestmentService {
         entity.setSubscriptionAppliedDate(appliedDate);
         entity.setSubscriptionExpectedConfirmDate(expectedConfirmDate);
         entity.setSubscriptionConfirmedAt(null);
-        entity.setLastSyncedAt(LocalDateTime.now());
+        entity.setLastSyncedAt(tradeAt);
         entity.setRemark(request.getRemark());
 
         if (fundingAccount != null) {
             deductFundingAccount(fundingAccount, costAmount);
         }
         positionMapper.insert(entity);
+        InvestmentPriceQuoteEntity immediateQuote = resolveImmediateSettlementQuote(product, baseInfo, appliedDate, LocalDateTime.now());
+        if (immediateQuote != null) {
+            LocalDateTime confirmedAt = immediateQuote.getQuoteTime() == null ? tradeAt : immediateQuote.getQuoteTime();
+            confirmPendingFundSubscription(entity, immediateQuote, confirmedAt);
+            positionMapper.updateById(entity);
+        }
         syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
         return toPositionResponse(positionMapper.selectById(entity.getId()), product, account);
     }
@@ -1091,9 +1097,9 @@ public class InvestmentService {
         InvestmentProductEntity product
     ) {
         JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
-        LocalDate appliedDate = resolveFundSubscriptionTradeDate(request.getSubscriptionTimeSlot(), LocalDate.now());
-        LocalDate expectedSettlementDate = addTradingDays(appliedDate, resolveFundConfirmDelayDays(baseInfo, product));
         LocalDateTime tradeAt = request.getTradeAt() == null ? LocalDateTime.now() : request.getTradeAt();
+        LocalDate appliedDate = resolveFundSubscriptionTradeDate(request.getSubscriptionTimeSlot(), tradeAt);
+        LocalDate expectedSettlementDate = resolveFundExpectedConfirmDate(appliedDate, baseInfo, product);
 
         if ("buy".equals(request.getTradeType())) {
             BigDecimal amount = defaultZero(request.getAmount()).setScale(2, RoundingMode.HALF_UP);
@@ -1104,6 +1110,34 @@ public class InvestmentService {
             BigDecimal taxAmount = defaultZero(request.getTaxAmount()).setScale(2, RoundingMode.HALF_UP);
             AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
             deductFundingAccount(fundingAccount, amount.add(feeAmount).add(taxAmount));
+
+            InvestmentPriceQuoteEntity immediateQuote = resolveImmediateSettlementQuote(product, baseInfo, appliedDate, LocalDateTime.now());
+            if (immediateQuote != null) {
+                BigDecimal confirmedPrice = resolveConfirmedFundPrice(immediateQuote);
+                if (confirmedPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new IllegalArgumentException("基金净值数据无效，暂无法确认份额");
+                }
+                BigDecimal quantity = amount.divide(confirmedPrice, 6, RoundingMode.HALF_UP);
+                applyBuyTransaction(position, quantity, confirmedPrice, amount, feeAmount, taxAmount);
+
+                InvestmentTransactionEntity entity = buildConfirmedFundTransactionEntity(
+                    request,
+                    position,
+                    quantity,
+                    confirmedPrice,
+                    amount,
+                    feeAmount,
+                    taxAmount,
+                    tradeAt,
+                    appliedDate,
+                    expectedSettlementDate,
+                    immediateQuote.getQuoteTime() == null ? tradeAt : immediateQuote.getQuoteTime()
+                );
+                transactionMapper.insert(entity);
+                positionMapper.updateById(position);
+                syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
+                return toTransactionResponse(entity, product, investmentAccount);
+            }
 
             InvestmentTransactionEntity entity = buildPendingFundTransactionEntity(
                 request,
@@ -1196,6 +1230,42 @@ public class InvestmentService {
         return entity;
     }
 
+    private InvestmentTransactionEntity buildConfirmedFundTransactionEntity(
+        InvestmentTransactionRequest request,
+        InvestmentPositionEntity position,
+        BigDecimal quantity,
+        BigDecimal price,
+        BigDecimal amount,
+        BigDecimal feeAmount,
+        BigDecimal taxAmount,
+        LocalDateTime tradeAt,
+        LocalDate appliedDate,
+        LocalDate expectedSettlementDate,
+        LocalDateTime confirmedAt
+    ) {
+        InvestmentTransactionEntity entity = buildPendingFundTransactionEntity(
+            request,
+            position,
+            quantity,
+            price,
+            amount,
+            feeAmount,
+            taxAmount,
+            tradeAt,
+            appliedDate,
+            expectedSettlementDate
+        );
+        entity.setSettlementStatus(SETTLEMENT_STATUS_CONFIRMED);
+        entity.setSettlementConfirmedAt(confirmedAt);
+        return entity;
+    }
+
+    private LocalDate resolveFundExpectedConfirmDate(LocalDate appliedDate, JsonNode baseInfo, InvestmentProductEntity product) {
+        return isQdiiFund(baseInfo, product)
+            ? addTradingDays(appliedDate, resolveFundConfirmDelayDays(baseInfo, product))
+            : appliedDate;
+    }
+
     private int resolveFundConfirmDelayDays(JsonNode baseInfo, InvestmentProductEntity product) {
         return isQdiiFund(baseInfo, product)
             ? QDII_FUND_CONFIRM_DAYS
@@ -1233,22 +1303,66 @@ public class InvestmentService {
         return Collections.unmodifiableSet(dates);
     }
 
-    private LocalDate resolveFundSubscriptionTradeDate(String subscriptionTimeSlot, LocalDate requestDate) {
-        LocalDate candidateDate = requestDate;
-        if (isNonTradingDay(candidateDate) || isAfterFundCutoff(subscriptionTimeSlot)) {
+    private LocalDate resolveFundSubscriptionTradeDate(String subscriptionTimeSlot, LocalDateTime tradeAt) {
+        LocalDateTime effectiveTradeAt = tradeAt == null ? LocalDateTime.now() : tradeAt;
+        LocalDate candidateDate = effectiveTradeAt.toLocalDate();
+        if (isNonTradingDay(candidateDate) || isAfterFundCutoff(subscriptionTimeSlot, effectiveTradeAt.toLocalTime())) {
             candidateDate = candidateDate.plusDays(1);
         }
         return nextTradingDay(candidateDate);
     }
 
-    private boolean isAfterFundCutoff(String subscriptionTimeSlot) {
+    private boolean isAfterFundCutoff(String subscriptionTimeSlot, LocalTime tradeTime) {
         if (SUBSCRIPTION_TIME_SLOT_AFTER_1500.equals(subscriptionTimeSlot)) {
             return true;
         }
         if (SUBSCRIPTION_TIME_SLOT_BEFORE_1500.equals(subscriptionTimeSlot)) {
             return false;
         }
-        return !LocalTime.now().isBefore(FUND_SUBSCRIPTION_CUTOFF_TIME);
+        LocalTime effectiveTradeTime = tradeTime == null ? LocalTime.now() : tradeTime;
+        return !effectiveTradeTime.isBefore(FUND_SUBSCRIPTION_CUTOFF_TIME);
+    }
+
+    private InvestmentPriceQuoteEntity resolveImmediateSettlementQuote(
+        InvestmentProductEntity product,
+        JsonNode baseInfo,
+        LocalDate appliedDate,
+        LocalDateTime syncedAt
+    ) {
+        upsertFundQuoteFromBaseInfo(product, baseInfo, syncedAt);
+        return findSettlementQuoteByProductAndDate(product.getId(), appliedDate);
+    }
+
+    private void upsertFundQuoteFromBaseInfo(InvestmentProductEntity product, JsonNode baseInfo, LocalDateTime syncedAt) {
+        if (product == null || baseInfo == null) {
+            return;
+        }
+        BigDecimal latestPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
+        LocalDate quoteDate = safeDate(baseInfo.path("FSRQ").asText(null));
+        if (latestPrice == null || quoteDate == null) {
+            return;
+        }
+
+        InvestmentPriceQuoteEntity existingQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
+            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
+            .eq(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
+            .last("LIMIT 1"));
+        InvestmentPriceQuoteEntity previousQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
+            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
+            .lt(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
+            .orderByDesc(InvestmentPriceQuoteEntity::getQuoteDate)
+            .last("LIMIT 1"));
+
+        BigDecimal changeRate = safeDecimal(baseInfo.path("RZDF").asText(null));
+        BigDecimal preClosePrice = resolveFundPreClose(existingQuote, previousQuote, latestPrice, changeRate);
+        BigDecimal changeAmount = preClosePrice == null
+            ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
+            : latestPrice.subtract(preClosePrice).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal normalizedChangeRate = changeRate != null
+            ? changeRate.setScale(4, RoundingMode.HALF_UP)
+            : rate(changeAmount, preClosePrice);
+
+        saveFundQuote(product.getId(), existingQuote, quoteDate, syncedAt, latestPrice, preClosePrice, changeAmount, normalizedChangeRate);
     }
 
     private LocalDate addTradingDays(LocalDate baseDate, int tradingDays) {
@@ -1763,9 +1877,7 @@ public class InvestmentService {
                 continue;
             }
 
-            BigDecimal confirmedPrice = defaultZero(
-                appliedQuote.getClosePrice() != null ? appliedQuote.getClosePrice() : appliedQuote.getLatestPrice()
-            ).setScale(6, RoundingMode.HALF_UP);
+            BigDecimal confirmedPrice = resolveConfirmedFundPrice(appliedQuote);
             if (confirmedPrice.compareTo(BigDecimal.ZERO) <= 0) {
                 continue;
             }
@@ -1913,10 +2025,6 @@ public class InvestmentService {
         if (!isPendingFundSubscription(position) || position.getSubscriptionAppliedDate() == null) {
             return false;
         }
-        LocalDate expectedConfirmDate = position.getSubscriptionExpectedConfirmDate();
-        if (expectedConfirmDate != null && settlementDate.isBefore(expectedConfirmDate)) {
-            return false;
-        }
         return !settlementDate.isBefore(position.getSubscriptionAppliedDate());
     }
 
@@ -1925,10 +2033,6 @@ public class InvestmentService {
             return false;
         }
         if (transaction.getSettlementAppliedDate() == null) {
-            return false;
-        }
-        LocalDate expectedDate = transaction.getSettlementExpectedDate();
-        if (expectedDate != null && settlementDate.isBefore(expectedDate)) {
             return false;
         }
         return !settlementDate.isBefore(transaction.getSettlementAppliedDate());
@@ -1945,14 +2049,20 @@ public class InvestmentService {
             .last("LIMIT 1"));
     }
 
+    private BigDecimal resolveConfirmedFundPrice(InvestmentPriceQuoteEntity appliedQuote) {
+        return defaultZero(
+            appliedQuote == null
+                ? null
+                : (appliedQuote.getClosePrice() != null ? appliedQuote.getClosePrice() : appliedQuote.getLatestPrice())
+        ).setScale(6, RoundingMode.HALF_UP);
+    }
+
     private void confirmPendingFundSubscription(
         InvestmentPositionEntity position,
         InvestmentPriceQuoteEntity appliedQuote,
         LocalDateTime syncedAt
     ) {
-        BigDecimal confirmedPrice = defaultZero(
-            appliedQuote.getClosePrice() != null ? appliedQuote.getClosePrice() : appliedQuote.getLatestPrice()
-        ).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal confirmedPrice = resolveConfirmedFundPrice(appliedQuote);
         if (confirmedPrice.compareTo(BigDecimal.ZERO) <= 0) {
             updatePendingFundPositionSnapshot(position, confirmedPrice, syncedAt);
             return;

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Data
 public class InvestmentPositionRequest {
@@ -36,6 +37,8 @@ public class InvestmentPositionRequest {
 
     @DecimalMin(value = "0.000000", message = "当前价格不能小于0")
     private BigDecimal currentPrice;
+
+    private LocalDateTime tradeAt;
 
     private String subscriptionTimeSlot;
 

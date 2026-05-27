@@ -609,6 +609,7 @@ export interface SaveInvestmentPositionParams {
   frozenQuantity?: number
   costAmount: number
   currentPrice?: number
+  tradeAt?: string
   subscriptionTimeSlot?: 'before_1500' | 'after_1500'
   includeInNetWorth?: boolean
   status?: string

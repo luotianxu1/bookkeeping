@@ -87,6 +87,11 @@ const holdings = computed(() => {
     .slice()
     .sort(compareHoldingsByProfitRate)
 })
+const showInvestmentTabSwitch = computed(() => {
+  const hasStocks = positions.value.some((item) => item.productType === 'stock')
+  const hasFunds = positions.value.some((item) => item.productType === 'fund')
+  return hasStocks && hasFunds
+})
 
 const isFundSubscriptionDraft = computed(() => addAssetCategory.value === 'fund')
 const pendingAmountsByPositionId = computed(() => {
@@ -279,7 +284,7 @@ async function saveAsset() {
   formError.value = ''
 
   try {
-    await createInvestmentPosition({
+    const savedPosition = await createInvestmentPosition({
       userId: currentUser.id,
       accountId,
       fundingAccountId: normalizedFundingAccountId,
@@ -298,13 +303,17 @@ async function saveAsset() {
       frozenQuantity: 0,
       costAmount: Number(costAmount.toFixed(2)),
       currentPrice: isFundProduct ? undefined : currentPrice,
+      tradeAt: toApiDateTime(new Date()),
       subscriptionTimeSlot: isFundProduct ? addAssetSubscriptionTimeSlot.value : undefined,
       includeInNetWorth: true,
       status: 'active',
       remark: null,
     })
     closeAddModal()
-    showFeedback(isFundProduct ? '基金申购已提交，待确认后生成份额' : '新增成功', 'success')
+    showFeedback(
+      isFundProduct ? getFundPositionSubmitMessage(savedPosition) : '新增成功',
+      'success',
+    )
     await loadInvestmentData()
   } catch (error) {
     const message = error instanceof Error ? error.message : '新增投资失败'
@@ -435,6 +444,21 @@ function formatSyncDate(value?: string | null) {
   return `${month}-${day}`
 }
 
+function formatMonthDay(value?: string | null) {
+  if (!value) {
+    return '--'
+  }
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) {
+    const matched = value.match(/^\d{4}-(\d{2})-(\d{2})/)
+    return matched ? `${matched[1]}-${matched[2]}` : value
+  }
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${month}-${day}`
+}
+
 function getAllocationPercent(position: InvestmentPosition) {
   const total = Number(summary.value.totalMarketValue)
   if (!Number.isFinite(total) || total <= 0) {
@@ -513,7 +537,9 @@ function getHoldingActionTone(position: InvestmentPosition) {
 
 function getHoldingPriceText(position: InvestmentPosition) {
   if (isPendingSubscription(position)) {
-    return `预计确认 ${position.subscriptionExpectedConfirmDate || '--'}`
+    const appliedDate = formatMonthDay(position.subscriptionAppliedDate)
+    const expectedDate = formatMonthDay(position.subscriptionExpectedConfirmDate || position.subscriptionAppliedDate)
+    return `${appliedDate}确认净值，${expectedDate}确认份额`
   }
   return `最新净值 ${formatSyncDate(position.lastSyncedAt)}`
 }
@@ -551,6 +577,28 @@ function formatAmount(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
+}
+
+function toApiDateTime(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  const second = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hour}:${minute}:${second}`
+}
+
+function getFundPositionSubmitMessage(position: InvestmentPosition) {
+  if (position.subscriptionStatus === 'confirmed') {
+    return '基金申购已按最新净值确认，份额已生成'
+  }
+  const appliedDate = position.subscriptionAppliedDate || '--'
+  const expectedDate = position.subscriptionExpectedConfirmDate || appliedDate
+  if (expectedDate === appliedDate) {
+    return `基金申购已提交，将按 ${appliedDate} 净值确认份额`
+  }
+  return `基金申购已提交，将按 ${appliedDate} 净值确认，预计 ${expectedDate} 完成`
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {
@@ -603,7 +651,12 @@ function showFeedback(message: string, type: 'success' | 'error') {
         </div>
       </section>
 
-      <SegmentedControl v-model="activeTab" :options="investmentTabs" label="投资分类筛选" />
+      <SegmentedControl
+        v-if="showInvestmentTabSwitch"
+        v-model="activeTab"
+        :options="investmentTabs"
+        label="投资分类筛选"
+      />
 
       <section class="investment-holdings" aria-label="持仓列表">
         <article
@@ -722,7 +775,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
         </p>
 
         <p v-if="isFundSubscriptionDraft" class="investment-lookup-message">
-          场外基金按金额申购处理，确认份额会在后续净值确认后自动生成；QDII 基金通常为 T+2 确认。
+          场外基金按金额申购处理；若目标申购日净值已同步，系统会直接确认份额，否则会在净值同步后自动确认。QDII 基金净值通常更新更晚。
         </p>
 
         <label v-if="isFundSubscriptionDraft" class="investment-add-modal-field">
