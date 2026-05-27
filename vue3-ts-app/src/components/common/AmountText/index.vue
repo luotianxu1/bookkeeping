@@ -78,19 +78,18 @@ const valueText = computed(() => {
 
   return normalized
 })
+
+const displayText = computed(() => {
+  if (!props.showSign && !props.showUnit) {
+    return text.value
+  }
+
+  return `${props.showSign && signText.value ? signText.value : ''}${props.showUnit ? props.unit : ''}${valueText.value}`
+})
 </script>
 
 <template>
-  <component :is="tag" :class="['amount-text', toneClass]">
-    <template v-if="showSign || showUnit">
-      <span v-if="showSign && signText">{{ signText }}</span>
-      <span v-if="showUnit">{{ unit }}</span>
-      <span>{{ valueText }}</span>
-    </template>
-    <template v-else>
-      {{ text }}
-    </template>
-  </component>
+  <component :is="tag" :class="['amount-text', toneClass]">{{ displayText }}</component>
 </template>
 
 <style scoped lang="scss" src="./style.scss"></style>

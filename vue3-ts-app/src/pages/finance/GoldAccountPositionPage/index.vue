@@ -793,9 +793,9 @@ function toApiDateTime(date: Date) {
       <section class="gold-position-summary">
         <div class="summary-head">
           <div class="summary-head-main">
-            <span>总重量(克)</span>
+            <span class="summary-weight-label">总重量(克)</span>
             <div class="summary-main">
-              <strong>{{ formatSummaryWeight(visibleSummary.totalWeight) }}</strong>
+              <strong class="summary-weight-value">{{ formatSummaryWeight(visibleSummary.totalWeight) }}</strong>
               <RouterLink
                 class="liquidation-link"
                 :to="selectedAccountId

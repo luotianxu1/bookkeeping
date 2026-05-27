@@ -540,8 +540,8 @@ function formatSignedAmount(value: number | null | undefined) {
       <section class="gold-account-summary">
         <div class="summary-head">
           <div class="summary-head-main">
-            <span>总重量(克)</span>
-            <strong>{{ formatSummaryWeight(displaySummary.totalWeight) }}</strong>
+            <span class="summary-weight-label">总重量(克)</span>
+            <strong class="summary-weight-value">{{ formatSummaryWeight(displaySummary.totalWeight) }}</strong>
           </div>
           <div class="gold-price-chip" aria-label="当前实时金价">
             <span class="gold-price-chip-label">实时金价</span>

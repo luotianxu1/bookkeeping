@@ -89,17 +89,28 @@
   gap: 8px;
 }
 
+.summary-weight-label {
+  color: #4f6ea8;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
 .summary-main {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
-.summary-main strong {
+.summary-weight-value {
+  display: inline-block;
   color: #facc15;
   font-size: 34px;
-  line-height: 1.1;
+  line-height: 1.05;
   font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .gold-price-chip {
@@ -136,18 +147,32 @@
 
 @media (max-width: 420px) {
   .summary-head {
+    align-items: flex-start;
+    flex-direction: row;
     gap: 8px;
   }
 
-  .summary-main {
-    gap: 10px;
+  .summary-head-main {
+    flex: 1;
   }
 
-  .summary-main strong {
-    font-size: 30px;
+  .summary-main {
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .summary-weight-value {
+    font-size: clamp(30px, 8.8vw, 34px);
+    line-height: 1.02;
+  }
+
+  .liquidation-link {
+    font-size: 12px;
   }
 
   .gold-price-chip {
+    width: auto;
+    min-width: 116px;
     padding: 7px 10px;
   }
 

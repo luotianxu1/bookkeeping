@@ -127,18 +127,18 @@ const debtCards = computed<DebtCardView[]>(() =>
       avatarText: (contact?.name?.trim() || account.name || '债').slice(0, 1),
       avatarClass: `debt-avatar-${index % 4}`,
       secondaryText: contact?.phone?.trim() ? `手机号 ${contact.phone.trim()}` : '未填写联系人手机号',
-      noteText: contact?.remark?.trim() || account.remark?.trim() || '点击查看该联系人的全部借入与借出记录',
+      noteText: contact?.remark?.trim() || account.remark?.trim() || '',
       payableTotal,
       receivableTotal,
       netAmount,
-      netAmountText: formatSignedCurrency(netAmount),
+      netAmountText: formatCurrency(netAmount),
       recordCount: records.length,
       latestRecordText: latestRecord ? `最近一笔 ${formatDate(latestRecord.occurredAt)}` : '暂无债务记录',
     }
   }),
 )
 
-const summaryAmountText = computed(() => formatSignedCurrency(summary.value.netAmount))
+const summaryAmountText = computed(() => formatCurrency(summary.value.netAmount))
 
 onMounted(() => {
   void loadDebtPage()
@@ -334,11 +334,6 @@ function formatCurrency(value: number) {
   return `¥${formatNumber(value)}`
 }
 
-function formatSignedCurrency(value: number) {
-  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
-  return `${sign}¥${formatNumber(value)}`
-}
-
 function formatDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
@@ -430,7 +425,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
                   <strong>{{ card.displayName }}</strong>
                   <span class="debt-account-card-phone">{{ card.secondaryText }}</span>
                 </div>
-                <p>{{ card.noteText }}</p>
+                <p v-if="card.noteText">{{ card.noteText }}</p>
               </div>
             </div>
 
