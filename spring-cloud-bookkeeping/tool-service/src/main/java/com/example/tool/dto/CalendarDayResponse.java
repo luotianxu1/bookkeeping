@@ -12,4 +12,6 @@ public class CalendarDayResponse {
     private boolean today;
     private boolean selected;
     private int anniversaryCount;
+    private String holidayLabel;
+    private String workdayLabel;
 }

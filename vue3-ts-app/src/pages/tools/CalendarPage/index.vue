@@ -231,6 +231,21 @@ function formatLunarLabel(dateText: string) {
   return label
 }
 
+function formatDaySecondaryLabel(day: CalendarDay) {
+  return day.holidayLabel?.trim() || formatLunarLabel(day.date)
+}
+
+function daySecondaryClass(day: CalendarDay) {
+  if (day.holidayLabel) {
+    return 'is-holiday'
+  }
+  return ''
+}
+
+function miniDayTitle(day: CalendarDay) {
+  return day.holidayLabel || day.workdayLabel || undefined
+}
+
 function toChineseDay(day: number) {
   const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九']
   if (day <= 10) {
@@ -304,15 +319,19 @@ function noteStatusClass(item: CalendarAnniversaryNote) {
                 {
                   'is-outside': !day.currentMonth,
                   'is-selected': day.selected,
-                  'is-weekend': day.weekend,
+                  'is-weekend': day.weekend && !day.workdayLabel,
+                  'is-workday': !!day.workdayLabel,
                   'has-anniversary': day.anniversaryCount > 0,
                 },
               ]"
               @click="selectMonthDay(day)"
             >
               <template v-if="day.currentMonth">
+                <span v-if="day.workdayLabel" class="calendar-day-badge is-workday">班</span>
                 <span class="calendar-day-number">{{ day.day }}</span>
-                <span class="calendar-day-lunar">{{ formatLunarLabel(day.date) }}</span>
+                <span :class="['calendar-day-lunar', daySecondaryClass(day)]">
+                  {{ formatDaySecondaryLabel(day) }}
+                </span>
                 <span v-if="day.anniversaryCount > 0" class="calendar-day-dot"></span>
               </template>
             </button>
@@ -361,16 +380,34 @@ function noteStatusClass(item: CalendarAnniversaryNote) {
               <span
                 v-for="day in month.days"
                 :key="`${month.key}-${day.date}`"
+                :title="day.currentMonth ? miniDayTitle(day) : undefined"
                 :class="[
                   'mini-month-day',
                   {
                     'is-empty': !day.currentMonth,
-                    'is-weekend': day.weekend && day.currentMonth,
+                    'is-weekend': day.weekend && day.currentMonth && !day.workdayLabel,
+                    'is-holiday': !!day.holidayLabel && day.currentMonth,
+                    'is-workday': !!day.workdayLabel && day.currentMonth,
                     'is-selected': day.selected,
                   },
                 ]"
               >
-                {{ day.currentMonth ? day.day : '' }}
+                <span class="mini-month-number">{{ day.currentMonth ? day.day : '' }}</span>
+                <span
+                  v-if="day.currentMonth && day.workdayLabel"
+                  class="mini-month-mark-dot is-workday"
+                  aria-hidden="true"
+                ></span>
+                <span
+                  v-else-if="day.currentMonth && day.holidayLabel"
+                  :class="[
+                    'mini-month-mark-dot',
+                    {
+                      'is-holiday': !!day.holidayLabel,
+                    },
+                  ]"
+                  aria-hidden="true"
+                ></span>
               </span>
             </div>
           </button>

@@ -103,6 +103,8 @@ export interface CalendarDay {
   today: boolean
   selected: boolean
   anniversaryCount: number
+  holidayLabel?: string | null
+  workdayLabel?: string | null
 }
 
 export interface CalendarMonth {
