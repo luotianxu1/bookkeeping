@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS categories (
   type ENUM('expense', 'income') NOT NULL COMMENT '分类类型：expense支出，income收入',
   icon VARCHAR(64) NOT NULL COMMENT '图标字符串编码，例如 food、salary、shopping',
   color VARCHAR(32) NULL COMMENT '分类颜色',
+  parent_id BIGINT NULL COMMENT '上级分类ID，NULL表示一级分类',
+  parent_key BIGINT UNSIGNED GENERATED ALWAYS AS (IFNULL(parent_id, 0)) STORED COMMENT '唯一索引用父分类ID，一级分类固定为0',
+  level INT NOT NULL DEFAULT 1 COMMENT '分类层级：1一级分类，2二级分类',
   is_system TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否系统内置分类',
   user_key BIGINT UNSIGNED GENERATED ALWAYS AS (IFNULL(user_id, 0)) STORED COMMENT '唯一索引用用户ID，系统分类固定为0',
   sort_order INT NOT NULL DEFAULT 0 COMMENT '排序值',
@@ -21,9 +24,11 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
   PRIMARY KEY (id),
-  UNIQUE KEY uk_categories_user_type_name (user_key, type, name),
+  UNIQUE KEY uk_categories_user_type_parent_name (user_key, type, parent_key, name),
   KEY idx_categories_user_type_sort (user_id, type, status, sort_order),
   KEY idx_categories_type_status_sort (type, status, sort_order),
+  KEY idx_categories_parent_id (parent_id),
+  KEY idx_categories_user_type_parent_name (user_id, type, parent_id, name),
   CONSTRAINT fk_categories_user
     FOREIGN KEY (user_id) REFERENCES users (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='收支分类表';

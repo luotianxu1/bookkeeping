@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 分类管理页：使用财务模块分类接口完成列表、新增、修改和删除。
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
@@ -20,8 +20,14 @@ import {
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
+type CategoryGroup = {
+  parent: Category
+  children: Category[]
+}
+
 const tabOptions = ['全部', '支出', '收入']
 const activeTab = ref(tabOptions[0])
+const ROOT_PARENT_VALUE = 'root'
 
 const isManageMode = ref(false)
 const categories = ref<Category[]>([])
@@ -44,6 +50,7 @@ const formType = ref<'expense' | 'income'>('expense')
 const formIcon = ref('other')
 const formColor = ref('#334155')
 const formRemark = ref('')
+const formParentId = ref(ROOT_PARENT_VALUE)
 
 const categoryTypeOptions: CommonSelectOption[] = [
   { label: '支出', value: 'expense' },
@@ -71,20 +78,55 @@ const categoryColorOptions: CommonSelectOption[] = [
 ]
 
 const categoryModalTitle = computed(() => (editingCategory.value ? '修改分类' : '新增分类'))
-const expenseCategories = computed(() => categories.value.filter((item) => item.type === 'expense'))
-const incomeCategories = computed(() => categories.value.filter((item) => item.type === 'income'))
+const fixedBackgroundCategoryNames = new Set(['餐饮', '摄影收入'])
+const expenseCategoryGroups = computed(() => buildCategoryGroups('expense'))
+const incomeCategoryGroups = computed(() => buildCategoryGroups('income'))
+const editingCategoryHasChildren = computed(() => (
+  editingCategory.value !== null &&
+  categories.value.some((item) => item.parentId === editingCategory.value?.id)
+))
+const parentCategoryOptions = computed<CommonSelectOption[]>(() => [
+  { label: '无（一级分类）', value: ROOT_PARENT_VALUE },
+  ...categories.value
+    .filter((item) => item.type === formType.value && !item.parentId && item.id !== editingCategory.value?.id)
+    .map((item) => ({
+      label: item.name,
+      value: String(item.id),
+    })),
+])
 
 onMounted(() => {
   loadCategories()
+})
+
+watch(formType, () => {
+  if (formParentId.value === ROOT_PARENT_VALUE) {
+    return
+  }
+
+  const exists = categories.value.some((item) => (
+    item.type === formType.value &&
+    !item.parentId &&
+    item.id !== editingCategory.value?.id &&
+    String(item.id) === formParentId.value
+  ))
+
+  if (!exists) {
+    formParentId.value = ROOT_PARENT_VALUE
+  }
 })
 
 function toggleManageMode() {
   isManageMode.value = !isManageMode.value
 }
 
-function openCreateModal() {
+function openCreateModal(parent?: Category) {
   editingCategory.value = null
   resetForm()
+  if (parent) {
+    formType.value = parent.type
+    formParentId.value = String(parent.id)
+  }
   showCategoryModal.value = true
 }
 
@@ -99,6 +141,7 @@ function openEditModal(category: Category) {
   formIcon.value = category.icon
   formColor.value = category.color || '#334155'
   formRemark.value = category.remark || ''
+  formParentId.value = category.parentId ? String(category.parentId) : ROOT_PARENT_VALUE
   categoryFormError.value = ''
   showCategoryModal.value = true
 }
@@ -115,6 +158,7 @@ function resetForm() {
   formIcon.value = 'other'
   formColor.value = '#334155'
   formRemark.value = ''
+  formParentId.value = ROOT_PARENT_VALUE
   categoryFormError.value = ''
 }
 
@@ -163,14 +207,16 @@ async function saveCategory() {
   categoryFormError.value = ''
 
   try {
+    const parentId = formParentId.value === ROOT_PARENT_VALUE ? null : Number(formParentId.value)
     const payload: SaveCategoryParams = {
       userId: editingCategory.value?.userId ?? currentUser.id,
       name: trimmedName,
       type: formType.value,
       icon: formIcon.value,
       color: formColor.value,
+      parentId,
       system: editingCategory.value?.system ?? false,
-      sortOrder: editingCategory.value?.sortOrder ?? categories.value.length * 10 + 10,
+      sortOrder: editingCategory.value?.sortOrder ?? getNextCategorySortOrder(formType.value, parentId),
       status: 'active',
       remark: trimmedRemark || null,
     }
@@ -234,6 +280,21 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
+function buildCategoryGroups(type: 'expense' | 'income') {
+  const roots = categories.value.filter((item) => item.type === type && !item.parentId)
+  return roots.map<CategoryGroup>((parent) => ({
+    parent,
+    children: categories.value.filter((item) => item.parentId === parent.id),
+  }))
+}
+
+function getNextCategorySortOrder(type: 'expense' | 'income', parentId: number | null) {
+  const siblingSortOrders = categories.value
+    .filter((item) => item.type === type && (item.parentId ?? null) === parentId)
+    .map((item) => item.sortOrder ?? 0)
+  return (siblingSortOrders.length ? Math.max(...siblingSortOrders) : 0) + 10
+}
+
 function getCategoryIcon(icon: string) {
   const iconMap: Record<string, string> = {
     food: '餐',
@@ -247,6 +308,20 @@ function getCategoryIcon(icon: string) {
   }
 
   return iconMap[icon] ?? icon.slice(0, 1)
+}
+
+function getCategoryIconStyle(category: Category) {
+  const color = fixedBackgroundCategoryNames.has(category.name)
+    ? 'rgb(51, 65, 85)'
+    : category.color || '#334155'
+
+  return {
+    backgroundColor: color,
+  }
+}
+
+function canDeleteCategory(category: Category) {
+  return !categories.value.some((item) => item.parentId === category.id)
 }
 </script>
 
@@ -283,28 +358,70 @@ function getCategoryIcon(icon: string) {
     <section v-else class="category-card" aria-label="分类内容">
       <template v-if="activeTab !== '收入'">
         <h2>支出分类</h2>
-        <div class="category-grid">
-          <article v-for="item in expenseCategories" :key="item.id" class="category-item">
-            <button
-              type="button"
-              :class="['category-tile', { editable: isManageMode }]"
-              @click="openEditModal(item)"
-            >
-              <span class="category-icon" :style="{ backgroundColor: item.color || '#334155' }">
-                {{ getCategoryIcon(item.icon) }}
-              </span>
-              <strong>{{ item.name }}</strong>
-            </button>
-            <button
-              v-if="isManageMode"
-              type="button"
-              class="category-delete-trigger"
-              :aria-label="`删除${item.name}`"
-              @click="openDeleteConfirmModal(item)"
-            >
-              ×
-            </button>
-          </article>
+        <p v-if="expenseCategoryGroups.length === 0" class="category-section-empty">暂无支出分类</p>
+        <div v-else class="category-group-list">
+          <section v-for="group in expenseCategoryGroups" :key="group.parent.id" class="category-group">
+            <div class="category-group-header">
+              <article class="category-item category-item-parent">
+                <button
+                  type="button"
+                  :class="['category-tile', 'category-tile-parent', { editable: isManageMode }]"
+                  :disabled="!isManageMode"
+                  :aria-disabled="!isManageMode"
+                  @click="openEditModal(group.parent)"
+                >
+                  <span class="category-icon" :style="getCategoryIconStyle(group.parent)">
+                    {{ getCategoryIcon(group.parent.icon) }}
+                  </span>
+                  <strong>{{ group.parent.name }}</strong>
+                </button>
+                <button
+                  v-if="isManageMode"
+                  type="button"
+                  class="category-delete-trigger"
+                  :aria-label="`删除${group.parent.name}`"
+                  :disabled="!canDeleteCategory(group.parent)"
+                  @click="openDeleteConfirmModal(group.parent)"
+                >
+                  ×
+                </button>
+              </article>
+              <button
+                v-if="isManageMode"
+                type="button"
+                class="category-child-create"
+                @click="openCreateModal(group.parent)"
+              >
+                新增二级
+              </button>
+            </div>
+
+            <div v-if="group.children.length > 0" class="category-grid category-grid-children">
+              <article v-for="item in group.children" :key="item.id" class="category-item">
+                <button
+                  type="button"
+                  :class="['category-tile', { editable: isManageMode }]"
+                  :disabled="!isManageMode"
+                  :aria-disabled="!isManageMode"
+                  @click="openEditModal(item)"
+                >
+                  <span class="category-icon" :style="getCategoryIconStyle(item)">
+                    {{ getCategoryIcon(item.icon) }}
+                  </span>
+                  <strong>{{ item.name }}</strong>
+                </button>
+                <button
+                  v-if="isManageMode"
+                  type="button"
+                  class="category-delete-trigger"
+                  :aria-label="`删除${item.name}`"
+                  @click="openDeleteConfirmModal(item)"
+                >
+                  ×
+                </button>
+              </article>
+            </div>
+          </section>
         </div>
       </template>
 
@@ -312,28 +429,70 @@ function getCategoryIcon(icon: string) {
 
       <template v-if="activeTab !== '支出'">
         <h2>收入分类</h2>
-        <div class="category-grid income">
-          <article v-for="item in incomeCategories" :key="item.id" class="category-item">
-            <button
-              type="button"
-              :class="['category-tile', { editable: isManageMode }]"
-              @click="openEditModal(item)"
-            >
-              <span class="category-icon" :style="{ backgroundColor: item.color || '#334155' }">
-                {{ getCategoryIcon(item.icon) }}
-              </span>
-              <strong>{{ item.name }}</strong>
-            </button>
-            <button
-              v-if="isManageMode"
-              type="button"
-              class="category-delete-trigger"
-              :aria-label="`删除${item.name}`"
-              @click="openDeleteConfirmModal(item)"
-            >
-              ×
-            </button>
-          </article>
+        <p v-if="incomeCategoryGroups.length === 0" class="category-section-empty">暂无收入分类</p>
+        <div v-else class="category-group-list">
+          <section v-for="group in incomeCategoryGroups" :key="group.parent.id" class="category-group">
+            <div class="category-group-header">
+              <article class="category-item category-item-parent">
+                <button
+                  type="button"
+                  :class="['category-tile', 'category-tile-parent', { editable: isManageMode }]"
+                  :disabled="!isManageMode"
+                  :aria-disabled="!isManageMode"
+                  @click="openEditModal(group.parent)"
+                >
+                  <span class="category-icon" :style="getCategoryIconStyle(group.parent)">
+                    {{ getCategoryIcon(group.parent.icon) }}
+                  </span>
+                  <strong>{{ group.parent.name }}</strong>
+                </button>
+                <button
+                  v-if="isManageMode"
+                  type="button"
+                  class="category-delete-trigger"
+                  :aria-label="`删除${group.parent.name}`"
+                  :disabled="!canDeleteCategory(group.parent)"
+                  @click="openDeleteConfirmModal(group.parent)"
+                >
+                  ×
+                </button>
+              </article>
+              <button
+                v-if="isManageMode"
+                type="button"
+                class="category-child-create"
+                @click="openCreateModal(group.parent)"
+              >
+                新增二级
+              </button>
+            </div>
+
+            <div v-if="group.children.length > 0" class="category-grid category-grid-children">
+              <article v-for="item in group.children" :key="item.id" class="category-item">
+                <button
+                  type="button"
+                  :class="['category-tile', { editable: isManageMode }]"
+                  :disabled="!isManageMode"
+                  :aria-disabled="!isManageMode"
+                  @click="openEditModal(item)"
+                >
+                  <span class="category-icon" :style="getCategoryIconStyle(item)">
+                    {{ getCategoryIcon(item.icon) }}
+                  </span>
+                  <strong>{{ item.name }}</strong>
+                </button>
+                <button
+                  v-if="isManageMode"
+                  type="button"
+                  class="category-delete-trigger"
+                  :aria-label="`删除${item.name}`"
+                  @click="openDeleteConfirmModal(item)"
+                >
+                  ×
+                </button>
+              </article>
+            </div>
+          </section>
         </div>
       </template>
     </section>
@@ -344,9 +503,18 @@ function getCategoryIcon(icon: string) {
       <form class="category-create-form" @submit.prevent="saveCategory">
         <CommonInput v-model="formName" label="分类名称" placeholder="请输入分类名称" />
         <CommonSelect v-model="formType" label="分类类型" :options="categoryTypeOptions" />
+        <CommonSelect
+          v-model="formParentId"
+          label="上级分类"
+          :options="parentCategoryOptions"
+          :disabled="editingCategoryHasChildren"
+        />
         <CommonSelect v-model="formIcon" label="分类图标" :options="categoryIconOptions" />
         <CommonSelect v-model="formColor" label="分类颜色" :options="categoryColorOptions" />
         <CommonInput v-model="formRemark" label="备注" placeholder="可选，添加分类说明" />
+        <p v-if="editingCategoryHasChildren" class="category-form-hint">
+          当前一级分类下已有二级分类，不能再调整为二级分类。
+        </p>
         <p v-if="categoryFormError" class="category-form-error">{{ categoryFormError }}</p>
       </form>
 

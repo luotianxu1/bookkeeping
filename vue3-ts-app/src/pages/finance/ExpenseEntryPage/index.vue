@@ -18,6 +18,13 @@ import {
 import { ApiError } from '@/api/request'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
+type PrimaryCategoryOption = {
+  id: number
+  icon: string
+  label: string
+  manage: boolean
+}
+
 // 记账类型：顶部支出/收入/转账切换。
 const entryTypeOptions = ['支出', '收入', '转账']
 const entryType = ref(entryTypeOptions[0])
@@ -26,9 +33,11 @@ const currentUserId = computed(() => getStoredCurrentUser()?.id ?? 1)
 
 // 分类数据：支出/收入切换后从后端加载。
 const categories = ref<Category[]>([])
+const activeParentCategoryId = ref<number | null>(null)
 const activeCategoryId = ref<number | null>(null)
-const categoryOptions = computed(() => [
-  ...categories.value.map((category) => ({
+const rootCategories = computed(() => categories.value.filter((category) => !category.parentId))
+const primaryCategoryOptions = computed<PrimaryCategoryOption[]>(() => [
+  ...rootCategories.value.map((category) => ({
     id: category.id,
     icon: displayIcon(category.icon),
     label: category.name,
@@ -36,6 +45,13 @@ const categoryOptions = computed(() => [
   })),
   { id: -1, icon: '⚙', label: '管理分类', manage: true },
 ])
+const secondaryCategoryOptions = computed(() => categories.value
+  .filter((category) => category.parentId === activeParentCategoryId.value)
+  .map((category) => ({
+    id: category.id,
+    icon: displayIcon(category.icon),
+    label: category.name,
+  })))
 
 // 表单数据：账户、时间、备注和金额。
 const accountId = ref<number | null>(null)
@@ -90,7 +106,12 @@ function selectCategory(item: { id: number; manage: boolean }) {
     return
   }
 
-  activeCategoryId.value = item.id
+  activeParentCategoryId.value = item.id
+  syncActiveLeafCategory(item.id, activeCategoryId.value)
+}
+
+function selectSecondaryCategory(categoryId: number) {
+  activeCategoryId.value = categoryId
 }
 
 async function onKeypadPress(key: string) {
@@ -152,12 +173,14 @@ async function loadCashAccounts() {
 }
 
 async function loadCategories() {
+  const previousParentId = activeParentCategoryId.value
+  const previousCategoryId = activeCategoryId.value
   categories.value = await getCategories({
     userId: currentUserId.value,
     type: transactionType.value,
     status: 'active',
   })
-  activeCategoryId.value = categories.value[0]?.id ?? null
+  syncSelectedCategories(previousParentId, previousCategoryId)
 }
 
 async function saveTransaction() {
@@ -241,6 +264,28 @@ function displayIcon(icon: string) {
   }
   return iconMap[icon] ?? icon
 }
+
+function syncSelectedCategories(preferredParentId: number | null, preferredCategoryId: number | null) {
+  if (rootCategories.value.length === 0) {
+    activeParentCategoryId.value = null
+    activeCategoryId.value = null
+    return
+  }
+
+  const nextParent = rootCategories.value.find((category) => category.id === preferredParentId) ?? rootCategories.value[0]
+  activeParentCategoryId.value = nextParent.id
+  syncActiveLeafCategory(nextParent.id, preferredCategoryId)
+}
+
+function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | null) {
+  const childCategories = categories.value.filter((category) => category.parentId === parentId)
+  if (childCategories.length === 0) {
+    activeCategoryId.value = parentId
+    return
+  }
+
+  activeCategoryId.value = childCategories.find((category) => category.id === preferredCategoryId)?.id ?? childCategories[0].id
+}
 </script>
 
 <template>
@@ -261,18 +306,40 @@ function displayIcon(icon: string) {
 
     <section v-if="entryType !== '转账'" class="expense-detail-card" aria-label="分类与详情">
       <CommonLoading v-if="loading" />
-      <div class="category-grid">
-        <button
-          v-for="item in categoryOptions"
-          :key="item.id"
-          type="button"
-          :class="['category-item', { active: activeCategoryId === item.id }]"
-          @click="selectCategory(item)"
-        >
-          <span>{{ item.icon }}</span>
-          <strong>{{ item.label }}</strong>
-        </button>
+      <div class="category-section">
+        <p class="category-section-title">一级分类</p>
+        <div class="category-grid">
+          <button
+            v-for="item in primaryCategoryOptions"
+            :key="item.id"
+            type="button"
+            :class="['category-item', { active: !item.manage && activeParentCategoryId === item.id }]"
+            @click="selectCategory(item)"
+          >
+            <span>{{ item.icon }}</span>
+            <strong>{{ item.label }}</strong>
+          </button>
+        </div>
       </div>
+
+      <template v-if="secondaryCategoryOptions.length > 0">
+        <div class="expense-divider"></div>
+        <div class="category-section">
+          <p class="category-section-title">二级分类</p>
+          <div class="category-grid">
+            <button
+              v-for="item in secondaryCategoryOptions"
+              :key="item.id"
+              type="button"
+              :class="['category-item', { active: activeCategoryId === item.id }]"
+              @click="selectSecondaryCategory(item.id)"
+            >
+              <span>{{ item.icon }}</span>
+              <strong>{{ item.label }}</strong>
+            </button>
+          </div>
+        </div>
+      </template>
 
       <div class="expense-info-row">
         <span>账户</span>

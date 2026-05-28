@@ -13,6 +13,8 @@ public class CategoryResponse {
     private String type;
     private String icon;
     private String color;
+    private Long parentId;
+    private Integer level;
     private Boolean system;
     private Integer sortOrder;
     private String status;

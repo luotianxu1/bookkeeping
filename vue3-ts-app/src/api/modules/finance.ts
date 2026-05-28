@@ -113,6 +113,8 @@ export interface Category {
   type: 'expense' | 'income'
   icon: string
   color?: string | null
+  parentId?: number | null
+  level?: number | null
   system: boolean
   sortOrder: number
   status: string
@@ -318,6 +320,7 @@ export interface SaveCategoryParams {
   type: 'expense' | 'income'
   icon: string
   color?: string | null
+  parentId?: number | null
   system?: boolean
   sortOrder?: number
   status?: string

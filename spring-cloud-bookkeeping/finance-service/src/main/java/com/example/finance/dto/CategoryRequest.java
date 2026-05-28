@@ -23,6 +23,8 @@ public class CategoryRequest {
     @Size(max = 32, message = "分类颜色不能超过32个字符")
     private String color;
 
+    private Long parentId;
+
     private Boolean system;
     private Integer sortOrder;
     private String status;

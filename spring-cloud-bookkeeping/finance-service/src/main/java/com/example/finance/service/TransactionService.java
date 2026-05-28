@@ -50,6 +50,7 @@ public class TransactionService {
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_STATUS = "normal";
     private static final String VOIDED_STATUS = "voided";
+    private static final String ACTIVE_CATEGORY_STATUS = "active";
     private static final DateTimeFormatter TRANSACTION_NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private final TransactionMapper transactionMapper;
@@ -164,6 +165,14 @@ public class TransactionService {
         }
         if (!type.equals(category.getType())) {
             throw new IllegalArgumentException("分类类型与流水类型不一致");
+        }
+        if (!ACTIVE_CATEGORY_STATUS.equals(category.getStatus())) {
+            throw new IllegalArgumentException("分类不可用");
+        }
+        if (categoryMapper.selectCount(new LambdaQueryWrapper<CategoryEntity>()
+            .eq(CategoryEntity::getParentId, category.getId())
+            .eq(CategoryEntity::getStatus, ACTIVE_CATEGORY_STATUS)) > 0) {
+            throw new IllegalArgumentException("请选择二级分类");
         }
         return category;
     }

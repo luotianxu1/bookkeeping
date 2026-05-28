@@ -23,6 +23,11 @@ public class CategoryEntity {
     private String icon;
     private String color;
 
+    @TableField("parent_id")
+    private Long parentId;
+
+    private Integer level;
+
     @TableField("is_system")
     private Boolean system;
 
