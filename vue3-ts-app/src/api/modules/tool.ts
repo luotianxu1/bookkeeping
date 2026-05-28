@@ -93,6 +93,54 @@ export interface SaveAnniversaryParams {
   sortOrder?: number
 }
 
+export type CalendarOverviewView = 'month' | 'year'
+
+export interface CalendarDay {
+  date: string
+  day: number
+  currentMonth: boolean
+  weekend: boolean
+  today: boolean
+  selected: boolean
+  anniversaryCount: number
+}
+
+export interface CalendarMonth {
+  key: string
+  label: string
+  daysInMonth: number
+  current: boolean
+  selected: boolean
+  days: CalendarDay[]
+}
+
+export interface CalendarAnniversaryNote {
+  id: number
+  title: string
+  occurrenceDate: string
+  remark?: string | null
+  statusLabel: string
+  daysOffset: number
+}
+
+export interface CalendarOverview {
+  view: CalendarOverviewView | string
+  anchor: string
+  selectedDate: string
+  title: string
+  subtitle: string
+  days: CalendarDay[]
+  months: CalendarMonth[]
+  anniversaries: CalendarAnniversaryNote[]
+}
+
+export interface CalendarOverviewQuery {
+  userId: number
+  view?: CalendarOverviewView
+  anchor?: string
+  selectedDate?: string | null
+}
+
 export type PhotographyOrderStatus = 'pending' | 'shot'
 export type PhotographyOrderType =
   | 'first_birthday'
@@ -289,6 +337,10 @@ export function deleteAnniversary(id: number, userId: number) {
   return requestDelete<void>(toolRequest, `/api/tools/anniversaries/${id}`, {
     params: { userId },
   })
+}
+
+export function getCalendarOverview(params: CalendarOverviewQuery) {
+  return requestGet<CalendarOverview>(toolRequest, '/api/tools/calendar', { params })
 }
 
 export function getPhotographyOrders(params: PhotographyOrderQuery) {

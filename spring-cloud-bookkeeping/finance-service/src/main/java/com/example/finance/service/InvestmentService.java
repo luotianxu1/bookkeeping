@@ -374,7 +374,15 @@ public class InvestmentService {
                 .stream()
                 .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
 
-        Map<String, JsonNode> estimateInfoBySymbol = new HashMap<>();
+        Map<String, JsonNode> estimateInfoBySymbol = positions.stream()
+            .map(position -> products.get(position.getProductId()))
+            .filter(product -> product != null
+                && FUND_PRODUCT_TYPE.equals(product.getProductType())
+                && StringUtils.hasText(product.getSymbol()))
+            .map(InvestmentProductEntity::getSymbol)
+            .distinct()
+            .parallel()
+            .collect(Collectors.toConcurrentMap(Function.identity(), this::fetchFundEstimateInfo));
         List<FundProfitForecastHoldingResponse> holdings = positions.stream()
             .filter(position -> {
                 InvestmentProductEntity product = products.get(position.getProductId());
@@ -2849,7 +2857,7 @@ public class InvestmentService {
         InvestmentProductEntity product,
         Map<String, JsonNode> estimateInfoBySymbol
     ) {
-        JsonNode estimateInfo = estimateInfoBySymbol.computeIfAbsent(product.getSymbol(), this::fetchFundEstimateInfo);
+        JsonNode estimateInfo = estimateInfoBySymbol.getOrDefault(product.getSymbol(), objectMapper.createObjectNode());
         BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
         BigDecimal officialNetValue = resolveOfficialFundNetValue(position, estimateInfo);
