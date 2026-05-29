@@ -10,9 +10,11 @@ import com.example.finance.dto.InvestmentPositionResponse;
 import com.example.finance.dto.InvestmentProductRequest;
 import com.example.finance.dto.InvestmentProductResponse;
 import com.example.finance.dto.InvestmentSummaryResponse;
+import com.example.finance.dto.InvestmentTrendResponse;
 import com.example.finance.dto.InvestmentTransactionRequest;
 import com.example.finance.dto.InvestmentTransactionResponse;
 import com.example.finance.dto.FundProfitForecastResponse;
+import com.example.finance.dto.FundProfitPageResponse;
 import com.example.finance.service.InvestmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -67,6 +69,16 @@ public class InvestmentController {
         return Result.ok(investmentService.summary(userId, accountId));
     }
 
+    @GetMapping("/trend")
+    @Operation(summary = "查询投资资产趋势")
+    public Result<InvestmentTrendResponse> trend(
+        @RequestParam(name = "userId") @NotNull Long userId,
+        @RequestParam(name = "accountId", required = false) Long accountId,
+        @RequestParam(name = "range", required = false) String range
+    ) {
+        return Result.ok(investmentService.trend(userId, accountId, range));
+    }
+
     @GetMapping("/fund-profit-forecast")
     @Operation(summary = "查询基金收益预测")
     public Result<FundProfitForecastResponse> fundProfitForecast(
@@ -74,6 +86,18 @@ public class InvestmentController {
         @RequestParam(name = "accountId", required = false) Long accountId
     ) {
         return Result.ok(investmentService.fundProfitForecast(userId, accountId));
+    }
+
+    @GetMapping("/fund-profit")
+    @Operation(summary = "查询基金收益页数据")
+    public Result<FundProfitPageResponse> fundProfitPage(
+        @RequestParam(name = "userId") @NotNull Long userId,
+        @RequestParam(name = "accountId", required = false) Long accountId,
+        @RequestParam(name = "view", required = false) String view,
+        @RequestParam(name = "anchor", required = false) String anchor,
+        @RequestParam(name = "selected", required = false) String selected
+    ) {
+        return Result.ok(investmentService.fundProfitPage(userId, accountId, view, anchor, selected));
     }
 
     @GetMapping("/positions")

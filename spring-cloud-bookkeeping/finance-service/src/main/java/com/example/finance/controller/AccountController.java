@@ -4,8 +4,10 @@ import com.example.common.result.Result;
 import com.example.finance.dto.AccountRequest;
 import com.example.finance.dto.AccountResponse;
 import com.example.finance.dto.AccountSortOrderRequest;
+import com.example.finance.dto.AssetTrendResponse;
 import com.example.finance.dto.FinanceOverviewResponse;
 import com.example.finance.service.AccountService;
+import com.example.finance.service.AssetTrendService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,9 +32,11 @@ import java.util.List;
 public class AccountController {
 
     private final AccountService accountService;
+    private final AssetTrendService assetTrendService;
 
-    public AccountController(AccountService accountService) {
+    public AccountController(AccountService accountService, AssetTrendService assetTrendService) {
         this.accountService = accountService;
+        this.assetTrendService = assetTrendService;
     }
 
     @GetMapping
@@ -51,6 +55,16 @@ public class AccountController {
         @RequestParam(name = "userId") @NotNull Long userId
     ) {
         return Result.ok(accountService.overview(userId));
+    }
+
+    @GetMapping("/trend")
+    @Operation(summary = "查询总资产趋势")
+    public Result<AssetTrendResponse> trend(
+        @RequestParam(name = "userId") @NotNull Long userId,
+        @RequestParam(name = "accountId", required = false) Long accountId,
+        @RequestParam(name = "range", required = false, defaultValue = "ytd") String range
+    ) {
+        return Result.ok(assetTrendService.trend(userId, accountId, range));
     }
 
     @GetMapping("/{id:\\d+}")

@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import FinancePage from '@/pages/finance/FinancePage/index.vue'
 import TransactionListPage from '@/pages/finance/TransactionListPage/index.vue'
 import AnalysisPage from '@/pages/finance/AnalysisPage/index.vue'
+import InvestmentTrendPage from '@/pages/finance/InvestmentTrendPage/index.vue'
 import MoreFeaturesPage from '@/pages/finance/MoreFeaturesPage/index.vue'
 import ExchangeRatePage from '@/pages/finance/ExchangeRatePage/index.vue'
 import GoldPricePage from '@/pages/finance/GoldPricePage/index.vue'
@@ -11,6 +12,7 @@ import GoldAccountPage from '@/pages/finance/GoldAccountPage/index.vue'
 import GoldAccountPositionPage from '@/pages/finance/GoldAccountPositionPage/index.vue'
 import GoldLiquidationPage from '@/pages/finance/GoldLiquidationPage/index.vue'
 import ProfitForecastPage from '@/pages/finance/ProfitForecastPage/index.vue'
+import FundProfitPage from '@/pages/finance/FundProfitPage/index.vue'
 import DividendIncomePage from '@/pages/finance/DividendIncomePage/index.vue'
 import BudgetManagementPage from '@/pages/finance/BudgetManagementPage/index.vue'
 import ExpenseEntryPage from '@/pages/finance/ExpenseEntryPage/index.vue'
@@ -25,7 +27,6 @@ import HumanRelationAccountDetailPage from '@/pages/finance/HumanRelationAccount
 import InvestmentAccountListPage from '@/pages/finance/InvestmentAccountListPage/index.vue'
 import InvestmentAccountPage from '@/pages/finance/InvestmentAccountPage/index.vue'
 import InvestmentDetailPage from '@/pages/finance/InvestmentDetailPage/index.vue'
-import PlaceholderPage from '@/pages/placeholder/PlaceholderPage/index.vue'
 
 export const financeRoutes: RouteRecordRaw[] = [
   {
@@ -67,7 +68,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/trend',
     name: 'finance-trend',
-    component: PlaceholderPage,
+    component: InvestmentTrendPage,
     meta: {
       section: 'finance',
       title: '资产趋势',
@@ -98,6 +99,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '收益预测',
+    },
+  },
+  {
+    path: '/finance/fund-profit',
+    name: 'finance-fund-profit',
+    component: FundProfitPage,
+    meta: {
+      section: 'finance',
+      title: '基金收益',
     },
   },
   {

@@ -452,6 +452,91 @@ export interface InvestmentSummary {
   lastSyncedAt?: string | null
 }
 
+export type InvestmentTrendRange = '7d' | '30d' | 'ytd' | 'all'
+
+export type AssetTrendRange = '7d' | '30d' | 'ytd' | 'all'
+
+export interface InvestmentTrendPoint {
+  key: string
+  label: string
+  value: number
+}
+
+export interface InvestmentTrendAllocation {
+  productType?: InvestmentProductType | string | null
+  label: string
+  marketValue: number
+  percent: number
+}
+
+export interface InvestmentTrendContributor {
+  positionId: number
+  productId: number
+  productType?: InvestmentProductType | string | null
+  productName: string
+  productSymbol?: string | null
+  contributionAmount: number
+  contributionRate: number
+}
+
+export interface InvestmentTrend {
+  userId: number
+  accountId?: number | null
+  range: InvestmentTrendRange | string
+  rangeLabel: string
+  startDate: string
+  endDate: string
+  totalMarketValue: number
+  cumulativeProfit: number
+  cumulativeProfitRate: number
+  periodChangeAmount: number
+  periodChangeRate: number
+  lastSyncedAt?: string | null
+  trendPoints: InvestmentTrendPoint[]
+  allocations: InvestmentTrendAllocation[]
+  contributors: InvestmentTrendContributor[]
+}
+
+export interface AssetTrendPoint {
+  key: string
+  label: string
+  value: number
+}
+
+export interface AssetTrendAllocation {
+  accountTypeCode?: string | null
+  label: string
+  balance: number
+  percent: number
+}
+
+export interface AssetTrendContributor {
+  accountId: number
+  accountName: string
+  accountTypeCode?: string | null
+  accountTypeLabel: string
+  contributionAmount: number
+  contributionRate: number
+}
+
+export interface AssetTrend {
+  userId: number
+  accountId?: number | null
+  range: AssetTrendRange | string
+  rangeLabel: string
+  startDate: string
+  endDate: string
+  totalAssets: number
+  cumulativeProfit: number
+  cumulativeProfitRate?: number | null
+  periodChangeAmount: number
+  periodChangeRate: number
+  lastSyncedAt?: string | null
+  trendPoints: AssetTrendPoint[]
+  allocations: AssetTrendAllocation[]
+  contributors: AssetTrendContributor[]
+}
+
 export interface FundProfitForecastAccount {
   accountId: number
   accountName: string
@@ -495,6 +580,110 @@ export interface FundProfitForecast {
   estimatedAt?: string | null
   accounts: FundProfitForecastAccount[]
   holdings: FundProfitForecastHolding[]
+}
+
+export type FundProfitView = 'day' | 'month' | 'year'
+
+export interface FundProfitPageAccount {
+  accountId: number
+  accountName: string
+  holdingAmount: number
+  totalProfit: number
+  totalProfitRate: number
+  fundCount: number
+}
+
+export interface FundProfitPageSummaryMetric {
+  key: 'today' | '7d' | 'month' | string
+  label: string
+  profit: number
+  profitRate: number
+}
+
+export interface FundProfitPageSummary {
+  holdingAmount: number
+  investedAmount: number
+  totalProfit: number
+  totalProfitRate: number
+  fundCount: number
+  lastSyncedAt?: string | null
+  activeShortcut: string
+  shortcuts: FundProfitPageSummaryMetric[]
+}
+
+export interface FundProfitTrendPoint {
+  key: string
+  label: string
+  date: string
+  profit: number
+}
+
+export interface FundProfitCalendarCell {
+  key: string
+  label: string
+  secondaryLabel?: string | null
+  startDate: string
+  endDate: string
+  profit?: number | null
+  profitRate?: number | null
+  selected: boolean
+  current: boolean
+}
+
+export interface FundProfitSelection {
+  key: string
+  label: string
+  title: string
+  startDate: string
+  endDate: string
+  comparisonDate: string
+  profit: number
+  profitRate: number
+  positiveFundCount: number
+  negativeFundCount: number
+}
+
+export interface FundProfitContribution {
+  positionId: number
+  productId: number
+  productName: string
+  productSymbol?: string | null
+  accountName?: string | null
+  contributionAmount: number
+  contributionRate: number
+  holdingAmount: number
+  holdingQuantity: number
+}
+
+export interface FundProfitDetail {
+  positionId: number
+  productId: number
+  productName: string
+  productSymbol?: string | null
+  accountName?: string | null
+  holdingQuantity: number
+  netValue: number
+  holdingAmount: number
+  costAmount: number
+  periodProfit: number
+  periodProfitRate: number
+}
+
+export interface FundProfitPage {
+  userId: number
+  accountId?: number | null
+  view: FundProfitView | string
+  anchor: string
+  selectedKey: string
+  lastSyncedAt?: string | null
+  accounts: FundProfitPageAccount[]
+  summary: FundProfitPageSummary
+  insight: string
+  trendPoints: FundProfitTrendPoint[]
+  calendarItems: FundProfitCalendarCell[]
+  selection: FundProfitSelection
+  contributors: FundProfitContribution[]
+  details: FundProfitDetail[]
 }
 
 export interface InvestmentPosition {
@@ -868,8 +1057,26 @@ export function getInvestmentSummary(params: { userId: number; accountId?: numbe
   return requestGet<InvestmentSummary>(financeRequest, '/api/finance/investments/summary', { params })
 }
 
+export function getInvestmentTrend(params: { userId: number; accountId?: number; range?: InvestmentTrendRange }) {
+  return requestGet<InvestmentTrend>(financeRequest, '/api/finance/investments/trend', { params })
+}
+
+export function getAssetTrend(params: { userId: number; accountId?: number; range?: AssetTrendRange }) {
+  return requestGet<AssetTrend>(financeRequest, '/api/finance/accounts/trend', { params })
+}
+
 export function getFundProfitForecast(params: { userId: number; accountId?: number }) {
   return requestGet<FundProfitForecast>(financeRequest, '/api/finance/investments/fund-profit-forecast', { params })
+}
+
+export function getFundProfitPage(params: {
+  userId: number
+  accountId?: number
+  view?: FundProfitView
+  anchor?: string
+  selected?: string
+}) {
+  return requestGet<FundProfitPage>(financeRequest, '/api/finance/investments/fund-profit', { params })
 }
 
 export function getInvestmentPositions(params: InvestmentPositionQuery) {

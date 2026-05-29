@@ -1,0 +1,242 @@
+.investment-trend-page {
+  display: grid;
+  gap: var(--space-6);
+  padding-bottom: var(--space-72);
+}
+
+.investment-trend-summary-card,
+.investment-trend-card {
+  display: grid;
+}
+
+.investment-trend-summary-card {
+  gap: var(--space-10);
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-border-blue);
+  border-radius: var(--radius-20);
+  background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
+  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+}
+
+.investment-trend-summary-top {
+  min-height: var(--space-72);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.investment-trend-summary-main,
+.investment-trend-summary-side {
+  display: grid;
+}
+
+.investment-trend-summary-main {
+  gap: var(--space-6);
+}
+
+.investment-trend-summary-main p,
+.investment-trend-summary-side span {
+  margin: 0;
+  color: var(--color-finance-subtitle);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.investment-trend-summary-main strong {
+  color: var(--color-finance-title);
+  font-size: var(--font-size-36);
+  line-height: 1;
+}
+
+.investment-trend-summary-main span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-trend-summary-side {
+  justify-items: end;
+  gap: var(--space-4);
+  text-align: right;
+}
+
+.investment-trend-summary-side :deep(.summary-profit.amount-text) {
+  font-size: var(--font-size-18);
+  font-weight: 700;
+}
+
+.investment-trend-summary-side :deep(.summary-rate.amount-text) {
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.investment-trend-card {
+  gap: var(--space-10);
+  padding: var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-18);
+  background: var(--color-white);
+}
+
+.investment-trend-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.investment-trend-card-head strong {
+  display: block;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.investment-trend-card-head p,
+.investment-trend-foot {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-trend-chart {
+  width: 100%;
+  height: 220px;
+}
+
+.allocation-list {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.allocation-item {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.allocation-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.allocation-title,
+.allocation-side {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.allocation-title strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.allocation-side {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.allocation-side span:last-child {
+  color: var(--color-text-muted);
+}
+
+.allocation-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+}
+
+.allocation-track {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--allocation-track);
+}
+
+.allocation-fill {
+  display: block;
+  width: var(--allocation-width);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--allocation-fill);
+}
+
+.investment-trend-message,
+.investment-trend-empty {
+  margin: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.investment-trend-message {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+}
+
+.investment-trend-message-error {
+  color: var(--color-danger);
+}
+
+.investment-trend-empty {
+  padding: var(--space-14);
+  border-style: dashed;
+}
+
+@media (prefers-color-scheme: dark) {
+  .investment-trend-summary-card {
+    border-color: #31405f;
+    background: linear-gradient(135deg, #22355a 0%, #121b2d 100%);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
+  }
+
+  .investment-trend-card,
+  .investment-trend-message,
+  .investment-trend-empty {
+    border-color: var(--color-dark-card-border);
+    background: var(--color-dark-card-bg);
+  }
+
+  .investment-trend-summary-main p,
+  .investment-trend-summary-side span {
+    color: #9fb5df;
+  }
+
+  .investment-trend-summary-main strong {
+    color: var(--color-white);
+  }
+
+  .investment-trend-summary-main span,
+  .investment-trend-card-head p,
+  .trend-card-side span,
+  .investment-trend-foot,
+  .contributor-main span,
+  .allocation-side span:last-child {
+    color: var(--color-dark-text-muted);
+  }
+
+  .investment-trend-card-head strong,
+  .allocation-title strong,
+  .contributor-title strong,
+  .allocation-side,
+  .investment-trend-message,
+  .investment-trend-empty {
+    color: var(--color-white);
+  }
+
+  .contributor-item + .contributor-item {
+    border-top-color: #1e293b;
+  }
+}

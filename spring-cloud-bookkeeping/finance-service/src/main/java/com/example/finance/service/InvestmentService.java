@@ -10,11 +10,24 @@ import com.example.finance.dto.InvestmentDetailStatResponse;
 import com.example.finance.dto.FundProfitForecastAccountResponse;
 import com.example.finance.dto.FundProfitForecastHoldingResponse;
 import com.example.finance.dto.FundProfitForecastResponse;
+import com.example.finance.dto.FundProfitCalendarCellResponse;
+import com.example.finance.dto.FundProfitContributionResponse;
+import com.example.finance.dto.FundProfitDetailResponse;
+import com.example.finance.dto.FundProfitPageAccountResponse;
+import com.example.finance.dto.FundProfitPageResponse;
+import com.example.finance.dto.FundProfitPageSummaryMetricResponse;
+import com.example.finance.dto.FundProfitPageSummaryResponse;
+import com.example.finance.dto.FundProfitSelectionResponse;
+import com.example.finance.dto.FundProfitTrendPointResponse;
 import com.example.finance.dto.InvestmentPositionRequest;
 import com.example.finance.dto.InvestmentPositionResponse;
 import com.example.finance.dto.InvestmentProductRequest;
 import com.example.finance.dto.InvestmentProductResponse;
 import com.example.finance.dto.InvestmentSummaryResponse;
+import com.example.finance.dto.InvestmentTrendAllocationResponse;
+import com.example.finance.dto.InvestmentTrendContributorResponse;
+import com.example.finance.dto.InvestmentTrendPointResponse;
+import com.example.finance.dto.InvestmentTrendResponse;
 import com.example.finance.dto.InvestmentTransactionRequest;
 import com.example.finance.dto.InvestmentTransactionResponse;
 import com.example.finance.entity.AccountEntity;
@@ -58,18 +71,23 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.Locale;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -82,6 +100,63 @@ public class InvestmentService {
         BigDecimal latestPrice,
         BigDecimal preClosePrice,
         LocalDateTime syncedAt
+    ) {
+    }
+
+    private record TrendRangeMeta(
+        String rangeKey,
+        String rangeLabel,
+        LocalDate startDate,
+        LocalDate endDate,
+        boolean monthlyBuckets
+    ) {
+    }
+
+    private record FundProfitPageContext(
+        List<AccountEntity> accounts,
+        Map<Long, AccountEntity> accountMap,
+        List<InvestmentPositionEntity> positions,
+        Map<Long, InvestmentProductEntity> products,
+        Map<Long, List<InvestmentTransactionEntity>> transactionsByPositionId,
+        Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId,
+        LocalDate earliestDate,
+        LocalDate latestDate,
+        LocalDateTime lastSyncedAt
+    ) {
+    }
+
+    private record FundProfitPeriodMeta(
+        String view,
+        String key,
+        String label,
+        LocalDate startDate,
+        LocalDate endDate,
+        LocalDate comparisonDate
+    ) {
+    }
+
+    private record PositionPeriodProfit(
+        BigDecimal startValue,
+        BigDecimal endValue,
+        BigDecimal cashIn,
+        BigDecimal cashOut,
+        BigDecimal profit,
+        BigDecimal profitRate,
+        BigDecimal holdingAmount,
+        BigDecimal holdingQuantity,
+        BigDecimal endPrice
+    ) {
+    }
+
+    private record FundProfitAggregate(
+        BigDecimal startValue,
+        BigDecimal endValue,
+        BigDecimal cashIn,
+        BigDecimal cashOut,
+        BigDecimal profit,
+        BigDecimal profitRate,
+        int positiveCount,
+        int negativeCount
     ) {
     }
 
@@ -327,10 +402,67 @@ public class InvestmentService {
     }
 
     public InvestmentSummaryResponse summary(Long userId, Long accountId) {
-        List<InvestmentPositionEntity> positions = filterPositionsByAccountType(positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
-            .eq(userId != null, InvestmentPositionEntity::getUserId, userId)
-            .eq(accountId != null, InvestmentPositionEntity::getAccountId, accountId)
-            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)), INVESTMENT_ACCOUNT_TYPE_CODE);
+        return buildSummaryResponse(userId, loadActiveInvestmentPositions(userId, accountId));
+    }
+
+    public InvestmentTrendResponse trend(Long userId, Long accountId, String range) {
+        List<InvestmentPositionEntity> positions = loadActiveInvestmentPositions(userId, accountId);
+        InvestmentSummaryResponse summary = buildSummaryResponse(userId, positions);
+        TrendRangeMeta rangeMeta = resolveTrendRange(range, userId, accountId, positions);
+
+        Map<Long, InvestmentProductEntity> products = positions.isEmpty()
+            ? Collections.emptyMap()
+            : productMapper.selectBatchIds(positions.stream()
+                .map(InvestmentPositionEntity::getProductId)
+                .collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
+        Map<Long, List<InvestmentTransactionEntity>> transactionsByPositionId = loadConfirmedTransactionsByPosition(userId, accountId, positions);
+        Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId = loadPriceHistoryByProduct(products.keySet());
+        List<LocalDate> bucketDates = buildTrendBucketDates(rangeMeta);
+        List<InvestmentTrendPointResponse> trendPoints = buildTrendPoints(
+            bucketDates,
+            rangeMeta,
+            positions,
+            transactionsByPositionId,
+            priceHistoryByProductId
+        );
+
+        BigDecimal periodChangeAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal periodChangeRate = BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
+        if (trendPoints.size() >= 2) {
+            BigDecimal startValue = defaultZero(trendPoints.get(0).getValue()).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal endValue = defaultZero(trendPoints.get(trendPoints.size() - 1).getValue()).setScale(2, RoundingMode.HALF_UP);
+            periodChangeAmount = endValue.subtract(startValue).setScale(2, RoundingMode.HALF_UP);
+            periodChangeRate = rate(periodChangeAmount, startValue);
+        }
+
+        InvestmentTrendResponse response = new InvestmentTrendResponse();
+        response.setUserId(userId);
+        response.setAccountId(accountId);
+        response.setRange(rangeMeta.rangeKey());
+        response.setRangeLabel(rangeMeta.rangeLabel());
+        response.setStartDate(rangeMeta.startDate());
+        response.setEndDate(rangeMeta.endDate());
+        response.setTotalMarketValue(summary.getTotalMarketValue());
+        response.setCumulativeProfit(summary.getCumulativeProfit());
+        response.setCumulativeProfitRate(summary.getCumulativeProfitRate());
+        response.setPeriodChangeAmount(periodChangeAmount);
+        response.setPeriodChangeRate(periodChangeRate);
+        response.setLastSyncedAt(summary.getLastSyncedAt());
+        response.setTrendPoints(trendPoints);
+        response.setAllocations(buildTrendAllocations(positions, products, summary.getTotalMarketValue()));
+        response.setContributors(buildTrendContributors(
+            rangeMeta,
+            positions,
+            products,
+            transactionsByPositionId,
+            priceHistoryByProductId
+        ));
+        return response;
+    }
+
+    private InvestmentSummaryResponse buildSummaryResponse(Long userId, List<InvestmentPositionEntity> positions) {
         BigDecimal totalMarketValue = sum(positions, InvestmentPositionEntity::getMarketValue);
         BigDecimal holdingProfit = sum(positions, InvestmentPositionEntity::getHoldingProfit);
         BigDecimal cumulativeProfit = sum(positions, InvestmentPositionEntity::getCumulativeProfit);
@@ -351,6 +483,405 @@ public class InvestmentService {
             .max(LocalDateTime::compareTo)
             .orElse(null));
         return response;
+    }
+
+    private List<InvestmentPositionEntity> loadActiveInvestmentPositions(Long userId, Long accountId) {
+        return filterPositionsByAccountType(positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .eq(userId != null, InvestmentPositionEntity::getUserId, userId)
+            .eq(accountId != null, InvestmentPositionEntity::getAccountId, accountId)
+            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)), INVESTMENT_ACCOUNT_TYPE_CODE);
+    }
+
+    private TrendRangeMeta resolveTrendRange(
+        String range,
+        Long userId,
+        Long accountId,
+        List<InvestmentPositionEntity> positions
+    ) {
+        String normalizedRange = switch (range == null ? "" : range.trim().toLowerCase(Locale.ROOT)) {
+            case "7d" -> "7d";
+            case "30d" -> "30d";
+            case "all" -> "all";
+            default -> "ytd";
+        };
+        LocalDate endDate = positions.stream()
+            .map(InvestmentPositionEntity::getLastSyncedAt)
+            .filter(item -> item != null)
+            .map(LocalDateTime::toLocalDate)
+            .max(LocalDate::compareTo)
+            .orElse(LocalDate.now());
+        LocalDate startDate;
+        boolean monthlyBuckets;
+        String rangeLabel;
+        switch (normalizedRange) {
+            case "7d" -> {
+                startDate = endDate.minusDays(6);
+                monthlyBuckets = false;
+                rangeLabel = "近7日";
+            }
+            case "30d" -> {
+                startDate = endDate.minusDays(29);
+                monthlyBuckets = false;
+                rangeLabel = "近30日";
+            }
+            case "all" -> {
+                LocalDate earliestPositionDate = positions.stream()
+                    .map(InvestmentPositionEntity::getCreatedAt)
+                    .filter(item -> item != null)
+                    .map(LocalDateTime::toLocalDate)
+                    .min(LocalDate::compareTo)
+                    .orElse(endDate);
+                InvestmentTransactionEntity earliestTransaction = transactionMapper.selectOne(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+                    .eq(userId != null, InvestmentTransactionEntity::getUserId, userId)
+                    .eq(accountId != null, InvestmentTransactionEntity::getAccountId, accountId)
+                    .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
+                    .orderByAsc(InvestmentTransactionEntity::getTradeAt)
+                    .last("LIMIT 1"));
+                LocalDate earliestTransactionDate = earliestTransaction == null || earliestTransaction.getTradeAt() == null
+                    ? earliestPositionDate
+                    : earliestTransaction.getTradeAt().toLocalDate();
+                startDate = earliestPositionDate.isBefore(earliestTransactionDate) ? earliestPositionDate : earliestTransactionDate;
+                monthlyBuckets = true;
+                rangeLabel = "全部";
+            }
+            default -> {
+                startDate = endDate.withDayOfYear(1);
+                monthlyBuckets = true;
+                rangeLabel = "年内";
+            }
+        }
+        if (startDate.isAfter(endDate)) {
+            startDate = endDate;
+        }
+        return new TrendRangeMeta(normalizedRange, rangeLabel, startDate, endDate, monthlyBuckets);
+    }
+
+    private Map<Long, List<InvestmentTransactionEntity>> loadConfirmedTransactionsByPosition(
+        Long userId,
+        Long accountId,
+        List<InvestmentPositionEntity> positions
+    ) {
+        if (positions.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Set<Long> positionIds = positions.stream()
+            .map(InvestmentPositionEntity::getId)
+            .collect(Collectors.toSet());
+        if (positionIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return transactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+                .eq(userId != null, InvestmentTransactionEntity::getUserId, userId)
+                .eq(accountId != null, InvestmentTransactionEntity::getAccountId, accountId)
+                .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
+                .in(InvestmentTransactionEntity::getPositionId, positionIds)
+                .orderByAsc(InvestmentTransactionEntity::getTradeAt)
+                .orderByAsc(InvestmentTransactionEntity::getId))
+            .stream()
+            .collect(Collectors.groupingBy(InvestmentTransactionEntity::getPositionId));
+    }
+
+    private Map<Long, NavigableMap<LocalDate, BigDecimal>> loadPriceHistoryByProduct(Set<Long> productIds) {
+        if (productIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, NavigableMap<LocalDate, BigDecimal>> history = new HashMap<>();
+        for (InvestmentPriceQuoteEntity quote : priceQuoteMapper.selectList(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
+            .in(InvestmentPriceQuoteEntity::getProductId, productIds)
+            .orderByAsc(InvestmentPriceQuoteEntity::getProductId)
+            .orderByAsc(InvestmentPriceQuoteEntity::getQuoteDate)
+            .orderByAsc(InvestmentPriceQuoteEntity::getQuoteTime)
+            .orderByAsc(InvestmentPriceQuoteEntity::getId))) {
+            LocalDate quoteDate = quote.getQuoteDate();
+            BigDecimal price = resolveQuotePrice(quote);
+            if (quoteDate == null || price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            history.computeIfAbsent(quote.getProductId(), key -> new TreeMap<>())
+                .put(quoteDate, price.setScale(6, RoundingMode.HALF_UP));
+        }
+        return history;
+    }
+
+    private List<LocalDate> buildTrendBucketDates(TrendRangeMeta rangeMeta) {
+        if (!rangeMeta.monthlyBuckets()) {
+            List<LocalDate> dates = new ArrayList<>();
+            LocalDate cursor = rangeMeta.startDate();
+            while (!cursor.isAfter(rangeMeta.endDate())) {
+                dates.add(cursor);
+                cursor = cursor.plusDays(1);
+            }
+            return dates;
+        }
+
+        List<LocalDate> dates = new ArrayList<>();
+        LocalDate monthCursor = rangeMeta.startDate().withDayOfMonth(1);
+        LocalDate endMonth = rangeMeta.endDate().withDayOfMonth(1);
+        while (!monthCursor.isAfter(endMonth)) {
+            LocalDate bucketDate = monthCursor.equals(endMonth)
+                ? rangeMeta.endDate()
+                : monthCursor.with(TemporalAdjusters.lastDayOfMonth());
+            if (bucketDate.isBefore(rangeMeta.startDate())) {
+                bucketDate = rangeMeta.startDate();
+            }
+            dates.add(bucketDate);
+            monthCursor = monthCursor.plusMonths(1);
+        }
+        return dates;
+    }
+
+    private List<InvestmentTrendPointResponse> buildTrendPoints(
+        List<LocalDate> bucketDates,
+        TrendRangeMeta rangeMeta,
+        List<InvestmentPositionEntity> positions,
+        Map<Long, List<InvestmentTransactionEntity>> transactionsByPositionId,
+        Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId
+    ) {
+        List<InvestmentTrendPointResponse> points = new ArrayList<>();
+        for (LocalDate bucketDate : bucketDates) {
+            InvestmentTrendPointResponse point = new InvestmentTrendPointResponse();
+            point.setKey(bucketDate.toString());
+            point.setLabel(buildTrendPointLabel(bucketDate, rangeMeta));
+            point.setValue(calculatePortfolioMarketValueAtDate(
+                bucketDate,
+                positions,
+                transactionsByPositionId,
+                priceHistoryByProductId
+            ));
+            points.add(point);
+        }
+        return points;
+    }
+
+    private String buildTrendPointLabel(LocalDate bucketDate, TrendRangeMeta rangeMeta) {
+        if (!rangeMeta.monthlyBuckets()) {
+            return bucketDate.getMonthValue() + "/" + bucketDate.getDayOfMonth();
+        }
+        if ("all".equals(rangeMeta.rangeKey()) && rangeMeta.startDate().getYear() != rangeMeta.endDate().getYear()) {
+            return bucketDate.getYear() + "-" + String.format("%02d", bucketDate.getMonthValue());
+        }
+        return bucketDate.getMonthValue() + "月";
+    }
+
+    private BigDecimal calculatePortfolioMarketValueAtDate(
+        LocalDate targetDate,
+        List<InvestmentPositionEntity> positions,
+        Map<Long, List<InvestmentTransactionEntity>> transactionsByPositionId,
+        Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId
+    ) {
+        BigDecimal total = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        for (InvestmentPositionEntity position : positions) {
+            BigDecimal quantity = resolvePositionQuantityAtDate(position, targetDate, transactionsByPositionId.get(position.getId()));
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal price = resolvePositionPriceAtDate(position, targetDate, priceHistoryByProductId.get(position.getProductId()));
+            total = total.add(quantity.multiply(price).setScale(2, RoundingMode.HALF_UP)).setScale(2, RoundingMode.HALF_UP);
+        }
+        return total;
+    }
+
+    private List<InvestmentTrendAllocationResponse> buildTrendAllocations(
+        List<InvestmentPositionEntity> positions,
+        Map<Long, InvestmentProductEntity> products,
+        BigDecimal totalMarketValue
+    ) {
+        if (positions.isEmpty() || totalMarketValue == null || totalMarketValue.compareTo(BigDecimal.ZERO) <= 0) {
+            return Collections.emptyList();
+        }
+
+        Map<String, BigDecimal> marketValueByProductType = new LinkedHashMap<>();
+        for (InvestmentPositionEntity position : positions) {
+            String productType = Optional.ofNullable(products.get(position.getProductId()))
+                .map(InvestmentProductEntity::getProductType)
+                .orElse("other");
+            marketValueByProductType.merge(
+                productType,
+                defaultZero(position.getMarketValue()).setScale(2, RoundingMode.HALF_UP),
+                BigDecimal::add
+            );
+        }
+
+        return marketValueByProductType.entrySet().stream()
+            .sorted(Map.Entry.<String, BigDecimal>comparingByValue().reversed())
+            .map(entry -> {
+                InvestmentTrendAllocationResponse item = new InvestmentTrendAllocationResponse();
+                item.setProductType(entry.getKey());
+                item.setLabel(productTypeName(entry.getKey()));
+                item.setMarketValue(entry.getValue().setScale(2, RoundingMode.HALF_UP));
+                item.setPercent(rate(entry.getValue(), totalMarketValue));
+                return item;
+            })
+            .toList();
+    }
+
+    private List<InvestmentTrendContributorResponse> buildTrendContributors(
+        TrendRangeMeta rangeMeta,
+        List<InvestmentPositionEntity> positions,
+        Map<Long, InvestmentProductEntity> products,
+        Map<Long, List<InvestmentTransactionEntity>> transactionsByPositionId,
+        Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId
+    ) {
+        if (positions.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<InvestmentTrendContributorResponse> contributors = new ArrayList<>();
+        for (InvestmentPositionEntity position : positions) {
+            List<InvestmentTransactionEntity> transactions = transactionsByPositionId.getOrDefault(position.getId(), Collections.emptyList());
+            BigDecimal startQuantity = resolvePositionQuantityAtDate(position, rangeMeta.startDate(), transactions);
+            BigDecimal endQuantity = resolvePositionQuantityAtDate(position, rangeMeta.endDate(), transactions);
+            BigDecimal startPrice = resolvePositionPriceAtDate(position, rangeMeta.startDate(), priceHistoryByProductId.get(position.getProductId()));
+            BigDecimal endPrice = resolvePositionPriceAtDate(position, rangeMeta.endDate(), priceHistoryByProductId.get(position.getProductId()));
+            BigDecimal startValue = startQuantity.multiply(startPrice).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal endValue = endQuantity.multiply(endPrice).setScale(2, RoundingMode.HALF_UP);
+
+            BigDecimal cashIn = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            BigDecimal cashOut = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            for (InvestmentTransactionEntity transaction : transactions) {
+                LocalDate effectiveDate = resolveTransactionEffectiveDate(transaction);
+                if (effectiveDate == null || effectiveDate.isBefore(rangeMeta.startDate()) || effectiveDate.isAfter(rangeMeta.endDate())) {
+                    continue;
+                }
+                if (isPositiveTradeType(transaction.getTradeType())) {
+                    cashIn = cashIn.add(defaultZero(transaction.getAmount()))
+                        .add(defaultZero(transaction.getFeeAmount()))
+                        .add(defaultZero(transaction.getTaxAmount()))
+                        .setScale(2, RoundingMode.HALF_UP);
+                } else if (isNegativeTradeType(transaction.getTradeType())) {
+                    cashOut = cashOut.add(defaultZero(transaction.getAmount()))
+                        .subtract(defaultZero(transaction.getFeeAmount()))
+                        .subtract(defaultZero(transaction.getTaxAmount()))
+                        .setScale(2, RoundingMode.HALF_UP);
+                }
+            }
+
+            BigDecimal contributionAmount = endValue.subtract(startValue).subtract(cashIn).add(cashOut).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal contributionBase = startValue.add(cashIn).setScale(2, RoundingMode.HALF_UP);
+            if (contributionAmount.compareTo(BigDecimal.ZERO) == 0
+                && endValue.compareTo(BigDecimal.ZERO) == 0
+                && startValue.compareTo(BigDecimal.ZERO) == 0) {
+                continue;
+            }
+
+            InvestmentProductEntity product = products.get(position.getProductId());
+            InvestmentTrendContributorResponse item = new InvestmentTrendContributorResponse();
+            item.setPositionId(position.getId());
+            item.setProductId(position.getProductId());
+            item.setProductType(product == null ? "other" : product.getProductType());
+            item.setProductName(product == null ? "未命名资产" : product.getName());
+            item.setProductSymbol(product == null ? null : product.getSymbol());
+            item.setContributionAmount(contributionAmount);
+            item.setContributionRate(rate(contributionAmount, contributionBase.compareTo(BigDecimal.ZERO) > 0 ? contributionBase : endValue));
+            contributors.add(item);
+        }
+
+        return contributors.stream()
+            .sorted((left, right) -> defaultZero(right.getContributionAmount()).abs()
+                .compareTo(defaultZero(left.getContributionAmount()).abs()))
+            .limit(3)
+            .toList();
+    }
+
+    private BigDecimal resolvePositionQuantityAtDate(
+        InvestmentPositionEntity position,
+        LocalDate targetDate,
+        List<InvestmentTransactionEntity> transactions
+    ) {
+        if (position.getCreatedAt() != null && position.getCreatedAt().toLocalDate().isAfter(targetDate)) {
+            return BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+        }
+        if (isPendingFundSubscription(position)
+            && (position.getSubscriptionConfirmedAt() == null || position.getSubscriptionConfirmedAt().toLocalDate().isAfter(targetDate))) {
+            return BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal quantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
+        if (transactions == null || transactions.isEmpty()) {
+            return quantity.max(BigDecimal.ZERO).setScale(6, RoundingMode.HALF_UP);
+        }
+
+        for (InvestmentTransactionEntity transaction : transactions) {
+            LocalDate effectiveDate = resolveTransactionEffectiveDate(transaction);
+            if (effectiveDate != null && effectiveDate.isAfter(targetDate)) {
+                quantity = quantity.subtract(signedTransactionQuantity(transaction)).setScale(6, RoundingMode.HALF_UP);
+            }
+        }
+        return quantity.compareTo(BigDecimal.ZERO) > 0 ? quantity : BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolvePositionPriceAtDate(
+        InvestmentPositionEntity position,
+        LocalDate targetDate,
+        NavigableMap<LocalDate, BigDecimal> priceHistory
+    ) {
+        if (priceHistory != null && !priceHistory.isEmpty()) {
+            Map.Entry<LocalDate, BigDecimal> floorEntry = priceHistory.floorEntry(targetDate);
+            if (floorEntry != null && floorEntry.getValue() != null && floorEntry.getValue().compareTo(BigDecimal.ZERO) > 0) {
+                return floorEntry.getValue().setScale(6, RoundingMode.HALF_UP);
+            }
+            Map.Entry<LocalDate, BigDecimal> firstEntry = priceHistory.firstEntry();
+            if (firstEntry != null && firstEntry.getValue() != null && firstEntry.getValue().compareTo(BigDecimal.ZERO) > 0) {
+                return firstEntry.getValue().setScale(6, RoundingMode.HALF_UP);
+            }
+        }
+
+        BigDecimal currentPrice = defaultZero(position.getCurrentPrice()).setScale(6, RoundingMode.HALF_UP);
+        if (currentPrice.compareTo(BigDecimal.ZERO) > 0) {
+            return currentPrice;
+        }
+        return defaultZero(position.getAvgCostPrice()).setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveQuotePrice(InvestmentPriceQuoteEntity quote) {
+        if (quote == null) {
+            return null;
+        }
+        if (quote.getClosePrice() != null && quote.getClosePrice().compareTo(BigDecimal.ZERO) > 0) {
+            return quote.getClosePrice();
+        }
+        if (quote.getLatestPrice() != null && quote.getLatestPrice().compareTo(BigDecimal.ZERO) > 0) {
+            return quote.getLatestPrice();
+        }
+        if (quote.getOpenPrice() != null && quote.getOpenPrice().compareTo(BigDecimal.ZERO) > 0) {
+            return quote.getOpenPrice();
+        }
+        return null;
+    }
+
+    private LocalDate resolveTransactionEffectiveDate(InvestmentTransactionEntity transaction) {
+        if (transaction == null || VOIDED_STATUS.equals(transaction.getStatus())) {
+            return null;
+        }
+        if (SETTLEMENT_STATUS_PENDING.equals(transaction.getSettlementStatus()) && transaction.getSettlementConfirmedAt() == null) {
+            return null;
+        }
+        if (transaction.getSettlementConfirmedAt() != null) {
+            return transaction.getSettlementConfirmedAt().toLocalDate();
+        }
+        return transaction.getTradeAt() == null ? null : transaction.getTradeAt().toLocalDate();
+    }
+
+    private BigDecimal signedTransactionQuantity(InvestmentTransactionEntity transaction) {
+        BigDecimal quantity = defaultZero(transaction.getQuantity()).setScale(6, RoundingMode.HALF_UP);
+        if (isPositiveTradeType(transaction.getTradeType())) {
+            return quantity;
+        }
+        if (isNegativeTradeType(transaction.getTradeType())) {
+            return quantity.negate().setScale(6, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private boolean isPositiveTradeType(String tradeType) {
+        return "buy".equals(tradeType)
+            || "add".equals(tradeType)
+            || "dividend_reinvest".equals(tradeType)
+            || "split_adjust".equals(tradeType);
+    }
+
+    private boolean isNegativeTradeType(String tradeType) {
+        return "sell".equals(tradeType) || "reduce".equals(tradeType);
     }
 
     public FundProfitForecastResponse fundProfitForecast(Long userId, Long accountId) {
@@ -419,6 +950,737 @@ public class InvestmentService {
         response.setAccounts(accounts);
         response.setHoldings(holdings);
         return response;
+    }
+
+    public FundProfitPageResponse fundProfitPage(Long userId, Long accountId, String view, String anchor, String selected) {
+        String normalizedView = normalizeFundProfitView(view);
+        FundProfitPageContext context = loadFundProfitPageContext(userId, accountId);
+        FundProfitPeriodMeta selectedPeriod = resolveFundProfitSelectedPeriod(
+            normalizedView,
+            anchor,
+            selected,
+            context.earliestDate(),
+            context.latestDate()
+        );
+        Map<Long, PositionPeriodProfit> positionProfitMap = buildPositionPeriodProfitMap(context, selectedPeriod);
+        FundProfitAggregate aggregate = aggregateFundProfit(positionProfitMap.values());
+        List<FundProfitContributionResponse> contributors = buildFundProfitContributors(context, positionProfitMap);
+        List<FundProfitDetailResponse> details = buildFundProfitDetails(context, positionProfitMap);
+
+        FundProfitPageResponse response = new FundProfitPageResponse();
+        response.setUserId(userId);
+        response.setAccountId(accountId);
+        response.setView(normalizedView);
+        response.setAnchor(resolveFundProfitAnchorValue(normalizedView, selectedPeriod));
+        response.setSelectedKey(selectedPeriod.key());
+        response.setLastSyncedAt(context.lastSyncedAt());
+        response.setAccounts(buildFundProfitAccounts(context));
+        response.setSummary(buildFundProfitSummary(context, normalizedView));
+        response.setInsight(buildFundProfitInsight(selectedPeriod, aggregate, contributors, details.size()));
+        response.setTrendPoints(buildFundProfitTrendPoints(context, selectedPeriod.endDate()));
+        response.setCalendarItems(buildFundProfitCalendarItems(context, normalizedView, selectedPeriod));
+        response.setSelection(buildFundProfitSelection(selectedPeriod, aggregate));
+        response.setContributors(contributors);
+        response.setDetails(details);
+        return response;
+    }
+
+    private String normalizeFundProfitView(String view) {
+        return switch (view == null ? "" : view.trim().toLowerCase(Locale.ROOT)) {
+            case "month" -> "month";
+            case "year" -> "year";
+            default -> "day";
+        };
+    }
+
+    private FundProfitPageContext loadFundProfitPageContext(Long userId, Long accountId) {
+        List<AccountEntity> investmentAccounts = listActiveAccountsByTypeCode(userId, accountId, INVESTMENT_ACCOUNT_TYPE_CODE);
+        Map<Long, AccountEntity> accountMap = investmentAccounts.stream()
+            .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
+        Set<Long> accountIds = accountMap.keySet();
+        if (accountIds.isEmpty()) {
+            LocalDate today = LocalDate.now();
+            return new FundProfitPageContext(
+                investmentAccounts,
+                accountMap,
+                Collections.emptyList(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                today,
+                today,
+                null
+            );
+        }
+
+        List<InvestmentPositionEntity> rawPositions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .eq(InvestmentPositionEntity::getUserId, userId)
+            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)
+            .in(InvestmentPositionEntity::getAccountId, accountIds));
+        if (rawPositions.isEmpty()) {
+            LocalDate today = LocalDate.now();
+            return new FundProfitPageContext(
+                investmentAccounts,
+                accountMap,
+                Collections.emptyList(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                today,
+                today,
+                null
+            );
+        }
+
+        Map<Long, InvestmentProductEntity> allProducts = productMapper.selectBatchIds(rawPositions.stream()
+                .map(InvestmentPositionEntity::getProductId)
+                .collect(Collectors.toSet()))
+            .stream()
+            .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
+        List<InvestmentPositionEntity> positions = rawPositions.stream()
+            .filter(position -> {
+                InvestmentProductEntity product = allProducts.get(position.getProductId());
+                return product != null && FUND_PRODUCT_TYPE.equals(product.getProductType());
+            })
+            .sorted(Comparator.comparing(InvestmentPositionEntity::getMarketValue, Comparator.nullsLast(BigDecimal::compareTo)).reversed())
+            .toList();
+        Map<Long, InvestmentProductEntity> products = positions.stream()
+            .map(position -> allProducts.get(position.getProductId()))
+            .filter(item -> item != null)
+            .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity(), (left, right) -> left));
+        Map<Long, List<InvestmentTransactionEntity>> transactionsByPositionId = positions.isEmpty()
+            ? Collections.emptyMap()
+            : loadConfirmedTransactionsByPosition(userId, accountId, positions);
+        Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId = positions.isEmpty()
+            ? Collections.emptyMap()
+            : loadPriceHistoryByProduct(products.keySet());
+        LocalDate latestDate = resolveFundProfitLatestDate(positions, priceHistoryByProductId);
+        LocalDate earliestDate = resolveFundProfitEarliestDate(positions, transactionsByPositionId, priceHistoryByProductId, latestDate);
+        LocalDateTime lastSyncedAt = positions.stream()
+            .map(InvestmentPositionEntity::getLastSyncedAt)
+            .filter(item -> item != null)
+            .max(LocalDateTime::compareTo)
+            .orElse(null);
+        return new FundProfitPageContext(
+            investmentAccounts,
+            accountMap,
+            positions,
+            products,
+            transactionsByPositionId,
+            priceHistoryByProductId,
+            earliestDate,
+            latestDate,
+            lastSyncedAt
+        );
+    }
+
+    private LocalDate resolveFundProfitLatestDate(
+        List<InvestmentPositionEntity> positions,
+        Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId
+    ) {
+        LocalDate latestDate = positions.stream()
+            .map(InvestmentPositionEntity::getLastSyncedAt)
+            .filter(item -> item != null)
+            .map(LocalDateTime::toLocalDate)
+            .max(LocalDate::compareTo)
+            .orElse(null);
+        for (NavigableMap<LocalDate, BigDecimal> history : priceHistoryByProductId.values()) {
+            if (history == null || history.isEmpty()) {
+                continue;
+            }
+            LocalDate historyDate = history.lastKey();
+            if (latestDate == null || historyDate.isAfter(latestDate)) {
+                latestDate = historyDate;
+            }
+        }
+        return latestDate == null ? LocalDate.now() : latestDate;
+    }
+
+    private LocalDate resolveFundProfitEarliestDate(
+        List<InvestmentPositionEntity> positions,
+        Map<Long, List<InvestmentTransactionEntity>> transactionsByPositionId,
+        Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId,
+        LocalDate fallbackDate
+    ) {
+        LocalDate earliestDate = null;
+        for (InvestmentPositionEntity position : positions) {
+            earliestDate = minDate(earliestDate, position.getCreatedAt() == null ? null : position.getCreatedAt().toLocalDate());
+            earliestDate = minDate(earliestDate, position.getSubscriptionConfirmedAt() == null ? null : position.getSubscriptionConfirmedAt().toLocalDate());
+            for (InvestmentTransactionEntity transaction : transactionsByPositionId.getOrDefault(position.getId(), Collections.emptyList())) {
+                earliestDate = minDate(earliestDate, resolveTransactionEffectiveDate(transaction));
+            }
+        }
+        for (NavigableMap<LocalDate, BigDecimal> history : priceHistoryByProductId.values()) {
+            if (history == null || history.isEmpty()) {
+                continue;
+            }
+            earliestDate = minDate(earliestDate, history.firstKey());
+        }
+        return earliestDate == null ? fallbackDate : earliestDate;
+    }
+
+    private FundProfitPeriodMeta resolveFundProfitSelectedPeriod(
+        String view,
+        String anchor,
+        String selected,
+        LocalDate earliestDate,
+        LocalDate latestDate
+    ) {
+        if ("month".equals(view)) {
+            int anchorYear = clampYear(
+                parseYearValue(anchor),
+                earliestDate.getYear(),
+                latestDate.getYear(),
+                latestDate.getYear()
+            );
+            YearMonth defaultMonth = anchorYear == latestDate.getYear()
+                ? YearMonth.from(latestDate)
+                : YearMonth.of(anchorYear, 12);
+            YearMonth selectedMonth = parseYearMonthValue(selected);
+            if (selectedMonth == null || selectedMonth.getYear() != anchorYear) {
+                selectedMonth = defaultMonth;
+            }
+            if (selectedMonth.isAfter(YearMonth.from(latestDate))) {
+                selectedMonth = YearMonth.from(latestDate);
+            }
+            LocalDate startDate = selectedMonth.atDay(1);
+            LocalDate endDate = selectedMonth.atEndOfMonth();
+            if (endDate.isAfter(latestDate)) {
+                endDate = latestDate;
+            }
+            return new FundProfitPeriodMeta(
+                "month",
+                selectedMonth.toString(),
+                String.format("%02d月", selectedMonth.getMonthValue()),
+                startDate,
+                endDate,
+                startDate.minusDays(1)
+            );
+        }
+
+        if ("year".equals(view)) {
+            int selectedYear = clampYear(
+                parseYearValue(selected) != null ? parseYearValue(selected) : parseYearValue(anchor),
+                earliestDate.getYear(),
+                latestDate.getYear(),
+                latestDate.getYear()
+            );
+            LocalDate startDate = LocalDate.of(selectedYear, 1, 1);
+            LocalDate endDate = LocalDate.of(selectedYear, 12, 31);
+            if (endDate.isAfter(latestDate)) {
+                endDate = latestDate;
+            }
+            return new FundProfitPeriodMeta(
+                "year",
+                String.valueOf(selectedYear),
+                selectedYear + "年",
+                startDate,
+                endDate,
+                startDate.minusDays(1)
+            );
+        }
+
+        YearMonth anchorMonth = clampYearMonth(
+            parseYearMonthValue(anchor),
+            YearMonth.from(earliestDate),
+            YearMonth.from(latestDate),
+            YearMonth.from(latestDate)
+        );
+        LocalDate selectedDate = parseDateValue(selected);
+        if (selectedDate == null || !YearMonth.from(selectedDate).equals(anchorMonth)) {
+            selectedDate = anchorMonth.equals(YearMonth.from(latestDate))
+                ? latestDate
+                : anchorMonth.atEndOfMonth();
+        }
+        LocalDate startDate = selectedDate;
+        return new FundProfitPeriodMeta(
+            "day",
+            selectedDate.toString(),
+            String.format("%02d/%02d", selectedDate.getMonthValue(), selectedDate.getDayOfMonth()),
+            startDate,
+            startDate,
+            startDate.minusDays(1)
+        );
+    }
+
+    private Map<Long, PositionPeriodProfit> buildPositionPeriodProfitMap(
+        FundProfitPageContext context,
+        FundProfitPeriodMeta period
+    ) {
+        Map<Long, PositionPeriodProfit> result = new LinkedHashMap<>();
+        for (InvestmentPositionEntity position : context.positions()) {
+            PositionPeriodProfit profit = calculatePositionPeriodProfit(
+                position,
+                period.startDate(),
+                period.endDate(),
+                period.comparisonDate(),
+                context.transactionsByPositionId().getOrDefault(position.getId(), Collections.emptyList()),
+                context.priceHistoryByProductId().get(position.getProductId())
+            );
+            result.put(position.getId(), profit);
+        }
+        return result;
+    }
+
+    private PositionPeriodProfit calculatePositionPeriodProfit(
+        InvestmentPositionEntity position,
+        LocalDate startDate,
+        LocalDate endDate,
+        LocalDate comparisonDate,
+        List<InvestmentTransactionEntity> transactions,
+        NavigableMap<LocalDate, BigDecimal> priceHistory
+    ) {
+        BigDecimal startQuantity = resolvePositionQuantityAtDate(position, comparisonDate, transactions);
+        BigDecimal endQuantity = resolvePositionQuantityAtDate(position, endDate, transactions);
+        BigDecimal startPrice = resolvePositionPriceAtDate(position, comparisonDate, priceHistory);
+        BigDecimal endPrice = resolvePositionPriceAtDate(position, endDate, priceHistory);
+        BigDecimal startValue = startQuantity.multiply(startPrice).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal endValue = endQuantity.multiply(endPrice).setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal cashIn = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal cashOut = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        for (InvestmentTransactionEntity transaction : transactions) {
+            LocalDate effectiveDate = resolveTransactionEffectiveDate(transaction);
+            if (effectiveDate == null || effectiveDate.isBefore(startDate) || effectiveDate.isAfter(endDate)) {
+                continue;
+            }
+            if (isPositiveTradeType(transaction.getTradeType())) {
+                cashIn = cashIn.add(defaultZero(transaction.getAmount()))
+                    .add(defaultZero(transaction.getFeeAmount()))
+                    .add(defaultZero(transaction.getTaxAmount()))
+                    .setScale(2, RoundingMode.HALF_UP);
+            } else if (isNegativeTradeType(transaction.getTradeType())) {
+                cashOut = cashOut.add(defaultZero(transaction.getAmount()))
+                    .subtract(defaultZero(transaction.getFeeAmount()))
+                    .subtract(defaultZero(transaction.getTaxAmount()))
+                    .setScale(2, RoundingMode.HALF_UP);
+            }
+        }
+
+        BigDecimal profit = endValue.subtract(startValue).subtract(cashIn).add(cashOut).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal base = startValue.add(cashIn).setScale(2, RoundingMode.HALF_UP);
+        if (base.compareTo(BigDecimal.ZERO) <= 0) {
+            base = endValue;
+        }
+        return new PositionPeriodProfit(
+            startValue,
+            endValue,
+            cashIn,
+            cashOut,
+            profit,
+            rate(profit, base),
+            endValue,
+            endQuantity,
+            endPrice
+        );
+    }
+
+    private FundProfitAggregate aggregateFundProfit(Iterable<PositionPeriodProfit> profits) {
+        BigDecimal startValue = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal endValue = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal cashIn = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal cashOut = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal profit = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        int positiveCount = 0;
+        int negativeCount = 0;
+        for (PositionPeriodProfit item : profits) {
+            if (item == null) {
+                continue;
+            }
+            startValue = startValue.add(defaultZero(item.startValue())).setScale(2, RoundingMode.HALF_UP);
+            endValue = endValue.add(defaultZero(item.endValue())).setScale(2, RoundingMode.HALF_UP);
+            cashIn = cashIn.add(defaultZero(item.cashIn())).setScale(2, RoundingMode.HALF_UP);
+            cashOut = cashOut.add(defaultZero(item.cashOut())).setScale(2, RoundingMode.HALF_UP);
+            profit = profit.add(defaultZero(item.profit())).setScale(2, RoundingMode.HALF_UP);
+            if (defaultZero(item.profit()).compareTo(BigDecimal.ZERO) > 0) {
+                positiveCount++;
+            } else if (defaultZero(item.profit()).compareTo(BigDecimal.ZERO) < 0) {
+                negativeCount++;
+            }
+        }
+        BigDecimal base = startValue.add(cashIn).setScale(2, RoundingMode.HALF_UP);
+        if (base.compareTo(BigDecimal.ZERO) <= 0) {
+            base = endValue;
+        }
+        return new FundProfitAggregate(
+            startValue,
+            endValue,
+            cashIn,
+            cashOut,
+            profit,
+            rate(profit, base),
+            positiveCount,
+            negativeCount
+        );
+    }
+
+    private List<FundProfitPageAccountResponse> buildFundProfitAccounts(FundProfitPageContext context) {
+        Map<Long, List<InvestmentPositionEntity>> positionsByAccountId = context.positions().stream()
+            .collect(Collectors.groupingBy(InvestmentPositionEntity::getAccountId));
+        return context.accounts().stream()
+            .map(account -> {
+                List<InvestmentPositionEntity> positions = positionsByAccountId.getOrDefault(account.getId(), Collections.emptyList());
+                FundProfitPageAccountResponse item = new FundProfitPageAccountResponse();
+                item.setAccountId(account.getId());
+                item.setAccountName(account.getName());
+                item.setHoldingAmount(sum(positions, InvestmentPositionEntity::getMarketValue));
+                item.setTotalProfit(sum(positions, InvestmentPositionEntity::getCumulativeProfit));
+                item.setTotalProfitRate(rate(item.getTotalProfit(), sum(positions, InvestmentPositionEntity::getCostAmount)));
+                item.setFundCount(positions.size());
+                return item;
+            })
+            .toList();
+    }
+
+    private FundProfitPageSummaryResponse buildFundProfitSummary(FundProfitPageContext context, String view) {
+        FundProfitPageSummaryResponse response = new FundProfitPageSummaryResponse();
+        BigDecimal holdingAmount = sum(context.positions(), InvestmentPositionEntity::getMarketValue);
+        BigDecimal investedAmount = sum(context.positions(), InvestmentPositionEntity::getCostAmount);
+        BigDecimal totalProfit = sum(context.positions(), InvestmentPositionEntity::getCumulativeProfit);
+
+        response.setHoldingAmount(holdingAmount);
+        response.setInvestedAmount(investedAmount);
+        response.setTotalProfit(totalProfit);
+        response.setTotalProfitRate(rate(totalProfit, investedAmount));
+        response.setFundCount(context.positions().size());
+        response.setLastSyncedAt(context.lastSyncedAt());
+
+        LocalDate latestDate = context.latestDate();
+        List<FundProfitPageSummaryMetricResponse> shortcuts = new ArrayList<>();
+        shortcuts.add(buildFundProfitShortcutMetric(context, "today", "今日", new FundProfitPeriodMeta(
+            "day",
+            latestDate.toString(),
+            "今日",
+            latestDate,
+            latestDate,
+            latestDate.minusDays(1)
+        )));
+        shortcuts.add(buildFundProfitShortcutMetric(context, "7d", "近7日", new FundProfitPeriodMeta(
+            "day",
+            latestDate.minusDays(6).toString(),
+            "近7日",
+            latestDate.minusDays(6),
+            latestDate,
+            latestDate.minusDays(7)
+        )));
+        LocalDate monthStart = latestDate.withDayOfMonth(1);
+        shortcuts.add(buildFundProfitShortcutMetric(context, "month", "本月", new FundProfitPeriodMeta(
+            "month",
+            YearMonth.from(latestDate).toString(),
+            "本月",
+            monthStart,
+            latestDate,
+            monthStart.minusDays(1)
+        )));
+
+        response.setActiveShortcut("day".equals(view) ? "today" : "month");
+        response.setShortcuts(shortcuts);
+        return response;
+    }
+
+    private FundProfitPageSummaryMetricResponse buildFundProfitShortcutMetric(
+        FundProfitPageContext context,
+        String key,
+        String label,
+        FundProfitPeriodMeta period
+    ) {
+        FundProfitAggregate aggregate = aggregateFundProfit(buildPositionPeriodProfitMap(context, period).values());
+        FundProfitPageSummaryMetricResponse item = new FundProfitPageSummaryMetricResponse();
+        item.setKey(key);
+        item.setLabel(label);
+        item.setProfit(aggregate.profit());
+        item.setProfitRate(aggregate.profitRate());
+        return item;
+    }
+
+    private String buildFundProfitInsight(
+        FundProfitPeriodMeta period,
+        FundProfitAggregate aggregate,
+        List<FundProfitContributionResponse> contributors,
+        int detailCount
+    ) {
+        if (detailCount == 0) {
+            return period.label() + "暂无基金收益明细";
+        }
+        if (contributors.isEmpty()) {
+            return period.label() + "暂无明显收益贡献差异";
+        }
+        if (defaultZero(aggregate.profit()).compareTo(BigDecimal.ZERO) >= 0) {
+            FundProfitContributionResponse top = contributors.get(0);
+            return period.label() + "共有 " + aggregate.positiveCount() + "/" + detailCount + " 只基金录得正收益，"
+                + top.getProductName() + " 贡献最多。";
+        }
+        FundProfitContributionResponse worst = contributors.stream()
+            .min(Comparator.comparing(item -> defaultZero(item.getContributionAmount())))
+            .orElse(contributors.get(contributors.size() - 1));
+        return period.label() + "回撤占优，主要拖累来自 " + worst.getProductName() + "。";
+    }
+
+    private List<FundProfitTrendPointResponse> buildFundProfitTrendPoints(FundProfitPageContext context, LocalDate endDate) {
+        LocalDate latestDate = context.latestDate();
+        LocalDate normalizedEndDate = endDate.isAfter(latestDate) ? latestDate : endDate;
+        List<FundProfitTrendPointResponse> items = new ArrayList<>();
+        for (int offset = 6; offset >= 0; offset--) {
+            LocalDate date = normalizedEndDate.minusDays(offset);
+            FundProfitPeriodMeta period = new FundProfitPeriodMeta(
+                "day",
+                date.toString(),
+                date.toString(),
+                date,
+                date,
+                date.minusDays(1)
+            );
+            FundProfitAggregate aggregate = aggregateFundProfit(buildPositionPeriodProfitMap(context, period).values());
+            FundProfitTrendPointResponse point = new FundProfitTrendPointResponse();
+            point.setKey(date.toString());
+            point.setDate(date);
+            point.setLabel(date.getMonthValue() + "/" + date.getDayOfMonth());
+            point.setProfit(aggregate.profit());
+            items.add(point);
+        }
+        return items;
+    }
+
+    private List<FundProfitCalendarCellResponse> buildFundProfitCalendarItems(
+        FundProfitPageContext context,
+        String view,
+        FundProfitPeriodMeta selectedPeriod
+    ) {
+        if ("month".equals(view)) {
+            int year = selectedPeriod.startDate().getYear();
+            List<FundProfitCalendarCellResponse> items = new ArrayList<>();
+            for (int month = 1; month <= 12; month++) {
+                YearMonth yearMonth = YearMonth.of(year, month);
+                LocalDate startDate = yearMonth.atDay(1);
+                LocalDate endDate = yearMonth.atEndOfMonth();
+                BigDecimal profit = null;
+                BigDecimal profitRate = null;
+                if (!startDate.isAfter(context.latestDate())) {
+                    if (endDate.isAfter(context.latestDate())) {
+                        endDate = context.latestDate();
+                    }
+                    FundProfitAggregate aggregate = aggregateFundProfit(buildPositionPeriodProfitMap(
+                        context,
+                        new FundProfitPeriodMeta("month", yearMonth.toString(), String.format("%02d月", month), startDate, endDate, startDate.minusDays(1))
+                    ).values());
+                    profit = aggregate.profit();
+                    profitRate = aggregate.profitRate();
+                }
+                FundProfitCalendarCellResponse item = new FundProfitCalendarCellResponse();
+                item.setKey(yearMonth.toString());
+                item.setLabel(String.format("%02d月", month));
+                item.setSecondaryLabel("收益");
+                item.setStartDate(startDate);
+                item.setEndDate(endDate);
+                item.setProfit(profit);
+                item.setProfitRate(profitRate);
+                item.setSelected(yearMonth.toString().equals(selectedPeriod.key()));
+                item.setCurrent(yearMonth.equals(YearMonth.from(context.latestDate())));
+                items.add(item);
+            }
+            return items;
+        }
+
+        if ("year".equals(view)) {
+            int selectedYear = selectedPeriod.startDate().getYear();
+            int startYear = Math.max(context.earliestDate().getYear(), selectedYear - 5);
+            List<FundProfitCalendarCellResponse> items = new ArrayList<>();
+            for (int year = selectedYear; year >= startYear; year--) {
+                LocalDate startDate = LocalDate.of(year, 1, 1);
+                LocalDate endDate = LocalDate.of(year, 12, 31);
+                if (endDate.isAfter(context.latestDate())) {
+                    endDate = context.latestDate();
+                }
+                FundProfitAggregate aggregate = aggregateFundProfit(buildPositionPeriodProfitMap(
+                    context,
+                    new FundProfitPeriodMeta("year", String.valueOf(year), year + "年", startDate, endDate, startDate.minusDays(1))
+                ).values());
+                FundProfitCalendarCellResponse item = new FundProfitCalendarCellResponse();
+                item.setKey(String.valueOf(year));
+                item.setLabel(year + "年");
+                item.setSecondaryLabel("年度收益");
+                item.setStartDate(startDate);
+                item.setEndDate(endDate);
+                item.setProfit(aggregate.profit());
+                item.setProfitRate(aggregate.profitRate());
+                item.setSelected(String.valueOf(year).equals(selectedPeriod.key()));
+                item.setCurrent(year == context.latestDate().getYear());
+                items.add(item);
+            }
+            return items;
+        }
+
+        YearMonth month = YearMonth.from(selectedPeriod.startDate());
+        int daysInMonth = month.lengthOfMonth();
+        List<FundProfitCalendarCellResponse> items = new ArrayList<>();
+        for (int day = 1; day <= daysInMonth; day++) {
+            LocalDate date = month.atDay(day);
+            BigDecimal profit = null;
+            BigDecimal profitRate = null;
+            if (!date.isAfter(context.latestDate())) {
+                FundProfitAggregate aggregate = aggregateFundProfit(buildPositionPeriodProfitMap(
+                    context,
+                    new FundProfitPeriodMeta("day", date.toString(), date.toString(), date, date, date.minusDays(1))
+                ).values());
+                profit = aggregate.profit();
+                profitRate = aggregate.profitRate();
+            }
+            FundProfitCalendarCellResponse item = new FundProfitCalendarCellResponse();
+            item.setKey(date.toString());
+            item.setLabel(String.valueOf(day));
+            item.setSecondaryLabel(date.getDayOfWeek().name().substring(0, 3));
+            item.setStartDate(date);
+            item.setEndDate(date);
+            item.setProfit(profit);
+            item.setProfitRate(profitRate);
+            item.setSelected(date.toString().equals(selectedPeriod.key()));
+            item.setCurrent(date.equals(context.latestDate()));
+            items.add(item);
+        }
+        return items;
+    }
+
+    private FundProfitSelectionResponse buildFundProfitSelection(FundProfitPeriodMeta period, FundProfitAggregate aggregate) {
+        FundProfitSelectionResponse response = new FundProfitSelectionResponse();
+        response.setKey(period.key());
+        response.setLabel(period.label());
+        response.setTitle(period.label() + "收益");
+        response.setStartDate(period.startDate());
+        response.setEndDate(period.endDate());
+        response.setComparisonDate(period.comparisonDate());
+        response.setProfit(aggregate.profit());
+        response.setProfitRate(aggregate.profitRate());
+        response.setPositiveFundCount(aggregate.positiveCount());
+        response.setNegativeFundCount(aggregate.negativeCount());
+        return response;
+    }
+
+    private List<FundProfitContributionResponse> buildFundProfitContributors(
+        FundProfitPageContext context,
+        Map<Long, PositionPeriodProfit> positionProfitMap
+    ) {
+        return context.positions().stream()
+            .map(position -> {
+                PositionPeriodProfit profit = positionProfitMap.get(position.getId());
+                if (profit == null) {
+                    return null;
+                }
+                InvestmentProductEntity product = context.products().get(position.getProductId());
+                AccountEntity account = context.accountMap().get(position.getAccountId());
+                FundProfitContributionResponse item = new FundProfitContributionResponse();
+                item.setPositionId(position.getId());
+                item.setProductId(position.getProductId());
+                item.setProductName(product == null ? "未命名基金" : product.getName());
+                item.setProductSymbol(product == null ? null : product.getSymbol());
+                item.setAccountName(account == null ? null : account.getName());
+                item.setContributionAmount(profit.profit());
+                item.setContributionRate(profit.profitRate());
+                item.setHoldingAmount(profit.holdingAmount());
+                item.setHoldingQuantity(profit.holdingQuantity());
+                return item;
+            })
+            .filter(item -> item != null)
+            .sorted(Comparator.comparing(FundProfitContributionResponse::getContributionAmount, Comparator.nullsLast(BigDecimal::compareTo)).reversed())
+            .limit(3)
+            .toList();
+    }
+
+    private List<FundProfitDetailResponse> buildFundProfitDetails(
+        FundProfitPageContext context,
+        Map<Long, PositionPeriodProfit> positionProfitMap
+    ) {
+        return context.positions().stream()
+            .map(position -> {
+                PositionPeriodProfit profit = positionProfitMap.get(position.getId());
+                if (profit == null) {
+                    return null;
+                }
+                InvestmentProductEntity product = context.products().get(position.getProductId());
+                AccountEntity account = context.accountMap().get(position.getAccountId());
+                FundProfitDetailResponse item = new FundProfitDetailResponse();
+                item.setPositionId(position.getId());
+                item.setProductId(position.getProductId());
+                item.setProductName(product == null ? "未命名基金" : product.getName());
+                item.setProductSymbol(product == null ? null : product.getSymbol());
+                item.setAccountName(account == null ? null : account.getName());
+                item.setHoldingQuantity(profit.holdingQuantity());
+                item.setNetValue(profit.endPrice());
+                item.setHoldingAmount(profit.holdingAmount());
+                item.setCostAmount(defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP));
+                item.setPeriodProfit(profit.profit());
+                item.setPeriodProfitRate(profit.profitRate());
+                return item;
+            })
+            .filter(item -> item != null)
+            .sorted(Comparator.comparing(FundProfitDetailResponse::getPeriodProfit, Comparator.nullsLast(BigDecimal::compareTo)).reversed()
+                .thenComparing(FundProfitDetailResponse::getHoldingAmount, Comparator.nullsLast(BigDecimal::compareTo)).reversed())
+            .toList();
+    }
+
+    private String resolveFundProfitAnchorValue(String view, FundProfitPeriodMeta period) {
+        if ("month".equals(view) || "year".equals(view)) {
+            return String.valueOf(period.startDate().getYear());
+        }
+        return YearMonth.from(period.startDate()).toString();
+    }
+
+    private Integer parseYearValue(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private YearMonth parseYearMonthValue(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return YearMonth.parse(value.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private LocalDate parseDateValue(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private int clampYear(Integer value, int min, int max, int fallback) {
+        int resolved = value == null ? fallback : value;
+        return Math.max(min, Math.min(max, resolved));
+    }
+
+    private YearMonth clampYearMonth(YearMonth value, YearMonth min, YearMonth max, YearMonth fallback) {
+        YearMonth resolved = value == null ? fallback : value;
+        if (resolved.isBefore(min)) {
+            return min;
+        }
+        if (resolved.isAfter(max)) {
+            return max;
+        }
+        return resolved;
+    }
+
+    private LocalDate minDate(LocalDate current, LocalDate candidate) {
+        if (candidate == null) {
+            return current;
+        }
+        if (current == null || candidate.isBefore(current)) {
+            return candidate;
+        }
+        return current;
     }
 
     public int syncDailyFundProfits() {
