@@ -1,6 +1,11 @@
 package com.example.finance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.finance.dto.TransactionAnalysisCategoryBreakdownResponse;
+import com.example.finance.dto.TransactionAnalysisPeriodSummaryResponse;
+import com.example.finance.dto.TransactionAnalysisResponse;
+import com.example.finance.dto.TransactionAnalysisSummaryResponse;
+import com.example.finance.dto.TransactionAnalysisTrendPointResponse;
 import com.example.finance.dto.TransactionRequest;
 import com.example.finance.dto.TransactionResponse;
 import com.example.finance.entity.AccountEntity;
@@ -21,10 +26,13 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,7 +58,14 @@ public class TransactionService {
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_STATUS = "normal";
     private static final String VOIDED_STATUS = "voided";
+    private static final String ACTIVE_ACCOUNT_STATUS = "active";
     private static final String ACTIVE_CATEGORY_STATUS = "active";
+    private static final String PERIOD_MONTH = "month";
+    private static final String PERIOD_YEAR = "year";
+    private static final String CATEGORY_COLOR_INCOME = "#F43F5E";
+    private static final String CATEGORY_COLOR_EXPENSE = "#10B981";
+    private static final String CATEGORY_COLOR_DEBT = "#F59E0B";
+    private static final String CATEGORY_COLOR_HUMAN_RELATION = "#8B5CF6";
     private static final DateTimeFormatter TRANSACTION_NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 
     private final TransactionMapper transactionMapper;
@@ -89,6 +104,47 @@ public class TransactionService {
         List<DebtRecordEntity> debtRecords = loadDebtRecords(userId, type, accountId);
         List<HumanRelationRecordEntity> humanRelationRecords = loadHumanRelationRecords(userId, type, accountId);
         return mergeResponses(transactions, debtRecords, humanRelationRecords);
+    }
+
+    public TransactionAnalysisResponse getAnalysis(Long userId, String period, String month, Integer year) {
+        if (userId == null) {
+            throw new IllegalArgumentException("用户不存在");
+        }
+
+        String normalizedPeriod = normalizePeriod(period);
+        Set<Long> cashAccountIds = loadCashAccountIds(userId);
+        List<TransactionResponse> cashTransactions = list(userId, null, null).stream()
+            .filter(transaction -> transaction.getAccountId() != null && cashAccountIds.contains(transaction.getAccountId()))
+            .toList();
+
+        TransactionAnalysisResponse response = new TransactionAnalysisResponse();
+        response.setUserId(userId);
+        response.setPeriod(normalizedPeriod);
+
+        if (PERIOD_YEAR.equals(normalizedPeriod)) {
+            int selectedYear = year == null ? LocalDate.now().getYear() : year;
+            response.setYear(selectedYear);
+
+            List<TransactionResponse> selectedTransactions = filterTransactionsByYear(cashTransactions, selectedYear);
+            response.setSummary(buildSummary(selectedTransactions));
+            response.setIncomeBreakdown(buildBreakdown(selectedTransactions, TYPE_INCOME));
+            response.setExpenseBreakdown(buildBreakdown(selectedTransactions, TYPE_EXPENSE));
+            response.setTrendPoints(buildYearTrendPoints(selectedYear, selectedTransactions));
+            response.setPeriodSummaries(buildYearPeriodSummaries(selectedYear, selectedTransactions));
+            return response;
+        }
+
+        YearMonth selectedMonth = parseMonth(month);
+        response.setMonth(selectedMonth.toString());
+        response.setYear(selectedMonth.getYear());
+
+        List<TransactionResponse> selectedTransactions = filterTransactionsByMonth(cashTransactions, selectedMonth);
+        response.setSummary(buildSummary(selectedTransactions));
+        response.setIncomeBreakdown(buildBreakdown(selectedTransactions, TYPE_INCOME));
+        response.setExpenseBreakdown(buildBreakdown(selectedTransactions, TYPE_EXPENSE));
+        response.setTrendPoints(buildMonthTrendPoints(selectedMonth, selectedTransactions));
+        response.setPeriodSummaries(buildMonthPeriodSummaries(selectedMonth, selectedTransactions));
+        return response;
     }
 
     @Transactional
@@ -140,6 +196,28 @@ public class TransactionService {
             throw new IllegalArgumentException("当前只支持支出和收入");
         }
         return type;
+    }
+
+    private String normalizePeriod(String period) {
+        if (!StringUtils.hasText(period)) {
+            return PERIOD_MONTH;
+        }
+        if (!PERIOD_MONTH.equals(period) && !PERIOD_YEAR.equals(period)) {
+            throw new IllegalArgumentException("分析周期仅支持 month 或 year");
+        }
+        return period;
+    }
+
+    private YearMonth parseMonth(String month) {
+        if (!StringUtils.hasText(month)) {
+            return YearMonth.now();
+        }
+
+        try {
+            return YearMonth.parse(month);
+        } catch (Exception exception) {
+            throw new IllegalArgumentException("月份格式应为 yyyy-MM");
+        }
     }
 
     private AccountEntity requireCashAccount(Long userId, Long accountId) {
@@ -353,6 +431,7 @@ public class TransactionService {
         response.setCategoryId(entity.getCategoryId());
         response.setCategoryName(category == null ? null : category.getName());
         response.setCategoryIcon(category == null ? null : category.getIcon());
+        response.setCategoryColor(category == null ? null : category.getColor());
         response.setTitle(entity.getTitle());
         response.setRemark(entity.getRemark());
         response.setOccurredAt(entity.getOccurredAt());
@@ -381,6 +460,7 @@ public class TransactionService {
         response.setCategoryId(null);
         response.setCategoryName(DEBT_DIRECTION_RECEIVABLE.equals(entity.getDirection()) ? "债务借出" : "债务借入");
         response.setCategoryIcon("债");
+        response.setCategoryColor(CATEGORY_COLOR_DEBT);
         response.setTitle(buildDebtRecordTitle(debtAccount, entity));
         response.setRemark(entity.getRemark());
         response.setOccurredAt(entity.getOccurredAt());
@@ -417,6 +497,7 @@ public class TransactionService {
         response.setCategoryId(null);
         response.setCategoryName(HUMAN_RELATION_DIRECTION_INCOMING.equals(entity.getDirection()) ? "人情收到" : "人情送出");
         response.setCategoryIcon("礼");
+        response.setCategoryColor(CATEGORY_COLOR_HUMAN_RELATION);
         response.setTitle(buildHumanRelationRecordTitle(humanRelationAccount, entity));
         response.setRemark(entity.getRemark());
         response.setOccurredAt(entity.getOccurredAt());
@@ -430,5 +511,238 @@ public class TransactionService {
         String accountName = account == null ? "人情账户" : account.getName();
         String directionLabel = HUMAN_RELATION_DIRECTION_INCOMING.equals(entity.getDirection()) ? "收到" : "送出";
         return accountName + " · " + directionLabel;
+    }
+
+    private Set<Long> loadCashAccountIds(Long userId) {
+        AccountTypeEntity cashAccountType = accountTypeMapper.selectOne(new LambdaQueryWrapper<AccountTypeEntity>()
+            .eq(AccountTypeEntity::getCode, CASH_ACCOUNT_TYPE_CODE)
+            .last("LIMIT 1"));
+        if (cashAccountType == null) {
+            return Set.of();
+        }
+
+        return accountMapper.selectList(new LambdaQueryWrapper<AccountEntity>()
+                .eq(AccountEntity::getUserId, userId)
+                .eq(AccountEntity::getAccountTypeId, cashAccountType.getId())
+                .eq(AccountEntity::getStatus, ACTIVE_ACCOUNT_STATUS))
+            .stream()
+            .map(AccountEntity::getId)
+            .collect(Collectors.toSet());
+    }
+
+    private List<TransactionResponse> filterTransactionsByMonth(List<TransactionResponse> transactions, YearMonth month) {
+        LocalDateTime startTime = month.atDay(1).atStartOfDay();
+        LocalDateTime endTime = month.plusMonths(1).atDay(1).atStartOfDay();
+        return transactions.stream()
+            .filter(transaction -> transaction.getOccurredAt() != null)
+            .filter(transaction -> !transaction.getOccurredAt().isBefore(startTime) && transaction.getOccurredAt().isBefore(endTime))
+            .sorted(transactionComparator())
+            .toList();
+    }
+
+    private List<TransactionResponse> filterTransactionsByYear(List<TransactionResponse> transactions, int year) {
+        LocalDateTime startTime = LocalDate.of(year, 1, 1).atStartOfDay();
+        LocalDateTime endTime = LocalDate.of(year + 1, 1, 1).atStartOfDay();
+        return transactions.stream()
+            .filter(transaction -> transaction.getOccurredAt() != null)
+            .filter(transaction -> !transaction.getOccurredAt().isBefore(startTime) && transaction.getOccurredAt().isBefore(endTime))
+            .sorted(transactionComparator())
+            .toList();
+    }
+
+    private TransactionAnalysisSummaryResponse buildSummary(List<TransactionResponse> transactions) {
+        BigDecimal income = sumAmounts(transactions, TYPE_INCOME);
+        BigDecimal expense = sumAmounts(transactions, TYPE_EXPENSE);
+
+        TransactionAnalysisSummaryResponse response = new TransactionAnalysisSummaryResponse();
+        response.setIncome(income);
+        response.setExpense(expense);
+        response.setSurplus(income.subtract(expense).setScale(2, RoundingMode.HALF_UP));
+        response.setIncomeCount((int) transactions.stream().filter(transaction -> TYPE_INCOME.equals(transaction.getType())).count());
+        response.setExpenseCount((int) transactions.stream().filter(transaction -> TYPE_EXPENSE.equals(transaction.getType())).count());
+        response.setTransactionCount(transactions.size());
+        return response;
+    }
+
+    private List<TransactionAnalysisCategoryBreakdownResponse> buildBreakdown(List<TransactionResponse> transactions, String type) {
+        List<TransactionResponse> filteredTransactions = transactions.stream()
+            .filter(transaction -> type.equals(transaction.getType()))
+            .toList();
+        BigDecimal totalAmount = filteredTransactions.stream()
+            .map(this::safeAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return List.of();
+        }
+
+        Map<String, BreakdownAccumulator> accumulatorMap = new LinkedHashMap<>();
+        for (TransactionResponse transaction : filteredTransactions) {
+            String key = transaction.getCategoryId() == null
+                ? String.valueOf(transaction.getSourceType()) + ":" + String.valueOf(transaction.getCategoryName())
+                : "category:" + transaction.getCategoryId();
+            BreakdownAccumulator accumulator = accumulatorMap.computeIfAbsent(key, ignored -> new BreakdownAccumulator(
+                transaction.getCategoryId(),
+                defaultCategoryName(transaction),
+                StringUtils.hasText(transaction.getCategoryIcon()) ? transaction.getCategoryIcon() : "账",
+                resolveCategoryColor(transaction)
+            ));
+            accumulator.amount = accumulator.amount.add(safeAmount(transaction));
+            accumulator.transactionCount += 1;
+        }
+
+        return accumulatorMap.values().stream()
+            .sorted(Comparator.comparing((BreakdownAccumulator item) -> item.amount).reversed())
+            .map(item -> {
+                TransactionAnalysisCategoryBreakdownResponse response = new TransactionAnalysisCategoryBreakdownResponse();
+                response.setCategoryId(item.categoryId);
+                response.setCategoryName(item.categoryName);
+                response.setCategoryIcon(item.categoryIcon);
+                response.setCategoryColor(item.categoryColor);
+                response.setAmount(item.amount.setScale(2, RoundingMode.HALF_UP));
+                response.setPercent(item.amount.multiply(BigDecimal.valueOf(100))
+                    .divide(totalAmount, 2, RoundingMode.HALF_UP));
+                response.setTransactionCount(item.transactionCount);
+                return response;
+            })
+            .toList();
+    }
+
+    private List<TransactionAnalysisTrendPointResponse> buildMonthTrendPoints(YearMonth month, List<TransactionResponse> transactions) {
+        Map<LocalDate, List<TransactionResponse>> groupedTransactions = transactions.stream()
+            .collect(Collectors.groupingBy(transaction -> transaction.getOccurredAt().toLocalDate()));
+        return java.util.stream.IntStream.rangeClosed(1, month.lengthOfMonth())
+            .mapToObj(day -> {
+                LocalDate currentDate = month.atDay(day);
+                List<TransactionResponse> currentTransactions = groupedTransactions.getOrDefault(currentDate, List.of());
+                TransactionAnalysisTrendPointResponse response = new TransactionAnalysisTrendPointResponse();
+                response.setKey(currentDate.toString());
+                response.setLabel(String.valueOf(day));
+                response.setIncome(sumAmounts(currentTransactions, TYPE_INCOME));
+                response.setExpense(sumAmounts(currentTransactions, TYPE_EXPENSE));
+                response.setSurplus(response.getIncome().subtract(response.getExpense()).setScale(2, RoundingMode.HALF_UP));
+                return response;
+            })
+            .toList();
+    }
+
+    private List<TransactionAnalysisTrendPointResponse> buildYearTrendPoints(int year, List<TransactionResponse> transactions) {
+        Map<YearMonth, List<TransactionResponse>> groupedTransactions = transactions.stream()
+            .collect(Collectors.groupingBy(transaction -> YearMonth.from(transaction.getOccurredAt())));
+        return java.util.stream.IntStream.rangeClosed(1, 12)
+            .mapToObj(month -> {
+                YearMonth currentMonth = YearMonth.of(year, month);
+                List<TransactionResponse> currentTransactions = groupedTransactions.getOrDefault(currentMonth, List.of());
+                TransactionAnalysisTrendPointResponse response = new TransactionAnalysisTrendPointResponse();
+                response.setKey(currentMonth.toString());
+                response.setLabel(month + "月");
+                response.setIncome(sumAmounts(currentTransactions, TYPE_INCOME));
+                response.setExpense(sumAmounts(currentTransactions, TYPE_EXPENSE));
+                response.setSurplus(response.getIncome().subtract(response.getExpense()).setScale(2, RoundingMode.HALF_UP));
+                return response;
+            })
+            .toList();
+    }
+
+    private List<TransactionAnalysisPeriodSummaryResponse> buildMonthPeriodSummaries(YearMonth month, List<TransactionResponse> transactions) {
+        Map<LocalDate, List<TransactionResponse>> groupedTransactions = transactions.stream()
+            .collect(Collectors.groupingBy(transaction -> transaction.getOccurredAt().toLocalDate()));
+        return java.util.stream.IntStream.rangeClosed(1, month.lengthOfMonth())
+            .mapToObj(day -> buildPeriodSummary(
+                month.atDay(day).toString(),
+                String.valueOf(day),
+                groupedTransactions.getOrDefault(month.atDay(day), List.of())
+            ))
+            .toList();
+    }
+
+    private List<TransactionAnalysisPeriodSummaryResponse> buildYearPeriodSummaries(int year, List<TransactionResponse> transactions) {
+        Map<YearMonth, List<TransactionResponse>> groupedTransactions = transactions.stream()
+            .collect(Collectors.groupingBy(transaction -> YearMonth.from(transaction.getOccurredAt())));
+        return java.util.stream.IntStream.rangeClosed(1, 12)
+            .mapToObj(month -> {
+                YearMonth currentMonth = YearMonth.of(year, month);
+                return buildPeriodSummary(currentMonth.toString(), month + "月", groupedTransactions.getOrDefault(currentMonth, List.of()));
+            })
+            .toList();
+    }
+
+    private TransactionAnalysisPeriodSummaryResponse buildPeriodSummary(
+        String key,
+        String label,
+        List<TransactionResponse> transactions
+    ) {
+        List<TransactionResponse> sortedTransactions = transactions.stream()
+            .sorted(transactionComparator())
+            .toList();
+        BigDecimal income = sumAmounts(sortedTransactions, TYPE_INCOME);
+        BigDecimal expense = sumAmounts(sortedTransactions, TYPE_EXPENSE);
+
+        TransactionAnalysisPeriodSummaryResponse response = new TransactionAnalysisPeriodSummaryResponse();
+        response.setKey(key);
+        response.setLabel(label);
+        response.setIncome(income);
+        response.setExpense(expense);
+        response.setSurplus(income.subtract(expense).setScale(2, RoundingMode.HALF_UP));
+        response.setTransactionCount(sortedTransactions.size());
+        response.setTransactions(sortedTransactions);
+        return response;
+    }
+
+    private BigDecimal sumAmounts(List<TransactionResponse> transactions, String type) {
+        return transactions.stream()
+            .filter(transaction -> type.equals(transaction.getType()))
+            .map(this::safeAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal safeAmount(TransactionResponse transaction) {
+        return transaction.getAmount() == null ? BigDecimal.ZERO : transaction.getAmount();
+    }
+
+    private String defaultCategoryName(TransactionResponse transaction) {
+        if (StringUtils.hasText(transaction.getCategoryName())) {
+            return transaction.getCategoryName();
+        }
+        return TYPE_INCOME.equals(transaction.getType()) ? "收入" : "支出";
+    }
+
+    private String resolveCategoryColor(TransactionResponse transaction) {
+        if (StringUtils.hasText(transaction.getCategoryColor())) {
+            return transaction.getCategoryColor();
+        }
+        if (SOURCE_DEBT_RECORD.equals(transaction.getSourceType())) {
+            return CATEGORY_COLOR_DEBT;
+        }
+        if (SOURCE_HUMAN_RELATION_RECORD.equals(transaction.getSourceType())) {
+            return CATEGORY_COLOR_HUMAN_RELATION;
+        }
+        return TYPE_INCOME.equals(transaction.getType()) ? CATEGORY_COLOR_INCOME : CATEGORY_COLOR_EXPENSE;
+    }
+
+    private Comparator<TransactionResponse> transactionComparator() {
+        return Comparator
+            .comparing(TransactionResponse::getOccurredAt, Comparator.nullsLast(LocalDateTime::compareTo))
+            .reversed()
+            .thenComparing(
+                Comparator.comparing(TransactionResponse::getSourceId, Comparator.nullsLast(Long::compareTo)).reversed()
+            );
+    }
+
+    private static class BreakdownAccumulator {
+
+        private final Long categoryId;
+        private final String categoryName;
+        private final String categoryIcon;
+        private final String categoryColor;
+        private BigDecimal amount = BigDecimal.ZERO;
+        private int transactionCount = 0;
+
+        private BreakdownAccumulator(Long categoryId, String categoryName, String categoryIcon, String categoryColor) {
+            this.categoryId = categoryId;
+            this.categoryName = categoryName;
+            this.categoryIcon = categoryIcon;
+            this.categoryColor = categoryColor;
+        }
     }
 }

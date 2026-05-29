@@ -4,6 +4,16 @@
   padding-bottom: var(--space-20);
 }
 
+.analysis-status,
+.card-empty {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+}
+
+.analysis-status-error {
+  color: var(--color-danger);
+}
+
 .summary-switch {
   min-height: var(--space-56);
   display: grid;
@@ -22,6 +32,7 @@
   gap: var(--space-6);
   border-radius: var(--radius-8);
   color: var(--color-text-muted);
+  cursor: pointer;
 }
 
 .summary-item strong {
@@ -204,13 +215,28 @@
   justify-content: space-between;
 }
 
-.day-detail > header strong {
+.detail-header-title {
   color: var(--color-text-primary);
   font-size: var(--font-size-12);
 }
 
 .day-detail > header span {
-  color: var(--color-success);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.detail-header-total {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.detail-header-total span {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+}
+
+.detail-header-amount {
   font-size: var(--font-size-12);
   font-weight: 600;
 }
@@ -243,7 +269,6 @@
 }
 
 .day-detail-row strong.expense {
-  color: var(--color-success);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
@@ -276,7 +301,6 @@
 }
 
 .year-grid-item span {
-  color: var(--color-success);
   font-size: var(--font-size-12);
   font-weight: 600;
 }

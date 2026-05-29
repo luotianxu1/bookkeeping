@@ -215,9 +215,10 @@ export interface Transaction {
   currencyCode: string
   accountId: number
   accountName?: string | null
-  categoryId: number
+  categoryId?: number | null
   categoryName?: string | null
   categoryIcon?: string | null
+  categoryColor?: string | null
   title: string
   remark?: string | null
   occurredAt: string
@@ -230,6 +231,64 @@ export interface TransactionQuery {
   userId?: number
   type?: TransactionType
   accountId?: number
+}
+
+export type TransactionAnalysisPeriod = 'month' | 'year'
+
+export interface TransactionAnalysisSummary {
+  income: number
+  expense: number
+  surplus: number
+  incomeCount: number
+  expenseCount: number
+  transactionCount: number
+}
+
+export interface TransactionAnalysisCategoryBreakdownItem {
+  categoryId?: number | null
+  categoryName: string
+  categoryIcon?: string | null
+  categoryColor?: string | null
+  amount: number
+  percent: number
+  transactionCount: number
+}
+
+export interface TransactionAnalysisTrendPoint {
+  key: string
+  label: string
+  income: number
+  expense: number
+  surplus: number
+}
+
+export interface TransactionAnalysisPeriodSummary {
+  key: string
+  label: string
+  income: number
+  expense: number
+  surplus: number
+  transactionCount: number
+  transactions: Transaction[]
+}
+
+export interface TransactionAnalysis {
+  userId: number
+  period: TransactionAnalysisPeriod
+  month?: string | null
+  year?: number | null
+  summary: TransactionAnalysisSummary
+  incomeBreakdown: TransactionAnalysisCategoryBreakdownItem[]
+  expenseBreakdown: TransactionAnalysisCategoryBreakdownItem[]
+  trendPoints: TransactionAnalysisTrendPoint[]
+  periodSummaries: TransactionAnalysisPeriodSummary[]
+}
+
+export interface TransactionAnalysisQuery {
+  userId: number
+  period?: TransactionAnalysisPeriod
+  month?: string
+  year?: number
 }
 
 export interface MonthlyBudget {
@@ -757,6 +816,10 @@ export function createTransaction(params: CreateTransactionParams) {
 
 export function getTransactions(params: TransactionQuery = {}) {
   return requestGet<Transaction[]>(financeRequest, '/api/finance/transactions', { params })
+}
+
+export function getTransactionAnalysis(params: TransactionAnalysisQuery) {
+  return requestGet<TransactionAnalysis>(financeRequest, '/api/finance/transactions/analysis', { params })
 }
 
 export function getAccountTransactions(accountId: number, params: Omit<TransactionQuery, 'accountId'> = {}) {

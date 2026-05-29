@@ -1,6 +1,7 @@
 package com.example.finance.controller;
 
 import com.example.common.result.Result;
+import com.example.finance.dto.TransactionAnalysisResponse;
 import com.example.finance.dto.TransactionRequest;
 import com.example.finance.dto.TransactionResponse;
 import com.example.finance.service.TransactionService;
@@ -49,6 +50,17 @@ public class TransactionController {
         @RequestParam(name = "type", required = false) String type
     ) {
         return Result.ok(transactionService.list(userId, type, accountId));
+    }
+
+    @GetMapping("/analysis")
+    @Operation(summary = "查询收支分析")
+    public Result<TransactionAnalysisResponse> getAnalysis(
+        @RequestParam("userId") Long userId,
+        @RequestParam(name = "period", required = false) String period,
+        @RequestParam(name = "month", required = false) String month,
+        @RequestParam(name = "year", required = false) Integer year
+    ) {
+        return Result.ok(transactionService.getAnalysis(userId, period, month, year));
     }
 
     @PostMapping
