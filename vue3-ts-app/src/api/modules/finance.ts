@@ -344,6 +344,59 @@ export interface MonthlyBudgetQuery {
   limit?: number
 }
 
+export type RenewalSubscriptionStatus = 'active' | 'paused' | 'cancelled'
+export type RenewalChargeStatus = 'idle' | 'success' | 'failed'
+export type RenewalBillingCycle = 'monthly' | 'quarterly' | 'yearly'
+
+export interface RenewalSubscription {
+  id: number
+  userId: number
+  name: string
+  providerName?: string | null
+  amount: number
+  currencyCode: string
+  fundingAccountId: number
+  fundingAccountName?: string | null
+  billingDay: number
+  billingCycle: RenewalBillingCycle
+  nextBillingDate: string
+  lastChargedAt?: string | null
+  lastTransactionId?: number | null
+  lastChargeStatus: RenewalChargeStatus
+  lastChargeMessage?: string | null
+  status: RenewalSubscriptionStatus
+  remark?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RenewalSubscriptionQuery {
+  userId: number
+  status?: RenewalSubscriptionStatus
+}
+
+export interface RenewalSubscriptionSummary {
+  activeCount: number
+  pausedCount: number
+  dueThisMonthCount: number
+  monthlyAmount: number
+  dueThisMonthAmount: number
+}
+
+export interface SaveRenewalSubscriptionParams {
+  userId: number
+  name: string
+  providerName?: string | null
+  amount: number
+  currencyCode?: string
+  fundingAccountId: number
+  billingDay: number
+  billingCycle: RenewalBillingCycle
+  nextBillingDate?: string
+  status?: Extract<RenewalSubscriptionStatus, 'active' | 'paused'>
+  remark?: string | null
+}
+
 export interface CreateAccountParams {
   userId: number
   accountTypeId: number
@@ -1158,6 +1211,54 @@ export function updateMonthlyBudget(id: number, params: SaveMonthlyBudgetParams)
 
 export function deleteMonthlyBudget(id: number, userId: number) {
   return requestDelete<void>(financeRequest, `/api/finance/monthly-budgets/${id}`, {
+    params: { userId },
+  })
+}
+
+export function getRenewalSubscriptions(params: RenewalSubscriptionQuery) {
+  return requestGet<RenewalSubscription[]>(financeRequest, '/api/finance/renewal-subscriptions', { params })
+}
+
+export function getRenewalSubscriptionSummary(userId: number) {
+  return requestGet<RenewalSubscriptionSummary>(financeRequest, '/api/finance/renewal-subscriptions/summary', {
+    params: { userId },
+  })
+}
+
+export function createRenewalSubscription(params: SaveRenewalSubscriptionParams) {
+  return requestPost<RenewalSubscription, SaveRenewalSubscriptionParams>(
+    financeRequest,
+    '/api/finance/renewal-subscriptions',
+    params,
+  )
+}
+
+export function updateRenewalSubscription(id: number, params: SaveRenewalSubscriptionParams) {
+  return requestPut<RenewalSubscription, SaveRenewalSubscriptionParams>(
+    financeRequest,
+    `/api/finance/renewal-subscriptions/${id}`,
+    params,
+  )
+}
+
+export function pauseRenewalSubscription(id: number, userId: number) {
+  return requestPost<RenewalSubscription, undefined>(
+    financeRequest,
+    `/api/finance/renewal-subscriptions/${id}/pause?userId=${userId}`,
+    undefined,
+  )
+}
+
+export function resumeRenewalSubscription(id: number, userId: number) {
+  return requestPost<RenewalSubscription, undefined>(
+    financeRequest,
+    `/api/finance/renewal-subscriptions/${id}/resume?userId=${userId}`,
+    undefined,
+  )
+}
+
+export function deleteRenewalSubscription(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/renewal-subscriptions/${id}`, {
     params: { userId },
   })
 }

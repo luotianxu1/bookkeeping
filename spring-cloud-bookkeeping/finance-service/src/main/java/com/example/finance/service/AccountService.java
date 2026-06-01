@@ -14,6 +14,7 @@ import com.example.finance.entity.InvestmentDividendRecordEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
 import com.example.finance.entity.InvestmentTransactionEntity;
 import com.example.finance.entity.LiabilityRecordEntity;
+import com.example.finance.entity.RenewalSubscriptionEntity;
 import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
@@ -24,6 +25,7 @@ import com.example.finance.mapper.InvestmentDividendRecordMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
 import com.example.finance.mapper.InvestmentTransactionMapper;
 import com.example.finance.mapper.LiabilityRecordMapper;
+import com.example.finance.mapper.RenewalSubscriptionMapper;
 import com.example.finance.mapper.TransactionMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -60,6 +62,7 @@ public class AccountService {
     private static final String DEBT_RECORD_STATUS_ACTIVE = "active";
     private static final String LIABILITY_RECORD_STATUS_ACTIVE = "active";
     private static final String HUMAN_RELATION_RECORD_STATUS_ACTIVE = "active";
+    private static final Set<String> ACTIVE_RENEWAL_SUBSCRIPTION_STATUSES = Set.of("active", "paused");
     private static final Set<String> POSITION_BALANCE_ACCOUNT_TYPES = Set.of("investment", "gold");
 
     private final AccountMapper accountMapper;
@@ -72,6 +75,7 @@ public class AccountService {
     private final InvestmentTransactionMapper investmentTransactionMapper;
     private final InvestmentDividendRecordMapper investmentDividendRecordMapper;
     private final TransactionMapper transactionMapper;
+    private final RenewalSubscriptionMapper renewalSubscriptionMapper;
     private final GoldPriceService goldPriceService;
     private final JdbcTemplate jdbcTemplate;
 
@@ -86,6 +90,7 @@ public class AccountService {
         InvestmentTransactionMapper investmentTransactionMapper,
         InvestmentDividendRecordMapper investmentDividendRecordMapper,
         TransactionMapper transactionMapper,
+        RenewalSubscriptionMapper renewalSubscriptionMapper,
         GoldPriceService goldPriceService,
         JdbcTemplate jdbcTemplate
     ) {
@@ -99,6 +104,7 @@ public class AccountService {
         this.investmentTransactionMapper = investmentTransactionMapper;
         this.investmentDividendRecordMapper = investmentDividendRecordMapper;
         this.transactionMapper = transactionMapper;
+        this.renewalSubscriptionMapper = renewalSubscriptionMapper;
         this.goldPriceService = goldPriceService;
         this.jdbcTemplate = jdbcTemplate;
     }
@@ -223,9 +229,20 @@ public class AccountService {
                     .eq(HumanRelationRecordEntity::getFundingAccountId, id)
                     .eq(HumanRelationRecordEntity::getStatus, HUMAN_RELATION_RECORD_STATUS_ACTIVE))
                 : 0L;
+            Long renewalReferenceCount = renewalSubscriptionMapper.selectCount(new LambdaQueryWrapper<RenewalSubscriptionEntity>()
+                .eq(RenewalSubscriptionEntity::getFundingAccountId, id));
+            Long autoInvestFundingReferenceCount = investmentAutoInvestPlanMapper.selectCount(new LambdaQueryWrapper<InvestmentAutoInvestPlanEntity>()
+                .eq(InvestmentAutoInvestPlanEntity::getFundingAccountId, id));
+            Long investmentFundingReferenceCount = investmentTransactionMapper.selectCount(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+                .eq(InvestmentTransactionEntity::getFundingAccountId, id));
+            long photographyReferenceCount = countPhotographyOrderAccountReferences(id);
             if ((debtReferenceCount != null && debtReferenceCount > 0)
-                || (humanRelationReferenceCount != null && humanRelationReferenceCount > 0)) {
-                throw new IllegalArgumentException("该现金账户已关联往来记录，暂时不能删除");
+                || (humanRelationReferenceCount != null && humanRelationReferenceCount > 0)
+                || (renewalReferenceCount != null && renewalReferenceCount > 0)
+                || (autoInvestFundingReferenceCount != null && autoInvestFundingReferenceCount > 0)
+                || (investmentFundingReferenceCount != null && investmentFundingReferenceCount > 0)
+                || photographyReferenceCount > 0) {
+                throw new IllegalArgumentException("该现金账户已关联投资记录、定投计划、往来记录、续费计划或工具订单，暂时不能删除");
             }
         }
 
@@ -279,6 +296,30 @@ public class AccountService {
             return count != null && count > 0;
         } catch (Exception ignored) {
             return false;
+        }
+    }
+
+    private long countPhotographyOrderAccountReferences(Long accountId) {
+        if (accountId == null) {
+            return 0L;
+        }
+        try {
+            Integer tableCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'photography_orders'",
+                Integer.class
+            );
+            if (tableCount == null || tableCount <= 0) {
+                return 0L;
+            }
+            Long referenceCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM photography_orders WHERE deposit_account_id = ? OR final_account_id = ?",
+                Long.class,
+                accountId,
+                accountId
+            );
+            return referenceCount == null ? 0L : referenceCount;
+        } catch (Exception ignored) {
+            return 0L;
         }
     }
 

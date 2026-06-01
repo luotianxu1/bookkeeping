@@ -15,6 +15,7 @@ import ProfitForecastPage from '@/pages/finance/ProfitForecastPage/index.vue'
 import FundProfitPage from '@/pages/finance/FundProfitPage/index.vue'
 import DividendIncomePage from '@/pages/finance/DividendIncomePage/index.vue'
 import BudgetManagementPage from '@/pages/finance/BudgetManagementPage/index.vue'
+import RenewalManagementPage from '@/pages/finance/RenewalManagementPage/index.vue'
 import ExpenseEntryPage from '@/pages/finance/ExpenseEntryPage/index.vue'
 import CategoryManagementPage from '@/pages/finance/CategoryManagementPage/index.vue'
 import AccountManagementPage from '@/pages/finance/AccountManagementPage/index.vue'
@@ -128,6 +129,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '预算管理',
+    },
+  },
+  {
+    path: '/finance/renewals',
+    name: 'finance-renewals',
+    component: RenewalManagementPage,
+    meta: {
+      section: 'finance',
+      title: '续费管理',
     },
   },
   {
