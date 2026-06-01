@@ -34,7 +34,7 @@ public class DebtAccountService {
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String DIRECTION_PAYABLE = "payable";
     private static final String DIRECTION_RECEIVABLE = "receivable";
-    private static final Set<String> DEBT_ACCOUNT_CODES = Set.of("debt", "loan_receivable", "loan_payable");
+    private static final Set<String> DEBT_ACCOUNT_CODES = Set.of("debt");
     private static final Set<String> DEBT_DIRECTIONS = Set.of(DIRECTION_PAYABLE, DIRECTION_RECEIVABLE);
 
     private final AccountMapper accountMapper;
@@ -62,7 +62,6 @@ public class DebtAccountService {
 
         BigDecimal payableTotal = sumByDirection(records, DIRECTION_PAYABLE);
         BigDecimal receivableTotal = sumByDirection(records, DIRECTION_RECEIVABLE);
-
         DebtAccountSummaryResponse response = new DebtAccountSummaryResponse();
         response.setNetAmount(receivableTotal.subtract(payableTotal).setScale(2, RoundingMode.HALF_UP));
         response.setPayableTotal(payableTotal);

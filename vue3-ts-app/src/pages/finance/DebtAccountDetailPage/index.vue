@@ -139,7 +139,7 @@ async function loadDetail() {
       return
     }
 
-    if (!['debt', 'loan_receivable', 'loan_payable'].includes(accountDetail.accountTypeCode ?? '')) {
+    if (accountDetail.accountTypeCode !== 'debt') {
       pageError.value = '当前账户不是债务账户'
       return
     }
@@ -439,11 +439,11 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
         <div class="debt-detail-metrics">
           <div class="debt-detail-metric">
-            <span>借入笔数</span>
+            <span>待还记录</span>
             <strong>{{ payableCount }} 笔</strong>
           </div>
           <div class="debt-detail-metric">
-            <span>借出笔数</span>
+            <span>待收记录</span>
             <strong>{{ receivableCount }} 笔</strong>
           </div>
           <div class="debt-detail-metric">
@@ -454,6 +454,14 @@ function showFeedback(message: string, type: 'success' | 'error') {
       </section>
 
       <section class="debt-record-history" aria-label="债务记录">
+        <div class="debt-record-history-head">
+          <div class="debt-record-history-title">
+            <strong>往来记录</strong>
+            <span>查看当前联系人债务往来</span>
+          </div>
+          <span class="debt-record-history-badge">{{ records.length }} 条</span>
+        </div>
+
         <div class="debt-record-history-list">
           <p v-if="records.length === 0" class="debt-record-empty">
             暂无债务记录
@@ -467,17 +475,17 @@ function showFeedback(message: string, type: 'success' | 'error') {
           >
             <div class="debt-record-card-main">
               <div class="debt-record-card-top">
-                <span :class="['debt-record-chip', record.direction === 'receivable' ? 'is-receivable' : 'is-payable']">
+                <span class="debt-record-chip" :class="{ 'is-payable': record.direction === 'payable' }">
                   {{ formatRecordDirectionLabel(record.direction) }}
                 </span>
                 <span class="debt-record-date">{{ formatDate(record.occurredAt) }}</span>
               </div>
               <p class="debt-record-funding-account">现金账户：{{ formatFundingAccountName(record) }}</p>
-              <p class="debt-record-remark">{{ record.remark || '未填写备注' }}</p>
+              <p class="debt-record-remark">{{ record.remark || '未填写债务说明' }}</p>
             </div>
 
             <div class="debt-record-card-side">
-              <strong :class="['debt-record-amount', record.direction === 'receivable' ? 'is-positive' : 'is-negative']">
+              <strong class="debt-record-amount" :class="{ 'is-negative': record.direction === 'payable' }">
                 {{ formatRecordAmount(record) }}
               </strong>
               <div class="debt-record-actions">
@@ -505,8 +513,8 @@ function showFeedback(message: string, type: 'success' | 'error') {
       :title="recordModalTitle"
     >
       <div class="debt-record-form">
+        <CommonSelect v-model="recordDirection" label="往来方向" :options="DIRECTION_OPTIONS" />
         <CommonSelect v-model="recordFundingAccountId" label="现金账户" :options="fundingAccountOptions" />
-        <CommonSelect v-model="recordDirection" label="债务方向" :options="DIRECTION_OPTIONS" />
         <CommonInput
           v-model="recordAmount"
           label="债务金额"
@@ -519,7 +527,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
           label="发生时间"
           input-type="datetime-local"
         />
-        <CommonInput v-model="recordRemark" label="备注" placeholder="输入借款原因、约定时间等" />
+        <CommonInput v-model="recordRemark" label="备注" placeholder="输入借款原因、往来说明等" />
         <p v-if="recordFormError" class="debt-record-form-error">
           {{ recordFormError }}
         </p>

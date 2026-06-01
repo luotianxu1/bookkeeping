@@ -39,8 +39,15 @@ export interface DebtAccountSummary {
   recordCount: number
 }
 
+export interface LiabilityAccountSummary {
+  totalAmount: number
+  accountCount: number
+  recordCount: number
+}
+
 export type DebtDirection = 'payable' | 'receivable'
 export type HumanRelationDirection = 'outgoing' | 'incoming'
+export type LiabilityRepaymentStatus = 'pending' | 'paid'
 
 export interface HumanRelationAccountSummary {
   netAmount: number
@@ -60,6 +67,25 @@ export interface DebtRecord {
   fundingAccountName?: string | null
   direction: DebtDirection
   amount: number
+  currencyCode: string
+  remark?: string | null
+  occurredAt: string
+  status: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LiabilityRecord {
+  id: number
+  userId: number
+  accountId: number
+  accountName?: string | null
+  amount: number
+  installmentTotalPeriods?: number | null
+  installmentCurrentPeriod?: number | null
+  repaymentStatus: LiabilityRepaymentStatus
+  repaymentType?: 'monthly' | 'prepayment'
+  paidAt?: string | null
   currencyCode: string
   remark?: string | null
   occurredAt: string
@@ -98,6 +124,13 @@ export interface Account {
   color?: string | null
   currencyCode: string
   currentBalance: number
+  loanTotalAmount?: number | null
+  loanInterestRate?: number | null
+  loanInterestAmount?: number | null
+  loanTotalPeriods?: number | null
+  loanRepaymentDay?: number | null
+  loanStartDate?: string | null
+  loanSettledAt?: string | null
   includeInNetWorth: boolean
   sortOrder: number
   status: string
@@ -320,6 +353,12 @@ export interface CreateAccountParams {
   color?: string | null
   currencyCode?: string
   currentBalance?: number
+  loanTotalAmount?: number | null
+  loanInterestRate?: number | null
+  loanInterestAmount?: number | null
+  loanTotalPeriods?: number | null
+  loanRepaymentDay?: number | null
+  loanStartDate?: string | null
   includeInNetWorth: boolean
   sortOrder?: number
   status?: string
@@ -340,6 +379,33 @@ export interface SaveDebtRecordParams {
   currencyCode?: string
   remark?: string | null
   occurredAt?: string
+}
+
+export interface LiabilityRecordQuery {
+  userId: number
+  accountId?: number
+}
+
+export interface SaveLiabilityRecordParams {
+  userId: number
+  accountId: number
+  amount?: number
+  installmentTotalPeriods?: number | null
+  installmentCurrentPeriod?: number | null
+  currencyCode?: string
+  remark?: string | null
+  occurredAt?: string
+}
+
+export interface RepayLiabilityRecordParams {
+  userId: number
+  paidAt?: string
+}
+
+export interface PrepayLiabilityAccountParams {
+  userId: number
+  paidAt?: string
+  remark?: string | null
 }
 
 export interface HumanRelationRecordQuery {
@@ -928,6 +994,57 @@ export function updateDebtRecord(id: number, params: SaveDebtRecordParams) {
 
 export function deleteDebtRecord(id: number, userId: number) {
   return requestDelete<void>(financeRequest, `/api/finance/debt-accounts/records/${id}`, {
+    params: { userId },
+  })
+}
+
+export function getLiabilityAccountSummary(userId: number, accountId?: number) {
+  return requestGet<LiabilityAccountSummary>(financeRequest, '/api/finance/liability-accounts/summary', {
+    params: {
+      userId,
+      accountId,
+    },
+  })
+}
+
+export function getLiabilityRecords(params: LiabilityRecordQuery) {
+  return requestGet<LiabilityRecord[]>(financeRequest, '/api/finance/liability-accounts/records', { params })
+}
+
+export function createLiabilityRecord(params: SaveLiabilityRecordParams) {
+  return requestPost<LiabilityRecord, SaveLiabilityRecordParams>(
+    financeRequest,
+    '/api/finance/liability-accounts/records',
+    params,
+  )
+}
+
+export function updateLiabilityRecord(id: number, params: SaveLiabilityRecordParams) {
+  return requestPut<LiabilityRecord, SaveLiabilityRecordParams>(
+    financeRequest,
+    `/api/finance/liability-accounts/records/${id}`,
+    params,
+  )
+}
+
+export function repayLiabilityRecord(id: number, params: RepayLiabilityRecordParams) {
+  return requestPost<LiabilityRecord, RepayLiabilityRecordParams>(
+    financeRequest,
+    `/api/finance/liability-accounts/records/${id}/repay`,
+    params,
+  )
+}
+
+export function prepayLiabilityAccount(accountId: number, params: PrepayLiabilityAccountParams) {
+  return requestPost<void, PrepayLiabilityAccountParams>(
+    financeRequest,
+    `/api/finance/liability-accounts/${accountId}/prepay`,
+    params,
+  )
+}
+
+export function deleteLiabilityRecord(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/liability-accounts/records/${id}`, {
     params: { userId },
   })
 }

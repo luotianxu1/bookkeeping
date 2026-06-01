@@ -270,27 +270,15 @@
   color: #b45309;
 }
 
-.debt-account-card-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.debt-account-card-metrics span {
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 10px;
-  border-radius: var(--radius-12);
-  background: var(--color-bg-soft);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-12);
-  font-weight: 600;
-}
-
 .debt-account-card-arrow {
   color: var(--color-text-subtle);
   font-size: var(--font-size-16);
+  font-weight: 700;
+}
+
+.debt-account-card-link {
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
   font-weight: 700;
 }
 

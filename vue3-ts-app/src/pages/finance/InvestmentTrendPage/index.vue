@@ -58,13 +58,35 @@ const backLabel = computed(() => (
 ))
 
 const totalAssets = computed(() => formatCurrency(trend.value?.totalAssets))
-const periodChangeAmount = computed(() => Number(trend.value?.periodChangeAmount ?? 0))
-const periodChangeRateText = computed(() => {
-  const startValue = Number(trend.value?.trendPoints?.[0]?.value ?? 0)
-  if (startValue <= 0) {
+const latestTrendPoints = computed(() => trend.value?.trendPoints ?? [])
+const previousPointLabel = computed(() => {
+  const range = (trend.value?.range ?? rangeMap[activeRange.value]) as AssetTrendRange | string
+  if (range === '7d' || range === '30d') return '较上一天'
+  if (range === 'ytd') return '较上月'
+  if (range === 'all') return '较上年'
+  return '较上期'
+})
+const previousPointAmount = computed<number | null>(() => {
+  const points = latestTrendPoints.value
+  if (points.length < 2) {
+    return null
+  }
+  const currentValue = Number(points[points.length - 1]?.value ?? 0)
+  const previousValue = Number(points[points.length - 2]?.value ?? 0)
+  return currentValue - previousValue
+})
+const previousPointRateText = computed(() => {
+  const points = latestTrendPoints.value
+  if (points.length < 2) {
     return '--'
   }
-  return `${Number(trend.value?.periodChangeRate ?? 0).toLocaleString('zh-CN', {
+  const currentValue = Number(points[points.length - 1]?.value ?? 0)
+  const previousValue = Number(points[points.length - 2]?.value ?? 0)
+  if (previousValue <= 0) {
+    return '--'
+  }
+  const rate = ((currentValue - previousValue) / previousValue) * 100
+  return `${rate.toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}%`
@@ -101,7 +123,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
 
   return {
     animation: false,
-    grid: { left: 8, right: 8, top: 16, bottom: 8, containLabel: true },
+    grid: { left: 18, right: 18, top: 16, bottom: 8, containLabel: true },
       tooltip: {
         trigger: 'axis',
         backgroundColor: isDark.value ? '#0F172A' : '#FFFFFF',
@@ -119,6 +141,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
         color: axisText,
         fontSize: 11,
         interval: points.length > 12 ? 'auto' : 0,
+        hideOverlap: false,
       },
     },
     yAxis: {
@@ -264,7 +287,7 @@ function getAccountTypeColors(value?: string | null) {
   if (value === 'other_asset') {
     return { fill: '#2563EB', track: '#EFF6FF' }
   }
-  if (value === 'debt' || value === 'other_liability' || value === 'credit_card') {
+  if (value === 'debt' || value === 'liability' || value === 'other_liability' || value === 'credit_card') {
     return { fill: '#7C3AED', track: '#F5F3FF' }
   }
   if (value === 'human_relation') {
@@ -354,9 +377,15 @@ onBeforeUnmount(() => {
             <span>{{ syncText }}</span>
           </div>
           <div class="investment-trend-summary-side">
-            <span>较区间起点</span>
-            <AmountText tag="strong" class="summary-profit" :value="periodChangeAmount" show-sign show-unit />
-            <AmountText tag="span" class="summary-rate" :value="periodChangeRateText" show-sign />
+            <span>{{ previousPointLabel }}</span>
+            <AmountText
+              tag="strong"
+              class="summary-profit"
+              :value="previousPointAmount ?? '--'"
+              show-sign
+              show-unit
+            />
+            <AmountText tag="span" class="summary-rate" :value="previousPointRateText" show-sign />
           </div>
         </div>
       </section>

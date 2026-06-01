@@ -127,9 +127,51 @@
   font-weight: 700;
 }
 
+.debt-detail-summary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
 .debt-record-history {
   display: grid;
   gap: var(--space-6);
+}
+
+.debt-record-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.debt-record-history-title {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.debt-record-history-title strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-16);
+  font-weight: 700;
+}
+
+.debt-record-history-title span,
+.debt-record-history-badge {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.debt-record-history-badge {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--color-white);
+  border: 1px solid var(--color-border-soft);
 }
 
 .debt-record-date {
@@ -191,11 +233,6 @@
   font-weight: 700;
 }
 
-.debt-record-chip.is-receivable {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
 .debt-record-chip.is-payable {
   background: #fef3c7;
   color: #b45309;
@@ -224,10 +261,6 @@
   font-size: var(--font-size-18);
   line-height: 1;
   font-weight: 700;
-}
-
-.debt-record-amount.is-positive {
-  color: var(--color-success);
 }
 
 .debt-record-amount.is-negative {
@@ -259,6 +292,13 @@
 .debt-record-form {
   display: grid;
   gap: var(--space-8);
+}
+
+.debt-record-form-hint {
+  margin: -2px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  line-height: 1.5;
 }
 
 .debt-record-modal-actions {

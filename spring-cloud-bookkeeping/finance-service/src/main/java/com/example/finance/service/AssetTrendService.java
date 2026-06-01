@@ -13,6 +13,7 @@ import com.example.finance.entity.HumanRelationRecordEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
 import com.example.finance.entity.InvestmentPriceQuoteEntity;
 import com.example.finance.entity.InvestmentTransactionEntity;
+import com.example.finance.entity.LiabilityRecordEntity;
 import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
@@ -21,6 +22,7 @@ import com.example.finance.mapper.HumanRelationRecordMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
 import com.example.finance.mapper.InvestmentPriceQuoteMapper;
 import com.example.finance.mapper.InvestmentTransactionMapper;
+import com.example.finance.mapper.LiabilityRecordMapper;
 import com.example.finance.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -70,6 +72,7 @@ public class AssetTrendService {
         String accountTypeCode,
         String accountTypeName,
         String accountCategory,
+        String balanceDirection,
         BigDecimal currentBalance,
         LocalDate createdDate,
         LocalDateTime updatedAt
@@ -84,6 +87,7 @@ public class AssetTrendService {
         Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId,
         Map<Long, List<DebtRecordEntity>> debtRecordsByAccountId,
         Map<Long, List<DebtRecordEntity>> debtFundingRecordsByAccountId,
+        Map<Long, List<LiabilityRecordEntity>> liabilityRecordsByAccountId,
         Map<Long, List<HumanRelationRecordEntity>> humanRelationRecordsByAccountId,
         Map<Long, List<HumanRelationRecordEntity>> humanRelationFundingRecordsByAccountId,
         LocalDate earliestActivityDate,
@@ -101,9 +105,12 @@ public class AssetTrendService {
     private static final String TRANSACTION_TYPE_TRANSFER = "transfer";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
     private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
+    private static final String LIABILITY_REPAYMENT_STATUS_PENDING = "pending";
+    private static final String LIABILITY_REPAYMENT_STATUS_PAID = "paid";
     private static final String SETTLEMENT_STATUS_PENDING = "pending";
     private static final Set<String> POSITION_ACCOUNT_TYPE_CODES = Set.of("investment", "gold");
-    private static final Set<String> DEBT_ACCOUNT_TYPE_CODES = Set.of("debt", "loan_receivable", "loan_payable");
+    private static final Set<String> DEBT_ACCOUNT_TYPE_CODES = Set.of("debt");
+    private static final String LIABILITY_ACCOUNT_TYPE_CODE = "liability";
     private static final Set<String> LIABILITY_ACCOUNT_CATEGORIES = Set.of("liability");
 
     private final AccountMapper accountMapper;
@@ -113,6 +120,7 @@ public class AssetTrendService {
     private final InvestmentTransactionMapper investmentTransactionMapper;
     private final InvestmentPriceQuoteMapper investmentPriceQuoteMapper;
     private final DebtRecordMapper debtRecordMapper;
+    private final LiabilityRecordMapper liabilityRecordMapper;
     private final HumanRelationRecordMapper humanRelationRecordMapper;
     private final AccountService accountService;
 
@@ -124,6 +132,7 @@ public class AssetTrendService {
         InvestmentTransactionMapper investmentTransactionMapper,
         InvestmentPriceQuoteMapper investmentPriceQuoteMapper,
         DebtRecordMapper debtRecordMapper,
+        LiabilityRecordMapper liabilityRecordMapper,
         HumanRelationRecordMapper humanRelationRecordMapper,
         AccountService accountService
     ) {
@@ -134,6 +143,7 @@ public class AssetTrendService {
         this.investmentTransactionMapper = investmentTransactionMapper;
         this.investmentPriceQuoteMapper = investmentPriceQuoteMapper;
         this.debtRecordMapper = debtRecordMapper;
+        this.liabilityRecordMapper = liabilityRecordMapper;
         this.humanRelationRecordMapper = humanRelationRecordMapper;
         this.accountService = accountService;
     }
@@ -213,8 +223,13 @@ public class AssetTrendService {
                     response == null ? accountType == null ? null : accountType.getCode() : response.getAccountTypeCode(),
                     response == null ? accountType == null ? null : accountType.getName() : response.getAccountTypeName(),
                     accountType == null ? null : accountType.getCategory(),
-                    response == null ? defaultZero(entity.getCurrentBalance()).setScale(2, RoundingMode.HALF_UP)
-                        : defaultZero(response.getCurrentBalance()).setScale(2, RoundingMode.HALF_UP),
+                    accountType == null ? null : accountType.getBalanceDirection(),
+                    normalizeAccountBalance(
+                        response == null ? accountType == null ? null : accountType.getCode() : response.getAccountTypeCode(),
+                        accountType == null ? null : accountType.getBalanceDirection(),
+                        response == null ? defaultZero(entity.getCurrentBalance()).setScale(2, RoundingMode.HALF_UP)
+                            : defaultZero(response.getCurrentBalance()).setScale(2, RoundingMode.HALF_UP)
+                    ),
                     entity.getCreatedAt() == null ? null : entity.getCreatedAt().toLocalDate(),
                     latestTime(entity.getUpdatedAt(), response == null ? null : response.getUpdatedAt())
                 );
@@ -225,6 +240,7 @@ public class AssetTrendService {
     private TrendContext buildTrendContext(Long userId, List<TrendAccount> accounts) {
         if (accounts.isEmpty()) {
             return new TrendContext(
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
@@ -335,6 +351,19 @@ public class AssetTrendService {
             }
         }
 
+        Map<Long, List<LiabilityRecordEntity>> liabilityRecordsByAccountId = new HashMap<>();
+        for (LiabilityRecordEntity record : liabilityRecordMapper.selectList(new LambdaQueryWrapper<LiabilityRecordEntity>()
+            .eq(LiabilityRecordEntity::getUserId, userId)
+            .eq(LiabilityRecordEntity::getStatus, DEFAULT_ACCOUNT_STATUS)
+            .orderByAsc(LiabilityRecordEntity::getOccurredAt)
+            .orderByAsc(LiabilityRecordEntity::getId))) {
+            if (record.getAccountId() != null && accountIds.contains(record.getAccountId())) {
+                liabilityRecordsByAccountId.computeIfAbsent(record.getAccountId(), key -> new ArrayList<>()).add(record);
+                earliestActivityDate = earliestDate(earliestActivityDate, record.getOccurredAt() == null ? null : record.getOccurredAt().toLocalDate());
+                lastSyncedAt = latestTime(lastSyncedAt, record.getUpdatedAt());
+            }
+        }
+
         Map<Long, List<HumanRelationRecordEntity>> humanRelationRecordsByAccountId = new HashMap<>();
         Map<Long, List<HumanRelationRecordEntity>> humanRelationFundingRecordsByAccountId = new HashMap<>();
         for (HumanRelationRecordEntity record : humanRelationRecordMapper.selectList(new LambdaQueryWrapper<HumanRelationRecordEntity>()
@@ -362,6 +391,7 @@ public class AssetTrendService {
             priceHistoryByProductId,
             debtRecordsByAccountId,
             debtFundingRecordsByAccountId,
+            liabilityRecordsByAccountId,
             humanRelationRecordsByAccountId,
             humanRelationFundingRecordsByAccountId,
             earliestActivityDate,
@@ -556,15 +586,18 @@ public class AssetTrendService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         if (POSITION_ACCOUNT_TYPE_CODES.contains(account.accountTypeCode())) {
-            return resolvePositionAccountBalanceAtDate(account.id(), context, targetDate);
+            return normalizeAccountBalance(account.accountTypeCode(), account.balanceDirection(), resolvePositionAccountBalanceAtDate(account.id(), context, targetDate));
         }
         if (DEBT_ACCOUNT_TYPE_CODES.contains(account.accountTypeCode())) {
             return resolveDebtAccountBalanceAtDate(account.id(), context, targetDate);
         }
+        if (LIABILITY_ACCOUNT_TYPE_CODE.equals(account.accountTypeCode())) {
+            return normalizeAccountBalance(account.accountTypeCode(), account.balanceDirection(), resolveLiabilityBalanceAtDate(account.id(), context, targetDate));
+        }
         if ("human_relation".equals(account.accountTypeCode())) {
             return resolveHumanRelationBalanceAtDate(account.id(), context, targetDate);
         }
-        return resolveLedgerAccountBalanceAtDate(account, context, targetDate);
+        return normalizeAccountBalance(account.accountTypeCode(), account.balanceDirection(), resolveLedgerAccountBalanceAtDate(account, context, targetDate));
     }
 
     private BigDecimal resolveLedgerAccountBalanceAtDate(TrendAccount account, TrendContext context, LocalDate targetDate) {
@@ -636,6 +669,27 @@ public class AssetTrendService {
         return receivable.subtract(payable).setScale(2, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal resolveLiabilityBalanceAtDate(Long accountId, TrendContext context, LocalDate targetDate) {
+        BigDecimal total = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        for (LiabilityRecordEntity record : context.liabilityRecordsByAccountId().getOrDefault(accountId, List.of())) {
+            LocalDate occurredDate = record.getOccurredAt() == null ? null : record.getOccurredAt().toLocalDate();
+            if (occurredDate == null || occurredDate.isAfter(targetDate)) {
+                continue;
+            }
+            String repaymentStatus = record.getRepaymentStatus();
+            if (LIABILITY_REPAYMENT_STATUS_PAID.equals(repaymentStatus)) {
+                LocalDate paidDate = record.getPaidAt() == null ? null : record.getPaidAt().toLocalDate();
+                if (paidDate == null || !paidDate.isAfter(targetDate)) {
+                    continue;
+                }
+            } else if (StringUtils.hasText(repaymentStatus) && !LIABILITY_REPAYMENT_STATUS_PENDING.equals(repaymentStatus)) {
+                continue;
+            }
+            total = total.add(defaultZero(record.getAmount())).setScale(2, RoundingMode.HALF_UP);
+        }
+        return total;
+    }
+
     private BigDecimal resolveHumanRelationBalanceAtDate(Long accountId, TrendContext context, LocalDate targetDate) {
         BigDecimal outgoing = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         BigDecimal incoming = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -651,6 +705,17 @@ public class AssetTrendService {
             }
         }
         return outgoing.subtract(incoming).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal normalizeAccountBalance(String accountTypeCode, String balanceDirection, BigDecimal balance) {
+        BigDecimal normalized = defaultZero(balance).setScale(2, RoundingMode.HALF_UP);
+        if (DEBT_ACCOUNT_TYPE_CODES.contains(accountTypeCode) || "human_relation".equals(accountTypeCode)) {
+            return normalized;
+        }
+        if ("credit".equals(balanceDirection)) {
+            return normalized.negate().setScale(2, RoundingMode.HALF_UP);
+        }
+        return normalized;
     }
 
     private List<AssetTrendAllocationResponse> buildAllocations(List<TrendAccount> accounts) {

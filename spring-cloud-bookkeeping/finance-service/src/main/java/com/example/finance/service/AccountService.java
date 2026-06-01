@@ -13,6 +13,7 @@ import com.example.finance.entity.InvestmentAutoInvestPlanEntity;
 import com.example.finance.entity.InvestmentDividendRecordEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
 import com.example.finance.entity.InvestmentTransactionEntity;
+import com.example.finance.entity.LiabilityRecordEntity;
 import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
@@ -22,6 +23,7 @@ import com.example.finance.mapper.InvestmentAutoInvestPlanMapper;
 import com.example.finance.mapper.InvestmentDividendRecordMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
 import com.example.finance.mapper.InvestmentTransactionMapper;
+import com.example.finance.mapper.LiabilityRecordMapper;
 import com.example.finance.mapper.TransactionMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -48,17 +51,21 @@ public class AccountService {
     private static final String GOLD_ACCOUNT_TYPE_CODE = "gold";
     private static final String INVESTMENT_ACCOUNT_TYPE_CODE = "investment";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
+    private static final String LIABILITY_ACCOUNT_TYPE_CODE = "liability";
+    private static final String LIABILITY_REPAYMENT_STATUS_PENDING = "pending";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
     private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
-    private static final Set<String> DEBT_ACCOUNT_TYPE_CODES = Set.of("debt", "loan_receivable", "loan_payable");
-    private static final Set<String> CONTACT_LINKED_ACCOUNT_TYPE_CODES = Set.of("debt", "loan_receivable", "loan_payable", "human_relation");
+    private static final Set<String> DEBT_ACCOUNT_TYPE_CODES = Set.of("debt");
+    private static final Set<String> CONTACT_LINKED_ACCOUNT_TYPE_CODES = Set.of("debt", "human_relation");
     private static final String DEBT_RECORD_STATUS_ACTIVE = "active";
+    private static final String LIABILITY_RECORD_STATUS_ACTIVE = "active";
     private static final String HUMAN_RELATION_RECORD_STATUS_ACTIVE = "active";
     private static final Set<String> POSITION_BALANCE_ACCOUNT_TYPES = Set.of("investment", "gold");
 
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
     private final DebtRecordMapper debtRecordMapper;
+    private final LiabilityRecordMapper liabilityRecordMapper;
     private final HumanRelationRecordMapper humanRelationRecordMapper;
     private final InvestmentAutoInvestPlanMapper investmentAutoInvestPlanMapper;
     private final InvestmentPositionMapper investmentPositionMapper;
@@ -72,6 +79,7 @@ public class AccountService {
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         DebtRecordMapper debtRecordMapper,
+        LiabilityRecordMapper liabilityRecordMapper,
         HumanRelationRecordMapper humanRelationRecordMapper,
         InvestmentAutoInvestPlanMapper investmentAutoInvestPlanMapper,
         InvestmentPositionMapper investmentPositionMapper,
@@ -84,6 +92,7 @@ public class AccountService {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.debtRecordMapper = debtRecordMapper;
+        this.liabilityRecordMapper = liabilityRecordMapper;
         this.humanRelationRecordMapper = humanRelationRecordMapper;
         this.investmentAutoInvestPlanMapper = investmentAutoInvestPlanMapper;
         this.investmentPositionMapper = investmentPositionMapper;
@@ -122,9 +131,17 @@ public class AccountService {
             .orderByAsc(AccountEntity::getSortOrder)
             .orderByAsc(AccountEntity::getId);
 
-        List<AccountResponse> accounts = toResponses(accountMapper.selectList(wrapper));
+        List<AccountEntity> accountEntities = accountMapper.selectList(wrapper);
+        List<AccountResponse> accounts = toResponses(accountEntities);
+        Map<Long, AccountTypeEntity> accountTypes = accountEntities.isEmpty()
+            ? Collections.emptyMap()
+            : accountTypeMapper.selectBatchIds(accountEntities.stream()
+                    .map(AccountEntity::getAccountTypeId)
+                    .collect(Collectors.toSet()))
+                .stream()
+                .collect(Collectors.toMap(AccountTypeEntity::getId, Function.identity()));
         BigDecimal totalAssets = accounts.stream()
-            .map(AccountResponse::getCurrentBalance)
+            .map(account -> resolveOverviewBalance(account, accountTypes.get(account.getAccountTypeId())))
             .filter(balance -> balance != null)
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
@@ -132,6 +149,20 @@ public class AccountService {
         FinanceOverviewResponse response = new FinanceOverviewResponse();
         response.setTotalAssets(totalAssets);
         return response;
+    }
+
+    private BigDecimal resolveOverviewBalance(AccountResponse account, AccountTypeEntity accountType) {
+        BigDecimal currentBalance = account == null || account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
+        if (accountType == null) {
+            return currentBalance;
+        }
+        if (CONTACT_LINKED_ACCOUNT_TYPE_CODES.contains(accountType.getCode())) {
+            return currentBalance;
+        }
+        if ("credit".equals(accountType.getBalanceDirection())) {
+            return currentBalance.negate().setScale(2, RoundingMode.HALF_UP);
+        }
+        return currentBalance.setScale(2, RoundingMode.HALF_UP);
     }
 
     public AccountResponse create(AccountRequest request) {
@@ -216,6 +247,10 @@ public class AccountService {
             .eq(InvestmentPositionEntity::getAccountId, id));
         debtRecordMapper.delete(new LambdaQueryWrapper<DebtRecordEntity>()
             .eq(DebtRecordEntity::getAccountId, id));
+        if (isLiabilityRecordsTableAvailable()) {
+            liabilityRecordMapper.delete(new LambdaQueryWrapper<LiabilityRecordEntity>()
+                .eq(LiabilityRecordEntity::getAccountId, id));
+        }
         if (isHumanRelationRecordsTableAvailable()) {
             humanRelationRecordMapper.delete(new LambdaQueryWrapper<HumanRelationRecordEntity>()
                 .eq(HumanRelationRecordEntity::getAccountId, id));
@@ -227,6 +262,18 @@ public class AccountService {
         try {
             Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'human_relation_records'",
+                Integer.class
+            );
+            return count != null && count > 0;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean isLiabilityRecordsTableAvailable() {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'liability_records'",
                 Integer.class
             );
             return count != null && count > 0;
@@ -281,6 +328,7 @@ public class AccountService {
     }
 
     private void fillEntity(AccountEntity entity, AccountRequest request, AccountTypeEntity accountType) {
+        LiabilityPlan liabilityPlan = normalizeLiabilityPlan(accountType, request);
         entity.setUserId(request.getUserId());
         entity.setAccountTypeId(request.getAccountTypeId());
         entity.setContactId(request.getContactId());
@@ -291,6 +339,13 @@ public class AccountService {
         entity.setCurrentBalance(accountType != null && CONTACT_LINKED_ACCOUNT_TYPE_CODES.contains(accountType.getCode())
             ? BigDecimal.ZERO
             : request.getCurrentBalance() != null ? request.getCurrentBalance() : BigDecimal.ZERO);
+        entity.setLoanTotalAmount(liabilityPlan.totalAmount());
+        entity.setLoanInterestRate(liabilityPlan.interestRate());
+        entity.setLoanInterestAmount(liabilityPlan.interestAmount());
+        entity.setLoanTotalPeriods(liabilityPlan.totalPeriods());
+        entity.setLoanRepaymentDay(liabilityPlan.repaymentDay());
+        entity.setLoanStartDate(liabilityPlan.startDate());
+        entity.setLoanSettledAt(accountType != null && LIABILITY_ACCOUNT_TYPE_CODE.equals(accountType.getCode()) ? entity.getLoanSettledAt() : null);
         entity.setIncludeInNetWorth(request.getIncludeInNetWorth());
         entity.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0);
         entity.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus() : DEFAULT_STATUS);
@@ -333,6 +388,13 @@ public class AccountService {
         response.setColor(entity.getColor());
         response.setCurrencyCode(entity.getCurrencyCode());
         response.setCurrentBalance(resolveCurrentBalance(entity, accountType, balanceContext));
+        response.setLoanTotalAmount(entity.getLoanTotalAmount());
+        response.setLoanInterestRate(entity.getLoanInterestRate());
+        response.setLoanInterestAmount(resolveLoanInterestAmount(entity));
+        response.setLoanTotalPeriods(entity.getLoanTotalPeriods());
+        response.setLoanRepaymentDay(entity.getLoanRepaymentDay());
+        response.setLoanStartDate(entity.getLoanStartDate());
+        response.setLoanSettledAt(entity.getLoanSettledAt());
         response.setIncludeInNetWorth(entity.getIncludeInNetWorth());
         response.setSortOrder(entity.getSortOrder());
         response.setStatus(entity.getStatus());
@@ -354,6 +416,9 @@ public class AccountService {
         }
         if (accountType != null && entity != null && DEBT_ACCOUNT_TYPE_CODES.contains(accountType.getCode())) {
             return resolveDebtBalance(entity.getId());
+        }
+        if (accountType != null && entity != null && LIABILITY_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
+            return resolveLiabilityBalance(entity.getId());
         }
         if (accountType != null && entity != null && "human_relation".equals(accountType.getCode())) {
             return resolveHumanRelationBalance(entity.getId());
@@ -410,6 +475,25 @@ public class AccountService {
         return receivableTotal.subtract(payableTotal).setScale(2, RoundingMode.HALF_UP);
     }
 
+    private BigDecimal resolveLiabilityBalance(Long accountId) {
+        if (!isLiabilityRecordsTableAvailable()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        AccountEntity account = accountMapper.selectById(accountId);
+        List<LiabilityRecordEntity> records = liabilityRecordMapper.selectList(new LambdaQueryWrapper<LiabilityRecordEntity>()
+            .eq(LiabilityRecordEntity::getAccountId, accountId)
+            .eq(LiabilityRecordEntity::getStatus, LIABILITY_RECORD_STATUS_ACTIVE));
+        if (hasLiabilityPlan(account)) {
+            return resolveLiabilityRemainingAmount(account, records);
+        }
+        return records.stream()
+            .filter(record -> LIABILITY_REPAYMENT_STATUS_PENDING.equals(record.getRepaymentStatus()) || !StringUtils.hasText(record.getRepaymentStatus()))
+            .map(LiabilityRecordEntity::getAmount)
+            .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+    }
+
     private BigDecimal resolveHumanRelationBalance(Long accountId) {
         List<HumanRelationRecordEntity> records = humanRelationRecordMapper.selectList(new LambdaQueryWrapper<HumanRelationRecordEntity>()
             .eq(HumanRelationRecordEntity::getAccountId, accountId)
@@ -443,6 +527,95 @@ public class AccountService {
             .findFirst()
             .map(value -> value.setScale(2, RoundingMode.HALF_UP))
             .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+    }
+
+    private LiabilityPlan normalizeLiabilityPlan(AccountTypeEntity accountType, AccountRequest request) {
+        if (accountType == null || !LIABILITY_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
+            return new LiabilityPlan(null, null, null, null, null, null);
+        }
+
+        boolean hasAnyPlanValue = request.getLoanTotalAmount() != null
+            || request.getLoanTotalPeriods() != null
+            || request.getLoanStartDate() != null;
+        if (!hasAnyPlanValue) {
+            throw new IllegalArgumentException("请填写贷款总额、贷款总期数和首期账单日期");
+        }
+        if (request.getLoanTotalAmount() == null) {
+            throw new IllegalArgumentException("请填写贷款总额");
+        }
+        if (request.getLoanTotalAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("贷款总额必须大于0");
+        }
+        BigDecimal interestRate = request.getLoanInterestRate() == null
+            ? BigDecimal.ZERO
+            : request.getLoanInterestRate().setScale(4, RoundingMode.HALF_UP);
+        if (interestRate.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("贷款利率不能小于0");
+        }
+        if (request.getLoanTotalPeriods() == null) {
+            throw new IllegalArgumentException("请填写贷款总期数");
+        }
+        if (request.getLoanTotalPeriods() < 2) {
+            throw new IllegalArgumentException("贷款总期数至少为2");
+        }
+        if (request.getLoanRepaymentDay() == null) {
+            throw new IllegalArgumentException("请填写每月还款日");
+        }
+        if (request.getLoanRepaymentDay() < 1 || request.getLoanRepaymentDay() > 31) {
+            throw new IllegalArgumentException("每月还款日必须在1到31之间");
+        }
+        if (request.getLoanStartDate() == null) {
+            throw new IllegalArgumentException("请填写首期账单日期");
+        }
+
+        return new LiabilityPlan(
+            request.getLoanTotalAmount().setScale(2, RoundingMode.HALF_UP),
+            interestRate,
+            null,
+            request.getLoanTotalPeriods(),
+            request.getLoanRepaymentDay(),
+            request.getLoanStartDate()
+        );
+    }
+
+    private boolean hasLiabilityPlan(AccountEntity account) {
+        return account != null
+            && account.getLoanTotalAmount() != null
+            && account.getLoanTotalPeriods() != null
+            && account.getLoanRepaymentDay() != null
+            && account.getLoanStartDate() != null;
+    }
+
+    private BigDecimal resolveLiabilityRemainingAmount(AccountEntity account, List<LiabilityRecordEntity> records) {
+        if (account == null || account.getLoanSettledAt() != null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal totalRepaymentAmount = account.getLoanTotalAmount()
+            .add(resolveLoanInterestAmount(account));
+        BigDecimal paidAmount = records.stream()
+            .filter(record -> "paid".equals(record.getRepaymentStatus()))
+            .map(LiabilityRecordEntity::getAmount)
+            .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal remaining = totalRepaymentAmount.subtract(paidAmount);
+        return remaining.compareTo(BigDecimal.ZERO) > 0
+            ? remaining.setScale(2, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveLoanInterestAmount(AccountEntity account) {
+        if (account == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        if (account.getLoanInterestRate() != null) {
+            BigDecimal principal = account.getLoanTotalAmount() == null ? BigDecimal.ZERO : account.getLoanTotalAmount();
+            return principal
+                .multiply(account.getLoanInterestRate())
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        }
+        return account.getLoanInterestAmount() == null
+            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+            : account.getLoanInterestAmount().setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal resolveListGoldPrice(List<InvestmentPositionEntity> positions) {
@@ -487,6 +660,40 @@ public class AccountService {
                 BigDecimal payable = payableTotals.getOrDefault(accountId, BigDecimal.ZERO);
                 BigDecimal receivable = receivableTotals.getOrDefault(accountId, BigDecimal.ZERO);
                 accountBalances.put(accountId, receivable.subtract(payable).setScale(2, RoundingMode.HALF_UP));
+            }
+        }
+
+        List<Long> liabilityAccountIds = accountTypeCodes.entrySet().stream()
+            .filter(entry -> LIABILITY_ACCOUNT_TYPE_CODE.equals(entry.getValue()))
+            .map(Map.Entry::getKey)
+            .toList();
+        if (isLiabilityRecordsTableAvailable() && !liabilityAccountIds.isEmpty()) {
+            Map<Long, AccountEntity> liabilityAccountsById = accounts.stream()
+                .filter(account -> liabilityAccountIds.contains(account.getId()))
+                .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
+            List<LiabilityRecordEntity> records = liabilityRecordMapper.selectList(new LambdaQueryWrapper<LiabilityRecordEntity>()
+                .in(LiabilityRecordEntity::getAccountId, liabilityAccountIds)
+                .eq(LiabilityRecordEntity::getStatus, LIABILITY_RECORD_STATUS_ACTIVE));
+            Map<Long, List<LiabilityRecordEntity>> recordsByAccountId = records.stream()
+                .collect(Collectors.groupingBy(LiabilityRecordEntity::getAccountId));
+            for (Long accountId : liabilityAccountIds) {
+                AccountEntity liabilityAccount = liabilityAccountsById.get(accountId);
+                List<LiabilityRecordEntity> accountRecords = recordsByAccountId.getOrDefault(accountId, List.of());
+                if (hasLiabilityPlan(liabilityAccount)) {
+                    accountBalances.put(accountId, resolveLiabilityRemainingAmount(liabilityAccount, accountRecords));
+                    continue;
+                }
+                BigDecimal pendingTotal = accountRecords.stream()
+                    .filter(record -> LIABILITY_REPAYMENT_STATUS_PENDING.equals(record.getRepaymentStatus()) || !StringUtils.hasText(record.getRepaymentStatus()))
+                    .map(LiabilityRecordEntity::getAmount)
+                    .filter(value -> value != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .setScale(2, RoundingMode.HALF_UP);
+                accountBalances.put(accountId, pendingTotal);
+            }
+        } else if (!liabilityAccountIds.isEmpty()) {
+            for (Long accountId : liabilityAccountIds) {
+                accountBalances.put(accountId, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             }
         }
 
@@ -572,5 +779,15 @@ public class AccountService {
     }
 
     private record BalanceContext(Map<Long, BigDecimal> accountBalances) {
+    }
+
+    private record LiabilityPlan(
+        BigDecimal totalAmount,
+        BigDecimal interestRate,
+        BigDecimal interestAmount,
+        Integer totalPeriods,
+        Integer repaymentDay,
+        LocalDate startDate
+    ) {
     }
 }

@@ -223,18 +223,22 @@ function formatDelta(change?: number, changePercent?: number) {
 
 function formatTime(value?: string) {
   if (!value) {
-    return '--:--'
+    return '--'
   }
 
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
-    return '--:--'
+    return '--'
   }
 
-  return date.toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  const second = String(date.getSeconds()).padStart(2, '0')
+
+  return `${year}年${month}月${day}日 ${hour}:${minute}:${second}`
 }
 
 onMounted(async () => {

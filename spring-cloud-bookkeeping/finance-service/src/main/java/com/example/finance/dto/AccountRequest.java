@@ -1,12 +1,15 @@
 package com.example.finance.dto;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 public class AccountRequest {
@@ -34,6 +37,21 @@ public class AccountRequest {
 
     @DecimalMin(value = "0.00", message = "当前余额不能小于0")
     private BigDecimal currentBalance;
+
+    @DecimalMin(value = "0.01", message = "贷款总额必须大于0")
+    private BigDecimal loanTotalAmount;
+
+    @DecimalMin(value = "0.00", message = "贷款利率不能小于0")
+    private BigDecimal loanInterestRate;
+
+    @Min(value = 2, message = "贷款总期数至少为2")
+    private Integer loanTotalPeriods;
+
+    @Min(value = 1, message = "每月还款日必须在1到31之间")
+    @Max(value = 31, message = "每月还款日必须在1到31之间")
+    private Integer loanRepaymentDay;
+
+    private LocalDate loanStartDate;
 
     @NotNull(message = "是否计入总资产不能为空")
     private Boolean includeInNetWorth;

@@ -23,14 +23,20 @@ import type { AccountGroup, AccountOverview } from '@/types/account'
 import AccountGroupCard from '../components/AccountGroupCard/index.vue'
 import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
 
-const DEBT_ACCOUNT_CODES = new Set(['debt', 'loan_receivable', 'loan_payable'])
-const CONTACT_LINKED_ACCOUNT_CODES = new Set(['debt', 'loan_receivable', 'loan_payable', 'human_relation'])
+const DEBT_ACCOUNT_CODES = new Set(['debt'])
+const LIABILITY_ACCOUNT_CODES = new Set(['liability'])
+const CONTACT_LINKED_ACCOUNT_CODES = new Set(['debt', 'human_relation'])
 
 const showCreateAccountModal = ref(false)
 const accountName = ref('')
 const accountRemark = ref('')
 const accountType = ref('')
 const accountContactId = ref('')
+const liabilityLoanTotalAmount = ref('')
+const liabilityLoanInterestRate = ref('')
+const liabilityLoanTotalPeriods = ref('')
+const liabilityLoanRepaymentDay = ref('')
+const liabilityLoanStartDate = ref('')
 const includeInNetWorth = ref(true)
 const accountTypes = ref<AccountType[]>([])
 const accounts = ref<Account[]>([])
@@ -46,6 +52,7 @@ const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const isDebtAccountTypeSelected = computed(() => CONTACT_LINKED_ACCOUNT_CODES.has(accountType.value))
+const isLiabilityAccountTypeSelected = computed(() => LIABILITY_ACCOUNT_CODES.has(accountType.value))
 const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
 const contactOptions = computed(() => [
   {
@@ -97,6 +104,8 @@ const accountGroups = computed<AccountGroup[]>(() => {
     const groupCode = accountType?.code ?? firstAccount?.accountTypeCode
     const title = DEBT_ACCOUNT_CODES.has(groupCode ?? '')
       ? '债务账户'
+      : LIABILITY_ACCOUNT_CODES.has(groupCode ?? '')
+        ? '负债账户'
       : groupCode === 'human_relation'
         ? '人情账户'
       : accountType?.name
@@ -112,6 +121,8 @@ const accountGroups = computed<AccountGroup[]>(() => {
         ? '/finance/accounts/cash'
         : DEBT_ACCOUNT_CODES.has(groupCode ?? '')
           ? '/finance/accounts/debt'
+        : LIABILITY_ACCOUNT_CODES.has(groupCode ?? '')
+          ? '/finance/accounts/liability'
         : groupCode === 'human_relation'
           ? '/finance/accounts/human-relation'
         : groupCode === 'gold'
@@ -129,6 +140,8 @@ const accountGroups = computed<AccountGroup[]>(() => {
             ? `/finance/accounts/cash/${account.id}`
             : DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
               ? `/finance/accounts/debt/${account.id}`
+            : LIABILITY_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
+              ? `/finance/accounts/liability/${account.id}`
               : account.accountTypeCode === 'human_relation'
                 ? `/finance/accounts/human-relation/${account.id}`
               : account.accountTypeCode === 'gold'
@@ -171,6 +184,13 @@ watch(accountType, (nextType) => {
   if (CONTACT_LINKED_ACCOUNT_CODES.has(nextType)) {
     return
   }
+  if (!LIABILITY_ACCOUNT_CODES.has(nextType)) {
+    liabilityLoanTotalAmount.value = ''
+    liabilityLoanInterestRate.value = ''
+    liabilityLoanTotalPeriods.value = ''
+    liabilityLoanRepaymentDay.value = ''
+    liabilityLoanStartDate.value = ''
+  }
   accountContactId.value = ''
   accountName.value = ''
 })
@@ -200,6 +220,11 @@ async function saveAccount() {
   const trimmedRemark = accountRemark.value.trim()
   const normalizedContactId = accountContactId.value ? Number(accountContactId.value) : null
   const debtContactName = normalizedContactId ? contactMap.value.get(normalizedContactId)?.name?.trim() ?? '' : ''
+  const normalizedLoanTotalAmount = normalizePositiveAmount(liabilityLoanTotalAmount.value)
+  const normalizedLoanInterestRate = normalizeNullableAmount(liabilityLoanInterestRate.value)
+  const normalizedLoanTotalPeriods = normalizePositiveInteger(liabilityLoanTotalPeriods.value)
+  const normalizedLoanRepaymentDay = normalizePositiveInteger(liabilityLoanRepaymentDay.value)
+  const normalizedLoanStartDate = liabilityLoanStartDate.value.trim()
   const resolvedName = CONTACT_LINKED_ACCOUNT_CODES.has(selectedAccountType?.code ?? '')
     ? debtContactName
     : trimmedName
@@ -229,6 +254,29 @@ async function saveAccount() {
     return
   }
 
+  if (selectedAccountType.code === 'liability') {
+    if (!Number.isFinite(normalizedLoanTotalAmount) || normalizedLoanTotalAmount <= 0) {
+      accountFormError.value = '请输入有效的贷款总额'
+      return
+    }
+    if (!Number.isInteger(normalizedLoanTotalPeriods) || normalizedLoanTotalPeriods < 2) {
+      accountFormError.value = '贷款总期数至少为2'
+      return
+    }
+    if (Number.isNaN(normalizedLoanInterestRate) || normalizedLoanInterestRate < 0) {
+      accountFormError.value = '请输入有效的贷款利率'
+      return
+    }
+    if (!Number.isInteger(normalizedLoanRepaymentDay) || normalizedLoanRepaymentDay < 1 || normalizedLoanRepaymentDay > 31) {
+      accountFormError.value = '每月还款日必须在1到31之间'
+      return
+    }
+    if (!normalizedLoanStartDate) {
+      accountFormError.value = '请选择首期账单日期'
+      return
+    }
+  }
+
   isSavingAccount.value = true
   accountFormError.value = ''
 
@@ -241,6 +289,11 @@ async function saveAccount() {
       icon: selectedAccountType.code,
       currencyCode: 'CNY',
       currentBalance: 0,
+      loanTotalAmount: selectedAccountType.code === 'liability' ? normalizedLoanTotalAmount : null,
+      loanInterestRate: selectedAccountType.code === 'liability' ? normalizedLoanInterestRate : null,
+      loanTotalPeriods: selectedAccountType.code === 'liability' ? normalizedLoanTotalPeriods : null,
+      loanRepaymentDay: selectedAccountType.code === 'liability' ? normalizedLoanRepaymentDay : null,
+      loanStartDate: selectedAccountType.code === 'liability' ? normalizedLoanStartDate : null,
       includeInNetWorth: includeInNetWorth.value,
       status: 'active',
       remark: trimmedRemark || null,
@@ -329,6 +382,11 @@ function resetCreateAccountForm() {
   accountName.value = ''
   accountRemark.value = ''
   accountContactId.value = ''
+  liabilityLoanTotalAmount.value = ''
+  liabilityLoanInterestRate.value = ''
+  liabilityLoanTotalPeriods.value = ''
+  liabilityLoanRepaymentDay.value = ''
+  liabilityLoanStartDate.value = ''
   accountFormError.value = ''
 }
 
@@ -349,6 +407,33 @@ function formatAmount(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
+}
+
+function normalizePositiveAmount(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return Number.NaN
+  }
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : Number.NaN
+}
+
+function normalizePositiveInteger(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return Number.NaN
+  }
+  const parsed = Number(trimmed)
+  return Number.isInteger(parsed) ? parsed : Number.NaN
+}
+
+function normalizeNullableAmount(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return 0
+  }
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : Number.NaN
 }
 
 function getSignedBalance(account: Account) {
@@ -373,8 +458,7 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
     stock: '◉',
     credit_card: '💳',
     debt: '债',
-    loan_receivable: '债',
-    loan_payable: '债',
+    liability: '负',
     human_relation: '礼',
     other_asset: '资',
     other_liability: '债',
@@ -451,6 +535,44 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
         <p v-if="isDebtAccountTypeSelected && accountName" class="create-account-name-hint">
           账户名称将使用联系人姓名：{{ accountName }}
         </p>
+        <CommonInput
+          v-if="isLiabilityAccountTypeSelected"
+          v-model="liabilityLoanTotalAmount"
+          label="贷款总额"
+          placeholder="例如：680000"
+          input-type="number"
+          input-mode="decimal"
+        />
+        <CommonInput
+          v-if="isLiabilityAccountTypeSelected"
+          v-model="liabilityLoanInterestRate"
+          label="贷款利率（%）"
+          placeholder="例如：3.25"
+          input-type="number"
+          input-mode="decimal"
+        />
+        <CommonInput
+          v-if="isLiabilityAccountTypeSelected"
+          v-model="liabilityLoanTotalPeriods"
+          label="贷款总期数"
+          placeholder="例如：360"
+          input-type="number"
+          input-mode="numeric"
+        />
+        <CommonInput
+          v-if="isLiabilityAccountTypeSelected"
+          v-model="liabilityLoanRepaymentDay"
+          label="每月还款日"
+          placeholder="例如：20"
+          input-type="number"
+          input-mode="numeric"
+        />
+        <CommonInput
+          v-if="isLiabilityAccountTypeSelected"
+          v-model="liabilityLoanStartDate"
+          label="首期账单日期"
+          input-type="date"
+        />
         <p v-if="accountTypeError" class="create-account-error">{{ accountTypeError }}</p>
         <CommonInput v-model="accountRemark" label="备注" placeholder="可选，添加账户说明" />
         <CommonSwitch v-model="includeInNetWorth" label="是否计入总资产" />

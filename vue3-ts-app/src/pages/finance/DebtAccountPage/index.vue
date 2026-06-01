@@ -33,11 +33,10 @@ type DebtCardView = {
   avatarClass: string
   secondaryText: string
   noteText: string
-  payableTotal: number
-  receivableTotal: number
   netAmount: number
   netAmountText: string
-  recordCount: number
+  netTagText: string
+  netTagClass: 'is-positive' | 'is-negative'
   latestRecordText: string
 }
 
@@ -46,7 +45,7 @@ type DeleteTarget = {
   name: string
 }
 
-const DEBT_ACCOUNT_CODES = new Set(['debt', 'loan_receivable', 'loan_payable'])
+const DEBT_ACCOUNT_CODES = new Set(['debt'])
 const DEFAULT_DEBT_ACCOUNT_CODE = 'debt'
 
 const router = useRouter()
@@ -128,17 +127,16 @@ const debtCards = computed<DebtCardView[]>(() =>
       avatarClass: `debt-avatar-${index % 4}`,
       secondaryText: contact?.phone?.trim() ? `手机号 ${contact.phone.trim()}` : '未填写联系人手机号',
       noteText: contact?.remark?.trim() || account.remark?.trim() || '',
-      payableTotal,
-      receivableTotal,
       netAmount,
-      netAmountText: formatCurrency(netAmount),
-      recordCount: records.length,
+      netAmountText: formatSignedCurrency(netAmount),
+      netTagText: netAmount >= 0 ? '待收' : '待还',
+      netTagClass: netAmount >= 0 ? 'is-positive' : 'is-negative',
       latestRecordText: latestRecord ? `最近一笔 ${formatDate(latestRecord.occurredAt)}` : '暂无债务记录',
     }
   }),
 )
 
-const summaryAmountText = computed(() => formatCurrency(summary.value.netAmount))
+const summaryAmountText = computed(() => formatSignedCurrency(summary.value.netAmount))
 
 onMounted(() => {
   void loadDebtPage()
@@ -334,6 +332,11 @@ function formatCurrency(value: number) {
   return `¥${formatNumber(value)}`
 }
 
+function formatSignedCurrency(value: number) {
+  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+  return `${sign}${formatCurrency(value)}`
+}
+
 function formatDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
@@ -430,22 +433,9 @@ function showFeedback(message: string, type: 'success' | 'error') {
             </div>
 
             <div class="debt-account-card-side">
-              <AmountText
-                tag="strong"
-                class="debt-account-card-amount"
-                :value="card.netAmountText"
-                tone="inherit"
-              />
-              <span :class="['debt-account-card-tag', card.netAmount >= 0 ? 'is-positive' : 'is-negative']">
-                {{ card.netAmount >= 0 ? '净借出' : '净借入' }}
-              </span>
+              <AmountText tag="strong" class="debt-account-card-amount" :value="card.netAmountText" tone="inherit" />
+              <span class="debt-account-card-tag" :class="card.netTagClass">{{ card.netTagText }}</span>
             </div>
-          </div>
-
-          <div class="debt-account-card-metrics">
-            <span>待收 {{ formatCurrency(card.receivableTotal) }}</span>
-            <span>待还 {{ formatCurrency(card.payableTotal) }}</span>
-            <span>{{ card.recordCount }} 条记录</span>
           </div>
 
           <div class="debt-account-card-bottom">
@@ -458,7 +448,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 删除
               </button>
             </div>
-            <span v-else class="debt-account-card-arrow">&gt;</span>
+            <span v-else class="debt-account-card-link">查看明细</span>
           </div>
         </article>
       </section>

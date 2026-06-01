@@ -6,6 +6,7 @@ defineProps<{
   placeholder?: string
   inputType?: string
   inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search'
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +23,7 @@ const emit = defineEmits<{
       :inputmode="inputMode"
       :value="modelValue"
       :placeholder="placeholder"
+      :disabled="disabled"
       @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
     />
   </label>

@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -34,6 +35,27 @@ public class AccountEntity {
 
     @TableField("current_balance")
     private BigDecimal currentBalance;
+
+    @TableField("loan_total_amount")
+    private BigDecimal loanTotalAmount;
+
+    @TableField("loan_interest_amount")
+    private BigDecimal loanInterestAmount;
+
+    @TableField("loan_interest_rate")
+    private BigDecimal loanInterestRate;
+
+    @TableField("loan_total_periods")
+    private Integer loanTotalPeriods;
+
+    @TableField("loan_repayment_day")
+    private Integer loanRepaymentDay;
+
+    @TableField("loan_start_date")
+    private LocalDate loanStartDate;
+
+    @TableField("loan_settled_at")
+    private LocalDateTime loanSettledAt;
 
     @TableField("include_in_net_worth")
     private Boolean includeInNetWorth;
