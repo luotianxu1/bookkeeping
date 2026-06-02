@@ -26,6 +26,7 @@ import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
 const DEBT_ACCOUNT_CODES = new Set(['debt'])
 const LIABILITY_ACCOUNT_CODES = new Set(['liability'])
 const CONTACT_LINKED_ACCOUNT_CODES = new Set(['debt', 'human_relation'])
+const ACCOUNT_GROUP_COLLAPSE_STORAGE_KEY = 'finance-account-management-group-collapse'
 
 const showCreateAccountModal = ref(false)
 const accountName = ref('')
@@ -51,6 +52,7 @@ const accountFormError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
+const collapsedGroupState = ref<Record<string, boolean>>({})
 const isDebtAccountTypeSelected = computed(() => CONTACT_LINKED_ACCOUNT_CODES.has(accountType.value))
 const isLiabilityAccountTypeSelected = computed(() => LIABILITY_ACCOUNT_CODES.has(accountType.value))
 const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
@@ -102,6 +104,7 @@ const accountGroups = computed<AccountGroup[]>(() => {
     const firstAccount = groupAccounts[0]
     const accountType = typeById.get(accountTypeId)
     const groupCode = accountType?.code ?? firstAccount?.accountTypeCode
+    const groupStorageKey = buildGroupStorageKey(accountTypeId, groupCode, accountType?.name ?? firstAccount?.accountTypeName)
     const title = DEBT_ACCOUNT_CODES.has(groupCode ?? '')
       ? '债务账户'
       : LIABILITY_ACCOUNT_CODES.has(groupCode ?? '')
@@ -116,7 +119,9 @@ const accountGroups = computed<AccountGroup[]>(() => {
 
     return {
       accountTypeId,
+      storageKey: groupStorageKey,
       title,
+      amount: formatAmount(groupAccounts.reduce((total, account) => total + getSignedBalance(account), 0)),
       path: groupCode === 'cash'
         ? '/finance/accounts/cash'
         : DEBT_ACCOUNT_CODES.has(groupCode ?? '')
@@ -130,7 +135,8 @@ const accountGroups = computed<AccountGroup[]>(() => {
         : groupCode === 'investment'
           ? '/finance/accounts/investment'
         : undefined,
-          items: groupAccounts.map((account) => ({
+      collapsed: collapsedGroupState.value[groupStorageKey] ?? false,
+      items: groupAccounts.map((account) => ({
           id: account.id,
           icon: getAccountIcon(account.icon, account.accountTypeCode),
           name: account.name,
@@ -196,6 +202,7 @@ watch(accountType, (nextType) => {
 })
 
 onMounted(() => {
+  restoreCollapsedGroupState()
   loadAccounts()
 })
 
@@ -402,6 +409,66 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
+function buildGroupStorageKey(accountTypeId?: number, groupCode?: string | null, fallbackName?: string | null) {
+  if (typeof accountTypeId === 'number') {
+    return `type-${accountTypeId}`
+  }
+  if (groupCode?.trim()) {
+    return `code-${groupCode.trim()}`
+  }
+  if (fallbackName?.trim()) {
+    return `name-${fallbackName.trim()}`
+  }
+  return 'group-unknown'
+}
+
+function getCollapsedGroupStorageId() {
+  const currentUser = getStoredCurrentUser()
+  return `${ACCOUNT_GROUP_COLLAPSE_STORAGE_KEY}-${currentUser?.id ?? 'guest'}`
+}
+
+function restoreCollapsedGroupState() {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const raw = window.localStorage.getItem(getCollapsedGroupStorageId())
+  if (!raw) {
+    collapsedGroupState.value = {}
+    return
+  }
+  try {
+    const parsed = JSON.parse(raw) as Record<string, boolean>
+    collapsedGroupState.value = Object.entries(parsed).reduce<Record<string, boolean>>((result, [key, value]) => {
+      if (typeof value === 'boolean') {
+        result[key] = value
+      }
+      return result
+    }, {})
+  } catch {
+    window.localStorage.removeItem(getCollapsedGroupStorageId())
+    collapsedGroupState.value = {}
+  }
+}
+
+function persistCollapsedGroupState() {
+  if (typeof window === 'undefined') {
+    return
+  }
+  window.localStorage.setItem(getCollapsedGroupStorageId(), JSON.stringify(collapsedGroupState.value))
+}
+
+function toggleAccountGroup(group: AccountGroup) {
+  const groupStorageKey = group.storageKey
+  if (!groupStorageKey) {
+    return
+  }
+  collapsedGroupState.value = {
+    ...collapsedGroupState.value,
+    [groupStorageKey]: !(collapsedGroupState.value[groupStorageKey] ?? false),
+  }
+  persistCollapsedGroupState()
+}
+
 function formatAmount(value: number) {
   return new Intl.NumberFormat('zh-CN', {
     minimumFractionDigits: 2,
@@ -501,6 +568,7 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
         v-for="group in accountGroups"
         :key="group.accountTypeId ?? group.title"
         :group="group"
+        @toggle="toggleAccountGroup(group)"
       />
     </div>
 

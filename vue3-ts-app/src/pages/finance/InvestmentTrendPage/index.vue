@@ -75,6 +75,9 @@ const previousPointAmount = computed<number | null>(() => {
   const previousValue = Number(points[points.length - 2]?.value ?? 0)
   return currentValue - previousValue
 })
+const previousPointAmountText = computed(() => (
+  previousPointAmount.value === null ? '--' : formatCurrency(previousPointAmount.value)
+))
 const previousPointRateText = computed(() => {
   const points = latestTrendPoints.value
   if (points.length < 2) {
@@ -306,9 +309,12 @@ function formatCurrency(value?: number | null) {
 function formatCompactMoney(value: number) {
   const normalized = Number(value ?? 0)
   if (Math.abs(normalized) >= 10000) {
-    return `${(normalized / 10000).toFixed(1)}w`
+    return `${(normalized / 10000).toFixed(2)}w`
   }
-  return Number.isInteger(normalized) ? String(normalized) : normalized.toFixed(0)
+  return normalized.toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 function formatDateTime(value?: string | null) {
@@ -381,7 +387,7 @@ onBeforeUnmount(() => {
             <AmountText
               tag="strong"
               class="summary-profit"
-              :value="previousPointAmount ?? '--'"
+              :value="previousPointAmountText"
               show-sign
               show-unit
             />

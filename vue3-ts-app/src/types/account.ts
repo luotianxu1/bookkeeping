@@ -17,10 +17,16 @@ export type AccountItem = {
 export type AccountGroup = {
   /** 账户类型ID。 */
   accountTypeId?: number
+  /** 本地持久化用的稳定键。 */
+  storageKey?: string
   /** 账户分组名称，如现金账户、投资账户。 */
   title: string
+  /** 当前账户类型总金额。 */
+  amount?: string
   /** 分组级可选跳转路径。 */
   path?: string
+  /** 当前是否折叠。 */
+  collapsed?: boolean
   /** 分组下账户列表。 */
   items: AccountItem[]
 }

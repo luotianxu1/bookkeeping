@@ -421,7 +421,7 @@ function formatCurrency(value: number, digits = 2) {
 }
 
 function formatQuantity(value: number, unitName?: string | null) {
-  return `x ${new Intl.NumberFormat('zh-CN', {
+  return `${new Intl.NumberFormat('zh-CN', {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(value)} ${unitName || '份'}`
@@ -429,19 +429,6 @@ function formatQuantity(value: number, unitName?: string | null) {
 
 function formatPrice(value: number) {
   return formatCurrency(value, 4)
-}
-
-function formatSyncDate(value?: string | null) {
-  if (!value) {
-    return '--'
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return '--'
-  }
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${month}-${day}`
 }
 
 function formatMonthDay(value?: string | null) {
@@ -500,10 +487,6 @@ function hasConfirmedHoldingQuantity(position: InvestmentPosition) {
   return Number.isFinite(quantity) && quantity > 0
 }
 
-function shouldShowPendingTag(position: InvestmentPosition) {
-  return isPendingSubscription(position) && hasConfirmedHoldingQuantity(position)
-}
-
 function getHoldingStatusText(position: InvestmentPosition) {
   if (!isPendingSubscription(position) || hasConfirmedHoldingQuantity(position)) {
     return formatQuantity(position.holdingQuantity, position.unitName)
@@ -512,12 +495,27 @@ function getHoldingStatusText(position: InvestmentPosition) {
   return ''
 }
 
+function getHoldingQuantityTag(position: InvestmentPosition) {
+  const quantityText = getHoldingStatusText(position)
+  return quantityText || '待确认'
+}
+
+function getHoldingMarketValueLabel(position: InvestmentPosition) {
+  return isPendingSubscription(position) ? '申购金额' : '持仓市值'
+}
+
+function getHoldingMarketValue(position: InvestmentPosition) {
+  return isPendingSubscription(position)
+    ? formatCurrency(position.costAmount, 0)
+    : formatCurrency(position.marketValue, 0)
+}
+
 function getHoldingActionLabel(position: InvestmentPosition) {
   return isPendingSubscription(position) ? '申购处理中' : '今日盈亏'
 }
 
 function getHoldingActionValue(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? formatCurrency(position.costAmount) : formatAmount(position.dayProfit)
+  return isPendingSubscription(position) ? formatCurrency(position.costAmount, 0) : formatCurrency(position.dayProfit)
 }
 
 function getHoldingActionRate(position: InvestmentPosition) {
@@ -535,13 +533,29 @@ function getHoldingActionTone(position: InvestmentPosition) {
   return dayProfit > 0 ? 'positive' as const : 'negative' as const
 }
 
-function getHoldingPriceText(position: InvestmentPosition) {
+function getHoldingPrimaryLabel(position: InvestmentPosition) {
   if (isPendingSubscription(position)) {
-    const appliedDate = formatMonthDay(position.subscriptionAppliedDate)
-    const expectedDate = formatMonthDay(position.subscriptionExpectedConfirmDate || position.subscriptionAppliedDate)
-    return `${appliedDate}确认净值，${expectedDate}确认份额`
+    return '确认净值'
   }
-  return `最新净值 ${formatSyncDate(position.lastSyncedAt)}`
+  return position.productType === 'stock' ? '最新价' : '最新净值'
+}
+
+function getHoldingPrimaryValue(position: InvestmentPosition) {
+  if (isPendingSubscription(position)) {
+    return formatMonthDay(position.subscriptionAppliedDate)
+  }
+  return formatPrice(position.currentPrice)
+}
+
+function getHoldingSecondaryLabel(position: InvestmentPosition) {
+  return isPendingSubscription(position) ? '确认份额' : '成本价'
+}
+
+function getHoldingSecondaryValue(position: InvestmentPosition) {
+  if (isPendingSubscription(position)) {
+    return formatMonthDay(position.subscriptionExpectedConfirmDate || position.subscriptionAppliedDate)
+  }
+  return formatPrice(position.avgCostPrice)
 }
 
 function getHoldingBottomLabel(position: InvestmentPosition) {
@@ -665,22 +679,17 @@ function showFeedback(message: string, type: 'success' | 'error') {
           class="investment-holding-card"
           @click="openInvestmentDetail(holding.id)"
         >
-          <div class="holding-title-row">
-            <div class="holding-title">
-              <strong>{{ holding.productName }}</strong>
-              <span v-if="getHoldingStatusText(holding)">{{ getHoldingStatusText(holding) }}</span>
-            </div>
-          </div>
-
-          <div class="holding-row top">
-            <div class="holding-left">
-              <div class="holding-tags">
-                <span v-if="shouldShowPendingTag(holding)" class="holding-tag is-pending">待确认</span>
-                <AmountText tag="span" class="holding-market-value" :value="formatCurrency(holding.marketValue, 0)" />
+          <div class="holding-card-top">
+            <div class="holding-card-main">
+              <div class="holding-card-left-top">
+                <div class="holding-title"><strong>{{ holding.productName }}</strong><span class="holding-quantity-tag">{{ getHoldingQuantityTag(holding) }}</span></div>
+                <div class="holding-value-line">
+                  <span>{{ getHoldingMarketValueLabel(holding) }}</span>
+                  <AmountText tag="strong" class="holding-market-value" tone="inherit" :value="getHoldingMarketValue(holding)" />
+                </div>
               </div>
-            </div>
-            <div class="holding-right">
-              <div class="holding-inline-field">
+
+              <div class="holding-card-right-top">
                 <span>{{ getHoldingActionLabel(holding) }}</span>
                 <div class="holding-action-group">
                   <AmountText
@@ -701,47 +710,45 @@ function showFeedback(message: string, type: 'success' | 'error') {
             </div>
           </div>
 
-          <div class="holding-row middle">
-            <div class="holding-price-line">
-              <AmountText tag="strong" tone="inherit" :value="formatPrice(holding.currentPrice)" />
-              <span>{{ getHoldingPriceText(holding) }}</span>
-            </div>
-            <div class="holding-right compact">
-              <div class="holding-inline-field">
-                <span>成本价</span>
-                <AmountText tag="strong" tone="inherit" :value="formatPrice(holding.avgCostPrice)" />
+          <div class="holding-panel">
+            <div class="holding-panel-row">
+              <div class="holding-panel-field">
+                <span>{{ getHoldingPrimaryLabel(holding) }}</span>
+                <AmountText tag="strong" class="holding-panel-value" tone="inherit" :value="getHoldingPrimaryValue(holding)" />
+              </div>
+              <div class="holding-panel-field is-end">
+                <span>{{ getHoldingSecondaryLabel(holding) }}</span>
+                <AmountText tag="strong" class="holding-panel-value is-secondary" tone="inherit" :value="getHoldingSecondaryValue(holding)" />
               </div>
             </div>
-          </div>
 
-          <p v-if="getHoldingPendingAmount(holding) > 0" class="holding-pending-amount">
-            待确认金额
-            <AmountText
-              tag="span"
-              class="holding-pending-amount-value"
-              :value="formatCurrency(getHoldingPendingAmount(holding))"
-            />
-          </p>
+            <p v-if="getHoldingPendingAmount(holding) > 0" class="holding-pending-amount">
+              待确认金额
+              <AmountText
+                tag="span"
+                class="holding-pending-amount-value"
+                :value="formatCurrency(getHoldingPendingAmount(holding))"
+              />
+            </p>
 
-          <div class="holding-divider"></div>
+            <div class="holding-divider"></div>
 
-          <div class="holding-row bottom">
-            <div class="holding-left compact">
-              <div class="holding-inline-field holding-inline-field--profit">
+            <div class="holding-panel-row">
+              <div class="holding-panel-field">
                 <span>{{ getHoldingBottomLabel(holding) }}</span>
-                <AmountText tag="strong" class="holding-pnl-value" :value="getHoldingBottomValue(holding)" />
-              </div>
-              <div class="holding-pnl-line">
-                <AmountText tag="span" class="holding-pnl-rate" :value="getHoldingBottomRate(holding)" />
-              </div>
-            </div>
-            <div class="holding-right compact">
-              <span>仓位占比</span>
-              <div class="holding-allocation">
-                <div class="holding-allocation-track">
-                  <span :style="{ width: `${getAllocationPercent(holding)}%` }"></span>
+                <div class="holding-pnl-line">
+                  <AmountText tag="strong" class="holding-pnl-value" :value="getHoldingBottomValue(holding)" />
+                  <AmountText tag="span" class="holding-pnl-rate" :value="getHoldingBottomRate(holding)" />
                 </div>
-                <AmountText tag="strong" tone="inherit" :value="`${formatAmount(getAllocationPercent(holding))}%`" />
+              </div>
+              <div class="holding-panel-field is-end">
+                <span>仓位占比</span>
+                <div class="holding-allocation">
+                  <div class="holding-allocation-track">
+                    <span :style="{ width: `${getAllocationPercent(holding)}%` }"></span>
+                  </div>
+                  <AmountText tag="strong" tone="inherit" :value="`${formatAmount(getAllocationPercent(holding))}%`" />
+                </div>
               </div>
             </div>
           </div>

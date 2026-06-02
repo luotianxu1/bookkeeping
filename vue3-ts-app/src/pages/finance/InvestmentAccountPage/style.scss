@@ -316,238 +316,182 @@
 
 .investment-holding-card {
   display: grid;
-  gap: var(--space-4);
-  padding: 10px 10px 14px;
-  border: 1px solid var(--color-danger-soft);
+  gap: var(--space-8);
+  padding: 12px;
+  border: 1px solid #e5e7eb;
   border-radius: var(--radius-18);
   background: var(--color-white);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
   cursor: pointer;
 }
 
-.holding-row {
+.holding-card-top,
+.holding-card-main,
+.holding-panel-row,
+.holding-allocation,
+.holding-pnl-line,
+.holding-value-line,
+.holding-action-group {
+  min-width: 0;
+}
+
+.holding-card-main,
+.holding-panel-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: var(--space-6);
+  gap: 12px;
 }
 
-.holding-title-row {
-  width: 100%;
-  min-width: 0;
-}
-
-.holding-left {
-  flex: 1;
+.holding-card-left-top,
+.holding-panel,
+.holding-panel-field {
   min-width: 0;
   display: grid;
 }
 
-.holding-left.compact {
+.holding-card-left-top {
   flex: 1;
-  min-width: 0;
-  gap: var(--space-6);
+  gap: 5px;
 }
 
-.holding-right {
-  flex: 0 0 auto;
-  min-width: 80px;
+.holding-card-right-top {
+  flex: 0 0 125px;
+  min-width: 110px;
   display: grid;
+  gap: 2px;
   justify-items: end;
-  gap: var(--space-6);
 }
 
-.holding-right.compact {
-  min-width: 90px;
+.holding-card-right-top > span,
+.holding-value-line > span,
+.holding-panel-field > span {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.holding-card-right-top > span {
+  color: #64748b;
 }
 
 .holding-title {
   display: flex;
   align-items: center;
-  width: 100%;
-  gap: var(--space-6);
-  flex-wrap: nowrap;
+  gap: 0;
   min-width: 0;
 }
 
 .holding-title strong {
-  flex: 1;
+  display: block;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--color-text-primary);
   font-size: var(--font-size-12);
   font-weight: 700;
-}
-
-.holding-title span {
-  flex: 0 0 auto;
+  line-height: 1.2;
   white-space: nowrap;
-  color: var(--color-text-muted);
-  font-size: 9px;
-  font-weight: 500;
 }
 
-.holding-tags {
-  display: flex;
+.holding-quantity-tag {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-6);
-}
-
-.holding-tag {
-  padding: 2px 8px;
-  border-radius: var(--radius-8);
-  background: var(--color-bg-purple-soft);
-  color: var(--color-purple);
-  font-size: var(--font-size-12);
+  white-space: nowrap;
+  padding: 2px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-page);
+  color: #64748b;
+  font-size: 9px;
   font-weight: 600;
+  line-height: 1;
+  vertical-align: baseline;
+  font-family: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
-.holding-tag.is-pending {
-  background: rgba(245, 158, 11, 0.12);
-  color: #b45309;
+.holding-value-line {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-6);
+  flex-wrap: wrap;
 }
 
 .holding-market-value {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-12);
-  font-weight: 500;
-}
-
-.holding-tags :deep(.holding-market-value.amount-text--positive) {
-  color: var(--color-danger);
-}
-
-.holding-tags :deep(.holding-market-value.amount-text--negative) {
-  color: var(--color-success);
-}
-
-.holding-right span {
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.holding-right strong {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-14);
+  color: var(--color-text-primary);
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1;
+  font-family: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 .holding-action-group {
   display: inline-flex;
   align-items: baseline;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: var(--space-6);
   justify-content: flex-end;
+}
+
+.holding-action-value {
+  font-size: var(--font-size-16);
+  font-weight: 700;
+  line-height: 1;
 }
 
 .holding-action-rate {
-  font-size: var(--font-size-12);
+  font-size: 11px;
   font-weight: 600;
 }
 
-.holding-right :deep(.holding-action-value.amount-text--positive) {
+.holding-card-right-top :deep(.holding-action-value.amount-text--positive),
+.holding-card-right-top :deep(.holding-action-rate.amount-text--positive) {
   color: var(--color-danger);
 }
 
-.holding-right :deep(.holding-action-rate.amount-text--positive) {
-  color: var(--color-danger);
-}
-
-.holding-right :deep(.holding-action-value.amount-text--negative) {
+.holding-card-right-top :deep(.holding-action-value.amount-text--negative),
+.holding-card-right-top :deep(.holding-action-rate.amount-text--negative) {
   color: var(--color-success);
 }
 
-.holding-right :deep(.holding-action-rate.amount-text--negative) {
-  color: var(--color-success);
-}
-
-.holding-right :deep(.holding-action-value.amount-text--neutral) {
+.holding-card-right-top :deep(.holding-action-value.amount-text--neutral),
+.holding-card-right-top :deep(.holding-action-rate.amount-text--neutral) {
   color: var(--color-text-primary);
 }
 
-.holding-right :deep(.holding-action-rate.amount-text--neutral) {
-  color: var(--color-text-primary);
+.holding-panel {
+  gap: 7px;
+  padding-top: 2px;
 }
 
-.holding-left.compact strong {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-14);
-  font-weight: 700;
+.holding-panel-field {
+  gap: 2px;
 }
 
-.holding-left.compact span {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-12);
-  font-weight: 600;
+.holding-panel-field.is-end {
+  justify-items: end;
+  text-align: right;
 }
 
-.holding-right.compact strong {
-  color: var(--color-text-tertiary);
-  font-size: var(--font-size-14);
-  font-weight: 500;
-}
-
-.holding-inline-field {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-6);
-  flex-wrap: wrap;
-}
-
-.holding-right.compact .holding-inline-field {
-  justify-content: flex-end;
-}
-
-.holding-pnl-value {
-  font-size: var(--font-size-14);
-  font-weight: 700;
-}
-
-.holding-left.compact :deep(.holding-pnl-value.amount-text--positive),
-.holding-left.compact :deep(.holding-pnl-rate.amount-text--positive) {
-  color: var(--color-danger);
-}
-
-.holding-left.compact :deep(.holding-pnl-value.amount-text--negative),
-.holding-left.compact :deep(.holding-pnl-rate.amount-text--negative) {
-  color: var(--color-success);
-}
-
-.holding-left.compact :deep(.holding-pnl-value.amount-text--neutral),
-.holding-left.compact :deep(.holding-pnl-rate.amount-text--neutral) {
-  color: var(--color-text-primary);
-}
-
-.holding-price-line {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-8);
-}
-
-.holding-price-line strong {
+.holding-panel-value {
   color: var(--color-text-primary);
   font-size: var(--font-size-14);
   font-weight: 700;
+  line-height: 1.2;
+  font-family: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
-.holding-price-line span {
-  color: var(--color-text-muted);
-  font-size: 9px;
+.holding-panel-value.is-secondary {
+  color: var(--color-text-secondary);
   font-weight: 600;
 }
 
 .holding-divider {
   width: 100%;
   height: var(--space-1);
-  background: var(--color-bg-soft-2);
+  background: #eef2f7;
 }
 
 .holding-pending-amount {
-  margin: -2px 0 0;
+  margin: 0;
   color: var(--color-brand-strong);
   font-size: var(--font-size-12);
   font-weight: 600;
@@ -565,15 +509,50 @@
   display: flex;
   align-items: center;
   gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.holding-pnl-value {
+  font-size: var(--font-size-14);
+  font-weight: 700;
+  font-family: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 .holding-pnl-rate {
   padding: 1px 6px;
-  border-radius: var(--radius-6);
+  border-radius: var(--radius-pill);
   background: var(--color-bg-success-soft);
   color: var(--color-success);
-  font-size: var(--font-size-12);
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.holding-panel-field :deep(.holding-pnl-value.amount-text--positive),
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--positive) {
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.holding-panel-field :deep(.holding-pnl-value.amount-text--negative),
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--negative) {
+  background: var(--color-bg-success-soft);
+}
+
+.holding-panel-field :deep(.holding-pnl-value.amount-text--neutral),
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral) {
+  color: var(--color-text-primary);
+}
+
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral) {
+  background: var(--color-bg-neutral-soft);
 }
 
 .holding-allocation {
@@ -583,9 +562,9 @@
 }
 
 .holding-allocation-track {
-  width: 110px;
+  width: 52px;
   height: 6px;
-  border-radius: var(--radius-3);
+  border-radius: var(--radius-pill);
   background: var(--color-bg-soft-2);
   overflow: hidden;
 }
@@ -599,8 +578,9 @@
 
 .holding-allocation strong {
   color: var(--color-brand-strong);
-  font-size: var(--font-size-12);
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 .investment-fab {
@@ -629,10 +609,10 @@
   .investment-summary-main span,
   .investment-summary-side span,
   .investment-metric-item span,
-  .holding-title span,
-  .holding-market-value,
-  .holding-right span,
-  .holding-left.compact span,
+  .holding-quantity-tag,
+  .holding-value-line > span,
+  .holding-card-right-top > span,
+  .holding-panel-field > span,
   .investment-add-modal-field > span {
     color: var(--color-dark-text-muted);
   }
@@ -641,9 +621,9 @@
   .investment-summary-side strong,
   .investment-metric-item strong,
   .holding-title strong,
-  .holding-left.compact strong,
-  .holding-right.compact strong,
-  .holding-pnl-line strong,
+  .holding-market-value,
+  .holding-panel-value,
+  .holding-pnl-value,
   .holding-allocation strong,
   .investment-message {
     color: var(--color-bg-page);
@@ -654,14 +634,9 @@
     background: var(--color-dark-card-border);
   }
 
-  .holding-tag {
-    background: rgba(79, 124, 255, 0.12);
-    color: #7ba0ff;
-  }
-
-  .holding-tag.is-pending {
-    background: rgba(245, 158, 11, 0.16);
-    color: #fbbf24;
+  .holding-quantity-tag {
+    border-color: var(--color-dark-card-border);
+    background: rgba(148, 163, 184, 0.12);
   }
 
   .holding-pnl-rate {

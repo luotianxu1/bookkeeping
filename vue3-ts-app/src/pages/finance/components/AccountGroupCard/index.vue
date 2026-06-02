@@ -7,17 +7,43 @@ import AmountText from '@/components/common/AmountText/index.vue'
 defineProps<{
   group: AccountGroup
 }>()
+
+defineEmits<{
+  toggle: []
+}>()
 </script>
 
 <template>
   <section class="account-group-card">
-    <RouterLink v-if="group.path" class="account-group-title-link" :to="group.path">
-      <h2>{{ group.title }}</h2>
-      <span>&gt;</span>
-    </RouterLink>
-    <h2 v-else>{{ group.title }}</h2>
+    <header class="account-group-header">
+      <div class="account-group-heading">
+        <RouterLink v-if="group.path" class="account-group-title-link" :to="group.path">
+          <h2>{{ group.title }}</h2>
+        </RouterLink>
+        <h2 v-else class="account-group-title">{{ group.title }}</h2>
 
-    <ul class="account-list">
+        <AmountText
+          v-if="group.amount"
+          class="account-group-amount"
+          tag="strong"
+          :value="group.amount"
+          show-unit
+        />
+      </div>
+
+      <button
+        class="account-group-toggle"
+        type="button"
+        :aria-expanded="!group.collapsed"
+        :aria-label="group.collapsed ? `展开${group.title}` : `收起${group.title}`"
+        @click="$emit('toggle')"
+      >
+        <span>{{ group.collapsed ? '展开' : '收起' }}</span>
+        <span class="account-group-toggle-icon" :class="{ 'is-collapsed': group.collapsed }">⌃</span>
+      </button>
+    </header>
+
+    <ul v-show="!group.collapsed" class="account-list">
       <li
         v-for="item in group.items"
         :key="item.id ?? item.name"
@@ -32,7 +58,6 @@ defineProps<{
           </span>
           <span class="account-item-right">
             <AmountText tag="strong" :value="item.amount" show-unit />
-            <span>&gt;</span>
           </span>
         </RouterLink>
 
@@ -45,7 +70,6 @@ defineProps<{
           </span>
           <span class="account-item-right">
             <AmountText tag="strong" :value="item.amount" show-unit />
-            <span>&gt;</span>
           </span>
         </template>
       </li>
