@@ -68,17 +68,7 @@ const categoryIconOptions: CommonSelectOption[] = [
   { label: '其他', value: 'other' },
 ]
 
-const categoryColorOptions: CommonSelectOption[] = [
-  { label: '蓝色', value: '#1D4ED8' },
-  { label: '青色', value: '#0F766E' },
-  { label: '绿色', value: '#16A34A' },
-  { label: '橙色', value: '#EA580C' },
-  { label: '紫色', value: '#7C3AED' },
-  { label: '灰色', value: '#334155' },
-]
-
 const categoryModalTitle = computed(() => (editingCategory.value ? '修改分类' : '新增分类'))
-const fixedBackgroundCategoryNames = new Set(['餐饮', '摄影收入'])
 const expenseCategoryGroups = computed(() => buildCategoryGroups('expense'))
 const incomeCategoryGroups = computed(() => buildCategoryGroups('income'))
 const editingCategoryHasChildren = computed(() => (
@@ -311,12 +301,8 @@ function getCategoryIcon(icon: string) {
 }
 
 function getCategoryIconStyle(category: Category) {
-  const color = fixedBackgroundCategoryNames.has(category.name)
-    ? 'rgb(51, 65, 85)'
-    : category.color || '#334155'
-
   return {
-    backgroundColor: color,
+    backgroundColor: category.color || '#334155',
   }
 }
 
@@ -510,7 +496,19 @@ function canDeleteCategory(category: Category) {
           :disabled="editingCategoryHasChildren"
         />
         <CommonSelect v-model="formIcon" label="分类图标" :options="categoryIconOptions" />
-        <CommonSelect v-model="formColor" label="分类颜色" :options="categoryColorOptions" />
+        <div class="category-color-field">
+          <span class="category-color-label">分类颜色</span>
+          <div class="category-color-picker-row">
+            <input
+              id="category-color-picker"
+              v-model="formColor"
+              class="category-color-picker"
+              type="color"
+              aria-label="选择分类颜色"
+            />
+            <span class="category-color-value">{{ formColor.toUpperCase() }}</span>
+          </div>
+        </div>
         <CommonInput v-model="formRemark" label="备注" placeholder="可选，添加分类说明" />
         <p v-if="editingCategoryHasChildren" class="category-form-hint">
           当前一级分类下已有二级分类，不能再调整为二级分类。
