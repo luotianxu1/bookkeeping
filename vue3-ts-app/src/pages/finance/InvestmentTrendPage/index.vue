@@ -10,11 +10,17 @@ import {
   getAssetTrend,
   type AssetTrend,
   type AssetTrendAllocation,
+  type AssetTrendPoint,
   type AssetTrendRange,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 type TrendRangeLabel = '近7日' | '近30日' | '年内' | '全部'
+interface RangeDetailPoint {
+  key: string
+  label: string
+  value: number | null
+}
 
 const route = useRoute()
 
@@ -114,6 +120,46 @@ const trendSubtitle = computed(() => {
   return `${trend.value.rangeLabel}净资产变化`
 })
 const allocations = computed(() => trend.value?.allocations ?? [])
+const trendRangeKey = computed<AssetTrendRange>(() => {
+  const range = trend.value?.range
+  return range === '7d' || range === '30d' || range === 'ytd' || range === 'all'
+    ? range
+    : rangeMap[activeRange.value]
+})
+const rangeDetailSummaryText = computed(() => {
+  if (trendRangeKey.value === '7d') return '7天总资产'
+  if (trendRangeKey.value === '30d') return '30天总资产'
+  if (trendRangeKey.value === 'ytd') return '12个月总资产'
+  return '按年总资产'
+})
+const rangeDetailPoints = computed<RangeDetailPoint[]>(() => {
+  const points = latestTrendPoints.value
+
+  if (trendRangeKey.value !== 'ytd') {
+    return points.map((item) => ({
+      key: item.key,
+      label: item.label,
+      value: Number(item.value ?? 0),
+    })).reverse()
+  }
+
+  const pointMap = new Map<string, AssetTrendPoint>(
+    points.map((item) => [item.label, item]),
+  )
+  const endMonth = trend.value?.endDate
+    ? new Date(`${trend.value.endDate}T00:00:00`).getMonth() + 1
+    : new Date().getMonth() + 1
+
+  return Array.from({ length: endMonth }, (_, index) => {
+    const label = `${index + 1}月`
+    const matchedPoint = pointMap.get(label)
+    return {
+      key: matchedPoint?.key ?? `ytd-${index + 1}`,
+      label,
+      value: matchedPoint ? Number(matchedPoint.value ?? 0) : null,
+    }
+  }).reverse()
+})
 
 const chartOption = computed<EChartsCoreOption>(() => {
   const points = trend.value?.trendPoints ?? []
@@ -438,6 +484,35 @@ onBeforeUnmount(() => {
           </article>
         </div>
         <p v-else class="investment-trend-empty">暂无可展示的资产分布</p>
+      </section>
+
+      <section class="investment-trend-card" aria-label="区间资产明细">
+        <header class="investment-trend-card-head">
+          <div>
+            <strong>区间资产明细</strong>
+          </div>
+          <span class="range-detail-side-text">{{ rangeDetailSummaryText }}</span>
+        </header>
+
+        <div v-if="rangeDetailPoints.length > 0" class="range-detail-list">
+          <article
+            v-for="item in rangeDetailPoints"
+            :key="item.key"
+            class="range-detail-item"
+          >
+            <span class="range-detail-label">{{ item.label }}</span>
+            <AmountText
+              v-if="item.value !== null"
+              tag="strong"
+              tone="inherit"
+              class="range-detail-value"
+              :value="formatCurrency(item.value)"
+              show-unit
+            />
+            <strong v-else class="range-detail-value range-detail-value--empty">--</strong>
+          </article>
+        </div>
+        <p v-else class="investment-trend-empty">当前区间暂无可展示的资产数据</p>
       </section>
     </template>
   </section>

@@ -8,7 +8,6 @@ import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import {
   getFundProfitPage,
   type FundProfitCalendarCell,
-  type FundProfitContribution,
   type FundProfitDetail,
   type FundProfitPage,
   type FundProfitPageSummaryMetric,
@@ -147,17 +146,7 @@ const calendarHeadLabel = computed(() => {
   }
   return '日视图'
 })
-const contributionTitle = computed(() => `${selectionLabel.value}收益贡献榜`)
 const detailTitle = computed(() => `${selectionLabel.value}收益明细`)
-const contributionSideText = computed(() => {
-  if (selectedView.value === 'month') {
-    return '按月收益排序'
-  }
-  if (selectedView.value === 'year') {
-    return '按年度收益排序'
-  }
-  return '按当日收益排序'
-})
 const detailPeriodLabel = computed(() => {
   if (selectedView.value === 'month') {
     return '本月'
@@ -200,46 +189,18 @@ const yearPeriodCards = computed<Array<FundProfitCalendarCell | null>>(() => {
   }
   return [...items, ...Array.from({ length: 3 - remainder }, () => null)]
 })
-const contributors = computed(() => pageData.value?.contributors ?? [])
-const contributionMaxAbs = computed(() => {
-  const max = contributors.value.reduce((current, item) => Math.max(current, Math.abs(Number(item.contributionAmount ?? 0))), 0)
-  return max > 0 ? max : 1
-})
-const contributionFootnote = computed(() => {
-  if (!contributors.value.length) {
-    return '当前范围暂无可展示的收益分析。'
-  }
-
-  const topContributor = contributors.value[0]
-  const positiveCount = contributors.value.filter((item) => Number(item.contributionAmount ?? 0) > 0).length
-  const topNames = contributors.value
-    .slice(0, 3)
-    .map((item) => item.productName)
-    .filter(Boolean)
-  const topThreeShare = contributors.value
-    .slice(0, 3)
-    .reduce((total, item) => total + Math.abs(Number(item.contributionRate ?? 0)), 0)
-
-  if (selectedView.value === 'month') {
-    return `${selectionLabel.value}收益主要集中在${topNames.slice(0, 2).join('和')}，前 3 只基金贡献占比 ${formatPlainRate(topThreeShare, 0)}。`
-  }
-
-  if (selectedView.value === 'year') {
-    return `${selectionLabel.value}收益贡献由${joinDisplayNames(topNames)}共同拉动，收益结构更均衡。`
-  }
-
-  return `${selectionLabel.value} 当日共有 ${positiveCount} 只基金录得正收益，收益主要来自${topContributor.productName}。`
-})
 
 const visibleDetails = computed(() => {
   const details = pageData.value?.details ?? []
+  const sortedDetails = [...details].sort((left, right) => Number(right.periodProfit ?? 0) - Number(left.periodProfit ?? 0))
+
   if (selectedDetailFilter.value === 'profit') {
-    return details.filter((item) => Number(item.periodProfit ?? 0) > 0)
+    return sortedDetails.filter((item) => Number(item.periodProfit ?? 0) > 0)
   }
   if (selectedDetailFilter.value === 'loss') {
-    return details.filter((item) => Number(item.periodProfit ?? 0) < 0)
+    return sortedDetails.filter((item) => Number(item.periodProfit ?? 0) < 0)
   }
-  return details
+  return sortedDetails
 })
 
 const detailFilterOptions = computed(() => {
@@ -490,10 +451,6 @@ function formatRate(value: number, digits = 2) {
   return `${sign}${formatNumber(normalized, digits)}%`
 }
 
-function formatPlainRate(value: number, digits = 2) {
-  return `${formatNumber(Math.abs(Number(value ?? 0)), digits)}%`
-}
-
 function formatHoldingQuantity(value: number) {
   return `${formatNumber(value, 2)}份`
 }
@@ -533,11 +490,6 @@ function getTrendBarStyle(point: FundProfitTrendPoint) {
   return { height: `${height}px` }
 }
 
-function getContributionBarStyle(item: FundProfitContribution) {
-  const width = Math.max(10, (Math.abs(Number(item.contributionAmount ?? 0)) / contributionMaxAbs.value) * 100)
-  return { width: `${Math.min(width, 100)}%` }
-}
-
 function getPeriodCardTone(item: FundProfitCalendarCell) {
   const value = Number(item.profit ?? 0)
   if (value > 0) {
@@ -549,32 +501,8 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
   return 'neutral'
 }
 
-function getContributionShareText(item: FundProfitContribution) {
-  if (selectedView.value === 'month') {
-    return `占月收益 ${formatPlainRate(item.contributionRate, 0)}`
-  }
-  if (selectedView.value === 'year') {
-    return `占年收益 ${formatPlainRate(item.contributionRate, 0)}`
-  }
-  return `占日收益 ${formatPlainRate(item.contributionRate, 0)}`
-}
-
 function getDetailAccumulatedProfit(item: FundProfitDetail) {
   return item.holdingAmount - item.costAmount
-}
-
-function formatRank(index: number) {
-  return String(index + 1).padStart(2, '0')
-}
-
-function joinDisplayNames(items: string[]) {
-  if (items.length <= 1) {
-    return items[0] ?? '基金组合'
-  }
-  if (items.length === 2) {
-    return `${items[0]}和${items[1]}`
-  }
-  return `${items[0]}、${items[1]}和${items[2]}`
 }
 </script>
 
@@ -640,15 +568,12 @@ function joinDisplayNames(items: string[]) {
         </span>
         <div class="insight-text-wrap">
           <p>{{ pageData.insight }}</p>
-          <span class="insight-action">查看</span>
         </div>
       </section>
 
       <section class="fund-profit-card" aria-label="近7日收益波动">
-        <header class="fund-profit-card-head">
-          <div>
-            <strong>近7日收益波动</strong>
-          </div>
+        <header class="fund-profit-card-head trend-card-head">
+          <strong>近7日收益波动</strong>
           <div class="trend-legend">
             <span class="trend-legend-item">
               <i class="positive"></i>
@@ -696,10 +621,8 @@ function joinDisplayNames(items: string[]) {
       </section>
 
       <section class="fund-profit-card" aria-label="收益日历">
-        <header class="fund-profit-card-head">
-          <div>
-            <strong>{{ calendarTitle }}</strong>
-          </div>
+        <header class="fund-profit-card-head calendar-card-head">
+          <strong>{{ calendarTitle }}</strong>
           <span class="card-side-text">{{ calendarHeadLabel }}</span>
         </header>
 
@@ -791,55 +714,9 @@ function joinDisplayNames(items: string[]) {
         <p class="calendar-footnote">{{ calendarFootnote }}</p>
       </section>
 
-      <section class="fund-profit-card" aria-label="收益贡献榜">
-        <header class="fund-profit-card-head">
-          <div>
-            <strong>{{ contributionTitle }}</strong>
-          </div>
-          <span class="card-side-text">{{ contributionSideText }}</span>
-        </header>
-
-        <p v-if="contributors.length === 0" class="empty-text">当前范围暂无收益贡献数据</p>
-
-        <template v-else>
-          <article v-for="(item, index) in contributors" :key="item.positionId" class="contribution-item">
-            <div class="contribution-row">
-              <div class="contribution-title">
-                <div class="fund-name-row">
-                  <span class="fund-rank-badge">{{ formatRank(index) }}</span>
-                  <strong>{{ item.productName }}</strong>
-                  <span v-if="item.productSymbol" class="fund-code-chip">{{ item.productSymbol }}</span>
-                </div>
-                <span>{{ item.productSymbol || item.accountName || '基金代码待同步' }}</span>
-              </div>
-              <div class="contribution-value">
-                <AmountText
-                  tag="strong"
-                  class="contribution-amount-text"
-                  :value="formatSignedCurrency(item.contributionAmount)"
-                  :tone="getTone(item.contributionAmount)"
-                />
-                <span>{{ getContributionShareText(item) }}</span>
-              </div>
-            </div>
-            <div class="contribution-track">
-              <span
-                class="contribution-track-fill"
-                :class="`is-${getTone(Number(item.contributionAmount ?? 0))}`"
-                :style="getContributionBarStyle(item)"
-              ></span>
-            </div>
-          </article>
-
-          <p class="card-footnote">{{ contributionFootnote }}</p>
-        </template>
-      </section>
-
       <section class="fund-profit-card" aria-label="基金收益明细">
         <header class="fund-profit-card-head detail-card-head">
-          <div>
-            <strong>{{ detailTitle }}</strong>
-          </div>
+          <strong>{{ detailTitle }}</strong>
           <span class="card-side-text">跟随 {{ selectionLabel }}</span>
         </header>
 

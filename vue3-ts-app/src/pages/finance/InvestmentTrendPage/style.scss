@@ -171,6 +171,51 @@
   background: var(--allocation-fill);
 }
 
+.range-detail-side-text {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.range-detail-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.range-detail-item {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-14);
+  background: linear-gradient(180deg, var(--color-finance-bg-2) 0%, var(--color-white) 100%);
+}
+
+.range-detail-label {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.range-detail-item :deep(.range-detail-value.amount-text),
+.range-detail-value {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.range-detail-value--empty {
+  color: var(--color-text-muted);
+}
+
 .investment-trend-message,
 .investment-trend-empty {
   margin: 0;
