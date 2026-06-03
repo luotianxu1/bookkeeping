@@ -49,17 +49,25 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-8);
+  align-items: start;
 }
 
 .orders-summary-type {
-  padding: 10px;
+  display: flex;
+  align-items: center;
+  align-self: start;
+  min-height: 32px;
+  padding: 6px 10px;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: var(--radius-14);
   background: rgba(255, 255, 255, 0.78);
+  box-sizing: border-box;
 }
 
 .orders-summary-type strong {
-  font-size: var(--font-size-16);
+  display: block;
+  font-size: var(--font-size-14);
+  line-height: 1;
 }
 
 .orders-summary-type--brand strong {
@@ -76,9 +84,12 @@
 
 .orders-page-error,
 .orders-empty {
+  margin: 0;
   padding: 32px 16px;
   border-radius: var(--radius-20);
   color: var(--color-text-secondary);
+  font-size: var(--font-size-14);
+  line-height: 1.6;
   text-align: center;
   background: var(--color-bg-card);
 }

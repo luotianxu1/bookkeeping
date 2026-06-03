@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 记一笔-支出页：还原 Pencil「记一笔-支出」页面结构与交互。
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -11,6 +11,7 @@ import {
   getAccounts,
   getAccountTypes,
   getCategories,
+  updateTransaction,
   type Account,
   type Category,
   type TransactionType,
@@ -28,8 +29,10 @@ type PrimaryCategoryOption = {
 // 记账类型：顶部支出/收入/转账切换。
 const entryTypeOptions = ['支出', '收入', '转账']
 const entryType = ref(entryTypeOptions[0])
+const route = useRoute()
 const router = useRouter()
 const currentUserId = computed(() => getStoredCurrentUser()?.id ?? 1)
+const editingTransactionId = ref<number | null>(parseRouteNumber(route.query.transactionId))
 
 // 分类数据：支出/收入切换后从后端加载。
 const categories = ref<Category[]>([])
@@ -81,6 +84,8 @@ const amountDisplay = computed(() => `${amountInput.value}`)
 const transactionType = computed<TransactionType>(() => (entryType.value === '收入' ? 'income' : 'expense'))
 const selectedCategory = computed(() => categories.value.find((category) => category.id === activeCategoryId.value))
 const selectedAccount = computed(() => accountOptions.value.find((account) => account.id === accountId.value))
+const isEditing = computed(() => editingTransactionId.value !== null)
+const backTo = computed(() => parseRouteText(route.query.redirect) || '/finance')
 const canSave = computed(() => (
   entryType.value !== '转账' &&
   !saving.value &&
@@ -90,6 +95,7 @@ const canSave = computed(() => (
 ))
 
 onMounted(() => {
+  applyRouteEntryType()
   loadEntryOptions()
 })
 
@@ -148,6 +154,7 @@ async function loadEntryOptions() {
 
   try {
     await Promise.all([loadCashAccounts(), loadCategories()])
+    applyEditingFormValues()
   } catch (error) {
     showFeedback(errorMessage(error), 'error')
   } finally {
@@ -203,7 +210,7 @@ async function saveTransaction() {
   closeFeedback()
 
   try {
-    await createTransaction({
+    const payload = {
       userId: currentUserId.value,
       type: transactionType.value,
       amount,
@@ -213,11 +220,18 @@ async function saveTransaction() {
       title: note.value.trim() || selectedCategory.value?.name,
       remark: note.value.trim() || null,
       occurredAt: entryTime.value,
-    })
-    amountInput.value = '0.00'
-    note.value = ''
-    showFeedback('新增成功', 'success')
-    await loadCashAccounts()
+    }
+
+    if (isEditing.value && editingTransactionId.value) {
+      await updateTransaction(editingTransactionId.value, payload)
+      showFeedback('修改成功', 'success')
+    } else {
+      await createTransaction(payload)
+      amountInput.value = '0.00'
+      note.value = ''
+      showFeedback('新增成功', 'success')
+      await loadCashAccounts()
+    }
   } catch (error) {
     showFeedback(errorMessage(error), 'error')
   } finally {
@@ -260,9 +274,87 @@ function displayIcon(icon: string) {
     shopping: '🛍',
     salary: '💼',
     'investment-income': '📈',
+    renewal: '🔁',
+    subscription: '🔁',
+    membership: '🔁',
+    'member-renewal': '🔁',
     other: '🧩',
   }
-  return iconMap[icon] ?? icon
+
+  if (iconMap[icon]) {
+    return iconMap[icon]
+  }
+
+  const normalized = icon.trim().toLowerCase()
+  if (
+    normalized.includes('renew')
+    || normalized.includes('subscription')
+    || normalized.includes('member')
+    || normalized.includes('vip')
+  ) {
+    return '🔁'
+  }
+
+  return icon
+}
+
+function applyRouteEntryType() {
+  const type = parseRouteText(route.query.type)
+  if (type === 'income') {
+    entryType.value = '收入'
+    return
+  }
+  if (type === 'expense') {
+    entryType.value = '支出'
+  }
+}
+
+function applyEditingFormValues() {
+  if (!isEditing.value) {
+    return
+  }
+
+  const amount = parseRouteNumber(route.query.amount)
+  if (amount !== null) {
+    amountInput.value = amount.toFixed(2)
+  }
+
+  const routeAccountId = parseRouteNumber(route.query.accountId)
+  if (routeAccountId !== null && accountOptions.value.some((account) => account.id === routeAccountId)) {
+    accountId.value = routeAccountId
+  }
+
+  const routeCategoryId = parseRouteNumber(route.query.categoryId)
+  if (routeCategoryId !== null) {
+    const matchedCategory = categories.value.find((category) => category.id === routeCategoryId)
+    if (matchedCategory) {
+      activeParentCategoryId.value = matchedCategory.parentId ?? matchedCategory.id
+      activeCategoryId.value = matchedCategory.id
+    }
+  }
+
+  const occurredAt = parseRouteText(route.query.occurredAt)
+  if (occurredAt) {
+    entryTime.value = occurredAt.slice(0, 16)
+  }
+
+  note.value = parseRouteText(route.query.remark) ?? ''
+}
+
+function parseRouteText(value: unknown) {
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : ''
+  }
+  return typeof value === 'string' ? value : ''
+}
+
+function parseRouteNumber(value: unknown) {
+  const raw = parseRouteText(value)
+  if (!raw) {
+    return null
+  }
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function syncSelectedCategories(preferredParentId: number | null, preferredCategoryId: number | null) {
@@ -296,7 +388,7 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
       :type="feedbackType"
     />
 
-    <PageHeader title="记一笔" back-to="/finance" back-label="返回财务首页" />
+    <PageHeader :title="isEditing ? '修改记录' : '记一笔'" :back-to="backTo" back-label="返回上一页" />
 
     <SegmentedControl v-model="entryType" :options="entryTypeOptions" label="记账类型切换" />
 

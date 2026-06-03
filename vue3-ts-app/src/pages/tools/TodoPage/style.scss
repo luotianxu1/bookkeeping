@@ -227,11 +227,14 @@
 }
 
 .todo-message {
+  margin: 0;
   padding: 16px;
   border-radius: 18px;
   background: var(--color-bg-card);
   text-align: center;
   color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  line-height: 1.6;
 }
 
 .todo-message-error {
@@ -307,10 +310,4 @@
 .todo-delete-content span {
   font-size: 13px;
   color: #64748b;
-}
-
-@media (max-width: 420px) {
-  .todo-card-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }

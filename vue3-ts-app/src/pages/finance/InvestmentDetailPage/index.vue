@@ -27,10 +27,14 @@ import {
   type InvestmentAutoInvestPlan,
   type InvestmentChartPoint,
   type InvestmentDetailStat,
+  type InvestmentFundRedeemFeeOption,
   type InvestmentPosition,
   type InvestmentTransaction,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+
+type FundTrendRange = '1m' | '3m' | '6m' | '1y' | '3y'
+type TradeFundFeeMode = 'auto' | `manual-${number}`
 
 const route = useRoute()
 const router = useRouter()
@@ -55,6 +59,7 @@ const tradePrice = ref('')
 const tradeRemark = ref('')
 const tradeError = ref('')
 const tradeTimeSlot = ref<'before_1500' | 'after_1500'>('before_1500')
+const tradeFundFeeMode = ref<TradeFundFeeMode>('auto')
 const showEditModal = ref(false)
 const editPrice = ref('')
 const editHoldingQuantity = ref('')
@@ -75,6 +80,8 @@ const isSavingAutoInvest = ref(false)
 const showDeleteModal = ref(false)
 const isDeletingPosition = ref(false)
 const deleteError = ref('')
+const selectedFundTrendRange = ref<FundTrendRange>('1y')
+const fullFundChartPoints = ref<InvestmentChartPoint[]>([])
 let chart: ECharts | null = null
 
 const positionId = computed(() => {
@@ -133,6 +140,24 @@ const tradeAmountLabel = computed(() => {
   return currentTradeAction.value === 'buy' ? '加仓金额' : '减仓金额'
 })
 const tradeAccountLabel = computed(() => currentTradeAction.value === 'buy' ? '资金账户' : '回款账户')
+const fundRedeemFeeOptions = computed<InvestmentFundRedeemFeeOption[]>(() => detail.value?.fundRedeemFeeOptions ?? [])
+const showFundRedeemFeeSelector = computed(() =>
+  isFundPosition.value && currentTradeAction.value === 'sell' && fundRedeemFeeOptions.value.length > 0,
+)
+const selectedTradeFundFeeOption = computed<InvestmentFundRedeemFeeOption | null>(() => {
+  if (tradeFundFeeMode.value === 'auto') {
+    return null
+  }
+  const index = Number(tradeFundFeeMode.value.replace('manual-', ''))
+  return Number.isInteger(index) && index >= 0 ? fundRedeemFeeOptions.value[index] ?? null : null
+})
+const tradeFundFeeSelectOptions = computed(() => [
+  { label: '自动计算（推荐）', value: 'auto' as const },
+  ...fundRedeemFeeOptions.value.map((option, index) => ({
+    label: `${option.label}（${formatPercentValue(Number(option.feeRate))}）`,
+    value: `manual-${index}` as TradeFundFeeMode,
+  })),
+])
 const editFundCostAmountPreview = computed(() => {
   const quantity = Number(editHoldingQuantity.value)
   const costPrice = Number(editCostPrice.value)
@@ -170,6 +195,13 @@ const tradeTimeSlotOptions = [
   { label: '15点前', value: 'before_1500' },
   { label: '15点后', value: 'after_1500' },
 ]
+const fundTrendRangeOptions = [
+  { label: '近1月', value: '1m' },
+  { label: '近3月', value: '3m' },
+  { label: '近6月', value: '6m' },
+  { label: '近1年', value: '1y' },
+  { label: '近3年', value: '3y' },
+]
 const tradeModeValue = computed({
   get: () => tradeInputMode.value === 'quantity' ? '按份额和净值' : '按金额',
   set: (value: string) => {
@@ -201,6 +233,30 @@ const tradeAmountPreview = computed(() => {
   }
   return formatCurrency(amount)
 })
+const tradeFundFeeAmountPreview = computed(() => {
+  if (!showFundRedeemFeeSelector.value) {
+    return '--'
+  }
+  if (tradeFundFeeMode.value === 'auto') {
+    return '按持仓批次自动计算'
+  }
+  const amount = getTradeFundSellFeeAmountValue()
+  return Number.isFinite(amount) && amount >= 0 ? formatCurrency(amount) : '--'
+})
+const tradeFundNetAmountPreview = computed(() => {
+  if (!showFundRedeemFeeSelector.value) {
+    return '--'
+  }
+  const amount = getTradeAmountValue()
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return '--'
+  }
+  if (tradeFundFeeMode.value === 'auto') {
+    return '以提交结果为准'
+  }
+  const feeAmount = getTradeFundSellFeeAmountValue()
+  return Number.isFinite(feeAmount) ? formatCurrency(amount - feeAmount) : '--'
+})
 
 function getTradeAmountValue() {
   if (isFundPosition.value) {
@@ -217,6 +273,30 @@ function getTradeAmountValue() {
     return quantity > 0 && price > 0 ? quantity * price : NaN
   }
   return Number(tradeAmount.value)
+}
+
+function getTradeFundSellFeeAmountValue() {
+  if (!isFundPosition.value || currentTradeAction.value !== 'sell') {
+    return NaN
+  }
+  const option = selectedTradeFundFeeOption.value
+  const amount = getTradeAmountValue()
+  if (!option || !Number.isFinite(amount) || amount <= 0) {
+    return NaN
+  }
+  const feeRate = Number(option.feeRate)
+  if (!Number.isFinite(feeRate) || feeRate < 0) {
+    return NaN
+  }
+  return Number((amount * feeRate).toFixed(2))
+}
+
+function getTradeFundSellFeeAmountPayload() {
+  if (!isFundPosition.value || currentTradeAction.value !== 'sell' || tradeFundFeeMode.value === 'auto') {
+    return undefined
+  }
+  const feeAmount = getTradeFundSellFeeAmountValue()
+  return Number.isFinite(feeAmount) && feeAmount >= 0 ? feeAmount : undefined
 }
 
 function getTradeQuantityValue() {
@@ -254,6 +334,10 @@ watch([detail, transactions], async () => {
   })
 })
 
+watch(selectedFundTrendRange, () => {
+  applyFundTrendRange()
+})
+
 async function loadDetail() {
   if (!positionId.value) {
     pageError.value = '投资资产不存在'
@@ -263,6 +347,8 @@ async function loadDetail() {
   isLoading.value = true
   pageError.value = ''
   try {
+    fullFundChartPoints.value = []
+    selectedFundTrendRange.value = '1y'
     const currentUser = getStoredCurrentUser()
     const [detailData, transactionList, planList, accountList] = await Promise.all([
       getInvestmentPositionDetail(positionId.value),
@@ -343,6 +429,7 @@ async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: s
   const changePercent = Number(baseInfo.RZDF)
   const updatedAt = baseInfo.FSRQ
   const chartPoints = trendResult.status === 'fulfilled' ? buildFundTrendPoints(trendResult.value) : []
+  fullFundChartPoints.value = chartPoints
 
   mergeDetail({
     name: baseInfo.SHORTNAME || baseDetail.name,
@@ -351,7 +438,7 @@ async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: s
     updatedAt: updatedAt || baseDetail.updatedAt,
     source: '东方财富',
     chartType: 'line',
-    chartPoints,
+    chartPoints: filterFundTrendPoints(chartPoints, selectedFundTrendRange.value),
     marketStats: [
       stat('资产类型', '基金'),
       stat('基金代码', fundCode),
@@ -693,6 +780,7 @@ function openTradeModal(action: 'buy' | 'sell') {
   tradeQuantity.value = ''
   tradePrice.value = isFundPosition.value ? '' : String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
   tradeRemark.value = ''
+  tradeFundFeeMode.value = 'auto'
   tradeError.value = ''
   showTradeModal.value = true
 }
@@ -975,7 +1063,7 @@ async function submitTrade() {
         quantity: currentTradeAction.value === 'sell' ? Number(quantity.toFixed(6)) : 0,
         price: null,
         amount: Number((currentTradeAction.value === 'buy' ? amount : getTradeAmountValue()).toFixed(2)),
-        feeAmount: 0,
+        feeAmount: currentTradeAction.value === 'sell' ? getTradeFundSellFeeAmountPayload() : 0,
         taxAmount: 0,
         currencyCode: currentPosition.value.currencyCode || 'CNY',
         tradeAt: toApiDateTime(new Date()),
@@ -1225,17 +1313,68 @@ function fetchFundTrend(fundCode: string) {
 
 function buildFundTrendPoints(trend: { netWorthTrend: any[] }) {
   const rows = Array.isArray(trend.netWorthTrend) ? trend.netWorthTrend : []
-  const latest = rows
+  return rows
     .map((item) => ({ ts: Number(item?.x), value: Number(item?.y) }))
     .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.value))
     .sort((a, b) => a.ts - b.ts)
-  const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000
-  return latest
-    .filter((item) => item.ts >= cutoff)
     .map((item) => ({
       label: formatDate(item.ts),
       value: item.value,
     }))
+}
+
+function applyFundTrendRange() {
+  if (!detail.value || detail.value.productType !== 'fund') {
+    return
+  }
+  const nextPoints = filterFundTrendPoints(fullFundChartPoints.value, selectedFundTrendRange.value)
+  mergeDetail({
+    chartPoints: nextPoints,
+  })
+}
+
+function filterFundTrendPoints(points: InvestmentChartPoint[], range: FundTrendRange) {
+  if (!points.length) {
+    return []
+  }
+
+  const datedPoints = points
+    .map((point) => {
+      const date = parsePointLabelDate(point.label)
+      return date ? { point, date } : null
+    })
+    .filter((item): item is { point: InvestmentChartPoint; date: Date } => Boolean(item))
+
+  if (!datedPoints.length) {
+    return points
+  }
+
+  const latestDate = datedPoints[datedPoints.length - 1].date
+  const cutoff = new Date(latestDate)
+
+  if (range === '1m') {
+    cutoff.setMonth(cutoff.getMonth() - 1)
+  } else if (range === '3m') {
+    cutoff.setMonth(cutoff.getMonth() - 3)
+  } else if (range === '6m') {
+    cutoff.setMonth(cutoff.getMonth() - 6)
+  } else if (range === '1y') {
+    cutoff.setFullYear(cutoff.getFullYear() - 1)
+  } else {
+    cutoff.setFullYear(cutoff.getFullYear() - 3)
+  }
+
+  const filtered = datedPoints
+    .filter((item) => item.date >= cutoff)
+    .map((item) => item.point)
+
+  return filtered.length ? filtered : points
+}
+
+function parsePointLabelDate(label: string) {
+  const normalized = normalizeDateLabel(label)
+  const parsed = new Date(`${normalized}T00:00:00`)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
 async function fetchStockQuote(symbol: string) {
@@ -1465,18 +1604,30 @@ function formatNumber(value: number, digits = 2) {
   }).format(value)
 }
 
+function formatPercentValue(value: number, digits = 2) {
+  if (!Number.isFinite(value)) return '--'
+  return `${formatNumber(value * 100, digits)}%`
+}
+
 function formatCurrency(value: number) {
   if (!Number.isFinite(value)) return '¥--'
   const sign = value < 0 ? '-' : ''
   return `${sign}¥${formatNumber(Math.abs(value))}`
 }
 
+function getNetTransactionAmount(entry: InvestmentTransaction) {
+  return Number(entry.amount) - Number(entry.feeAmount ?? 0) - Number(entry.taxAmount ?? 0)
+}
+
 function formatAmountLabel(entry: InvestmentTransaction) {
   if (entry.settlementStatus === 'pending' && entry.tradeType === 'sell') {
-    return `回款金额 ${formatCurrency(Number(entry.amount))}`
+    return `预计到账 ${formatCurrency(getNetTransactionAmount(entry))}`
   }
   if (entry.settlementStatus === 'pending' && entry.tradeType === 'buy') {
     return `申购金额 ${formatCurrency(Number(entry.amount))}`
+  }
+  if (entry.tradeType === 'sell') {
+    return `到账金额 ${formatCurrency(getNetTransactionAmount(entry))}`
   }
   return `金额 ${formatCurrency(Number(entry.amount))}`
 }
@@ -1485,13 +1636,15 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
   if (entry.tradeType === 'sell') {
     const appliedDate = entry.settlementAppliedDate || '--'
     const expectedDate = entry.settlementExpectedDate || appliedDate
+    const feeText = formatCurrency(Number(entry.feeAmount ?? 0))
+    const netAmountText = formatCurrency(getNetTransactionAmount(entry))
     if (entry.settlementStatus === 'confirmed') {
-      return '基金减仓已按确认净值结算，到账金额已更新'
+      return `基金减仓已按确认净值结算，到账 ${netAmountText}`
     }
     if (expectedDate === appliedDate) {
-      return `基金减仓申请已提交，将按 ${appliedDate} 净值确认到账金额`
+      return `基金减仓申请已提交，预计手续费 ${feeText}，将按 ${appliedDate} 净值确认，预计到账 ${netAmountText}`
     }
-    return `基金减仓申请已提交，将按 ${appliedDate} 净值确认，预计 ${expectedDate} 完成到账`
+    return `基金减仓申请已提交，预计手续费 ${feeText}，将按 ${appliedDate} 净值确认，预计 ${expectedDate} 到账 ${netAmountText}`
   }
 
   if (entry.settlementStatus === 'confirmed') {
@@ -1555,6 +1708,14 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           <h2>{{ detail.chartType === 'candlestick' ? '股票日K走势' : '业绩走势' }}</h2>
           <span>{{ externalStatus || detail.source || '行情接口' }}</span>
         </header>
+        <SegmentedControl
+          v-if="detail.productType === 'fund'"
+          v-model="selectedFundTrendRange"
+          :options="fundTrendRangeOptions"
+          label="基金业绩走势区间切换"
+          class="investment-detail-trend-range"
+          variant="surface"
+        />
         <div v-if="detail.chartPoints.length" ref="chartRef" class="investment-detail-chart"></div>
         <p v-else class="investment-detail-empty">暂无走势数据</p>
       </section>
@@ -1749,6 +1910,25 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
             :options="tradeTimeSlotOptions"
             label="基金交易时点"
           />
+        </label>
+
+        <label v-if="showFundRedeemFeeSelector" class="investment-detail-modal-field">
+          <span>手续费档位</span>
+          <select v-model="tradeFundFeeMode" class="investment-detail-field-control">
+            <option v-for="option in tradeFundFeeSelectOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <label v-if="showFundRedeemFeeSelector" class="investment-detail-modal-field">
+          <span>预计手续费</span>
+          <input class="investment-detail-field-control" :value="tradeFundFeeAmountPreview" type="text" readonly />
+        </label>
+
+        <label v-if="showFundRedeemFeeSelector" class="investment-detail-modal-field">
+          <span>预计到账</span>
+          <input class="investment-detail-field-control" :value="tradeFundNetAmountPreview" type="text" readonly />
         </label>
 
         <label class="investment-detail-modal-field">

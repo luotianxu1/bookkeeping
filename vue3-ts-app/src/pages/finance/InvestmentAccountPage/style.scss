@@ -269,6 +269,7 @@
   min-height: var(--space-24);
   display: flex;
   align-items: center;
+  gap: 0;
 }
 
 .investment-metric-item {
@@ -277,18 +278,39 @@
   display: grid;
   gap: var(--space-6);
   justify-items: center;
+  align-content: center;
+  min-height: 40px;
 }
 
 .investment-metric-item span {
+  width: 100%;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text-muted);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
 
 .investment-metric-item strong {
+  width: 100%;
+  overflow: hidden;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-success);
   font-size: var(--font-size-12);
   font-weight: 700;
+}
+
+.investment-metric-item :deep(.investment-metric-value) {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .investment-metric-item :deep(.investment-metric-value.amount-text--positive) {
@@ -596,77 +618,4 @@
   font-weight: 700;
   line-height: 1;
   box-shadow: 0 12px 30px rgba(29, 78, 216, 0.32);
-}
-
-@media (prefers-color-scheme: dark) {
-  .investment-message,
-  .investment-holding-card {
-    border-color: var(--color-dark-card-border);
-    background: var(--color-dark-card-bg);
-  }
-
-  .investment-summary-main p,
-  .investment-summary-main span,
-  .investment-summary-side span,
-  .investment-metric-item span,
-  .holding-quantity-tag,
-  .holding-value-line > span,
-  .holding-card-right-top > span,
-  .holding-panel-field > span,
-  .investment-add-modal-field > span {
-    color: var(--color-dark-text-muted);
-  }
-
-  .investment-summary-main strong,
-  .investment-summary-side strong,
-  .investment-metric-item strong,
-  .holding-title strong,
-  .holding-market-value,
-  .holding-panel-value,
-  .holding-pnl-value,
-  .holding-allocation strong,
-  .investment-message {
-    color: var(--color-bg-page);
-  }
-
-  .investment-metric-divider,
-  .holding-divider {
-    background: var(--color-dark-card-border);
-  }
-
-  .holding-quantity-tag {
-    border-color: var(--color-dark-card-border);
-    background: rgba(148, 163, 184, 0.12);
-  }
-
-  .holding-pnl-rate {
-    background: rgba(22, 163, 74, 0.12);
-    color: #86efac;
-  }
-
-  .holding-pending-amount {
-    color: #7ba0ff;
-  }
-
-  .investment-summary-side :deep(.investment-summary-rate.amount-text--neutral),
-  .investment-summary-side :deep(.amount-text--neutral) {
-    color: var(--color-bg-page);
-  }
-
-  .investment-metric-item :deep(.investment-metric-value.amount-text--neutral) {
-    color: var(--color-dark-text-muted);
-  }
-
-  .holding-allocation-track {
-    background: var(--color-dark-card-border);
-  }
-
-  .investment-message-error,
-  .investment-add-error {
-    color: #f87171;
-  }
-
-  .investment-lookup-message {
-    color: var(--color-dark-text-muted);
-  }
 }

@@ -121,7 +121,6 @@ const summaryMetrics = computed(() => [
   { label: '今日盈亏', value: summary.value.dayProfit, isRate: false },
   { label: '持仓盈亏', value: summary.value.holdingProfit, isRate: false },
   { label: '累计总收益', value: totalSummaryProfit.value, isRate: false },
-  { label: '账户数', value: accounts.value.length, isRate: false, isCount: true },
 ])
 
 onMounted(() => {
@@ -376,8 +375,8 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <span>{{ metric.label }}</span>
               <AmountText
                 tag="strong"
-                :tone="metric.isCount ? 'inherit' : 'auto'"
-                :value="formatMetricValue(metric.value, metric.isRate, metric.isCount)"
+                tone="auto"
+                :value="formatMetricValue(metric.value, metric.isRate)"
               />
             </div>
           </template>

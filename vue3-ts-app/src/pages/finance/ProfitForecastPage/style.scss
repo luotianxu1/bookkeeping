@@ -242,36 +242,3 @@
   font-weight: 500;
   line-height: 1.2;
 }
-
-@media (prefers-color-scheme: dark) {
-  .summary-card,
-  .holding-card {
-    border-color: var(--color-dark-card-border);
-    background: var(--color-dark-card-bg);
-  }
-
-  .summary-account-pill {
-    border-color: rgba(148, 163, 184, 0.22);
-    background-color: rgba(15, 23, 42, 0.24);
-    color: var(--color-brand-light, #93c5fd);
-  }
-
-  .holding-name {
-    color: var(--color-bg-page);
-  }
-
-  .summary-title,
-  .summary-hint,
-  .holding-header-title,
-  .holding-amount,
-  .holding-update,
-  .holding-header-right span,
-  .summary-row--headline span,
-  .holding-empty {
-    color: var(--color-dark-text-muted);
-  }
-
-  .holding-row {
-    border-bottom-color: var(--color-dark-card-border);
-  }
-}

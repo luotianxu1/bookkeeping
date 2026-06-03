@@ -213,44 +213,6 @@
   color: var(--color-danger);
 }
 
-@media (prefers-color-scheme: dark) {
-  .market-news-refresh,
-  .market-news-card,
-  .market-news-message {
-    background: var(--color-dark-card-bg);
-    border-color: var(--color-dark-card-border);
-  }
-
-  .market-news-category-chip {
-    background: var(--color-dark-card-bg);
-    border-color: var(--color-dark-card-border);
-    color: var(--color-dark-text-muted);
-  }
-
-  .market-news-time,
-  .market-news-related,
-  .market-news-card-bottom span,
-  .market-news-summary-main span,
-  .market-news-message {
-    color: var(--color-dark-text-muted);
-  }
-
-  .market-news-card strong {
-    color: var(--color-bg-page);
-  }
-
-  .market-news-card strong.highlight {
-    color: var(--color-bg-page);
-  }
-
-  .market-news-card p {
-    color: var(--color-bg-page);
-  }
-
-  .market-news-related {
-    background: rgba(148, 163, 184, 0.12);
-  }
-}
 
 @keyframes market-news-spin {
   from {

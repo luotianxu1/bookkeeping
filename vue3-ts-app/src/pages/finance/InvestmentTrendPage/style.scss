@@ -59,16 +59,19 @@
   justify-items: end;
   gap: var(--space-4);
   text-align: right;
+  flex-shrink: 0;
 }
 
 .investment-trend-summary-side :deep(.summary-profit.amount-text) {
   font-size: var(--font-size-18);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .investment-trend-summary-side :deep(.summary-rate.amount-text) {
   font-size: var(--font-size-12);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .investment-trend-card {
@@ -193,50 +196,4 @@
 .investment-trend-empty {
   padding: var(--space-14);
   border-style: dashed;
-}
-
-@media (prefers-color-scheme: dark) {
-  .investment-trend-summary-card {
-    border-color: #31405f;
-    background: linear-gradient(135deg, #22355a 0%, #121b2d 100%);
-    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
-  }
-
-  .investment-trend-card,
-  .investment-trend-message,
-  .investment-trend-empty {
-    border-color: var(--color-dark-card-border);
-    background: var(--color-dark-card-bg);
-  }
-
-  .investment-trend-summary-main p,
-  .investment-trend-summary-side span {
-    color: #9fb5df;
-  }
-
-  .investment-trend-summary-main strong {
-    color: var(--color-white);
-  }
-
-  .investment-trend-summary-main span,
-  .investment-trend-card-head p,
-  .trend-card-side span,
-  .investment-trend-foot,
-  .contributor-main span,
-  .allocation-side span:last-child {
-    color: var(--color-dark-text-muted);
-  }
-
-  .investment-trend-card-head strong,
-  .allocation-title strong,
-  .contributor-title strong,
-  .allocation-side,
-  .investment-trend-message,
-  .investment-trend-empty {
-    color: var(--color-white);
-  }
-
-  .contributor-item + .contributor-item {
-    border-top-color: #1e293b;
-  }
 }

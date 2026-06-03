@@ -3,10 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
-import MonthPicker from '@/components/common/MonthPicker/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
-import YearPicker from '@/components/common/YearPicker/index.vue'
 import {
   getFundProfitPage,
   type FundProfitCalendarCell,
@@ -24,20 +22,21 @@ type DetailFilter = 'all' | 'profit' | 'loss'
 const router = useRouter()
 
 const viewOptions = [
-  { label: '日视图', value: 'day', icon: 'calendar-day' },
-  { label: '月视图', value: 'month', icon: 'calendar-month' },
-  { label: '年视图', value: 'year', icon: 'calendar-year' },
+  { label: '日视图', value: 'day' },
+  { label: '月视图', value: 'month' },
+  { label: '年视图', value: 'year' },
 ] as const
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
-const detailFilters: Array<{ label: string; value: DetailFilter }> = [
-  { label: '全部', value: 'all' },
-  { label: '盈利', value: 'profit' },
-  { label: '亏损', value: 'loss' },
-]
+const summaryShortcutOrder: Record<string, number> = {
+  today: 0,
+  '7d': 1,
+  month: 2,
+  cumulative: 3,
+}
 
 const selectedView = ref<FundProfitView>('day')
 const selectedAccountId = ref('all')
-const selectedSummaryShortcut = ref('today')
+const selectedSummaryShortcut = ref('cumulative')
 const selectedDetailFilter = ref<DetailFilter>('all')
 const selectedKey = ref('')
 const dayAnchor = ref(formatMonthValue(new Date()))
@@ -48,31 +47,30 @@ const isLoading = ref(false)
 const pageError = ref('')
 
 const isDayView = computed(() => selectedView.value === 'day')
-const isMonthView = computed(() => selectedView.value === 'month')
-
-const accountOptions = computed(() => {
-  const options = [{ label: '全部账户', value: 'all' }]
-  for (const account of pageData.value?.accounts ?? []) {
-    options.push({
-      label: `${account.accountName}（${account.fundCount}只）`,
-      value: String(account.accountId),
-    })
-  }
-  return options
-})
 
 const selectedAccountLabel = computed(() =>
-  accountOptions.value.find((option) => option.value === selectedAccountId.value)?.label ?? '全部账户',
+  pageData.value?.accounts.find((account) => String(account.accountId) === selectedAccountId.value)?.accountName ?? '全部账户',
 )
 
-const visibleSummaryShortcuts = computed(() =>
-  (pageData.value?.summary.shortcuts ?? []).filter((item) => !isHiddenSummaryShortcut(item)),
+const summaryShortcuts = computed(() =>
+  [...(pageData.value?.summary.shortcuts ?? [])].sort((left, right) => {
+    const leftOrder = summaryShortcutOrder[left.key] ?? 99
+    const rightOrder = summaryShortcutOrder[right.key] ?? 99
+    return leftOrder - rightOrder
+  }),
 )
 
 const selectedSummaryMetric = computed<FundProfitPageSummaryMetric | null>(() => {
-  const items = visibleSummaryShortcuts.value
+  const items = summaryShortcuts.value
   return items.find((item) => item.key === selectedSummaryShortcut.value) ?? items[0] ?? null
 })
+
+const summaryShortcutOptions = computed(() =>
+  summaryShortcuts.value.map((item) => ({
+    label: item.label,
+    value: item.key,
+  })),
+)
 
 const summaryTitle = computed(() => {
   if (selectedAccountId.value === 'all') {
@@ -81,14 +79,11 @@ const summaryTitle = computed(() => {
   return `${selectedAccountLabel.value}收益总览`
 })
 
+const summaryPillText = computed(() => `${pageData.value?.summary.fundCount ?? 0}只持仓基金`)
+
 const summaryHint = computed(() => {
   const syncText = formatDateTime(pageData.value?.summary.lastSyncedAt ?? pageData.value?.lastSyncedAt)
-  return syncText ? `含已确认基金持仓，数据更新时间 ${syncText}` : '含已确认基金持仓'
-})
-
-const summaryRateLabel = computed(() => {
-  const label = selectedSummaryMetric.value?.label ?? '区间'
-  return `${label}收益率`
+  return syncText ? `含分红再投资，数据更新时间 ${syncText}` : '含分红再投资'
 })
 
 const trendPoints = computed(() => pageData.value?.trendPoints ?? [])
@@ -110,6 +105,20 @@ const trendStats = computed(() => {
   }
 })
 
+const trendPositiveRate = computed(() => {
+  if (!trendPoints.value.length) {
+    return '--'
+  }
+  return `${Math.round((trendStats.value.positiveDays / trendPoints.value.length) * 100)}%`
+})
+
+const trendNegativeRate = computed(() => {
+  if (!trendPoints.value.length) {
+    return '--'
+  }
+  return `${Math.round((trendStats.value.negativeDays / trendPoints.value.length) * 100)}%`
+})
+
 const trendFootnote = computed(() => {
   if (!trendStats.value.peak || !trendStats.value.trough) {
     return '近 7 日收益变化将按上方所选账户持续更新。'
@@ -129,8 +138,35 @@ const calendarTitle = computed(() => {
 
 const selection = computed(() => pageData.value?.selection ?? null)
 const selectionLabel = computed(() => selection.value?.label ?? '--')
+const calendarHeadLabel = computed(() => {
+  if (selectedView.value === 'month') {
+    return '月视图'
+  }
+  if (selectedView.value === 'year') {
+    return '年视图'
+  }
+  return '日视图'
+})
 const contributionTitle = computed(() => `${selectionLabel.value}收益贡献榜`)
 const detailTitle = computed(() => `${selectionLabel.value}收益明细`)
+const contributionSideText = computed(() => {
+  if (selectedView.value === 'month') {
+    return '按月收益排序'
+  }
+  if (selectedView.value === 'year') {
+    return '按年度收益排序'
+  }
+  return '按当日收益排序'
+})
+const detailPeriodLabel = computed(() => {
+  if (selectedView.value === 'month') {
+    return '本月'
+  }
+  if (selectedView.value === 'year') {
+    return selectionLabel.value
+  }
+  return '当日'
+})
 
 const dayCalendarCells = computed<Array<FundProfitCalendarCell | null>>(() => {
   if (!isDayView.value) {
@@ -144,14 +180,55 @@ const dayCalendarCells = computed<Array<FundProfitCalendarCell | null>>(() => {
 
   const firstDate = new Date(`${items[0].startDate}T00:00:00`)
   const offset = (firstDate.getDay() + 6) % 7
-  return [...Array.from({ length: offset }, () => null), ...items]
+  const cells = [...Array.from({ length: offset }, () => null), ...items]
+  const remainder = cells.length % 7
+  if (remainder === 0) {
+    return cells
+  }
+  return [...cells, ...Array.from({ length: 7 - remainder }, () => null)]
 })
 
 const periodCards = computed(() => (isDayView.value ? [] : pageData.value?.calendarItems ?? []))
+const yearPeriodCards = computed<Array<FundProfitCalendarCell | null>>(() => {
+  if (selectedView.value !== 'year') {
+    return []
+  }
+  const items = [...periodCards.value]
+  const remainder = items.length % 3
+  if (remainder === 0) {
+    return items
+  }
+  return [...items, ...Array.from({ length: 3 - remainder }, () => null)]
+})
 const contributors = computed(() => pageData.value?.contributors ?? [])
 const contributionMaxAbs = computed(() => {
   const max = contributors.value.reduce((current, item) => Math.max(current, Math.abs(Number(item.contributionAmount ?? 0))), 0)
   return max > 0 ? max : 1
+})
+const contributionFootnote = computed(() => {
+  if (!contributors.value.length) {
+    return '当前范围暂无可展示的收益分析。'
+  }
+
+  const topContributor = contributors.value[0]
+  const positiveCount = contributors.value.filter((item) => Number(item.contributionAmount ?? 0) > 0).length
+  const topNames = contributors.value
+    .slice(0, 3)
+    .map((item) => item.productName)
+    .filter(Boolean)
+  const topThreeShare = contributors.value
+    .slice(0, 3)
+    .reduce((total, item) => total + Math.abs(Number(item.contributionRate ?? 0)), 0)
+
+  if (selectedView.value === 'month') {
+    return `${selectionLabel.value}收益主要集中在${topNames.slice(0, 2).join('和')}，前 3 只基金贡献占比 ${formatPlainRate(topThreeShare, 0)}。`
+  }
+
+  if (selectedView.value === 'year') {
+    return `${selectionLabel.value}收益贡献由${joinDisplayNames(topNames)}共同拉动，收益结构更均衡。`
+  }
+
+  return `${selectionLabel.value} 当日共有 ${positiveCount} 只基金录得正收益，收益主要来自${topContributor.productName}。`
 })
 
 const visibleDetails = computed(() => {
@@ -165,11 +242,66 @@ const visibleDetails = computed(() => {
   return details
 })
 
-const analysisLink = computed(() => (
-  selectedAccountId.value === 'all'
-    ? '/finance/trend'
-    : `/finance/trend?accountId=${selectedAccountId.value}`
-))
+const detailFilterOptions = computed(() => {
+  const details = pageData.value?.details ?? []
+  const profitCount = details.filter((item) => Number(item.periodProfit ?? 0) > 0).length
+  const lossCount = details.filter((item) => Number(item.periodProfit ?? 0) < 0).length
+  return [
+    { label: `全部 ${details.length}`, value: 'all' as const },
+    { label: `盈利 ${profitCount}`, value: 'profit' as const },
+    { label: `亏损 ${lossCount}`, value: 'loss' as const },
+  ]
+})
+
+const calendarAnchorLabel = computed(() => {
+  if (selectedView.value === 'month') {
+    return `${monthAnchor.value}年`
+  }
+  if (selectedView.value === 'year') {
+    return '近5年'
+  }
+  return formatMonthLabel(dayAnchor.value)
+})
+
+const calendarStatePillText = computed(() => {
+  const items = pageData.value?.calendarItems ?? []
+  if (selectedView.value === 'month') {
+    const positiveMonths = items.filter((item) => Number(item.profit ?? 0) > 0).length
+    return `正收益月 ${positiveMonths} / ${items.length || 0}`
+  }
+  if (selectedView.value === 'year') {
+    return `${yearAnchor.value} 为当前年`
+  }
+  const positiveDays = items.filter((item) => Number(item.profit ?? 0) > 0).length
+  return `正收益 ${positiveDays} 天`
+})
+
+const calendarFootnote = computed(() => {
+  if (selectedView.value === 'month') {
+    return '点击月份可切换到日视图查看当月每日收益表现。'
+  }
+  if (selectedView.value === 'year') {
+    return '点击年份卡片可切换到月视图查看当年各月收益表现。'
+  }
+  return '点击日期可下钻查看当日基金收益构成，红色为上涨、绿色为回撤。'
+})
+
+const showCalendarLegend = computed(() => selectedView.value !== 'year')
+
+const calendarLegendItems = computed(() => {
+  if (selectedView.value === 'month') {
+    return [
+      { label: '盈利月', tone: 'positive' },
+      { label: '回撤月', tone: 'negative' },
+      { label: '当前月', tone: 'selected' },
+    ]
+  }
+  return [
+    { label: '上涨', tone: 'positive' },
+    { label: '下跌', tone: 'negative' },
+    { label: '选中', tone: 'selected' },
+  ]
+})
 
 const viewModel = computed({
   get: () => selectedView.value,
@@ -178,54 +310,6 @@ const viewModel = computed({
       return
     }
     selectedView.value = value as FundProfitView
-    selectedKey.value = ''
-    void loadPage()
-  },
-})
-
-const accountModel = computed({
-  get: () => selectedAccountId.value,
-  set: (value: string) => {
-    if (value === selectedAccountId.value) {
-      return
-    }
-    selectedAccountId.value = value
-    selectedKey.value = ''
-    void loadPage()
-  },
-})
-
-const dayAnchorModel = computed({
-  get: () => dayAnchor.value,
-  set: (value: string) => {
-    if (value === dayAnchor.value) {
-      return
-    }
-    dayAnchor.value = value
-    selectedKey.value = ''
-    void loadPage()
-  },
-})
-
-const monthAnchorModel = computed({
-  get: () => monthAnchor.value,
-  set: (value: number) => {
-    if (value === monthAnchor.value) {
-      return
-    }
-    monthAnchor.value = value
-    selectedKey.value = ''
-    void loadPage()
-  },
-})
-
-const yearAnchorModel = computed({
-  get: () => yearAnchor.value,
-  set: (value: number) => {
-    if (value === yearAnchor.value) {
-      return
-    }
-    yearAnchor.value = value
     selectedKey.value = ''
     void loadPage()
   },
@@ -278,13 +362,13 @@ function syncPageState(data: FundProfitPage) {
   }
 
   const shortcutKeys = new Set(
-    (data.summary.shortcuts ?? [])
-      .filter((item) => !isHiddenSummaryShortcut(item))
-      .map((item) => item.key),
+    (data.summary.shortcuts ?? []).map((item) => item.key),
   )
   if (!shortcutKeys.has(selectedSummaryShortcut.value)) {
-    const nextShortcut = (data.summary.shortcuts ?? []).find((item) => !isHiddenSummaryShortcut(item))
-    selectedSummaryShortcut.value = shortcutKeys.has(data.summary.activeShortcut) ? data.summary.activeShortcut : nextShortcut?.key || 'today'
+    const nextShortcut = data.summary.shortcuts?.[0]
+    selectedSummaryShortcut.value = shortcutKeys.has(data.summary.activeShortcut)
+      ? data.summary.activeShortcut
+      : nextShortcut?.key || 'cumulative'
   }
 
   const validAccountIds = new Set(['all', ...data.accounts.map((account) => String(account.accountId))])
@@ -318,6 +402,42 @@ function handleCalendarSelect(item: FundProfitCalendarCell) {
   void loadPage()
 }
 
+function handlePeriodSelect(item: FundProfitCalendarCell) {
+  if (item.profit === null || item.profit === undefined) {
+    return
+  }
+
+  if (selectedView.value === 'month') {
+    dayAnchor.value = item.startDate.slice(0, 7)
+    selectedView.value = 'day'
+    selectedKey.value = ''
+    void loadPage()
+    return
+  }
+
+  if (selectedView.value === 'year') {
+    monthAnchor.value = Number.parseInt(item.startDate.slice(0, 4), 10) || monthAnchor.value
+    selectedView.value = 'month'
+    selectedKey.value = ''
+    void loadPage()
+    return
+  }
+
+  handleCalendarSelect(item)
+}
+
+function shiftCalendarAnchor(offset: number) {
+  if (selectedView.value === 'day') {
+    dayAnchor.value = shiftMonthValue(dayAnchor.value, offset)
+  } else if (selectedView.value === 'month') {
+    monthAnchor.value += offset
+  } else {
+    yearAnchor.value += offset
+  }
+  selectedKey.value = ''
+  void loadPage()
+}
+
 function openDetail(item: FundProfitDetail) {
   router.push({
     path: '/finance/accounts/investment/detail',
@@ -331,6 +451,20 @@ function formatMonthValue(date: Date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   return `${year}-${month}`
+}
+
+function formatMonthLabel(value: string) {
+  const matched = /^(\d{4})-(\d{2})$/.exec(value)
+  if (!matched) {
+    return value
+  }
+  return `${matched[1]}年${matched[2]}月`
+}
+
+function shiftMonthValue(value: string, offset: number) {
+  const [yearText, monthText] = value.split('-')
+  const date = new Date(Number(yearText), Number(monthText) - 1 + offset, 1)
+  return formatMonthValue(date)
 }
 
 function formatNumber(value: number, digits = 2) {
@@ -356,6 +490,10 @@ function formatRate(value: number, digits = 2) {
   return `${sign}${formatNumber(normalized, digits)}%`
 }
 
+function formatPlainRate(value: number, digits = 2) {
+  return `${formatNumber(Math.abs(Number(value ?? 0)), digits)}%`
+}
+
 function formatHoldingQuantity(value: number) {
   return `${formatNumber(value, 2)}份`
 }
@@ -377,10 +515,6 @@ function formatDateTime(value?: string | null) {
     minute: '2-digit',
     hour12: false,
   }).format(date)
-}
-
-function isHiddenSummaryShortcut(item: FundProfitPageSummaryMetric) {
-  return item.key === 'cumulative' || item.label === '累计'
 }
 
 function getTone(value: number) {
@@ -414,6 +548,34 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
   }
   return 'neutral'
 }
+
+function getContributionShareText(item: FundProfitContribution) {
+  if (selectedView.value === 'month') {
+    return `占月收益 ${formatPlainRate(item.contributionRate, 0)}`
+  }
+  if (selectedView.value === 'year') {
+    return `占年收益 ${formatPlainRate(item.contributionRate, 0)}`
+  }
+  return `占日收益 ${formatPlainRate(item.contributionRate, 0)}`
+}
+
+function getDetailAccumulatedProfit(item: FundProfitDetail) {
+  return item.holdingAmount - item.costAmount
+}
+
+function formatRank(index: number) {
+  return String(index + 1).padStart(2, '0')
+}
+
+function joinDisplayNames(items: string[]) {
+  if (items.length <= 1) {
+    return items[0] ?? '基金组合'
+  }
+  if (items.length === 2) {
+    return `${items[0]}和${items[1]}`
+  }
+  return `${items[0]}、${items[1]}和${items[2]}`
+}
 </script>
 
 <template>
@@ -426,39 +588,36 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
     <CommonLoading v-else-if="isLoading" text="基金收益加载中..." />
 
     <template v-else-if="pageData">
+      <SegmentedControl
+        v-model="selectedSummaryShortcut"
+        :options="summaryShortcutOptions"
+        label="基金收益范围切换"
+        class="fund-profit-range-seg"
+      />
+
       <section class="fund-profit-summary-card" aria-label="基金收益汇总">
         <div class="fund-profit-summary-top">
           <div class="fund-profit-summary-main">
             <p>{{ summaryTitle }}</p>
-            <AmountText
-              tag="strong"
-              class="summary-amount"
-              :value="selectedSummaryMetric?.profit ?? 0"
-              :tone="getTone(Number(selectedSummaryMetric?.profit ?? 0))"
-              show-sign
-              show-unit
-            />
-            <span>{{ summaryHint }}</span>
-          </div>
-
-          <div class="fund-profit-summary-side">
-            <label class="summary-account-pill">
-              <span class="summary-account-pill-text">{{ selectedAccountLabel }}</span>
-              <select v-model="accountModel" class="summary-account-pill-select" aria-label="查看账户">
-                <option v-for="option in accountOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-            <div class="summary-rate-card">
-              <span>{{ summaryRateLabel }}</span>
+            <div class="summary-amount-row">
               <AmountText
                 tag="strong"
+                class="summary-amount"
+                :value="selectedSummaryMetric?.profit ?? 0"
+                :tone="getTone(Number(selectedSummaryMetric?.profit ?? 0))"
+                show-sign
+                show-unit
+              />
+              <AmountText
+                tag="span"
+                class="summary-rate-inline"
                 :value="selectedSummaryMetric ? formatRate(selectedSummaryMetric.profitRate) : '--'"
                 :tone="getTone(Number(selectedSummaryMetric?.profitRate ?? 0))"
               />
             </div>
           </div>
+
+          <div class="summary-account-pill">{{ summaryPillText }}</div>
         </div>
 
         <div class="fund-profit-summary-stats">
@@ -467,51 +626,39 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
             <strong>{{ formatCurrency(pageData.summary.holdingAmount) }}</strong>
           </article>
           <article class="summary-stat-card">
-            <span>持仓成本</span>
+            <span>累计投入</span>
             <strong>{{ formatCurrency(pageData.summary.investedAmount) }}</strong>
-          </article>
-          <article class="summary-stat-card">
-            <span>总收益</span>
-            <AmountText
-              tag="strong"
-              :value="pageData.summary.totalProfit"
-              :tone="getTone(pageData.summary.totalProfit)"
-              show-sign
-              show-unit
-            />
           </article>
         </div>
 
-        <div class="summary-shortcuts" aria-label="收益范围快捷切换">
-          <button
-            v-for="shortcut in visibleSummaryShortcuts"
-            :key="shortcut.key"
-            :class="['summary-shortcut', { active: shortcut.key === selectedSummaryShortcut }]"
-            type="button"
-            @click="selectedSummaryShortcut = shortcut.key"
-          >
-            <span>{{ shortcut.label }}</span>
-            <AmountText
-              tag="strong"
-              :value="formatSignedCurrency(shortcut.profit)"
-              :tone="getTone(shortcut.profit)"
-            />
-          </button>
-        </div>
+        <p class="summary-hint">{{ summaryHint }}</p>
       </section>
 
       <section class="fund-profit-card fund-profit-insight-banner" aria-label="收益洞察">
-        <div class="insight-dot"></div>
-        <p>{{ pageData.insight }}</p>
+        <span class="insight-icon-wrap">
+          <span class="insight-dot"></span>
+        </span>
+        <div class="insight-text-wrap">
+          <p>{{ pageData.insight }}</p>
+          <span class="insight-action">查看</span>
+        </div>
       </section>
 
       <section class="fund-profit-card" aria-label="近7日收益波动">
         <header class="fund-profit-card-head">
           <div>
             <strong>近7日收益波动</strong>
-            <p>按所选账户展示最近 7 天基金收益变化</p>
           </div>
-          <span class="card-side-text">单位：元</span>
+          <div class="trend-legend">
+            <span class="trend-legend-item">
+              <i class="positive"></i>
+              <span>上涨</span>
+            </span>
+            <span class="trend-legend-item">
+              <i class="negative"></i>
+              <span>下跌</span>
+            </span>
+          </div>
         </header>
 
         <div class="trend-chart">
@@ -534,12 +681,16 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
 
         <div class="trend-stats">
           <article class="trend-stat up">
-            <span>正收益天数</span>
-            <strong>{{ trendStats.positiveDays }}</strong>
+            <span>上涨 {{ trendStats.positiveDays }} 天</span>
+            <strong>{{ trendPositiveRate }}</strong>
           </article>
           <article class="trend-stat down">
-            <span>回撤天数</span>
-            <strong>{{ trendStats.negativeDays }}</strong>
+            <span>下跌 {{ trendStats.negativeDays }} 天</span>
+            <strong>{{ trendNegativeRate }}</strong>
+          </article>
+          <article class="trend-stat neutral">
+            <span>最大回撤</span>
+            <strong>{{ trendStats.trough ? formatSignedCurrency(Number(trendStats.trough.profit ?? 0), 0) : '--' }}</strong>
           </article>
         </div>
       </section>
@@ -548,108 +699,127 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
         <header class="fund-profit-card-head">
           <div>
             <strong>{{ calendarTitle }}</strong>
-            <p>点击任意日、月、年，下方贡献榜和明细会同步切换</p>
           </div>
-          <span class="card-side-text">{{ selectionLabel }}已选</span>
+          <span class="card-side-text">{{ calendarHeadLabel }}</span>
         </header>
 
         <SegmentedControl
           v-model="viewModel"
           :options="viewOptions"
           label="基金收益视图切换"
+          class="calendar-view-seg"
           variant="surface"
         />
 
-        <div class="calendar-toolbar">
-          <MonthPicker v-if="isDayView" v-model="dayAnchorModel" />
-          <YearPicker v-else-if="isMonthView" v-model="monthAnchorModel" />
-          <YearPicker v-else v-model="yearAnchorModel" />
-
-          <div class="calendar-status-pill">
-            <span>正收益 {{ selection?.positiveFundCount ?? 0 }}</span>
-            <span>回撤 {{ selection?.negativeFundCount ?? 0 }}</span>
+        <div class="calendar-meta-row">
+          <div class="calendar-meta-left">
+            <button type="button" class="calendar-nav-button" @click="shiftCalendarAnchor(-1)">‹</button>
+            <strong>{{ calendarAnchorLabel }}</strong>
+            <button type="button" class="calendar-nav-button" @click="shiftCalendarAnchor(1)">›</button>
           </div>
+
+          <div class="calendar-status-pill" :class="`is-${selectedView}`">
+            <span>{{ calendarStatePillText }}</span>
+          </div>
+        </div>
+
+        <div v-if="showCalendarLegend" class="calendar-legend-row">
+          <span
+            v-for="item in calendarLegendItems"
+            :key="item.label"
+            class="calendar-legend-item"
+          >
+            <i :class="`is-${item.tone}`"></i>
+            <span>{{ item.label }}</span>
+          </span>
         </div>
 
         <template v-if="isDayView">
-          <div class="weekday-row">
-            <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
-          </div>
+          <div class="calendar-box">
+            <div class="weekday-row">
+              <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
+            </div>
 
-          <div class="day-calendar-grid">
-            <template v-for="(item, index) in dayCalendarCells" :key="item?.key ?? `blank-${index}`">
-              <span v-if="!item" class="day-calendar-cell day-calendar-cell-blank"></span>
-              <button
-                v-else
-                type="button"
-                :class="[
-                  'day-calendar-cell',
-                  `is-${getPeriodCardTone(item)}`,
-                  { selected: item.selected, current: item.current, disabled: item.profit === null || item.profit === undefined },
-                ]"
-                @click="handleCalendarSelect(item)"
-              >
-                <strong>{{ item.label }}</strong>
-                <span>{{ item.profit === null || item.profit === undefined ? '--' : formatSignedCurrency(item.profit, 0) }}</span>
-              </button>
-            </template>
+            <div class="day-calendar-grid">
+              <template v-for="(item, index) in dayCalendarCells" :key="item?.key ?? `blank-${index}`">
+                <span v-if="!item" class="day-calendar-cell day-calendar-cell-blank"></span>
+                <button
+                  v-else
+                  type="button"
+                  :class="[
+                    'day-calendar-cell',
+                    `is-${getPeriodCardTone(item)}`,
+                    { selected: item.selected, current: item.current, disabled: item.profit === null || item.profit === undefined },
+                  ]"
+                  @click="handlePeriodSelect(item)"
+                >
+                  <strong>{{ item.label }}</strong>
+                  <span>{{ item.profit === null || item.profit === undefined ? '--' : formatSignedCurrency(item.profit, 0) }}</span>
+                </button>
+              </template>
+            </div>
           </div>
         </template>
 
-        <div v-else class="period-card-grid" :class="{ 'period-card-grid-year': !isMonthView }">
-          <button
-            v-for="item in periodCards"
-            :key="item.key"
-            type="button"
-            :class="[
-              'period-card',
-              `is-${getPeriodCardTone(item)}`,
-              { selected: item.selected, current: item.current, disabled: item.profit === null || item.profit === undefined },
-            ]"
-            @click="handleCalendarSelect(item)"
-          >
-            <span class="period-card-label">{{ item.label }}</span>
-            <AmountText
-              tag="strong"
-              :value="item.profit === null || item.profit === undefined ? '--' : formatSignedCurrency(item.profit)"
-              :tone="getTone(Number(item.profit ?? 0))"
-            />
-            <span class="period-card-side">
-              {{ item.profitRate === null || item.profitRate === undefined ? '--' : formatRate(item.profitRate) }}
-            </span>
-          </button>
+        <div v-else class="period-card-grid" :class="{ 'period-card-grid-year': selectedView === 'year' }">
+          <template v-for="(item, index) in selectedView === 'year' ? yearPeriodCards : periodCards" :key="item?.key ?? `spacer-${index}`">
+            <span v-if="!item" class="period-card period-card-spacer"></span>
+            <button
+              v-else
+              type="button"
+              :class="[
+                'period-card',
+                `is-${getPeriodCardTone(item)}`,
+                { selected: item.selected, current: item.current, disabled: item.profit === null || item.profit === undefined },
+              ]"
+              @click="handlePeriodSelect(item)"
+            >
+              <span class="period-card-label">{{ item.label }}</span>
+              <AmountText
+                tag="strong"
+                class="period-card-value"
+                :value="item.profit === null || item.profit === undefined ? '--' : formatSignedCurrency(item.profit)"
+                :tone="getTone(Number(item.profit ?? 0))"
+              />
+              <span class="period-card-side">
+                {{ item.profitRate === null || item.profitRate === undefined ? '--' : formatRate(item.profitRate) }}
+              </span>
+            </button>
+          </template>
         </div>
+
+        <p class="calendar-footnote">{{ calendarFootnote }}</p>
       </section>
 
       <section class="fund-profit-card" aria-label="收益贡献榜">
         <header class="fund-profit-card-head">
           <div>
             <strong>{{ contributionTitle }}</strong>
-            <p>按当前选中范围收益排序</p>
           </div>
-          <span class="card-side-text">Top {{ contributors.length }}</span>
+          <span class="card-side-text">{{ contributionSideText }}</span>
         </header>
 
         <p v-if="contributors.length === 0" class="empty-text">当前范围暂无收益贡献数据</p>
 
         <template v-else>
-          <article v-for="item in contributors" :key="item.positionId" class="contribution-item">
+          <article v-for="(item, index) in contributors" :key="item.positionId" class="contribution-item">
             <div class="contribution-row">
               <div class="contribution-title">
-                <strong>{{ item.productName }}</strong>
-                <span>{{ item.accountName }} · {{ formatHoldingQuantity(item.holdingQuantity) }}</span>
+                <div class="fund-name-row">
+                  <span class="fund-rank-badge">{{ formatRank(index) }}</span>
+                  <strong>{{ item.productName }}</strong>
+                  <span v-if="item.productSymbol" class="fund-code-chip">{{ item.productSymbol }}</span>
+                </div>
+                <span>{{ item.productSymbol || item.accountName || '基金代码待同步' }}</span>
               </div>
               <div class="contribution-value">
                 <AmountText
                   tag="strong"
+                  class="contribution-amount-text"
                   :value="formatSignedCurrency(item.contributionAmount)"
                   :tone="getTone(item.contributionAmount)"
                 />
-                <AmountText
-                  tag="span"
-                  :value="formatRate(item.contributionRate)"
-                  :tone="getTone(item.contributionRate)"
-                />
+                <span>{{ getContributionShareText(item) }}</span>
               </div>
             </div>
             <div class="contribution-track">
@@ -660,21 +830,22 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
               ></span>
             </div>
           </article>
+
+          <p class="card-footnote">{{ contributionFootnote }}</p>
         </template>
       </section>
 
       <section class="fund-profit-card" aria-label="基金收益明细">
-        <header class="fund-profit-card-head">
+        <header class="fund-profit-card-head detail-card-head">
           <div>
             <strong>{{ detailTitle }}</strong>
-            <p>点击基金可进入资产详情页查看持仓与交易</p>
           </div>
           <span class="card-side-text">跟随 {{ selectionLabel }}</span>
         </header>
 
         <div class="detail-filter-row">
           <button
-            v-for="item in detailFilters"
+            v-for="item in detailFilterOptions"
             :key="item.value"
             type="button"
             :class="['detail-filter', { active: selectedDetailFilter === item.value }]"
@@ -695,24 +866,29 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
             @click="openDetail(item)"
           >
             <div class="detail-main">
-              <strong>{{ item.productName }}</strong>
-              <span>{{ item.accountName }} · {{ formatHoldingQuantity(item.holdingQuantity) }} · 净值 {{ formatNumber(item.netValue, 4) }}</span>
+              <div class="fund-name-row">
+                <strong>{{ item.productName }}</strong>
+                <span v-if="item.productSymbol" class="fund-code-chip">{{ item.productSymbol }}</span>
+              </div>
+              <span>{{ formatHoldingQuantity(item.holdingQuantity) }} · 市值 {{ formatCurrency(item.holdingAmount) }}</span>
             </div>
             <div class="detail-side">
               <AmountText
                 tag="strong"
-                :value="formatSignedCurrency(item.periodProfit)"
+                class="detail-profit-text"
+                :value="`${detailPeriodLabel} ${formatSignedCurrency(item.periodProfit)}`"
                 :tone="getTone(item.periodProfit)"
               />
-              <span>{{ formatCurrency(item.holdingAmount) }}</span>
+              <AmountText
+                tag="span"
+                class="detail-accumulated-text"
+                :value="`累计 ${formatSignedCurrency(getDetailAccumulatedProfit(item))}`"
+                :tone="getTone(getDetailAccumulatedProfit(item))"
+              />
             </div>
           </button>
         </template>
       </section>
-
-      <RouterLink class="analysis-link" :to="analysisLink">
-        查看完整收益分析
-      </RouterLink>
     </template>
   </section>
 </template>

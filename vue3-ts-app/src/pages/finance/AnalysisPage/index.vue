@@ -600,7 +600,6 @@ function formatTime(value: string) {
           <article v-for="item in breakdownItems" :key="`${item.categoryId ?? item.categoryName}`" class="breakdown-item">
             <div class="breakdown-head">
               <div class="breakdown-left" :style="{ color: item.categoryColor || '#475569' }">
-                <span>{{ item.categoryIcon || '账' }}</span>
                 <strong>{{ item.categoryName }}</strong>
               </div>
               <span class="breakdown-right" :style="{ color: item.categoryColor || '#475569' }">

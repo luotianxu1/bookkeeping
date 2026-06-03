@@ -38,12 +38,15 @@
 }
 
 .overview-panel-head strong,
-.chart-card-head strong,
-.overview-orders-panel strong {
+.chart-card-head strong {
+  display: block;
   margin: 0;
   color: var(--color-text-primary);
+  font-size: var(--font-size-16);
+  line-height: 23px;
+  font-weight: 700;
+  white-space: nowrap;
 }
-.overview-panel-head span,
 .overview-panel-head span,
 .chart-card-head p,
 .overview-stat-card p,
@@ -56,7 +59,14 @@
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-12);
-  line-height: 1.5;
+  line-height: 17px;
+}
+
+.overview-panel-head span {
+  display: block;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .overview-focus-chip {
@@ -272,7 +282,7 @@
 }
 
 .chart-surface--pie {
-  height: 220px;
+  height: 180px;
 }
 
 .chart-empty,
@@ -285,6 +295,7 @@
 }
 
 .type-legend {
+  display: grid;
   gap: 10px;
 }
 
@@ -292,6 +303,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  white-space: nowrap;
 }
 
 .type-dot {
@@ -299,6 +311,13 @@
   height: 10px;
   border-radius: 999px;
   flex-shrink: 0;
+}
+
+.type-legend-item > div {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .type-legend-item strong {
@@ -372,28 +391,4 @@
 .overview-order-foot {
   display: grid;
   gap: 4px;
-}
-
-@media (min-width: 768px) {
-  .overview-charts-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .bucket-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 767px) {
-  .bucket-card--calendar {
-    padding: 8px;
-  }
-
-  .bucket-card--calendar .calendar-card-center strong {
-    font-size: 16px;
-  }
-
-  .bucket-card--calendar .calendar-card-dot {
-    margin-top: 10px;
-  }
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 收支列表页：还原 Pencil「收支列表页」画板中的筛选与日期分组流水。
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { deleteTransaction, getAccounts, getAccountTypes, getTransactions, type Transaction } from '@/api/modules/finance'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
@@ -15,6 +16,7 @@ import TransactionDayCard from '../components/TransactionDayCard/index.vue'
 
 const filterOptions = ['全部', '收入', '支出']
 const activeFilter = ref(filterOptions[0])
+const router = useRouter()
 const transactions = ref<Transaction[]>([])
 const isLoadingTransactions = ref(false)
 const transactionListError = ref('')
@@ -42,6 +44,27 @@ const dayGroups = computed(() => buildTransactionDayGroups(filteredTransactions.
 onMounted(() => {
   loadCashTransactions()
 })
+
+function openEditTransaction(transaction: DayTransaction) {
+  if (!transaction.id || transaction.sourceType !== 'transaction' || !transaction.accountId || !transaction.categoryId || !transaction.occurredAt) {
+    showFeedback('当前记录暂不支持修改', 'error')
+    return
+  }
+
+  router.push({
+    path: '/finance/entry/expense',
+    query: {
+      transactionId: String(transaction.id),
+      type: transaction.type,
+      amount: String(transaction.rawAmount ?? 0),
+      accountId: String(transaction.accountId),
+      categoryId: String(transaction.categoryId),
+      occurredAt: transaction.occurredAt,
+      remark: transaction.remark ?? '',
+      redirect: '/finance/transactions',
+    },
+  })
+}
 
 async function loadCashTransactions() {
   const currentUser = getStoredCurrentUser()
@@ -163,6 +186,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
           summary-mode="stacked"
           show-delete
           :deleting-id="deletingId"
+          @edit="openEditTransaction"
           @delete="openDeleteConfirm"
         />
       </template>

@@ -3,9 +3,11 @@ import App from './App.vue'
 import './styles/base.css'
 import { router } from './router'
 import { startGoldPriceAutoRefresh } from './utils/gold-price-cache'
+import { setupRem } from './utils/rem'
 
 const app = createApp(App)
 app.use(router)
+setupRem()
 startGoldPriceAutoRefresh()
 
 router.isReady().then(() => {

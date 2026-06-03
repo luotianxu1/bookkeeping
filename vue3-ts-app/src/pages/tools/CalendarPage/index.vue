@@ -30,11 +30,13 @@ const selectedDate = ref<string | null>(resolveInitialSelectedDate())
 const overview = ref<CalendarOverview | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
+const hasLoadedOnce = ref(false)
 let requestSerial = 0
 
 const monthAnniversaries = computed(() => overview.value?.anniversaries ?? [])
 const isMonthView = computed(() => viewMode.value === 'month')
 const periodLabel = computed(() => overview.value?.title ?? (isMonthView.value ? formatMonthTitle(monthAnchor.value) : yearAnchor.value))
+const showInitialLoading = computed(() => isLoading.value && !hasLoadedOnce.value && !overview.value)
 
 const lunarFormatter = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
   month: 'long',
@@ -80,6 +82,7 @@ async function loadOverview() {
     }
 
     selectedDate.value = response.selectedDate || null
+    hasLoadedOnce.value = true
 
     await router.replace({
       query: buildRouteQuery(),
@@ -299,7 +302,7 @@ function noteStatusClass(item: CalendarAnniversaryNote) {
       <button type="button" class="calendar-period-arrow" @click="shiftPeriod(1)">›</button>
     </div>
 
-    <CommonLoading v-if="isLoading" text="日历加载中..." />
+    <CommonLoading v-if="showInitialLoading" text="日历加载中..." />
     <p v-else-if="pageError" class="calendar-message calendar-message-error">{{ pageError }}</p>
 
     <template v-else>
@@ -388,7 +391,7 @@ function noteStatusClass(item: CalendarAnniversaryNote) {
                     'is-weekend': day.weekend && day.currentMonth && !day.workdayLabel,
                     'is-holiday': !!day.holidayLabel && day.currentMonth,
                     'is-workday': !!day.workdayLabel && day.currentMonth,
-                    'is-selected': day.selected,
+                    'is-selected': day.selected && day.currentMonth,
                   },
                 ]"
               >

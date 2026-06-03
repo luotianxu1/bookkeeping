@@ -174,6 +174,32 @@ public class TransactionService {
     }
 
     @Transactional
+    public TransactionResponse update(Long id, TransactionRequest request) {
+        TransactionEntity transaction = requireEditableTransaction(id, request.getUserId());
+        AccountEntity originalAccount = requireOwnedAccount(request.getUserId(), transaction.getAccountId());
+        String type = requireIncomeOrExpense(request.getType());
+        AccountEntity account = requireCashAccount(request.getUserId(), request.getAccountId());
+        CategoryEntity category = requireCategory(request.getUserId(), request.getCategoryId(), type);
+        BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
+
+        rollbackAccountBalance(originalAccount, transaction.getType(), transaction.getAmount());
+        AccountEntity targetAccount = originalAccount.getId().equals(account.getId()) ? originalAccount : account;
+        updateAccountBalance(targetAccount, type, amount);
+
+        transaction.setType(type);
+        transaction.setAmount(amount);
+        transaction.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+        transaction.setAccountId(targetAccount.getId());
+        transaction.setCategoryId(category.getId());
+        transaction.setTitle(buildTitle(request, category));
+        transaction.setRemark(request.getRemark());
+        transaction.setOccurredAt(request.getOccurredAt());
+        transactionMapper.updateById(transaction);
+
+        return toTransactionResponse(transactionMapper.selectById(transaction.getId()), targetAccount, category);
+    }
+
+    @Transactional
     public boolean delete(Long id, Long userId) {
         TransactionEntity transaction = transactionMapper.selectById(id);
         if (transaction == null || !DEFAULT_STATUS.equals(transaction.getStatus()) || !userId.equals(transaction.getUserId())) {
@@ -221,14 +247,19 @@ public class TransactionService {
     }
 
     private AccountEntity requireCashAccount(Long userId, Long accountId) {
-        AccountEntity account = accountMapper.selectById(accountId);
-        if (account == null || !userId.equals(account.getUserId())) {
-            throw new IllegalArgumentException("账户不存在");
-        }
+        AccountEntity account = requireOwnedAccount(userId, accountId);
 
         AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
         if (accountType == null || !CASH_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
             throw new IllegalArgumentException("请选择现金账户");
+        }
+        return account;
+    }
+
+    private AccountEntity requireOwnedAccount(Long userId, Long accountId) {
+        AccountEntity account = accountMapper.selectById(accountId);
+        if (account == null || !userId.equals(account.getUserId())) {
+            throw new IllegalArgumentException("账户不存在");
         }
         return account;
     }
@@ -263,6 +294,14 @@ public class TransactionService {
             return request.getRemark().length() > 120 ? request.getRemark().substring(0, 120) : request.getRemark();
         }
         return category.getName();
+    }
+
+    private TransactionEntity requireEditableTransaction(Long id, Long userId) {
+        TransactionEntity transaction = transactionMapper.selectById(id);
+        if (transaction == null || !DEFAULT_STATUS.equals(transaction.getStatus()) || !userId.equals(transaction.getUserId())) {
+            throw new IllegalArgumentException("收支记录不存在");
+        }
+        return transaction;
     }
 
     private void updateAccountBalance(AccountEntity account, String type, BigDecimal amount) {

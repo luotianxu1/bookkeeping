@@ -73,19 +73,3 @@
     transform: rotate(360deg);
   }
 }
-
-@media (prefers-color-scheme: dark) {
-  .common-loading-mask {
-    background: rgba(2, 6, 23, 0.52);
-  }
-
-  .common-loading-panel {
-    border-color: rgba(71, 85, 105, 0.55);
-    background: rgba(15, 23, 42, 0.94);
-    box-shadow: 0 24px 56px rgba(2, 6, 23, 0.4);
-  }
-
-  .common-loading-text {
-    color: var(--color-white);
-  }
-}

@@ -175,6 +175,31 @@
   font-weight: 500;
 }
 
+.investment-detail-trend-range {
+  width: 100%;
+}
+
+.investment-detail-trend-range :deep(.segmented-control) {
+  padding: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.investment-detail-trend-range :deep(.segmented-control-item) {
+  min-height: 32px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.investment-detail-trend-range :deep(.segmented-control-indicator) {
+  top: 4px;
+  left: 4px;
+  height: calc(100% - 8px);
+  width: calc((100% - 8px) / var(--count));
+  border-radius: 10px;
+}
+
 .investment-detail-chart {
   width: 100%;
   min-width: 0;

@@ -4,8 +4,7 @@ import { ref } from 'vue'
 import type { DayGroup } from '@/types/finance'
 import AmountText from '@/components/common/AmountText/index.vue'
 
-const DELETE_WIDTH = 72
-const OPEN_THRESHOLD = 36
+const ACTION_WIDTH = 72
 
 const props = withDefaults(defineProps<{
   group: DayGroup
@@ -19,6 +18,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
+  edit: [transaction: DayGroup['transactions'][number]]
   delete: [transaction: DayGroup['transactions'][number]]
 }>()
 
@@ -30,6 +30,7 @@ const dragStart = ref({
   x: 0,
   y: 0,
   originOffset: 0,
+  actionWidth: 0,
   active: false,
   horizontal: false,
 })
@@ -77,11 +78,12 @@ function rowOffset(transaction: DayGroup['transactions'][number]) {
   if (draggingKey.value === key) {
     return dragOffset.value
   }
-  return openedKey.value === key ? -DELETE_WIDTH : 0
+  return openedKey.value === key ? -rowActionWidth(transaction) : 0
 }
 
 function rowStyle(transaction: DayGroup['transactions'][number]) {
   return {
+    '--action-width': `${rowActionWidth(transaction)}px`,
     transform: `translateX(${rowOffset(transaction)}px)`,
   }
 }
@@ -90,21 +92,35 @@ function canSwipeDelete(transaction: DayGroup['transactions'][number]) {
   return props.showDelete && Boolean(transaction.id)
 }
 
+function canEditTransaction(transaction: DayGroup['transactions'][number]) {
+  return canSwipeDelete(transaction)
+    && transaction.sourceType === 'transaction'
+    && Boolean(transaction.accountId)
+    && Boolean(transaction.categoryId)
+    && Boolean(transaction.occurredAt)
+}
+
+function rowActionWidth(transaction: DayGroup['transactions'][number]) {
+  return ACTION_WIDTH * (canEditTransaction(transaction) ? 2 : 1)
+}
+
 function handlePointerDown(event: PointerEvent, transaction: DayGroup['transactions'][number]) {
   if (!canSwipeDelete(transaction)) {
     return
   }
 
   const key = transactionKey(transaction)
+  const actionWidth = rowActionWidth(transaction)
   const target = event.currentTarget as HTMLElement
   target.setPointerCapture(event.pointerId)
   draggingKey.value = key
-  dragOffset.value = openedKey.value === key ? -DELETE_WIDTH : 0
+  dragOffset.value = openedKey.value === key ? -actionWidth : 0
   dragStart.value = {
     pointerId: event.pointerId,
     x: event.clientX,
     y: event.clientY,
     originOffset: dragOffset.value,
+    actionWidth,
     active: true,
     horizontal: false,
   }
@@ -125,7 +141,7 @@ function handlePointerMove(event: PointerEvent) {
   }
 
   event.preventDefault()
-  dragOffset.value = Math.min(0, Math.max(-DELETE_WIDTH, dragStart.value.originOffset + deltaX))
+  dragOffset.value = Math.min(0, Math.max(-dragStart.value.actionWidth, dragStart.value.originOffset + deltaX))
 }
 
 function handlePointerUp(event: PointerEvent) {
@@ -133,11 +149,16 @@ function handlePointerUp(event: PointerEvent) {
     return
   }
 
-  openedKey.value = dragOffset.value <= -OPEN_THRESHOLD ? draggingKey.value : ''
+  openedKey.value = dragOffset.value <= -(dragStart.value.actionWidth / 2) ? draggingKey.value : ''
   draggingKey.value = ''
   dragOffset.value = 0
   dragStart.value.active = false
   dragStart.value.horizontal = false
+}
+
+function handleEdit(transaction: DayGroup['transactions'][number]) {
+  openedKey.value = ''
+  emit('edit', transaction)
 }
 
 function handleDelete(transaction: DayGroup['transactions'][number]) {
@@ -181,16 +202,26 @@ function handleDelete(transaction: DayGroup['transactions'][number]) {
         class="transaction-row"
         :class="{ 'transaction-row-swipeable': canSwipeDelete(transaction) }"
       >
-        <button
-          v-if="canSwipeDelete(transaction)"
-          class="transaction-delete"
-          type="button"
-          :disabled="deletingId === transaction.id"
-          :aria-label="`删除${transaction.name}`"
-          @click="handleDelete(transaction)"
-        >
-          {{ deletingId === transaction.id ? '...' : '删除' }}
-        </button>
+        <div v-if="canSwipeDelete(transaction)" class="transaction-actions" :style="{ width: `${rowActionWidth(transaction)}px` }">
+          <button
+            v-if="canEditTransaction(transaction)"
+            class="transaction-action transaction-action-edit"
+            type="button"
+            :aria-label="`修改${transaction.name}`"
+            @click="handleEdit(transaction)"
+          >
+            修改
+          </button>
+          <button
+            class="transaction-action transaction-action-delete"
+            type="button"
+            :disabled="deletingId === transaction.id"
+            :aria-label="`删除${transaction.name}`"
+            @click="handleDelete(transaction)"
+          >
+            {{ deletingId === transaction.id ? '...' : '删除' }}
+          </button>
+        </div>
         <div
           class="transaction-item"
           :style="rowStyle(transaction)"

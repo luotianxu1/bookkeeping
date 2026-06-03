@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -67,6 +68,15 @@ public class TransactionController {
     @Operation(summary = "新增支出或收入")
     public Result<TransactionResponse> create(@Valid @RequestBody TransactionRequest request) {
         return Result.ok(transactionService.create(request));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "修改支出或收入")
+    public Result<TransactionResponse> update(
+        @PathVariable("id") Long id,
+        @Valid @RequestBody TransactionRequest request
+    ) {
+        return Result.ok(transactionService.update(id, request));
     }
 
     @DeleteMapping("/{id}")

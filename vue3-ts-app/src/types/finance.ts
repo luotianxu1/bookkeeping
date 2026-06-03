@@ -4,14 +4,26 @@ export type TransactionType = 'income' | 'expense'
 export type Transaction = {
   /** 流水 ID。 */
   id?: number
+  /** 原始来源类型。 */
+  sourceType?: 'transaction' | 'debt_record' | 'human_relation_record' | null
   /** 交易名称。 */
   name: string
   /** 交易发生时间。 */
   time: string
+  /** 交易发生原始时间。 */
+  occurredAt?: string
   /** 交易分类文案。 */
   category: string
+  /** 分类 ID。 */
+  categoryId?: number | null
+  /** 账户 ID。 */
+  accountId?: number | null
+  /** 原始备注。 */
+  remark?: string | null
   /** 交易方向，用于决定金额颜色和符号含义。 */
   type: TransactionType
+  /** 原始金额。 */
+  rawAmount?: number
   /** 已格式化的展示金额。 */
   amount: string
 }

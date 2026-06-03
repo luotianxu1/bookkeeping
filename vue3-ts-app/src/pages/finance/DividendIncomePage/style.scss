@@ -134,25 +134,3 @@
   font-size: var(--font-size-12);
   font-weight: 500;
 }
-
-@media (prefers-color-scheme: dark) {
-  .summary-card,
-  .holding-card {
-    border-color: var(--color-dark-card-border);
-    background: var(--color-dark-card-bg);
-  }
-
-  .holding-left p {
-    color: var(--color-bg-page);
-  }
-
-  .summary-title,
-  .holding-header-right span,
-  .holding-left small {
-    color: var(--color-dark-text-muted);
-  }
-
-  .holding-row {
-    border-bottom-color: var(--color-dark-card-border);
-  }
-}

@@ -108,29 +108,50 @@
 
 .investment-list-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  align-items: stretch;
 }
 
 .investment-list-metric-item {
   min-width: 0;
   display: grid;
   gap: 4px;
+  align-content: center;
+  min-height: 52px;
   padding: 10px 12px;
   border-radius: var(--radius-14);
   background: rgba(255, 255, 255, 0.72);
+  overflow: hidden;
 }
 
 .investment-list-metric-item span {
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text-muted);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
 
 .investment-list-metric-item strong {
+  display: block;
+  overflow: hidden;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text-primary);
   font-size: var(--font-size-14);
   font-weight: 700;
+}
+
+.investment-list-metric-item :deep(.amount-text) {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .investment-list-metric-item :deep(.amount-text--positive) {
@@ -336,10 +357,4 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-}
-
-@media (max-width: 767px) {
-  .investment-list-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }

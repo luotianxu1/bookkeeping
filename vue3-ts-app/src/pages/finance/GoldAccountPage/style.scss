@@ -156,32 +156,6 @@
   font-weight: 500;
 }
 
-@media (max-width: 420px) {
-  .summary-head {
-    align-items: flex-start;
-    flex-direction: row;
-    gap: var(--space-8);
-  }
-
-  .summary-head-main {
-    flex: 1;
-  }
-
-  .summary-weight-value {
-    font-size: clamp(30px, 8.8vw, 34px);
-    line-height: 1.02;
-  }
-
-  .gold-price-chip {
-    width: auto;
-    min-width: 116px;
-    padding: 7px 10px;
-  }
-
-  .gold-price-chip-value {
-    font-size: var(--font-size-14) !important;
-  }
-}
 
 .summary-grid {
   display: grid;

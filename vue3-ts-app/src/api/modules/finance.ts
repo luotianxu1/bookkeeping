@@ -517,6 +517,8 @@ export interface CreateTransactionParams {
   occurredAt: string
 }
 
+export type UpdateTransactionParams = CreateTransactionParams
+
 export interface SaveMonthlyBudgetParams {
   userId: number
   budgetMonth: string
@@ -871,10 +873,16 @@ export interface InvestmentAssetDetail {
   updatedAt?: string | null
   marketStats: InvestmentDetailStat[]
   holdingStats: InvestmentDetailStat[]
+  fundRedeemFeeOptions?: InvestmentFundRedeemFeeOption[] | null
   chartPoints: InvestmentChartPoint[]
   chartType?: 'line' | 'candlestick' | string | null
   source?: string | null
   description?: string | null
+}
+
+export interface InvestmentFundRedeemFeeOption {
+  label: string
+  feeRate: number
 }
 
 export interface InvestmentTransaction {
@@ -1171,6 +1179,10 @@ export function getMarketNews(params: { category?: MarketNewsCategory; limit?: n
 
 export function createTransaction(params: CreateTransactionParams) {
   return requestPost<Transaction, CreateTransactionParams>(financeRequest, '/api/finance/transactions', params)
+}
+
+export function updateTransaction(id: number, params: UpdateTransactionParams) {
+  return requestPut<Transaction, UpdateTransactionParams>(financeRequest, `/api/finance/transactions/${id}`, params)
 }
 
 export function getTransactions(params: TransactionQuery = {}) {

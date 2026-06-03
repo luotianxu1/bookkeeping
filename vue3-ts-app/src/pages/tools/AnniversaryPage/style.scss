@@ -100,6 +100,8 @@
   background: var(--color-bg-card);
   text-align: center;
   color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  line-height: 1.6;
 }
 
 .anniversary-message-error {
@@ -271,6 +273,7 @@
   display: grid;
   gap: 6px;
   color: #475569;
+  font-size: 12px;
 }
 
 .anniversary-delete-content p,
@@ -278,9 +281,16 @@
   margin: 0;
 }
 
-@media (max-width: 420px) {
-  .anniversary-header-left h1,
-  .anniversary-hero h2 {
-    font-size: 22px;
-  }
+.anniversary-delete-content p {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.anniversary-delete-content span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
 }

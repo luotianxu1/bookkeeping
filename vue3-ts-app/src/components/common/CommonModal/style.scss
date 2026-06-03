@@ -23,6 +23,9 @@
   border: 0;
   border-radius: var(--radius-18);
   background: var(--color-white);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  line-height: 1.5;
   box-shadow: 0 22px 48px rgba(15, 23, 42, 0.24);
 }
 
@@ -66,6 +69,46 @@
   padding: 12px 16px 16px;
 }
 
+.common-modal-body,
+.common-modal-footer {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.common-modal-body :deep(p),
+.common-modal-body :deep(span),
+.common-modal-body :deep(label),
+.common-modal-body :deep(small),
+.common-modal-body :deep(strong),
+.common-modal-body :deep(b),
+.common-modal-body :deep(em),
+.common-modal-body :deep(i),
+.common-modal-body :deep(a),
+.common-modal-footer :deep(p),
+.common-modal-footer :deep(span),
+.common-modal-footer :deep(label),
+.common-modal-footer :deep(small),
+.common-modal-footer :deep(strong),
+.common-modal-footer :deep(b),
+.common-modal-footer :deep(em),
+.common-modal-footer :deep(i),
+.common-modal-footer :deep(a) {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.common-modal-body :deep(input),
+.common-modal-body :deep(textarea),
+.common-modal-body :deep(select),
+.common-modal-body :deep(button),
+.common-modal-footer :deep(input),
+.common-modal-footer :deep(textarea),
+.common-modal-footer :deep(select),
+.common-modal-footer :deep(button) {
+  font: inherit;
+}
+
 .modal-fade-enter-active,
 .modal-fade-leave-active {
   transition: opacity 220ms ease;
@@ -87,15 +130,4 @@
 .modal-pop-leave-to {
   opacity: 0;
   transform: translateY(16px) scale(0.98);
-}
-
-@media (prefers-color-scheme: dark) {
-  .common-modal-overlay {
-    background: rgba(2, 6, 23, 0.7);
-  }
-
-  .common-modal-panel {
-    border-color: var(--color-dark-card-border);
-    background: var(--color-dark-card-bg);
-  }
 }

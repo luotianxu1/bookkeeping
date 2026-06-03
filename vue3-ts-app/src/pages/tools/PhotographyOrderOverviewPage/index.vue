@@ -83,12 +83,6 @@ const bucketSectionTitle = computed(() => {
   return '近5年年份概览'
 })
 
-const trendChartSubtitle = computed(() => {
-  if (viewMode.value === 'calendar') return '按当前视角展示当天总收益'
-  if (viewMode.value === 'month') return '按当前视角展示当月总收益'
-  return '按当前视角展示当年总收益'
-})
-
 const trendSeriesName = computed(() => {
   if (viewMode.value === 'calendar') return '当天总收益'
   if (viewMode.value === 'month') return '当月总收益'
@@ -572,9 +566,6 @@ function handleResize() {
       <section class="overview-panel">
         <div class="overview-panel-head">
           <strong>{{ bucketSectionTitle }}</strong>
-          <span v-if="viewMode === 'calendar'">点击日期查看当天订单</span>
-          <span v-else-if="viewMode === 'month'">点击某一天可切换到日历视图</span>
-          <span v-else>点击某个月可切换到月视图</span>
         </div>
 
         <div v-if="viewMode === 'calendar'" class="calendar-weekdays">
@@ -662,7 +653,6 @@ function handleResize() {
           <div class="chart-card-head">
             <div>
               <strong>收益趋势</strong>
-              <p>{{ trendChartSubtitle }}</p>
             </div>
           </div>
           <div v-if="!lineHasData" class="chart-empty">当前周期还没有可展示的趋势数据</div>
@@ -673,7 +663,6 @@ function handleResize() {
           <div class="chart-card-head">
             <div>
               <strong>分类分布</strong>
-              <p>按订单类型汇总订单数量分布</p>
             </div>
           </div>
           <div v-if="!quantityPieHasData" class="chart-empty">当前周期暂无分类分布数据</div>
@@ -693,7 +682,6 @@ function handleResize() {
           <div class="chart-card-head">
             <div>
               <strong>收益类型</strong>
-              <p>按订单类型汇总拍摄总金额</p>
             </div>
           </div>
           <div v-if="!revenuePieHasData" class="chart-empty">当前周期暂无收益类型数据</div>

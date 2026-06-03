@@ -46,6 +46,27 @@ function openExpenseEntryPage() {
   router.push('/finance/entry/expense')
 }
 
+function openEditTransaction(transaction: DayTransaction) {
+  if (!transaction.id || transaction.sourceType !== 'transaction' || !transaction.accountId || !transaction.categoryId || !transaction.occurredAt) {
+    showFeedback('当前记录暂不支持修改', 'error')
+    return
+  }
+
+  router.push({
+    path: '/finance/entry/expense',
+    query: {
+      transactionId: String(transaction.id),
+      type: transaction.type,
+      amount: String(transaction.rawAmount ?? 0),
+      accountId: String(transaction.accountId),
+      categoryId: String(transaction.categoryId),
+      occurredAt: transaction.occurredAt,
+      remark: transaction.remark ?? '',
+      redirect: '/finance',
+    },
+  })
+}
+
 async function loadCashTransactions() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
@@ -267,6 +288,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
         summary-mode="stacked"
         show-delete
         :deleting-id="deletingId"
+        @edit="openEditTransaction"
         @delete="openDeleteConfirm"
       />
     </template>
