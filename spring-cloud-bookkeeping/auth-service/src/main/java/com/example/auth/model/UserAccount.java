@@ -12,6 +12,7 @@ public record UserAccount(
     String avatarUrl,
     String status,
     String roleName,
+    Long familyId,
     LocalDateTime lastLoginAt
 ) {
 }

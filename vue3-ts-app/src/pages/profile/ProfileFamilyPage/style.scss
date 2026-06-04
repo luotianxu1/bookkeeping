@@ -1,0 +1,245 @@
+.profile-family-page {
+  min-height: calc(100dvh - 26px);
+  display: grid;
+  align-content: start;
+  gap: var(--space-12);
+  padding-bottom: var(--space-20);
+}
+
+.family-card {
+  display: grid;
+  gap: var(--space-12);
+  padding: var(--space-14);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.family-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.family-card-header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-16);
+  font-weight: 700;
+}
+
+.family-card p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.family-badge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.invite-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: 12px;
+  border-radius: var(--radius-14);
+  background: var(--color-bg-page);
+}
+
+.invite-card > div {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.invite-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.invite-card strong {
+  display: block;
+  color: #1d4ed8;
+  font-size: var(--font-size-18);
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.copy-btn,
+.join-entry-btn {
+  border: 0;
+  cursor: pointer;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.join-field {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.join-field > span {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.join-field input {
+  height: 46px;
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-12);
+  padding: 0 var(--space-14);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  background: var(--color-bg-page);
+  text-transform: uppercase;
+}
+
+.join-field input::placeholder {
+  color: var(--color-text-subtle);
+  text-transform: none;
+}
+
+.join-error {
+  margin: -4px 0 0;
+  color: #dc2626;
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.family-empty {
+  padding: 14px 0 6px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+  text-align: center;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-height: 56px;
+}
+
+.member-row + .member-row {
+  border-top: 1px solid var(--color-bg-soft-2);
+  padding-top: var(--space-12);
+}
+
+.member-avatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 21px;
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.member-info {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+
+.member-info strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.member-info span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.member-tag {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.member-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.member-action-btn {
+  min-width: 48px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.member-action-btn:disabled,
+.copy-btn:disabled,
+.join-entry-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.tone-brand.member-avatar,
+.tone-brand.member-tag {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.tone-success.member-avatar,
+.tone-success.member-tag {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.tone-muted.member-avatar,
+.tone-muted.member-tag {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.join-entry-btn {
+  width: 100%;
+  height: 48px;
+  border-radius: var(--radius-14);
+  color: var(--color-white);
+  font-size: var(--font-size-16);
+  font-weight: 700;
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+}

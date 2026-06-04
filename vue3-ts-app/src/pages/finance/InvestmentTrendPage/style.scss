@@ -28,10 +28,12 @@
 
 .investment-trend-summary-main,
 .investment-trend-summary-side {
+  min-width: 0;
   display: grid;
 }
 
 .investment-trend-summary-main {
+  flex: 1;
   gap: var(--space-6);
 }
 
@@ -44,9 +46,13 @@
 }
 
 .investment-trend-summary-main strong {
+  display: block;
   color: var(--color-finance-title);
-  font-size: var(--font-size-36);
+  font-size: var(--font-size-28);
   line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .investment-trend-summary-main span {
@@ -56,22 +62,30 @@
 }
 
 .investment-trend-summary-side {
+  max-width: 46%;
   justify-items: end;
   gap: var(--space-4);
   text-align: right;
-  flex-shrink: 0;
 }
 
 .investment-trend-summary-side :deep(.summary-profit.amount-text) {
-  font-size: var(--font-size-18);
+  display: block;
+  font-size: var(--font-size-14);
   font-weight: 700;
+  max-width: 100%;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .investment-trend-summary-side :deep(.summary-rate.amount-text) {
-  font-size: var(--font-size-12);
+  display: block;
+  font-size: 11px;
   font-weight: 600;
+  max-width: 100%;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .investment-trend-card {
@@ -120,6 +134,7 @@
 }
 
 .allocation-row {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -128,6 +143,7 @@
 
 .allocation-title,
 .allocation-side {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--space-8);
@@ -140,9 +156,22 @@
 }
 
 .allocation-side {
+  flex-shrink: 1;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
   color: var(--color-text-tertiary);
-  font-size: var(--font-size-12);
+  font-size: 11px;
   font-weight: 600;
+  text-align: right;
+}
+
+.allocation-side :deep(.amount-text) {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .allocation-side span:last-child {
@@ -205,10 +234,15 @@
 .range-detail-item :deep(.range-detail-value.amount-text),
 .range-detail-value {
   color: var(--color-text-primary);
-  font-size: var(--font-size-14);
+  display: block;
+  font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
+  min-width: 0;
+  max-width: 100%;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: right;
 }
 

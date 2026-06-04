@@ -33,6 +33,9 @@ public class UserEntity {
     @TableField("role_name")
     private String roleName;
 
+    @TableField("family_id")
+    private Long familyId;
+
     @TableField("last_login_at")
     private LocalDateTime lastLoginAt;
 }

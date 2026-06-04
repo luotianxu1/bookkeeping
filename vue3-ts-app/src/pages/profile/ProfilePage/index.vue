@@ -2,7 +2,7 @@
 // 我的页：展示用户信息和个人设置入口。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getCurrentUser, type CurrentUser } from '@/api/modules/auth'
+import { getCurrentUser, getFamilyOverview, type CurrentUser } from '@/api/modules/auth'
 import { clearStoredToken } from '@/utils/auth-token'
 import {
   clearStoredCurrentUser,
@@ -12,21 +12,31 @@ import {
 
 type ProfileMenuItem = {
   label: string
+  path?: string
+  meta?: string
 }
 
 const router = useRouter()
 const currentUser = ref<CurrentUser | null>(getStoredCurrentUser())
+const familyMemberCount = ref<number | null>(null)
 const displayName = computed(() => currentUser.value?.displayName || currentUser.value?.username || '未登录用户')
 const avatarText = computed(() => getAvatarText(displayName.value))
-
-const profileMenus: ProfileMenuItem[] = [
+const familyMeta = computed(() => {
+  if (familyMemberCount.value === null) {
+    return '去管理'
+  }
+  return familyMemberCount.value > 0 ? `${familyMemberCount.value}人已绑定` : '去绑定'
+})
+const profileMenus = computed<ProfileMenuItem[]>(() => [
+  { label: '家庭成员', path: '/profile/family-members', meta: familyMeta.value },
   { label: '隐私与安全' },
   { label: '消息通知' },
   { label: '关于我们' },
-]
+])
 
 onMounted(() => {
   void refreshCurrentUser()
+  void refreshFamilyOverview()
 })
 
 async function refreshCurrentUser() {
@@ -40,12 +50,29 @@ async function refreshCurrentUser() {
   }
 }
 
+async function refreshFamilyOverview() {
+  try {
+    const familyOverview = await getFamilyOverview()
+    familyMemberCount.value = familyOverview.hasFamily ? familyOverview.memberCount : 0
+  } catch {
+    familyMemberCount.value = null
+  }
+}
+
 function getAvatarText(name: string) {
   const normalizedName = name.trim()
   if (!normalizedName) {
     return '--'
   }
   return normalizedName.slice(0, 2).toUpperCase()
+}
+
+async function goMenu(path?: string) {
+  if (!path) {
+    return
+  }
+
+  await router.push(path)
 }
 
 async function logout() {
@@ -68,9 +95,13 @@ async function logout() {
         :key="item.label"
         class="menu-item"
         type="button"
+        @click="goMenu(item.path)"
       >
         <span>{{ item.label }}</span>
-        <span class="arrow">></span>
+        <span class="menu-right">
+          <span v-if="item.meta" class="menu-meta">{{ item.meta }}</span>
+          <span class="arrow">></span>
+        </span>
         <span v-if="index < profileMenus.length - 1" class="divider" aria-hidden="true"></span>
       </button>
     </section>

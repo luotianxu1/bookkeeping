@@ -26,7 +26,7 @@ export const router = createRouter({
 })
 
 router.beforeEach((to, from) => {
-  if (to.name === 'login' || getStoredToken()) {
+  if (to.name === 'login' || to.name === 'register' || getStoredToken()) {
     return true
   }
 

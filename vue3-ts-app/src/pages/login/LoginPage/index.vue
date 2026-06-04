@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCurrentUser, login } from '@/api/modules/auth'
 import { ApiError } from '@/api/request'
@@ -11,7 +11,21 @@ const route = useRoute()
 const account = ref('')
 const password = ref('')
 const errorMessage = ref('')
+const successMessage = ref('')
 const isSubmitting = ref(false)
+
+onMounted(() => {
+  const routeAccount = typeof route.query.account === 'string' ? route.query.account : ''
+  const registered = route.query.registered === '1'
+
+  if (routeAccount) {
+    account.value = routeAccount
+  }
+
+  if (registered) {
+    successMessage.value = '注册成功，请登录后继续'
+  }
+})
 
 async function submitLogin() {
   if (isSubmitting.value) {
@@ -19,6 +33,7 @@ async function submitLogin() {
   }
 
   errorMessage.value = ''
+  successMessage.value = ''
   if (!account.value.trim() || !password.value.trim()) {
     errorMessage.value = '请输入账号和密码'
     return
@@ -73,6 +88,7 @@ async function submitLogin() {
             />
           </div>
 
+          <p v-if="successMessage" class="login-success">{{ successMessage }}</p>
           <p v-if="errorMessage" class="login-error">{{ errorMessage }}</p>
         </form>
       </section>
@@ -81,8 +97,11 @@ async function submitLogin() {
         <button type="button" class="login-btn" :disabled="isSubmitting" @click="submitLogin">
           {{ isSubmitting ? '登录中...' : '登录并继续' }}
         </button>
-        <button type="button" class="wx-btn">微信快捷登录</button>
       </div>
+      <p class="register-entry">
+        还没有账号？
+        <RouterLink class="register-link" to="/register">立即注册</RouterLink>
+      </p>
       <p class="agreement">登录即表示你已阅读并同意《用户协议》和《隐私政策》</p>
     </div>
   </section>

@@ -58,6 +58,18 @@
   text-align: left;
 }
 
+.menu-right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.menu-meta {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
 .arrow {
   color: var(--color-text-subtle);
   font-size: var(--font-size-16);

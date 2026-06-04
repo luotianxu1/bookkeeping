@@ -1,0 +1,117 @@
+.register-page {
+  min-height: calc(100dvh - 26px);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-14);
+  padding: 56px var(--space-20) var(--space-28);
+}
+
+.register-header {
+  display: grid;
+  gap: var(--space-6);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.register-header h1 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-28);
+  font-weight: 700;
+}
+
+.register-header p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.register-form-wrap {
+  width: 100%;
+  margin: 0 auto;
+  display: grid;
+  align-content: start;
+  gap: 24px;
+}
+
+.register-form-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-14);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+}
+
+.register-fields {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.field > span {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+input {
+  height: 46px;
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-12);
+  padding: 0 var(--space-14);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  background: var(--color-bg-page);
+}
+
+input::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.register-actions {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.register-btn {
+  width: 100%;
+  height: 48px;
+  border-radius: var(--radius-14);
+  color: var(--color-white);
+  font-size: var(--font-size-16);
+  font-weight: 700;
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.register-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.register-error {
+  margin: var(--space-4) 0 0;
+  color: #dc2626;
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.register-link-text {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.register-link {
+  color: #1d4ed8;
+  font-weight: 700;
+  text-decoration: none;
+}
