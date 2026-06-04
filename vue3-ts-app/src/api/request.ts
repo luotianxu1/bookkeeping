@@ -161,6 +161,7 @@ export const authRequest = createRequest({ service: 'auth' })
 export const financeRequest = createRequest({ service: 'finance' })
 export const adminRequest = createRequest({ service: 'admin' })
 export const toolRequest = createRequest({ service: 'tool' })
+export const foodRequest = createRequest({ service: 'food' })
 
 export async function requestGet<T>(
     client: ReturnType<typeof createRequest>,

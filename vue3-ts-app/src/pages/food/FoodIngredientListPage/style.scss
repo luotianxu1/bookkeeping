@@ -1,0 +1,246 @@
+.food-ingredient-page {
+  min-height: calc(100dvh - 16px);
+  display: grid;
+  align-content: start;
+  gap: var(--space-12);
+}
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.page-head :deep(.page-header) {
+  flex: 1;
+}
+
+.manage-link {
+  padding: 0 12px;
+}
+
+.manage-link.active {
+  color: var(--color-text-muted);
+}
+
+.search-bar {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-14);
+  background: var(--color-white);
+}
+
+.search-bar input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  color: var(--color-text-primary);
+  background: transparent;
+  font-size: var(--font-size-12);
+}
+
+.search-bar span {
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.category-row {
+  display: flex;
+  gap: var(--space-8);
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.category-pill {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.category-pill.active {
+  border-color: #d4e5ff;
+  background: #eaf3ff;
+  color: #2563eb;
+}
+
+.ingredient-groups {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.ingredient-card {
+  display: grid;
+  gap: var(--space-12);
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-18);
+  background: var(--color-white);
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.group-head strong {
+  font-size: var(--font-size-14);
+}
+
+.group-head span,
+.ingredient-copy em {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+}
+
+.ingredient-item {
+  position: relative;
+}
+
+.ingredient-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8);
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--color-bg-soft-2);
+}
+
+.ingredient-row-button {
+  width: 100%;
+  padding-right: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.ingredient-row-button:disabled {
+  opacity: 1;
+}
+
+.ingredient-row-button.editable {
+  padding-right: 34px;
+}
+
+.ingredient-copy {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.ingredient-copy strong {
+  font-size: var(--font-size-13);
+}
+
+.ingredient-copy em {
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.ingredient-delete-trigger {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--color-danger);
+  color: var(--color-white);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.18);
+}
+
+.page-error {
+  margin: 0;
+  padding: 24px 16px;
+  border-radius: var(--radius-18);
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.empty-state-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: 18px 16px;
+  border: 1px dashed var(--color-border-soft);
+  border-radius: var(--radius-18);
+  background: var(--color-bg-neutral-soft-2);
+  text-align: center;
+}
+
+.empty-state-card strong {
+  font-size: var(--font-size-14);
+}
+
+.empty-state-card span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  line-height: 1.5;
+}
+
+.ingredient-form {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.ingredient-form-field {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.ingredient-form-field span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.ingredient-form-field textarea {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  outline: none;
+  border-radius: var(--radius-14);
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.ingredient-form-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-12);
+  line-height: 1.4;
+}
+
+.ingredient-modal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-10);
+}
+
+.ingredient-delete-message {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+  line-height: 1.6;
+}

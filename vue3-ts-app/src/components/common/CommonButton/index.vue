@@ -3,16 +3,22 @@
 withDefaults(defineProps<{
   type?: 'button' | 'submit' | 'reset'
   variant?: 'primary' | 'secondary'
+  size?: 'md' | 'sm'
   disabled?: boolean
 }>(), {
   type: 'button',
   variant: 'primary',
+  size: 'md',
   disabled: false,
 })
 </script>
 
 <template>
-  <button :type="type" :class="['common-button', `common-button-${variant}`]" :disabled="disabled">
+  <button
+    :type="type"
+    :class="['common-button', `common-button-${variant}`, `common-button-${size}`]"
+    :disabled="disabled"
+  >
     <slot />
   </button>
 </template>

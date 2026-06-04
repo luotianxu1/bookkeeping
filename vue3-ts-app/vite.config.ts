@@ -24,6 +24,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/tool-api/, ''),
       },
+      '/food-api': {
+        target: 'http://localhost:8084',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/food-api/, ''),
+      },
       '/api-proxy': {
         target: 'http://localhost:8081',
         changeOrigin: true,

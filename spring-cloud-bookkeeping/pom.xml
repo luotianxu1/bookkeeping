@@ -16,6 +16,7 @@
         <module>auth-service</module>
         <module>finance-service</module>
         <module>tool-service</module>
+        <module>food-service</module>
     </modules>
 
     <properties>

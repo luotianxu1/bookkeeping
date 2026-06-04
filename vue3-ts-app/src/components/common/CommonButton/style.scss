@@ -1,8 +1,18 @@
 .common-button {
-  min-height: 42px;
   border-radius: var(--radius-10);
-  font-size: var(--font-size-14);
   font-weight: 600;
+  line-height: 1.4;
+}
+
+.common-button-md {
+  min-height: 42px;
+  font-size: var(--font-size-14);
+}
+
+.common-button-sm {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: var(--font-size-13);
 }
 
 .common-button-secondary {

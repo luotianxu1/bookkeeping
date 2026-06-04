@@ -1,8 +1,14 @@
 // 主导航路由模块：承载底部 Tab 的非财务入口页面。
 import type { RouteRecordRaw } from 'vue-router'
 import LoginPage from '@/pages/login/LoginPage/index.vue'
-import PlaceholderPage from '@/pages/placeholder/PlaceholderPage/index.vue'
 import ProfilePage from '@/pages/profile/ProfilePage/index.vue'
+import FoodCategoryListPage from '@/pages/food/FoodCategoryListPage/index.vue'
+import FoodDishCreatePage from '@/pages/food/FoodDishCreatePage/index.vue'
+import FoodDishDetailPage from '@/pages/food/FoodDishDetailPage/index.vue'
+import FoodDishListPage from '@/pages/food/FoodDishListPage/index.vue'
+import FoodHomePage from '@/pages/food/FoodHomePage/index.vue'
+import FoodIngredientCategoryPage from '@/pages/food/FoodIngredientCategoryPage/index.vue'
+import FoodIngredientListPage from '@/pages/food/FoodIngredientListPage/index.vue'
 import AnniversaryPage from '@/pages/tools/AnniversaryPage/index.vue'
 import CalendarPage from '@/pages/tools/CalendarPage/index.vue'
 import ContactsPage from '@/pages/tools/ContactsPage/index.vue'
@@ -24,10 +30,82 @@ export const mainRoutes: RouteRecordRaw[] = [
   {
     path: '/food',
     name: 'food',
-    component: PlaceholderPage,
+    component: FoodHomePage,
     meta: {
       section: 'food',
       title: '餐饮',
+    },
+  },
+  {
+    path: '/food/menu',
+    name: 'food-menu',
+    component: FoodDishListPage,
+    meta: {
+      section: 'food',
+      title: '菜品列表',
+    },
+  },
+  {
+    path: '/food/dishes/new',
+    name: 'food-dishes-new',
+    component: FoodDishCreatePage,
+    meta: {
+      section: 'food',
+      title: '新增菜品',
+    },
+  },
+  {
+    path: '/food/dishes/:dishId',
+    name: 'food-dishes-detail',
+    component: FoodDishDetailPage,
+    meta: {
+      section: 'food',
+      title: '菜品详情',
+    },
+  },
+  {
+    path: '/food/categories',
+    name: 'food-categories',
+    component: FoodCategoryListPage,
+    meta: {
+      section: 'food',
+      title: '菜品分类',
+    },
+  },
+  {
+    path: '/food/categories/new',
+    name: 'food-categories-new',
+    component: FoodCategoryListPage,
+    meta: {
+      section: 'food',
+      title: '新增菜品分类',
+    },
+  },
+  {
+    path: '/food/ingredients',
+    name: 'food-ingredients',
+    component: FoodIngredientListPage,
+    meta: {
+      section: 'food',
+      title: '食材列表',
+    },
+  },
+  {
+    path: '/food/ingredient-categories',
+    name: 'food-ingredient-categories',
+    component: FoodIngredientCategoryPage,
+    meta: {
+      section: 'food',
+      title: '食材分类',
+    },
+  },
+  {
+    path: '/food/ingredient-categories/new',
+    name: 'food-ingredient-categories-new',
+    component: FoodIngredientCategoryPage,
+    meta: {
+      section: 'food',
+      title: '新增食材分类',
     },
   },
   {
