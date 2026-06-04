@@ -100,6 +100,18 @@ const summaryAmount = computed(() =>
     ? formatCurrency(Number(detail.value?.position?.costAmount ?? 0))
     : formatCurrency(Number(detail.value?.position?.marketValue ?? 0)),
 )
+const todayProfitValue = computed(() => {
+  if (currentPosition.value?.subscriptionStatus === 'pending') {
+    return '--'
+  }
+  return formatCurrency(Number(detail.value?.position?.dayProfit ?? 0))
+})
+const todayProfitTone = computed<'positive' | 'negative' | 'neutral'>(() => {
+  if (currentPosition.value?.subscriptionStatus === 'pending') {
+    return 'neutral'
+  }
+  return toneByNumber(Number(detail.value?.position?.dayProfit ?? 0))
+})
 const todayValue = computed(() => {
   const changePercent = detail.value?.changePercent
   if (changePercent !== null && changePercent !== undefined) {
@@ -714,17 +726,8 @@ function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line
       xAxisIndex: 0,
       yAxisIndex: 0,
       symbol: 'circle',
-      symbolSize: 14,
+      symbolSize: 10,
       itemStyle: { color: '#2563EB' },
-      label: {
-        show: true,
-        formatter: '买',
-        position: 'top',
-        distance: 4,
-        color: '#2563EB',
-        fontSize: 10,
-        fontWeight: 700,
-      },
       emphasis: { scale: 1.15 },
       z: 5,
     })
@@ -737,17 +740,8 @@ function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line
       xAxisIndex: 0,
       yAxisIndex: 0,
       symbol: 'diamond',
-      symbolSize: 16,
+      symbolSize: 12,
       itemStyle: { color: '#DC2626' },
-      label: {
-        show: true,
-        formatter: '卖',
-        position: 'bottom',
-        distance: 4,
-        color: '#DC2626',
-        fontSize: 10,
-        fontWeight: 700,
-      },
       emphasis: { scale: 1.15 },
       z: 5,
     })
@@ -1675,17 +1669,25 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
     <template v-else-if="detail">
       <section class="investment-detail-summary-card" aria-label="投资详情总览">
         <div class="investment-detail-summary-head">
-          <div class="investment-detail-summary-title">
-            <strong>{{ detail.name || detail.position.productName }}</strong>
-            <span>{{ detail.symbol || detail.position.productSymbol }} · {{ detail.productType === 'stock' ? '股票' : detail.productType === 'fund' ? '基金' : '投资资产' }}</span>
+          <div class="investment-detail-summary-main">
+            <div class="investment-detail-summary-title">
+              <strong>{{ detail.name || detail.position.productName }}</strong>
+              <span>{{ detail.symbol || detail.position.productSymbol }} · {{ detail.productType === 'stock' ? '股票' : detail.productType === 'fund' ? '基金' : '投资资产' }}</span>
+            </div>
+            <AmountText tag="p" class="investment-detail-summary-amount" tone="inherit" :value="summaryAmount" />
+            <p class="investment-detail-summary-updated">{{ displayUpdatedAt }}</p>
           </div>
           <div class="investment-detail-summary-side">
-            <span>当日涨跌</span>
-            <AmountText tag="strong" :tone="todayTone" :value="todayValue" />
+            <div class="investment-detail-summary-metric">
+              <span>当日盈亏</span>
+              <AmountText tag="strong" :tone="todayProfitTone" :value="todayProfitValue" />
+            </div>
+            <div class="investment-detail-summary-metric">
+              <span>当日收益率</span>
+              <AmountText tag="strong" :tone="todayTone" :value="todayValue" />
+            </div>
           </div>
         </div>
-        <AmountText tag="p" class="investment-detail-summary-amount" tone="inherit" :value="summaryAmount" />
-        <p class="investment-detail-summary-updated">{{ displayUpdatedAt }}</p>
       </section>
 
       <section class="investment-detail-actions" aria-label="持仓操作">

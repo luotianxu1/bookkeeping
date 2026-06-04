@@ -203,7 +203,7 @@
 
 .investment-summary-main strong {
   color: var(--color-text-primary);
-  font-size: var(--font-size-44);
+  font-size: var(--font-size-36);
   line-height: 1;
   font-weight: 700;
 }
@@ -401,12 +401,27 @@
 .holding-title {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 6px;
   min-width: 0;
+}
+
+.holding-auto-invest-tag {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .holding-title strong {
   display: block;
+  flex: 1;
   min-width: 0;
   color: var(--color-text-primary);
   font-size: var(--font-size-12);
@@ -435,6 +450,15 @@
   display: flex;
   align-items: flex-end;
   gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.holding-primary-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
   flex-wrap: wrap;
 }
 

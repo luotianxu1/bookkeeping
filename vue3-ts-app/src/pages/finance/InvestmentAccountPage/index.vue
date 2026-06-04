@@ -12,11 +12,13 @@ import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import {
   createInvestmentPosition,
   getAccounts,
+  getInvestmentAutoInvestPlans,
   getInvestmentPositions,
   getInvestmentProducts,
   getInvestmentSummary,
   getInvestmentTransactions,
   type Account,
+  type InvestmentAutoInvestPlan,
   type InvestmentPosition,
   type InvestmentProduct,
   type InvestmentProductType,
@@ -53,6 +55,7 @@ const summary = ref<InvestmentSummary>({
 })
 const positions = ref<InvestmentPosition[]>([])
 const transactions = ref<InvestmentTransaction[]>([])
+const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
 
 const addAssetKeyword = ref('')
 const addAssetName = ref('')
@@ -105,6 +108,11 @@ const pendingAmountsByPositionId = computed(() => {
   }
   return pendingMap
 })
+const autoInvestPositionIds = computed(() => new Set(
+  autoInvestPlans.value
+    .filter((plan) => plan.status !== 'cancelled')
+    .map((plan) => plan.positionId),
+))
 
 const totalSummaryProfit = computed(() => Number(summary.value.cumulativeProfit ?? 0) + Number(summary.value.holdingProfit ?? 0))
 const totalSummaryProfitRate = computed(() => {
@@ -193,19 +201,22 @@ async function loadInvestmentData() {
         lastSyncedAt: null,
       }
       transactions.value = []
+      autoInvestPlans.value = []
       pageError.value = '投资账户不存在'
       return
     }
 
-    const [summaryData, positionList, transactionList] = await Promise.all([
+    const [summaryData, positionList, transactionList, autoInvestPlanList] = await Promise.all([
       getInvestmentSummary({ userId: currentUser.id, accountId: targetAccount.id }),
       getInvestmentPositions({ userId: currentUser.id, accountId: targetAccount.id }),
       getInvestmentTransactions({ userId: currentUser.id, accountId: targetAccount.id }),
+      getInvestmentAutoInvestPlans({ userId: currentUser.id, accountId: targetAccount.id }),
     ])
 
     summary.value = summaryData
     positions.value = positionList
     transactions.value = transactionList
+    autoInvestPlans.value = autoInvestPlanList
     syncActiveInvestmentTab()
     if (addAssetFundingAccount.value && !fundingAccounts.value.some((account) => String(account.id) === addAssetFundingAccount.value)) {
       addAssetFundingAccount.value = ''
@@ -586,6 +597,10 @@ function getHoldingPendingAmount(position: InvestmentPosition) {
   return pendingAmountsByPositionId.value.get(position.id) ?? 0
 }
 
+function hasAutoInvestPlan(position: InvestmentPosition) {
+  return position.productType === 'fund' && autoInvestPositionIds.value.has(position.id)
+}
+
 function formatAmount(value: number) {
   return new Intl.NumberFormat('zh-CN', {
     minimumFractionDigits: 2,
@@ -682,10 +697,13 @@ function showFeedback(message: string, type: 'success' | 'error') {
           <div class="holding-card-top">
             <div class="holding-card-main">
               <div class="holding-card-left-top">
-                <div class="holding-title"><strong>{{ holding.productName }}</strong><span class="holding-quantity-tag">{{ getHoldingQuantityTag(holding) }}</span></div>
+                <div class="holding-title">
+                  <strong>{{ holding.productName }}</strong>
+                </div>
                 <div class="holding-value-line">
                   <span>{{ getHoldingMarketValueLabel(holding) }}</span>
                   <AmountText tag="strong" class="holding-market-value" tone="inherit" :value="getHoldingMarketValue(holding)" />
+                  <span v-if="hasAutoInvestPlan(holding)" class="holding-auto-invest-tag">定投</span>
                 </div>
               </div>
 
@@ -714,7 +732,10 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <div class="holding-panel-row">
               <div class="holding-panel-field">
                 <span>{{ getHoldingPrimaryLabel(holding) }}</span>
-                <AmountText tag="strong" class="holding-panel-value" tone="inherit" :value="getHoldingPrimaryValue(holding)" />
+                <div class="holding-primary-line">
+                  <AmountText tag="strong" class="holding-panel-value" tone="inherit" :value="getHoldingPrimaryValue(holding)" />
+                  <span class="holding-quantity-tag">{{ getHoldingQuantityTag(holding) }}</span>
+                </div>
               </div>
               <div class="holding-panel-field is-end">
                 <span>{{ getHoldingSecondaryLabel(holding) }}</span>
