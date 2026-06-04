@@ -1,17 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import CommonButton from '@/components/common/CommonButton/index.vue'
-import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getFoodDish, type FoodDish } from '@/api/modules/food'
-import {
-  getFoodMenuPath,
-  isDarkFoodPath,
-  mapCoverToneToClass,
-  useFoodSelection,
-} from '../shared'
+import { getFoodDishListPath, isDarkFoodPath, mapCoverToneToClass } from '../shared'
 
 const route = useRoute()
 
@@ -19,10 +12,6 @@ const isDark = computed(() => isDarkFoodPath(route.path))
 const dish = ref<FoodDish | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
-const feedbackVisible = ref(false)
-const feedbackMessage = ref('')
-
-const { addDish, selectedCount, isSelected } = useFoodSelection()
 
 onMounted(() => {
   void loadDetail()
@@ -46,16 +35,6 @@ async function loadDetail() {
     isLoading.value = false
   }
 }
-
-function addCurrentDish() {
-  if (!dish.value) {
-    return
-  }
-  const existed = isSelected(dish.value.id)
-  addDish(dish.value.id)
-  feedbackMessage.value = existed ? '已在今晚菜单中' : '已加入今晚菜单'
-  feedbackVisible.value = true
-}
 </script>
 
 <template>
@@ -63,7 +42,7 @@ function addCurrentDish() {
     <CommonLoading v-if="isLoading" text="详情加载中..." />
 
     <template v-if="dish && !pageError">
-      <PageHeader title="菜品详情" class="page-head" :back-to="getFoodMenuPath(isDark)" />
+      <PageHeader title="菜品详情" class="page-head" :back-to="getFoodDishListPath(isDark)" />
 
       <section :class="['hero-card', mapCoverToneToClass(dish.coverTone)]">
         <div>
@@ -73,7 +52,6 @@ function addCurrentDish() {
 
         <div class="hero-pills">
           <span>{{ dish.cookMinutes }}分钟</span>
-          <span>{{ dish.servingCount }}人份</span>
         </div>
       </section>
 
@@ -101,19 +79,9 @@ function addCurrentDish() {
           <p v-for="step in dish.steps" :key="step.stepNo">{{ step.stepNo }}. {{ step.content }}</p>
         </div>
       </section>
-
-      <section class="bottom-bar">
-        <div>
-          <strong>已选菜品 {{ selectedCount }} 道</strong>
-          <span>可直接加入今晚菜单</span>
-        </div>
-        <CommonButton size="sm" @click="addCurrentDish">加入菜单</CommonButton>
-      </section>
     </template>
 
     <p v-else class="page-error">{{ pageError }}</p>
-
-    <CommonFeedback v-model="feedbackVisible" :message="feedbackMessage" />
   </section>
 </template>
 

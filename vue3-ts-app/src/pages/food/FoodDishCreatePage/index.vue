@@ -14,7 +14,7 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 import {
   buildDefaultFoodCover,
   getFoodDishDetailPath,
-  getFoodMenuPath,
+  getFoodDishListPath,
   isDarkFoodPath,
 } from '../shared'
 
@@ -40,7 +40,6 @@ const categoryId = ref<number | null>(null)
 const tasteTags = ref('')
 const description = ref('')
 const cookMinutes = ref('45')
-const servingCount = ref('2')
 const ingredients = ref<EditableIngredient[]>([
   { ingredientName: '牛腩', amount: '500g' },
   { ingredientName: '番茄', amount: '2个' },
@@ -85,8 +84,16 @@ function addIngredientRow() {
   ingredients.value.push({ ingredientName: '', amount: '' })
 }
 
+function removeIngredientRow(index: number) {
+  ingredients.value.splice(index, 1)
+}
+
 function addStepRow() {
   steps.value.push('')
+}
+
+function removeStepRow(index: number) {
+  steps.value.splice(index, 1)
 }
 
 async function saveDish() {
@@ -132,7 +139,6 @@ async function saveDish() {
         .filter(Boolean),
       highlightTags: ['适合晚餐', '家常菜', '新上架'],
       cookMinutes: Number(cookMinutes.value) || 1,
-      servingCount: Number(servingCount.value) || 1,
       coverTone,
       coverText,
       ingredients: normalizedIngredients,
@@ -160,7 +166,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <CommonLoading v-if="isLoading || isSaving" :text="isSaving ? '菜品保存中...' : '页面加载中...'" />
 
     <template v-if="!pageError">
-      <PageHeader title="新增菜品" class="page-head" :back-to="getFoodMenuPath(isDark)" />
+      <PageHeader title="新增菜品" class="page-head" :back-to="getFoodDishListPath(isDark)" />
 
       <section class="form-card">
         <h2>基础信息</h2>
@@ -186,17 +192,10 @@ function showFeedback(message: string, type: 'success' | 'error') {
           </label>
         </div>
 
-        <div class="field-grid">
-          <label class="field-block">
-            <span>预计时间</span>
-            <input v-model.trim="cookMinutes" type="number" min="1" />
-          </label>
-
-          <label class="field-block">
-            <span>适合份量</span>
-            <input v-model.trim="servingCount" type="number" min="1" />
-          </label>
-        </div>
+        <label class="field-block">
+          <span>预计时间</span>
+          <input v-model.trim="cookMinutes" type="number" min="1" />
+        </label>
 
         <label class="field-block">
           <span>菜品图片</span>
@@ -221,6 +220,9 @@ function showFeedback(message: string, type: 'success' | 'error') {
         <div v-for="(item, index) in ingredients" :key="`ingredient-${index}`" class="mini-row">
           <input v-model.trim="item.ingredientName" type="text" placeholder="食材名称" />
           <input v-model.trim="item.amount" type="text" placeholder="数量" />
+          <button type="button" class="row-remove" @click="removeIngredientRow(index)">
+            删除
+          </button>
         </div>
       </section>
 
@@ -233,11 +235,14 @@ function showFeedback(message: string, type: 'success' | 'error') {
         <div v-for="(_, index) in steps" :key="`step-${index}`" class="step-box">
           <span>{{ index + 1 }}</span>
           <textarea v-model.trim="steps[index]" rows="2" placeholder="填写步骤内容"></textarea>
+          <button type="button" class="row-remove step-remove" @click="removeStepRow(index)">
+            删除
+          </button>
         </div>
       </section>
 
       <div class="action-bar">
-        <CommonButton variant="secondary" @click="router.push(getFoodMenuPath(isDark))">
+        <CommonButton variant="secondary" @click="router.push(getFoodDishListPath(isDark))">
           取消
         </CommonButton>
         <CommonButton :disabled="isSaving" @click="saveDish">

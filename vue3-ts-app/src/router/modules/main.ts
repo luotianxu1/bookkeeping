@@ -9,6 +9,8 @@ import FoodDishListPage from '@/pages/food/FoodDishListPage/index.vue'
 import FoodHomePage from '@/pages/food/FoodHomePage/index.vue'
 import FoodIngredientCategoryPage from '@/pages/food/FoodIngredientCategoryPage/index.vue'
 import FoodIngredientListPage from '@/pages/food/FoodIngredientListPage/index.vue'
+import FoodMenuDetailPage from '@/pages/food/FoodMenuDetailPage/index.vue'
+import FoodMenuListPage from '@/pages/food/FoodMenuListPage/index.vue'
 import AnniversaryPage from '@/pages/tools/AnniversaryPage/index.vue'
 import CalendarPage from '@/pages/tools/CalendarPage/index.vue'
 import ContactsPage from '@/pages/tools/ContactsPage/index.vue'
@@ -39,6 +41,24 @@ export const mainRoutes: RouteRecordRaw[] = [
   {
     path: '/food/menu',
     name: 'food-menu',
+    component: FoodMenuListPage,
+    meta: {
+      section: 'food',
+      title: '菜单列表',
+    },
+  },
+  {
+    path: '/food/menu/:orderId',
+    name: 'food-menu-detail',
+    component: FoodMenuDetailPage,
+    meta: {
+      section: 'food',
+      title: '菜单详情',
+    },
+  },
+  {
+    path: '/food/dishes',
+    name: 'food-dishes',
     component: FoodDishListPage,
     meta: {
       section: 'food',

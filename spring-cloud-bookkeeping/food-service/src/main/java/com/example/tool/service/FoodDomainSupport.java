@@ -52,8 +52,6 @@ public class FoodDomainSupport {
     private static final Set<String> VALID_CATEGORY_STATUSES = Set.of("active", "archived");
     private static final Set<String> VALID_DISH_STATUSES = Set.of("published", "pending", "draft");
     private static final Set<String> VALID_INGREDIENT_STATUSES = Set.of("enough", "low", "urgent");
-    private static final Set<String> VALID_ORDER_STATUSES = Set.of("planned", "preparing", "served");
-
     private final FoodCategoryMapper foodCategoryMapper;
     private final FoodIngredientMapper foodIngredientMapper;
     private final FoodDishMapper foodDishMapper;
@@ -113,10 +111,6 @@ public class FoodDomainSupport {
 
     public String normalizeOptionalDishStatus(String status) {
         return normalizeOptionalStatus(status, VALID_DISH_STATUSES, "菜品状态不正确");
-    }
-
-    public String normalizeOptionalOrderStatus(String status) {
-        return normalizeOptionalStatus(status, VALID_ORDER_STATUSES, "菜单状态不正确");
     }
 
     public Map<Long, Integer> buildCategoryCountMap(Long userId, String categoryType) {
@@ -220,7 +214,6 @@ public class FoodDomainSupport {
         response.setTasteTags(splitTags(entity.getTasteTags()));
         response.setHighlightTags(splitTags(entity.getHighlightTags()));
         response.setCookMinutes(entity.getCookMinutes());
-        response.setServingCount(entity.getServingCount());
         response.setCoverTone(entity.getCoverTone());
         response.setCoverText(entity.getCoverText());
         response.setStatus(entity.getStatus());
@@ -255,10 +248,15 @@ public class FoodDomainSupport {
         response.setPlannedFor(entity.getPlannedFor());
         response.setRemark(entity.getRemark());
         response.setTotalCookMinutes(entity.getTotalCookMinutes());
-        response.setServingCount(entity.getServingCount());
-        response.setStatus(entity.getStatus());
         response.setDishCount(items.size());
         response.setDishNames(items.stream().map(FoodOrderItemEntity::getDishName).toList());
+        response.setDishes(items.stream().map(item -> {
+            FoodOrderResponse.DishItem dish = new FoodOrderResponse.DishItem();
+            dish.setDishId(item.getDishId());
+            dish.setDishName(item.getDishName());
+            dish.setCategoryName(item.getCategoryName());
+            return dish;
+        }).toList());
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
         return response;
@@ -334,7 +332,6 @@ public class FoodDomainSupport {
         entity.setTasteTags(joinTags(request.getTasteTags()));
         entity.setHighlightTags(joinTags(request.getHighlightTags()));
         entity.setCookMinutes(request.getCookMinutes());
-        entity.setServingCount(request.getServingCount());
         entity.setCoverTone(request.getCoverTone().trim());
         entity.setCoverText(request.getCoverText().trim());
         entity.setStatus(normalizeDishStatus(request.getStatus()));
@@ -384,6 +381,22 @@ public class FoodDomainSupport {
             case SATURDAY -> "周末家庭晚餐";
             case SUNDAY -> "周日收心晚餐";
         };
+    }
+
+    public String resolveOrderTitle(Long userId, String title, LocalDate plannedFor) {
+        String baseTitle = buildOrderTitle(title, plannedFor);
+        String candidate = baseTitle;
+        int suffix = 2;
+
+        while (foodOrderMapper.selectCount(new LambdaQueryWrapper<FoodOrderEntity>()
+            .eq(FoodOrderEntity::getUserId, userId)
+            .eq(FoodOrderEntity::getTitle, candidate)
+            .eq(FoodOrderEntity::getPlannedFor, plannedFor)) > 0) {
+            candidate = baseTitle + " " + suffix;
+            suffix++;
+        }
+
+        return candidate;
     }
 
     public String normalizeNullable(String value) {

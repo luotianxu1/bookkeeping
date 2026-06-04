@@ -10,6 +10,8 @@ import com.example.tool.entity.FoodOrderItemEntity;
 import com.example.tool.mapper.FoodDishMapper;
 import com.example.tool.mapper.FoodOrderItemMapper;
 import com.example.tool.mapper.FoodOrderMapper;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -18,6 +20,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 public class FoodOrderService {
@@ -39,12 +42,9 @@ public class FoodOrderService {
         this.foodDomainSupport = foodDomainSupport;
     }
 
-    public List<FoodOrderResponse> listOrders(Long userId, String status, String keyword) {
-        String normalizedStatus = foodDomainSupport.normalizeOptionalOrderStatus(status);
-
+    public List<FoodOrderResponse> listOrders(Long userId, String keyword) {
         LambdaQueryWrapper<FoodOrderEntity> wrapper = new LambdaQueryWrapper<FoodOrderEntity>()
             .eq(FoodOrderEntity::getUserId, userId)
-            .eq(StringUtils.hasText(normalizedStatus), FoodOrderEntity::getStatus, normalizedStatus)
             .and(StringUtils.hasText(keyword), query -> query
                 .like(FoodOrderEntity::getTitle, keyword.trim())
                 .or()
@@ -60,6 +60,33 @@ public class FoodOrderService {
             .toList();
     }
 
+    public Optional<FoodOrderResponse> getOrderById(Long id) {
+        FoodOrderEntity entity = foodOrderMapper.selectById(id);
+        if (entity == null) {
+            return Optional.empty();
+        }
+
+        List<FoodOrderItemEntity> items = foodOrderItemMapper.selectList(new LambdaQueryWrapper<FoodOrderItemEntity>()
+            .eq(FoodOrderItemEntity::getOrderId, id)
+            .orderByAsc(FoodOrderItemEntity::getSortOrder)
+            .orderByAsc(FoodOrderItemEntity::getId));
+        return Optional.of(foodDomainSupport.toOrderResponse(entity, items));
+    }
+
+    @Transactional
+    public boolean deleteOrder(Long id) {
+        FoodOrderEntity entity = foodOrderMapper.selectById(id);
+        if (entity == null) {
+            return false;
+        }
+
+        foodOrderItemMapper.delete(new LambdaQueryWrapper<FoodOrderItemEntity>()
+            .eq(FoodOrderItemEntity::getOrderId, id));
+        foodOrderMapper.deleteById(id);
+        return true;
+    }
+
+    @Transactional
     public FoodOrderResponse createOrder(FoodOrderCreateRequest request) {
         List<FoodDishEntity> dishes = foodDishMapper.selectBatchIds(request.getDishIds()).stream()
             .filter(dish -> Objects.equals(dish.getUserId(), request.getUserId()))
@@ -72,13 +99,11 @@ public class FoodOrderService {
         LocalDate plannedFor = request.getPlannedFor() == null ? LocalDate.now() : request.getPlannedFor();
         FoodOrderEntity entity = new FoodOrderEntity();
         entity.setUserId(request.getUserId());
-        entity.setTitle(foodDomainSupport.buildOrderTitle(request.getTitle(), plannedFor));
         entity.setPlannedFor(plannedFor);
         entity.setRemark(foodDomainSupport.normalizeNullable(request.getRemark()));
         entity.setTotalCookMinutes(dishes.stream().map(FoodDishEntity::getCookMinutes).filter(Objects::nonNull).mapToInt(Integer::intValue).sum());
-        entity.setServingCount(dishes.stream().map(FoodDishEntity::getServingCount).filter(Objects::nonNull).max(Integer::compareTo).orElse(1));
         entity.setStatus("planned");
-        foodOrderMapper.insert(entity);
+        insertOrderWithResolvedTitle(entity, request.getTitle(), plannedFor);
 
         Map<Long, FoodCategoryEntity> categoryMap = foodDomainSupport.getCategoryMap(request.getUserId());
         for (int index = 0; index < dishes.size(); index++) {
@@ -92,9 +117,23 @@ public class FoodOrderService {
             foodOrderItemMapper.insert(item);
         }
 
-        return listOrders(request.getUserId(), "all", entity.getTitle()).stream()
+        return listOrders(request.getUserId(), entity.getTitle()).stream()
             .filter(order -> Objects.equals(order.getId(), entity.getId()))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("菜单创建失败"));
+    }
+
+    private void insertOrderWithResolvedTitle(FoodOrderEntity entity, String rawTitle, LocalDate plannedFor) {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            entity.setTitle(foodDomainSupport.resolveOrderTitle(entity.getUserId(), rawTitle, plannedFor));
+            try {
+                foodOrderMapper.insert(entity);
+                return;
+            } catch (DataIntegrityViolationException exception) {
+                if (attempt == 4) {
+                    throw exception;
+                }
+            }
+        }
     }
 }

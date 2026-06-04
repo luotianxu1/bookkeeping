@@ -13,7 +13,7 @@ import {
   type FoodManagementCard,
 } from '@/api/modules/food'
 import { getStoredCurrentUser } from '@/utils/current-user'
-import { getFoodMenuPath } from '../shared'
+import { getFoodDishListPath, getFoodDishMenuPath, getFoodMenuDetailPath, getFoodMenuPath } from '../shared'
 
 const router = useRouter()
 
@@ -25,8 +25,19 @@ const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const publishedDishes = ref<FoodDish[]>([])
 
-const dishCards = computed(() => homeData.value?.managementCards.slice(0, 2) ?? [])
-const staticCards = computed(() => homeData.value?.managementCards.slice(2) ?? [])
+const managementCards = computed<FoodManagementCard[]>(() => {
+  const cards = homeData.value?.managementCards ?? []
+  return [
+    {
+      key: 'menus',
+      title: '菜单列表',
+      description: '查看已生成菜单与安排',
+      count: 0,
+      path: getFoodMenuPath(),
+    },
+    ...cards,
+  ]
+})
 
 onMounted(() => {
   void loadPage()
@@ -87,12 +98,12 @@ function navigateByCard(card: FoodManagementCard) {
   void router.push(resolveManagementPath(card))
 }
 
-function goRecentMenu() {
-  void router.push(getFoodMenuPath())
+function goRecentMenu(orderId: number) {
+  void router.push(getFoodMenuDetailPath(orderId))
 }
 
 function goMenu() {
-  void router.push(getFoodMenuPath())
+  void router.push(getFoodDishMenuPath())
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {
@@ -102,6 +113,18 @@ function showFeedback(message: string, type: 'success' | 'error') {
 }
 
 function resolveManagementPath(card: Pick<FoodManagementCard, 'key' | 'path'>) {
+  if (card.key === 'dishes') {
+    return getFoodDishListPath()
+  }
+
+  if (card.key === 'menus') {
+    return getFoodMenuPath()
+  }
+
+  if (card.key === 'dish-categories') {
+    return '/food/categories'
+  }
+
   if (card.key === 'ingredients') {
     return '/food/ingredients'
   }
@@ -137,7 +160,7 @@ function resolveManagementPath(card: Pick<FoodManagementCard, 'key' | 'path'>) {
             去点菜
           </CommonButton>
           <CommonButton class="hero-action hero-action-secondary" variant="secondary" @click="createTodayMenu">
-            替今日菜单
+            今日菜单
           </CommonButton>
         </div>
       </section>
@@ -145,13 +168,8 @@ function resolveManagementPath(card: Pick<FoodManagementCard, 'key' | 'path'>) {
       <section class="section-block">
         <h2>管理中心</h2>
         <div class="card-grid">
-          <button
-            v-for="card in [...dishCards, ...staticCards]"
-            :key="card.key"
-            type="button"
-            class="manager-card"
-            @click="navigateByCard(card)"
-          >
+          <button v-for="card in managementCards" :key="card.key" type="button" class="manager-card"
+            @click="navigateByCard(card)">
             <strong>{{ card.title }}</strong>
             <span>{{ card.description }}</span>
           </button>
@@ -164,18 +182,12 @@ function resolveManagementPath(card: Pick<FoodManagementCard, 'key' | 'path'>) {
           <RouterLink class="section-link" :to="getFoodMenuPath()">查看全部</RouterLink>
         </div>
 
-        <button
-          v-for="menu in homeData.recentMenus"
-          :key="menu.orderId"
-          type="button"
-          class="recent-row"
-          @click="goRecentMenu"
-        >
+        <button v-for="menu in homeData.recentMenus" :key="menu.orderId" type="button" class="recent-row"
+          @click="goRecentMenu(menu.orderId)">
           <div>
             <strong>{{ menu.title }}</strong>
             <span>{{ menu.summary }}</span>
           </div>
-          <em>{{ menu.actionLabel }}</em>
         </button>
       </section>
     </template>

@@ -29,9 +29,6 @@ public class FoodOrderEntity {
     @TableField("total_cook_minutes")
     private Integer totalCookMinutes;
 
-    @TableField("serving_count")
-    private Integer servingCount;
-
     private String status;
 
     @TableField("created_at")

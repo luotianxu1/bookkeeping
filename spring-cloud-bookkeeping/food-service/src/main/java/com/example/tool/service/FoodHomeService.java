@@ -28,7 +28,7 @@ public class FoodHomeService {
     public FoodHomeResponse getHome(Long userId) {
         List<FoodCategoryResponse> dishCategories = foodCategoryService.listCategories(userId, "dish", null, "active");
         List<FoodCategoryResponse> ingredientCategories = foodCategoryService.listCategories(userId, "ingredient", null, "active");
-        List<FoodOrderResponse> recentOrders = foodOrderService.listOrders(userId, "all", null);
+        List<FoodOrderResponse> recentOrders = foodOrderService.listOrders(userId, null);
 
         FoodHomeResponse response = new FoodHomeResponse();
         response.setHeroTitle("今天吃什么");

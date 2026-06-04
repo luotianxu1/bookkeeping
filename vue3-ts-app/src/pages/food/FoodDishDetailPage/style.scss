@@ -16,8 +16,7 @@
 }
 
 .hero-card,
-.info-card,
-.bottom-bar {
+.info-card {
   border: 1px solid var(--food-border);
   background: var(--food-surface);
 }
@@ -137,32 +136,6 @@
 
 .ingredient-row strong {
   font-size: var(--font-size-12);
-}
-
-.bottom-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-12);
-  padding: 12px;
-  border-radius: var(--radius-18);
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border-color: #bfdbfe;
-}
-
-.bottom-bar strong {
-  display: block;
-  color: #7c2d12;
-  font-size: var(--font-size-12);
-}
-
-.bottom-bar span {
-  color: var(--color-brand-strong);
-  font-size: var(--font-size-12);
-}
-
-.bottom-bar :deep(.common-button) {
-  min-width: 96px;
 }
 
 .page-error {

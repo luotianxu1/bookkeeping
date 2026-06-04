@@ -36,10 +36,6 @@ public class FoodDishRequest {
     @Min(value = 1, message = "预计时间至少为1分钟")
     private Integer cookMinutes;
 
-    @NotNull(message = "适合份量不能为空")
-    @Min(value = 1, message = "适合份量至少为1人")
-    private Integer servingCount;
-
     @NotBlank(message = "封面色系不能为空")
     @Size(max = 32, message = "封面色系不能超过32个字符")
     private String coverTone;

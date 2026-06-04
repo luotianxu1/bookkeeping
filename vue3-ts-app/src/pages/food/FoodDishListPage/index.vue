@@ -18,6 +18,7 @@ import {
   getFoodCreatePath,
   getFoodDishDetailPath,
   getFoodHomePath,
+  getFoodMenuDetailPath,
   isDarkFoodPath,
   mapCoverToneToClass,
   useFoodSelection,
@@ -37,13 +38,15 @@ const isSubmitting = ref(false)
 const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
+const selectedPanelOpen = ref(false)
+const canCreateMenu = computed(() => route.query.entry === 'menu')
 
 const {
   selectedCount,
-  addDish,
   clearSelection,
   isSelected,
   resolveSelectedDishes,
+  toggleDish,
 } = useFoodSelection()
 
 const visibleCategories = computed(() => {
@@ -96,6 +99,8 @@ const selectedSummary = computed(() => {
 })
 
 onMounted(() => {
+  clearSelection()
+  selectedPanelOpen.value = false
   void loadPage()
 })
 
@@ -161,14 +166,15 @@ async function confirmOrder() {
 
   isSubmitting.value = true
   try {
-    await createFoodOrder({
+    const order = await createFoodOrder({
       userId: currentUser.id,
       dishIds: selectedDishes.value.map((item) => item.id),
     })
     clearSelection()
-    showFeedback('菜单已创建', 'success')
+    selectedPanelOpen.value = false
+    void router.push(getFoodMenuDetailPath(order.id))
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '下单失败', 'error')
+    showFeedback(error instanceof Error ? error.message : '新增菜单失败', 'error')
   } finally {
     isSubmitting.value = false
   }
@@ -179,6 +185,11 @@ function showFeedback(message: string, type: 'success' | 'error') {
   feedbackType.value = type
   feedbackVisible.value = true
 }
+
+function toggleSelectedPanel() {
+  selectedPanelOpen.value = !selectedPanelOpen.value
+}
+
 </script>
 
 <template>
@@ -229,10 +240,11 @@ function showFeedback(message: string, type: 'success' | 'error') {
               </div>
 
               <CommonButton
+                v-if="canCreateMenu"
                 class="add-button"
                 variant="secondary"
                 size="sm"
-                @click.stop="addDish(dish.id)"
+                @click.stop="toggleDish(dish.id)"
               >
                 {{ isSelected(dish.id) ? '已选' : '+' }}
               </CommonButton>
@@ -241,12 +253,35 @@ function showFeedback(message: string, type: 'success' | 'error') {
         </div>
       </section>
 
-      <section v-if="selectedCount > 0" class="selected-bar">
-        <div>
-          <strong>已选 {{ selectedCount }} 道菜</strong>
-          <span>{{ selectedSummary }} · 预计{{ selectedMinutes }}分钟</span>
-        </div>
-        <CommonButton :disabled="isSubmitting" @click="confirmOrder">确认下单</CommonButton>
+      <section v-if="canCreateMenu && selectedCount > 0" class="selected-stack">
+        <section v-if="selectedPanelOpen" class="selected-panel">
+          <strong>已选菜品</strong>
+          <div class="selected-panel-list">
+            <button
+              v-for="dish in selectedDishes"
+              :key="dish.id"
+              type="button"
+              class="selected-chip"
+              @click="openDetail(dish.id)"
+            >
+              {{ dish.name }}
+            </button>
+          </div>
+        </section>
+
+        <section class="selected-bar">
+          <button type="button" class="selected-trigger" @click="toggleSelectedPanel">
+            <div class="selected-trigger-copy">
+              <strong>已选 {{ selectedCount }} 道菜</strong>
+              <span>{{ selectedSummary }} · 预计{{ selectedMinutes }}分钟</span>
+            </div>
+            <em>{{ selectedPanelOpen ? '收起' : '展开' }}</em>
+          </button>
+
+          <CommonButton size="sm" :disabled="isSubmitting" @click="confirmOrder">
+            {{ isSubmitting ? '新增中...' : '新增菜单' }}
+          </CommonButton>
+        </section>
       </section>
 
       <FloatingAddButton

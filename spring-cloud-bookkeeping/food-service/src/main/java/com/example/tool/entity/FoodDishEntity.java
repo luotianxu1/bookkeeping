@@ -34,9 +34,6 @@ public class FoodDishEntity {
     @TableField("cook_minutes")
     private Integer cookMinutes;
 
-    @TableField("serving_count")
-    private Integer servingCount;
-
     @TableField("cover_tone")
     private String coverTone;
 

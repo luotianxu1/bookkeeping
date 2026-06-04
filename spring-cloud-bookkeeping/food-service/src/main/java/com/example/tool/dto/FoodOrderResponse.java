@@ -15,10 +15,16 @@ public class FoodOrderResponse {
     private LocalDate plannedFor;
     private String remark;
     private Integer totalCookMinutes;
-    private Integer servingCount;
-    private String status;
     private Integer dishCount;
     private List<String> dishNames;
+    private List<DishItem> dishes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    @Data
+    public static class DishItem {
+        private Long dishId;
+        private String dishName;
+        private String categoryName;
+    }
 }

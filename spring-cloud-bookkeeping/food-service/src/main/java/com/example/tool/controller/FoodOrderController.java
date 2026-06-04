@@ -9,7 +9,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,10 +36,25 @@ public class FoodOrderController {
     @Operation(summary = "查询菜单订单列表")
     public Result<List<FoodOrderResponse>> orders(
         @RequestParam("userId") @NotNull Long userId,
-        @RequestParam(name = "status", required = false) String status,
         @RequestParam(name = "keyword", required = false) String keyword
     ) {
-        return Result.ok(foodOrderService.listOrders(userId, status, keyword));
+        return Result.ok(foodOrderService.listOrders(userId, keyword));
+    }
+
+    @GetMapping("/orders/{id}")
+    @Operation(summary = "查询菜单订单详情")
+    public Result<FoodOrderResponse> orderDetail(@PathVariable("id") @NotNull Long id) {
+        return foodOrderService.getOrderById(id)
+            .map(Result::ok)
+            .orElseGet(() -> Result.<FoodOrderResponse>fail().code(404).message("菜单不存在"));
+    }
+
+    @DeleteMapping("/orders/{id}")
+    @Operation(summary = "删除菜单订单")
+    public Result<Void> deleteOrder(@PathVariable("id") @NotNull Long id) {
+        return foodOrderService.deleteOrder(id)
+            ? Result.ok()
+            : Result.<Void>fail().code(404).message("菜单不存在");
     }
 
     @PostMapping("/orders")

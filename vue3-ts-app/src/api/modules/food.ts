@@ -3,7 +3,6 @@ import { foodRequest, requestDelete, requestGet, requestPost, requestPut } from 
 export type FoodCategoryType = 'dish' | 'ingredient'
 export type FoodCategoryStatus = 'active' | 'archived'
 export type FoodDishStatus = 'published' | 'pending' | 'draft'
-export type FoodOrderStatus = 'planned' | 'preparing' | 'served'
 
 export interface FoodManagementCard {
   key: string
@@ -66,7 +65,6 @@ export interface FoodDish {
   tasteTags: string[]
   highlightTags: string[]
   cookMinutes: number
-  servingCount: number
   coverTone: string
   coverText: string
   status: FoodDishStatus | string
@@ -85,12 +83,17 @@ export interface FoodOrder {
   plannedFor: string
   remark?: string | null
   totalCookMinutes: number
-  servingCount: number
-  status: FoodOrderStatus | string
   dishCount: number
   dishNames: string[]
+  dishes: FoodOrderDishItem[]
   createdAt: string
   updatedAt: string
+}
+
+export interface FoodOrderDishItem {
+  dishId: number
+  dishName: string
+  categoryName: string
 }
 
 export interface FoodCategoryQuery {
@@ -147,7 +150,6 @@ export interface FoodIngredientQuery {
 export interface FoodOrderQuery {
   userId: number
   keyword?: string
-  status?: FoodOrderStatus | 'all'
 }
 
 export interface SaveFoodCategoryParams {
@@ -170,7 +172,6 @@ export interface SaveFoodDishParams {
   tasteTags?: string[]
   highlightTags?: string[]
   cookMinutes: number
-  servingCount: number
   coverTone: string
   coverText: string
   status?: FoodDishStatus | string
@@ -251,6 +252,14 @@ export function getFoodOrders(params: FoodOrderQuery) {
   return requestGet<FoodOrder[]>(foodRequest, '/api/tools/food/orders', {
     params,
   })
+}
+
+export function getFoodOrder(id: number) {
+  return requestGet<FoodOrder>(foodRequest, `/api/tools/food/orders/${id}`)
+}
+
+export function deleteFoodOrder(id: number) {
+  return requestDelete<void>(foodRequest, `/api/tools/food/orders/${id}`)
 }
 
 export function createFoodOrder(params: CreateFoodOrderParams) {

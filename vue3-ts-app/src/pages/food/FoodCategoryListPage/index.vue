@@ -19,7 +19,7 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 import {
   getFoodCategoryCreatePath,
   getFoodCategoryPath,
-  getFoodMenuPath,
+  getFoodDishListPath,
   isDarkFoodPath,
   mapIconToneToClass,
 } from '../shared'
@@ -94,7 +94,7 @@ async function loadCategories() {
 
 function openCategory(categoryId: number) {
   void router.push({
-    path: getFoodMenuPath(isDark.value),
+    path: getFoodDishListPath(isDark.value),
     query: { categoryId },
   })
 }
@@ -242,7 +242,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
     <template v-if="!pageError">
       <header class="page-head">
-        <PageHeader title="菜品分类" :back-to="getFoodMenuPath(isDark)" />
+        <PageHeader title="菜品分类" :back-to="getFoodDishListPath(isDark)" />
         <CommonButton
           v-if="!showModal"
           class="manage-link"

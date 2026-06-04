@@ -61,6 +61,18 @@ export function getFoodMenuPath(_isDark = false) {
   return '/food/menu'
 }
 
+export function getFoodMenuDetailPath(orderId: number) {
+  return `/food/menu/${orderId}`
+}
+
+export function getFoodDishListPath(_isDark = false) {
+  return '/food/dishes'
+}
+
+export function getFoodDishMenuPath() {
+  return '/food/dishes?entry=menu'
+}
+
 export function getFoodDishDetailPath(_isDark: boolean, dishId: number) {
   return `/food/dishes/${dishId}`
 }

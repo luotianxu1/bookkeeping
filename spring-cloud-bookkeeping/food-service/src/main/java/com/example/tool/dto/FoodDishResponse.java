@@ -18,7 +18,6 @@ public class FoodDishResponse {
     private List<String> tasteTags;
     private List<String> highlightTags;
     private Integer cookMinutes;
-    private Integer servingCount;
     private String coverTone;
     private String coverText;
     private String status;
