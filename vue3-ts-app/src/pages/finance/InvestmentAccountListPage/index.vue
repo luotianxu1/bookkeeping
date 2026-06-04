@@ -302,7 +302,7 @@ function formatMetricValue(value: number, isRate: boolean, isCount = false) {
     return String(value)
   }
   if (isRate) {
-    return `${formatAmount(value)}%`
+    return formatSignedRate(value)
   }
   return formatSignedCurrency(value)
 }
@@ -316,6 +316,11 @@ function formatAmount(value: number, digits = 2) {
 
 function formatCurrency(value: number) {
   return `¥${formatAmount(value)}`
+}
+
+function formatSignedRate(value: number) {
+  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+  return `${sign}${formatAmount(value)}%`
 }
 
 function formatSignedCurrency(value: number) {
@@ -365,7 +370,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
           </div>
           <div class="investment-list-summary-side">
             <span>今日收益率</span>
-            <AmountText tag="strong" :value="`${formatAmount(summary.dayProfitRate)}%`" />
+            <AmountText tag="strong" :value="formatSignedRate(summary.dayProfitRate)" />
           </div>
         </div>
 

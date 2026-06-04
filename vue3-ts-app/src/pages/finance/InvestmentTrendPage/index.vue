@@ -22,6 +22,11 @@ interface RangeDetailPoint {
   value: number | null
 }
 
+interface TrendYAxisBounds {
+  min?: number
+  max?: number
+}
+
 const route = useRoute()
 
 const rangeOptions: TrendRangeLabel[] = ['近7日', '近30日', '年内', '全部']
@@ -113,12 +118,6 @@ const syncText = computed(() => {
   }
   return `更新于 ${formatDateTime(trend.value.lastSyncedAt)}`
 })
-const trendSubtitle = computed(() => {
-  if (!trend.value) {
-    return '年内净资产变化'
-  }
-  return `${trend.value.rangeLabel}净资产变化`
-})
 const allocations = computed(() => trend.value?.allocations ?? [])
 const trendRangeKey = computed<AssetTrendRange>(() => {
   const range = trend.value?.range
@@ -163,6 +162,12 @@ const rangeDetailPoints = computed<RangeDetailPoint[]>(() => {
 
 const chartOption = computed<EChartsCoreOption>(() => {
   const points = trend.value?.trendPoints ?? []
+  const pointValues = points.map((item) => Number(item.value ?? 0))
+  const yAxisBounds = getTrendYAxisBounds(pointValues)
+  const yAxisRange = Math.max(
+    Number(yAxisBounds.max ?? 0) - Number(yAxisBounds.min ?? 0),
+    0,
+  )
   const isSinglePoint = points.length === 1
   const axisText = isDark.value ? '#8FA3C7' : '#94A3B8'
   const axisLine = isDark.value ? '#253045' : '#CBD5E1'
@@ -173,13 +178,13 @@ const chartOption = computed<EChartsCoreOption>(() => {
   return {
     animation: false,
     grid: { left: 18, right: 18, top: 16, bottom: 8, containLabel: true },
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: isDark.value ? '#0F172A' : '#FFFFFF',
-        borderColor: isDark.value ? '#253045' : '#E2E8F0',
-        textStyle: { color: isDark.value ? '#E2E8F0' : '#0F172A' },
-        valueFormatter: (value: number | string) => formatCurrency(Number(value ?? 0)),
-      },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: isDark.value ? '#0F172A' : '#FFFFFF',
+      borderColor: isDark.value ? '#253045' : '#E2E8F0',
+      textStyle: { color: isDark.value ? '#E2E8F0' : '#0F172A' },
+      valueFormatter: (value: number | string) => `¥ ${formatCurrency(Number(value ?? 0))}`,
+    },
     xAxis: {
       type: 'category',
       boundaryGap: false,
@@ -196,12 +201,15 @@ const chartOption = computed<EChartsCoreOption>(() => {
     yAxis: {
       type: 'value',
       scale: true,
+      min: yAxisBounds.min,
+      max: yAxisBounds.max,
+      splitNumber: 4,
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {
         color: axisText,
         fontSize: 11,
-        formatter: (value: number) => formatCompactMoney(value),
+        formatter: (value: number) => formatAxisMoney(value, yAxisRange),
       },
       splitLine: { lineStyle: { color: splitLine } },
     },
@@ -209,11 +217,11 @@ const chartOption = computed<EChartsCoreOption>(() => {
       {
         type: 'line',
         smooth: !isSinglePoint,
-        showSymbol: isSinglePoint,
+        showSymbol: true,
         symbol: 'circle',
-        symbolSize: isSinglePoint ? 10 : 7,
-        data: points.map((item) => item.value),
-        lineStyle: { width: 3, color: '#2563EB' },
+        symbolSize: isSinglePoint ? 10 : 6,
+        data: pointValues,
+        lineStyle: { width: 4, color: '#2563EB' },
         itemStyle: { color: '#2563EB' },
         label: isSinglePoint
           ? {
@@ -363,6 +371,20 @@ function formatCompactMoney(value: number) {
   })
 }
 
+function formatAxisMoney(value: number, axisRange?: number) {
+  const normalized = Number(value ?? 0)
+  const span = Number(axisRange ?? 0)
+
+  if (span >= 100000) {
+    return formatCompactMoney(normalized)
+  }
+
+  return normalized.toLocaleString('zh-CN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: span > 0 && span < 1 ? 2 : 0,
+  })
+}
+
 function formatDateTime(value?: string | null) {
   if (!value) {
     return '--'
@@ -379,6 +401,35 @@ function formatDateTime(value?: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function getTrendYAxisBounds(values: number[]): TrendYAxisBounds {
+  const normalized = values.filter((value) => Number.isFinite(value))
+  if (normalized.length === 0) {
+    return {}
+  }
+
+  const minValue = Math.min(...normalized)
+  const maxValue = Math.max(...normalized)
+  const baseRange = maxValue - minValue
+
+  if (baseRange === 0) {
+    const padding = Math.max(Math.abs(minValue) * 0.02, 1)
+    return {
+      min: minValue,
+      max: maxValue + padding,
+    }
+  }
+
+  const center = (minValue + maxValue) / 2
+  const basePadding = Math.max(baseRange * 0.12, 1)
+  const valuePadding = Math.abs(center) * 0.002
+  const padding = Math.max(basePadding, valuePadding)
+
+  return {
+    min: minValue,
+    max: maxValue + padding,
+  }
 }
 
 onMounted(async () => {
@@ -446,12 +497,10 @@ onBeforeUnmount(() => {
         <header class="investment-trend-card-head">
           <div>
             <strong>总资产走势</strong>
-            <p>{{ trendSubtitle }}</p>
           </div>
         </header>
         <div v-if="hasTrendPoints" ref="chartRef" class="investment-trend-chart"></div>
         <p v-else class="investment-trend-empty">当前区间暂无可展示的资产走势</p>
-        <p class="investment-trend-foot">{{ rangeDateText }}</p>
       </section>
 
       <section class="investment-trend-card" aria-label="资产分布">
