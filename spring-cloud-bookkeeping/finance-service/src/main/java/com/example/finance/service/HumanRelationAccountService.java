@@ -88,11 +88,11 @@ public class HumanRelationAccountService {
             .collect(Collectors.toSet());
         Map<Long, AccountEntity> accountMap = accountIds.isEmpty()
             ? Collections.emptyMap()
-            : accountMapper.selectBatchIds(accountIds).stream()
+            : accountMapper.selectByIds(accountIds).stream()
                 .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
         Map<Long, AccountEntity> fundingAccountMap = fundingAccountIds.isEmpty()
             ? Collections.emptyMap()
-            : accountMapper.selectBatchIds(fundingAccountIds).stream()
+            : accountMapper.selectByIds(fundingAccountIds).stream()
                 .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
 
         return records.stream()

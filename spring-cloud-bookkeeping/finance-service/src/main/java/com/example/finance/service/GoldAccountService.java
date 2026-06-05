@@ -126,7 +126,7 @@ public class GoldAccountService {
         }
 
         Set<Long> productIds = transactions.stream().map(InvestmentTransactionEntity::getProductId).collect(Collectors.toSet());
-        Map<Long, InvestmentProductEntity> productMap = investmentProductMapper.selectBatchIds(productIds).stream()
+        Map<Long, InvestmentProductEntity> productMap = investmentProductMapper.selectByIds(productIds).stream()
             .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
 
         List<GoldLiquidationRecordResponse> records = buildLiquidationRecords(transactions, accountMap, productMap);

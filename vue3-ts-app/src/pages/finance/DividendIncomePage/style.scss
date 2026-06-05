@@ -3,6 +3,22 @@
   gap: var(--space-6);
 }
 
+.dividend-message {
+  margin: 0;
+  padding: var(--space-16) var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 500;
+  text-align: center;
+}
+
+.dividend-message-error {
+  color: var(--color-danger);
+}
+
 .summary-card,
 .holding-card {
   display: grid;
@@ -37,21 +53,30 @@
   font-weight: 600;
 }
 
-.summary-total-row {
+.summary-monthly {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.summary-footnote {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.holding-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-6);
 }
 
-.summary-total-row strong {
-  font-size: var(--font-size-12);
+.holding-card-head strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
   font-weight: 700;
-}
-
-.summary-total-row span {
-  font-size: var(--font-size-12);
-  font-weight: 600;
 }
 
 .holding-header {
@@ -67,7 +92,7 @@
 
 .holding-header-right {
   display: flex;
-  gap: var(--space-10);
+  gap: 0;
 }
 
 .holding-header-right span {
@@ -115,7 +140,7 @@
 
 .holding-right {
   display: flex;
-  gap: var(--space-10);
+  gap: 0;
 }
 
 .value-column {

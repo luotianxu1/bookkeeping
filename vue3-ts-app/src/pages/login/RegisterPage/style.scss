@@ -3,7 +3,7 @@
   display: grid;
   grid-template-rows: auto 1fr;
   gap: var(--space-14);
-  padding: 56px var(--space-20) var(--space-28);
+  padding: 70px var(--space-20) var(--space-28);
 }
 
 .register-header {
@@ -13,9 +13,11 @@
   margin: 0 auto;
 }
 
-.register-header :deep(.page-header h1) {
+.register-header h1 {
+  margin: 0;
   color: var(--color-text-primary);
   font-size: var(--font-size-28);
+  line-height: 1.2;
   font-weight: 700;
 }
 
@@ -30,8 +32,8 @@
   width: 100%;
   margin: 0 auto;
   display: grid;
-  align-content: start;
-  gap: 24px;
+  align-content: center;
+  gap: 30px;
 }
 
 .register-form-card {

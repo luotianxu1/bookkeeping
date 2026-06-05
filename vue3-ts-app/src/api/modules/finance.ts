@@ -541,6 +541,12 @@ export interface InvestmentProduct {
   unitName: string
   pricePrecision: number
   latestPrice?: number | null
+  stableDividend?: boolean | null
+  predictedAnnualDividendPerUnit?: number | null
+  dividendStableYears?: number | null
+  dividendLastPaidDate?: string | null
+  dividendDataSource?: string | null
+  dividendEvaluatedAt?: string | null
   status: string
   remark?: string | null
   createdAt: string
@@ -874,6 +880,7 @@ export interface InvestmentAssetDetail {
   marketStats: InvestmentDetailStat[]
   holdingStats: InvestmentDetailStat[]
   fundRedeemFeeOptions?: InvestmentFundRedeemFeeOption[] | null
+  dividendRecords?: InvestmentDividendRecord[] | null
   chartPoints: InvestmentChartPoint[]
   chartType?: 'line' | 'candlestick' | string | null
   source?: string | null
@@ -883,6 +890,50 @@ export interface InvestmentAssetDetail {
 export interface InvestmentFundRedeemFeeOption {
   label: string
   feeRate: number
+}
+
+export interface InvestmentDividendRecord {
+  id: number
+  productId: number
+  productName?: string | null
+  productSymbol?: string | null
+  dividendYear?: number | null
+  payDate?: string | null
+  dividendPerUnit?: number | null
+  expectedAmount?: number | null
+  actualAmount?: number | null
+  status?: string | null
+  paidAt?: string | null
+}
+
+export interface InvestmentDividendIncomeItem {
+  productId: number
+  productName: string
+  productSymbol?: string | null
+  productType?: InvestmentProductType | string | null
+  unitName?: string | null
+  holdingQuantity: number
+  marketValue: number
+  costAmount: number
+  estimatedDividendAmount: number
+  estimatedDividendRate: number
+  actualDividendAmount: number
+  actualDividendRate: number
+}
+
+export interface InvestmentDividendIncomeSummary {
+  estimatedDividendAmount: number
+  estimatedDividendRate: number
+  actualDividendAmount: number
+  actualDividendRate: number
+  holdingCount: number
+}
+
+export interface InvestmentDividendIncomePage {
+  userId: number
+  summary: InvestmentDividendIncomeSummary
+  items: InvestmentDividendIncomeItem[]
+  updatedAt?: string | null
 }
 
 export interface InvestmentTransaction {
@@ -1357,6 +1408,12 @@ export function updateInvestmentAutoInvestPlan(id: number, params: SaveInvestmen
 
 export function deleteInvestmentAutoInvestPlan(id: number, userId: number) {
   return requestDelete<void>(financeRequest, `/api/finance/investments/auto-invest-plans/${id}`, {
+    params: { userId },
+  })
+}
+
+export function getInvestmentDividendIncome(userId: number) {
+  return requestGet<InvestmentDividendIncomePage>(financeRequest, '/api/finance/investments/dividend-income', {
     params: { userId },
   })
 }

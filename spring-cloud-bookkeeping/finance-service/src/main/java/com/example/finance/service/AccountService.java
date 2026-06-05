@@ -141,7 +141,7 @@ public class AccountService {
         List<AccountResponse> accounts = toResponses(accountEntities);
         Map<Long, AccountTypeEntity> accountTypes = accountEntities.isEmpty()
             ? Collections.emptyMap()
-            : accountTypeMapper.selectBatchIds(accountEntities.stream()
+            : accountTypeMapper.selectByIds(accountEntities.stream()
                     .map(AccountEntity::getAccountTypeId)
                     .collect(Collectors.toSet()))
                 .stream()
@@ -401,7 +401,7 @@ public class AccountService {
         Set<Long> accountTypeIds = accounts.stream()
             .map(AccountEntity::getAccountTypeId)
             .collect(Collectors.toSet());
-        Map<Long, AccountTypeEntity> accountTypes = accountTypeMapper.selectBatchIds(accountTypeIds).stream()
+        Map<Long, AccountTypeEntity> accountTypes = accountTypeMapper.selectByIds(accountTypeIds).stream()
             .collect(Collectors.toMap(AccountTypeEntity::getId, Function.identity()));
         BalanceContext balanceContext = buildBalanceContext(accounts, accountTypes);
 

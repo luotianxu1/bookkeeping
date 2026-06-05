@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import PageHeader from '@/components/common/PageHeader/index.vue'
 import { register } from '@/api/modules/auth'
 import { ApiError } from '@/api/request'
 
@@ -65,7 +64,7 @@ async function submitRegister() {
 <template>
   <section class="register-page" aria-label="注册">
     <div class="register-header">
-      <PageHeader title="注册" :show-back="false" />
+      <h1>注册</h1>
       <p>使用用户名和密码创建新账号。</p>
     </div>
 

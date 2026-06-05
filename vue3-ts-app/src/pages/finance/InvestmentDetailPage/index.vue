@@ -27,6 +27,7 @@ import {
   type InvestmentAutoInvestPlan,
   type InvestmentChartPoint,
   type InvestmentDetailStat,
+  type InvestmentDividendRecord,
   type InvestmentFundRedeemFeeOption,
   type InvestmentPosition,
   type InvestmentTransaction,
@@ -128,6 +129,7 @@ const todayTone = computed<'positive' | 'negative' | 'neutral'>(() => {
   }
   return value > 0 ? 'positive' : 'negative'
 })
+const dividendRecords = computed<InvestmentDividendRecord[]>(() => detail.value?.dividendRecords ?? [])
 const displayUpdatedAt = computed(() => {
   if (currentPosition.value?.subscriptionStatus === 'pending') {
     return '待确认'
@@ -1504,6 +1506,29 @@ function formatDateTimeLabel(value?: string | null) {
   return `${formatDate(date.getTime())} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+function formatDividendDate(value?: string | null) {
+  if (!value) return '--'
+  const date = new Date(`${value}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return value
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function formatDividendPerUnit(value?: number | null) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${formatNumber(numeric, 4)} / ${currentUnitName.value}` : '--'
+}
+
+function getDividendStatusLabel(value?: string | null) {
+  if (value === 'paid') return '已分红'
+  if (value === 'confirmed') return '已公告'
+  if (value === 'planned') return '计划中'
+  if (value === 'cancelled') return '已取消'
+  return value || '--'
+}
+
 function normalizeDateLabel(value: string) {
   if (!value) return ''
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -1740,6 +1765,39 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
             <AmountText tag="strong" :class="statClass(entry)" :tone="statTone(entry)" :value="entry.value" />
           </div>
         </div>
+      </section>
+
+      <section class="investment-detail-card" aria-label="近一年分红记录">
+        <header class="investment-detail-card-head">
+          <h2>近一年分红记录</h2>
+          <span>{{ dividendRecords.length }} 条</span>
+        </header>
+        <div v-if="dividendRecords.length > 0" class="investment-detail-dividend-list">
+          <article
+            v-for="entry in dividendRecords"
+            :key="entry.id"
+            class="investment-detail-dividend-item"
+          >
+            <div class="investment-detail-dividend-top">
+              <div class="investment-detail-dividend-title">
+                <strong>{{ formatDividendDate(entry.payDate) }}</strong>
+              </div>
+              <em class="investment-detail-dividend-status">{{ getDividendStatusLabel(entry.status) }}</em>
+            </div>
+
+            <div class="investment-detail-dividend-grid">
+              <div>
+                <span>每单位分红</span>
+                <strong>{{ formatDividendPerUnit(entry.dividendPerUnit) }}</strong>
+              </div>
+              <div>
+                <span>分红</span>
+                <strong>{{ formatCurrency(Number(entry.expectedAmount ?? 0)) }}</strong>
+              </div>
+            </div>
+          </article>
+        </div>
+        <p v-else class="investment-detail-empty">近一年暂无分红记录</p>
       </section>
 
       <section v-if="showAutoInvestSection" class="investment-detail-card" aria-label="定投计划">

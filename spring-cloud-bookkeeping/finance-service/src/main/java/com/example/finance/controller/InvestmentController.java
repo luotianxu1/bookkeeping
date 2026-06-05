@@ -4,6 +4,7 @@ import com.example.common.result.Result;
 import com.example.finance.dto.InvestmentAssetDetailResponse;
 import com.example.finance.dto.InvestmentAutoInvestPlanRequest;
 import com.example.finance.dto.InvestmentAutoInvestPlanResponse;
+import com.example.finance.dto.InvestmentDividendIncomePageResponse;
 import com.example.finance.dto.InvestmentDividendResponse;
 import com.example.finance.dto.InvestmentPositionRequest;
 import com.example.finance.dto.InvestmentPositionResponse;
@@ -231,5 +232,13 @@ public class InvestmentController {
         @RequestParam(name = "accountId", required = false) Long accountId
     ) {
         return Result.ok(investmentService.listDividends(userId, accountId));
+    }
+
+    @GetMapping("/dividend-income")
+    @Operation(summary = "查询攒股收息页面数据")
+    public Result<InvestmentDividendIncomePageResponse> dividendIncome(
+        @RequestParam(name = "userId") @NotNull Long userId
+    ) {
+        return Result.ok(investmentService.dividendIncome(userId));
     }
 }

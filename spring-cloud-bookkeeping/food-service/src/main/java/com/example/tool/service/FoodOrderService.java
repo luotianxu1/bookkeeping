@@ -88,7 +88,7 @@ public class FoodOrderService {
 
     @Transactional
     public FoodOrderResponse createOrder(FoodOrderCreateRequest request) {
-        List<FoodDishEntity> dishes = foodDishMapper.selectBatchIds(request.getDishIds()).stream()
+        List<FoodDishEntity> dishes = foodDishMapper.selectByIds(request.getDishIds()).stream()
             .filter(dish -> Objects.equals(dish.getUserId(), request.getUserId()))
             .sorted(Comparator.comparing(FoodDishEntity::getSortOrder).thenComparing(FoodDishEntity::getId))
             .toList();

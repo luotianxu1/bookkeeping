@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -37,6 +39,24 @@ public class InvestmentProductEntity {
 
     @TableField("price_precision")
     private Integer pricePrecision;
+
+    @TableField("is_stable_dividend")
+    private Boolean stableDividend;
+
+    @TableField("predicted_annual_dividend_per_unit")
+    private BigDecimal predictedAnnualDividendPerUnit;
+
+    @TableField("dividend_stable_years")
+    private Integer dividendStableYears;
+
+    @TableField("dividend_last_paid_date")
+    private LocalDate dividendLastPaidDate;
+
+    @TableField("dividend_data_source")
+    private String dividendDataSource;
+
+    @TableField("dividend_evaluated_at")
+    private LocalDateTime dividendEvaluatedAt;
 
     private String status;
     private String remark;

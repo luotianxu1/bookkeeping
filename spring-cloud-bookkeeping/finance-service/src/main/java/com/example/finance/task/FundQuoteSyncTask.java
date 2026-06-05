@@ -16,6 +16,7 @@ public class FundQuoteSyncTask {
     @Scheduled(cron = "${finance.investment.profit-sync.cron:0 30 21 * * *}", zone = "Asia/Shanghai")
     public void syncDailyFundProfits() {
         investmentService.syncDailyFundProfits();
+        investmentService.syncFundDividendPlans();
         investmentService.settlePendingFundTrades();
     }
 

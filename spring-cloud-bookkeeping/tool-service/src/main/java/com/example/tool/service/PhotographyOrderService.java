@@ -829,7 +829,7 @@ public class PhotographyOrderService {
             return Collections.emptyMap();
         }
 
-        return accountMapper.selectBatchIds(accountIds).stream()
+        return accountMapper.selectByIds(accountIds).stream()
             .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
     }
 

@@ -206,7 +206,7 @@ public class AssetTrendService {
         Set<Long> accountTypeIds = accountEntities.stream()
             .map(AccountEntity::getAccountTypeId)
             .collect(Collectors.toSet());
-        Map<Long, AccountTypeEntity> accountTypes = accountTypeMapper.selectBatchIds(accountTypeIds).stream()
+        Map<Long, AccountTypeEntity> accountTypes = accountTypeMapper.selectByIds(accountTypeIds).stream()
             .collect(Collectors.toMap(AccountTypeEntity::getId, Function.identity()));
         Map<Long, AccountResponse> accountResponses = accountService.list(userId, null, DEFAULT_ACCOUNT_STATUS).stream()
             .filter(item -> Boolean.TRUE.equals(item.getIncludeInNetWorth()))

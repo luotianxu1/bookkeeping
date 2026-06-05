@@ -371,10 +371,10 @@ public class TransactionService {
 
         Map<Long, AccountEntity> accounts = accountIds.isEmpty()
             ? Collections.emptyMap()
-            : accountMapper.selectBatchIds(accountIds).stream().collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
+            : accountMapper.selectByIds(accountIds).stream().collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
         Map<Long, CategoryEntity> categories = categoryIds.isEmpty()
             ? Collections.emptyMap()
-            : categoryMapper.selectBatchIds(categoryIds).stream().collect(Collectors.toMap(CategoryEntity::getId, Function.identity()));
+            : categoryMapper.selectByIds(categoryIds).stream().collect(Collectors.toMap(CategoryEntity::getId, Function.identity()));
 
         List<TransactionResponse> expenseIncomeResponses = transactions.stream()
             .map(transaction -> toTransactionResponse(

@@ -67,8 +67,9 @@ const chartOption = computed<EChartsCoreOption>(() => {
   const axisText = isDark.value ? '#8FA3C7' : '#94A3B8'
   const axisLine = isDark.value ? '#253045' : '#CBD5E1'
   const splitLine = isDark.value ? '#1E293B' : '#E2E8F0'
-  const areaStart = isDark.value ? 'rgba(59,130,246,0.34)' : 'rgba(59,130,246,0.22)'
-  const areaEnd = isDark.value ? 'rgba(59,130,246,0.02)' : 'rgba(59,130,246,0.03)'
+  const lineColor = isDark.value ? '#FACC15' : '#EAB308'
+  const areaStart = isDark.value ? 'rgba(250,204,21,0.34)' : 'rgba(234,179,8,0.24)'
+  const areaEnd = isDark.value ? 'rgba(250,204,21,0.03)' : 'rgba(234,179,8,0.04)'
 
   return {
     animation: false,
@@ -101,7 +102,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
         smooth: true,
         showSymbol: false,
         data: trendData.value.y,
-        lineStyle: { width: 3, color: '#3B82F6' },
+        lineStyle: { width: 3, color: lineColor },
         areaStyle: {
           color: {
             type: 'linear',

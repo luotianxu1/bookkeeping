@@ -260,6 +260,75 @@
   color: var(--color-brand-strong);
 }
 
+.investment-detail-dividend-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.investment-detail-dividend-item {
+  display: grid;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-14);
+  background: #f8fbff;
+}
+
+.investment-detail-dividend-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.investment-detail-dividend-title {
+  display: grid;
+  gap: 2px;
+}
+
+.investment-detail-dividend-title strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.investment-detail-dividend-title span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-detail-dividend-status {
+  flex-shrink: 0;
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-12);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.investment-detail-dividend-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.investment-detail-dividend-grid div {
+  display: grid;
+  gap: 4px;
+}
+
+.investment-detail-dividend-grid span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.investment-detail-dividend-grid strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
 .investment-detail-grid-item strong.tone-positive {
   color: var(--color-danger);
 }

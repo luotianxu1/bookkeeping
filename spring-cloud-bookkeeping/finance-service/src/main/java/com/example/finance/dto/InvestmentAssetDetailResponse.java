@@ -20,6 +20,7 @@ public class InvestmentAssetDetailResponse {
     private List<InvestmentDetailStatResponse> marketStats;
     private List<InvestmentDetailStatResponse> holdingStats;
     private List<InvestmentFundRedeemFeeOptionResponse> fundRedeemFeeOptions;
+    private List<InvestmentDividendResponse> dividendRecords;
     private List<InvestmentChartPointResponse> chartPoints;
     private String chartType;
     private String source;

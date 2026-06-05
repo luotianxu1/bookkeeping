@@ -292,6 +292,11 @@ public class GoldPriceService {
     }
 
     private List<GoldPriceResponse.GoldChartPoint> fetchChartPoints(String range) {
+        List<GoldPriceResponse.GoldChartPoint> cngoldPoints = fetchCngoldChartPoints(range);
+        if (!cngoldPoints.isEmpty()) {
+            return compactChartPoints(cngoldPoints, range);
+        }
+
         try {
             JsonNode result = fetchJson(goldChartUrl(range))
                 .path("chart")
@@ -326,6 +331,68 @@ public class GoldPriceService {
         }
     }
 
+    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldChartPoints(String range) {
+        try {
+            return "1d".equals(range) ? fetchCngoldTodayMinPoints() : fetchCngoldKlinePoints(range);
+        } catch (Exception ex) {
+            return List.of();
+        }
+    }
+
+    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldTodayMinPoints() throws Exception {
+        String body = fetchCngoldText(cngoldChartUrl("todayMin.htm") + "?code=JO_92233");
+        JsonNode root = extractJavascriptObject(body, "hq_str_ml");
+        JsonNode data = root.path("data");
+        if (!data.isArray()) {
+            return List.of();
+        }
+
+        BigDecimal usdCny = fetchUsdCny();
+        List<GoldPriceResponse.GoldChartPoint> points = new ArrayList<>();
+        for (JsonNode item : data) {
+            BigDecimal price = decimalAt(item, "price");
+            Long timestamp = firstLong(item, "date");
+            if (price == null || price.compareTo(BigDecimal.ZERO) <= 0 || timestamp == null) {
+                continue;
+            }
+
+            LocalDateTime time = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), DEFAULT_ZONE);
+            GoldPriceResponse.GoldChartPoint point = new GoldPriceResponse.GoldChartPoint();
+            point.setLabel(formatChartLabel(time, "1d"));
+            point.setPrice(usdOzToCnyGram(price, usdCny));
+            points.add(point);
+        }
+        return points;
+    }
+
+    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldKlinePoints(String range) throws Exception {
+        String body = fetchCngoldText(cngoldChartUrl("kDataList.htm") + "?code=JO_92233&pageSize=400");
+        JsonNode root = extractJavascriptObject(body, "KLC_KL");
+        JsonNode seriesGroup = root.path("data");
+        JsonNode data = seriesGroup.isArray() && !seriesGroup.isEmpty() ? seriesGroup.get(0) : null;
+        if (data == null || !data.isArray()) {
+            return List.of();
+        }
+
+        BigDecimal usdCny = fetchUsdCny();
+        long minTimestamp = minimumTimestampForRange(range);
+        List<GoldPriceResponse.GoldChartPoint> points = new ArrayList<>();
+        for (JsonNode item : data) {
+            BigDecimal close = decimalAt(item, "close");
+            Long timestamp = firstLong(item, "date", "time");
+            if (close == null || close.compareTo(BigDecimal.ZERO) <= 0 || timestamp == null || timestamp < minTimestamp) {
+                continue;
+            }
+
+            LocalDateTime time = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), DEFAULT_ZONE);
+            GoldPriceResponse.GoldChartPoint point = new GoldPriceResponse.GoldChartPoint();
+            point.setLabel(formatChartLabel(time, range));
+            point.setPrice(usdOzToCnyGram(close, usdCny));
+            points.add(point);
+        }
+        return points;
+    }
+
     private String goldChartUrl(String range) {
         String yahooRange = switch (range) {
             case "7d" -> "7d";
@@ -344,7 +411,7 @@ public class GoldPriceService {
 
     private String formatChartLabel(LocalDateTime time, String range) {
         return switch (range) {
-            case "1d", "7d" -> String.format("%02d:%02d", time.getHour(), time.getMinute());
+            case "1d" -> String.format("%02d:%02d", time.getHour(), time.getMinute());
             case "1y" -> time.getMonthValue() + "月";
             default -> time.getMonthValue() + "/" + time.getDayOfMonth();
         };
@@ -370,6 +437,53 @@ public class GoldPriceService {
             result.add(points.get((int) Math.round(index * step)));
         }
         return result;
+    }
+
+    private String cngoldChartUrl(String endpoint) {
+        int quoteCenterIndex = cngoldRealtimeApiUrl.indexOf("/quoteCenter/");
+        if (quoteCenterIndex >= 0) {
+            return cngoldRealtimeApiUrl.substring(0, quoteCenterIndex) + "/sQuoteCenter/" + endpoint;
+        }
+
+        int sQuoteCenterIndex = cngoldRealtimeApiUrl.indexOf("/sQuoteCenter/");
+        if (sQuoteCenterIndex >= 0) {
+            return cngoldRealtimeApiUrl.substring(0, sQuoteCenterIndex) + "/sQuoteCenter/" + endpoint;
+        }
+
+        return "https://api.jijinhao.com/sQuoteCenter/" + endpoint;
+    }
+
+    private String fetchCngoldText(String url) {
+        return restClient.get()
+            .uri(url)
+            .header("Referer", "https://quote.cngold.org/gjs/gjhj_xhhj.html?key=au")
+            .header("User-Agent", "Mozilla/5.0")
+            .retrieve()
+            .body(String.class);
+    }
+
+    private JsonNode extractJavascriptObject(String body, String variableName) throws Exception {
+        if (body == null) {
+            throw new IllegalStateException("金投图表数据为空");
+        }
+
+        int variableIndex = body.indexOf(variableName);
+        int start = variableIndex < 0 ? -1 : body.indexOf('{', variableIndex);
+        int end = body.lastIndexOf('}');
+        if (start < 0 || end <= start) {
+            throw new IllegalStateException("金投图表数据格式错误");
+        }
+        return objectMapper.readTree(body.substring(start, end + 1));
+    }
+
+    private long minimumTimestampForRange(String range) {
+        long now = System.currentTimeMillis();
+        return switch (range) {
+            case "7d" -> now - 7L * 24 * 60 * 60 * 1000;
+            case "30d" -> now - 30L * 24 * 60 * 60 * 1000;
+            case "1y" -> now - 365L * 24 * 60 * 60 * 1000;
+            default -> 0L;
+        };
     }
 
     private GoldPriceResponse copyResponseWithoutChart(GoldPriceResponse source) {

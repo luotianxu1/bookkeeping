@@ -290,7 +290,7 @@ public class RenewalSubscriptionService {
             .collect(Collectors.toSet());
         Map<Long, AccountEntity> fundingAccounts = fundingAccountIds.isEmpty()
             ? Collections.emptyMap()
-            : accountMapper.selectBatchIds(fundingAccountIds).stream()
+            : accountMapper.selectByIds(fundingAccountIds).stream()
                 .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
 
         return entities.stream()
