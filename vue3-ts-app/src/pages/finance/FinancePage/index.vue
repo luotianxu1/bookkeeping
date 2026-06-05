@@ -39,7 +39,7 @@ const feedbackType = ref<'success' | 'error'>('success')
 const dayGroups = computed(() => buildTransactionDayGroups(transactions.value))
 
 onMounted(() => {
-  loadCashTransactions()
+  void loadCashTransactions()
 })
 
 function openExpenseEntryPage() {
@@ -82,11 +82,9 @@ async function loadCashTransactions() {
     const currentMonthDate = `${currentMonth}-01`
     const accountTypes = await getAccountTypes({ status: 'active' })
     const cashType = accountTypes.find((type) => type.code === 'cash')
-    const financeOverviewSummaryPromise = getFinanceOverview(currentUser.id)
     if (!cashType) {
       transactions.value = []
-      updateOverview([], 0)
-      await syncTotalAssets(financeOverviewSummaryPromise)
+      updateOverview(0, 0, 0)
       transactionListError.value = '现金账户类型不存在'
       return
     }
@@ -101,23 +99,28 @@ async function loadCashTransactions() {
         userId: currentUser.id,
       }),
       getCurrentMonthlyBudget(currentUser.id, currentMonthDate),
-      financeOverviewSummaryPromise,
+      getFinanceOverview(currentUser.id),
     ])
+
     const cashAccountIds = new Set(cashAccounts.map((account) => String(account.id)))
     transactions.value = transactionList.filter((transaction) => cashAccountIds.has(String(transaction.accountId)))
     const currentMonthTransactions = transactions.value.filter((transaction) =>
       isSameMonth(transaction.occurredAt, currentMonth),
     )
-    updateOverview(
-      currentMonthTransactions,
-      toNumber(currentBudget?.amount),
-      currentBudget ? toNumber(currentBudget.usedAmount) : undefined,
-    )
+    const monthlyIncome = sumTransactions(currentMonthTransactions, 'income')
+    const transactionExpense = sumTransactions(currentMonthTransactions, 'expense')
+    const budgetAmount = toNumber(currentBudget?.amount)
+    const monthlyExpense = currentBudget
+      ? toNumber(currentBudget.usedAmount)
+      : transactionExpense
+
+    updateOverview(monthlyIncome, monthlyExpense, budgetAmount)
     overview.value = {
       ...overview.value,
       totalAssets: formatAmount(toNumber(financeOverviewSummary.totalAssets)),
     }
   } catch (error) {
+    transactions.value = []
     transactionListError.value = error instanceof Error ? error.message : '收支记录加载失败'
   } finally {
     isLoadingTransactions.value = false
@@ -130,13 +133,10 @@ function getCurrentMonthKey() {
 }
 
 function updateOverview(
-  currentMonthTransactions: Transaction[],
+  monthlyIncome: number,
+  monthlyExpense: number,
   budgetAmount: number,
-  budgetUsedAmount?: number,
 ) {
-  const monthlyIncome = sumTransactions(currentMonthTransactions, 'income')
-  const transactionExpense = sumTransactions(currentMonthTransactions, 'expense')
-  const monthlyExpense = budgetUsedAmount ?? transactionExpense
   const monthlyBalance = monthlyIncome - monthlyExpense
   const budgetUsagePercent = budgetAmount > 0
     ? (monthlyExpense / budgetAmount) * 100
@@ -150,18 +150,6 @@ function updateOverview(
     budget: budgetAmount > 0 ? `月预算 ${formatAmount(budgetAmount)}` : '月预算 未设置',
     budgetUsageLabel: budgetAmount > 0 ? `已用 ${formatPercent(budgetUsagePercent)}` : '已用 0%',
     budgetUsagePercent: budgetAmount > 0 ? Math.min(Math.max(budgetUsagePercent, 0), 100) : 0,
-  }
-}
-
-async function syncTotalAssets(financeOverviewSummaryPromise: Promise<{ totalAssets: number }>) {
-  try {
-    const financeOverviewSummary = await financeOverviewSummaryPromise
-    overview.value = {
-      ...overview.value,
-      totalAssets: formatAmount(toNumber(financeOverviewSummary.totalAssets)),
-    }
-  } catch {
-    // Keep the current fallback display when the asset overview request fails.
   }
 }
 

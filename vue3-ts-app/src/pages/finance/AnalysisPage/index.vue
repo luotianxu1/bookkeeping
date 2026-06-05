@@ -7,6 +7,7 @@ import MonthPicker from '@/components/common/MonthPicker/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import YearPicker from '@/components/common/YearPicker/index.vue'
+import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import {
   getTransactionAnalysis,
   type Transaction,
@@ -14,8 +15,8 @@ import {
   type TransactionAnalysisCategoryBreakdownItem,
   type TransactionAnalysisPeriod,
   type TransactionAnalysisPeriodSummary,
+  type TransactionAnalysisTrendPoint,
 } from '@/api/modules/finance'
-import { getStoredCurrentUser } from '@/utils/current-user'
 
 type PeriodLabel = '月' | '年'
 type SummaryTab = '收入' | '支出' | '结余'
@@ -39,6 +40,18 @@ const selectedYearMonthKey = ref('')
 const analysis = ref<TransactionAnalysis | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
+const requestSerial = ref(0)
+
+const {
+  familyView,
+  familyViewOptions,
+  selectedFamilyView,
+  canSwitchFamilyView,
+  selectedViewerUserIds,
+  viewerNameByUserId,
+  isReadOnlyFamilyView,
+  loadFamilyMembers,
+} = useFinanceFamilyView()
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
 const summaryMetricMap: Record<SummaryTab, 'income' | 'expense' | 'surplus'> = {
@@ -64,13 +77,10 @@ const emptySummary = {
   transactionCount: 0,
 }
 
-const currentUserId = computed(() => getStoredCurrentUser()?.id ?? null)
 const analysisPeriod = computed<TransactionAnalysisPeriod>(() => (period.value === '年' ? 'year' : 'month'))
 const activeMetric = computed(() => summaryMetricMap[summaryTab.value])
 const requestKey = computed(() => (
-  analysisPeriod.value === 'month'
-    ? `month:${currentUserId.value ?? 'guest'}:${activeMonth.value}`
-    : `year:${currentUserId.value ?? 'guest'}:${activeYear.value}`
+  `${selectedFamilyView.value.value}:${analysisPeriod.value}:${analysisPeriod.value === 'month' ? activeMonth.value : activeYear.value}`
 ))
 const summary = computed(() => analysis.value?.summary ?? emptySummary)
 const summaryCards = computed(() => [
@@ -89,6 +99,15 @@ const breakdownItems = computed<TransactionAnalysisCategoryBreakdownItem[]>(() =
   return []
 })
 const periodSummaries = computed(() => analysis.value?.periodSummaries ?? [])
+const familyViewHint = computed(() => {
+  if (!isReadOnlyFamilyView.value) {
+    return ''
+  }
+
+  return selectedFamilyView.value.kind === 'total'
+    ? '当前为家庭总计视角，可查看全家收支分析。'
+    : `当前查看 ${selectedFamilyView.value.label} 的收支分析。`
+})
 const calendarRows = computed<CalendarCell[][]>(() => {
   if (analysisPeriod.value !== 'month' || !analysis.value?.month) {
     return []
@@ -170,7 +189,7 @@ const detailAmountLabel = computed(() => {
 const detailAmountValue = computed(() => {
   const currentSummary = currentDetailSummary.value
   if (!currentSummary) {
-    return summaryTab.value === '结余' ? '0.00' : '0.00'
+    return '0.00'
   }
 
   if (summaryTab.value === '收入') {
@@ -196,15 +215,15 @@ const trendSectionTitle = computed(() => {
   return `${prefix}${summaryTab.value}趋势`
 })
 
-watch(requestKey, () => {
-  void loadAnalysis()
-}, { immediate: true })
-
 const pieRef = ref<HTMLDivElement | null>(null)
 const lineRef = ref<HTMLDivElement | null>(null)
 let echartsLib: (typeof import('echarts')) | null = null
 let pieChart: ECharts | null = null
 let lineChart: ECharts | null = null
+
+watch(requestKey, () => {
+  void loadAnalysis()
+})
 
 watch([breakdownItems, () => analysis.value?.summary, activeMetric], () => {
   void syncCharts()
@@ -223,7 +242,7 @@ watch(isLoading, (loading) => {
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
-  void syncCharts()
+  void initializePage()
 })
 
 onBeforeUnmount(() => {
@@ -232,39 +251,218 @@ onBeforeUnmount(() => {
   lineChart?.dispose()
 })
 
+async function initializePage() {
+  await loadFamilyMembers()
+  await loadAnalysis()
+  void syncCharts()
+}
+
 async function loadAnalysis() {
-  const userId = currentUserId.value
-  if (!userId) {
+  if (selectedViewerUserIds.value.length === 0) {
     analysis.value = null
     isLoading.value = false
     pageError.value = '请先登录后查看收支分析'
     return
   }
 
+  const currentRequest = requestSerial.value + 1
+  requestSerial.value = currentRequest
   isLoading.value = true
   pageError.value = ''
 
   try {
-    const result = await getTransactionAnalysis({
-      userId,
-      period: analysisPeriod.value,
-      month: analysisPeriod.value === 'month' ? activeMonth.value : undefined,
-      year: analysisPeriod.value === 'year' ? activeYear.value : undefined,
-    })
-    analysis.value = result
-    if (result.month && result.month !== activeMonth.value) {
-      activeMonth.value = result.month
+    const results = await Promise.all(
+      selectedViewerUserIds.value.map(async (userId) => {
+        const result = await getTransactionAnalysis({
+          userId,
+          period: analysisPeriod.value,
+          month: analysisPeriod.value === 'month' ? activeMonth.value : undefined,
+          year: analysisPeriod.value === 'year' ? activeYear.value : undefined,
+        })
+
+        return normalizeAnalysisForView(result, userId)
+      }),
+    )
+
+    if (currentRequest !== requestSerial.value) {
+      return
     }
-    if (typeof result.year === 'number' && result.year !== activeYear.value) {
-      activeYear.value = result.year
+
+    const merged = mergeTransactionAnalysisResults(results)
+    analysis.value = merged
+    if (merged.month && merged.month !== activeMonth.value) {
+      activeMonth.value = merged.month
+    }
+    if (typeof merged.year === 'number' && merged.year !== activeYear.value) {
+      activeYear.value = merged.year
     }
     syncSelectedSummary()
   } catch (error) {
+    if (currentRequest !== requestSerial.value) {
+      return
+    }
     analysis.value = null
     pageError.value = error instanceof Error ? error.message : '收支分析加载失败'
   } finally {
-    isLoading.value = false
+    if (currentRequest === requestSerial.value) {
+      isLoading.value = false
+    }
   }
+}
+
+function normalizeAnalysisForView(source: TransactionAnalysis, userId: number) {
+  if (!isReadOnlyFamilyView.value || selectedFamilyView.value.kind !== 'total') {
+    return source
+  }
+
+  const viewerName = viewerNameByUserId.value.get(userId)
+  if (!viewerName) {
+    return source
+  }
+
+  return {
+    ...source,
+    periodSummaries: source.periodSummaries.map((item) => ({
+      ...item,
+      transactions: item.transactions.map((transaction) => ({
+        ...transaction,
+        accountName: `${viewerName} · ${transaction.accountName ?? '现金账户'}`,
+      })),
+    })),
+  }
+}
+
+function mergeTransactionAnalysisResults(results: TransactionAnalysis[]) {
+  const summary = {
+    income: 0,
+    expense: 0,
+    surplus: 0,
+    incomeCount: 0,
+    expenseCount: 0,
+    transactionCount: 0,
+  }
+
+  const incomeBreakdownMap = new Map<string, TransactionAnalysisCategoryBreakdownItem>()
+  const expenseBreakdownMap = new Map<string, TransactionAnalysisCategoryBreakdownItem>()
+  const trendMap = new Map<string, TransactionAnalysisTrendPoint>()
+  const periodSummaryMap = new Map<string, TransactionAnalysisPeriodSummary>()
+
+  results.forEach((result) => {
+    summary.income += Number(result.summary.income ?? 0)
+    summary.expense += Number(result.summary.expense ?? 0)
+    summary.surplus += Number(result.summary.surplus ?? 0)
+    summary.incomeCount += Number(result.summary.incomeCount ?? 0)
+    summary.expenseCount += Number(result.summary.expenseCount ?? 0)
+    summary.transactionCount += Number(result.summary.transactionCount ?? 0)
+
+    mergeBreakdownItems(incomeBreakdownMap, result.incomeBreakdown)
+    mergeBreakdownItems(expenseBreakdownMap, result.expenseBreakdown)
+
+    result.trendPoints.forEach((item) => {
+      const current = trendMap.get(item.key) ?? {
+        key: item.key,
+        label: item.label,
+        income: 0,
+        expense: 0,
+        surplus: 0,
+      }
+      current.income += Number(item.income ?? 0)
+      current.expense += Number(item.expense ?? 0)
+      current.surplus += Number(item.surplus ?? 0)
+      trendMap.set(item.key, current)
+    })
+
+    result.periodSummaries.forEach((item) => {
+      const current = periodSummaryMap.get(item.key) ?? {
+        key: item.key,
+        label: item.label,
+        income: 0,
+        expense: 0,
+        surplus: 0,
+        transactionCount: 0,
+        transactions: [],
+      }
+      current.income += Number(item.income ?? 0)
+      current.expense += Number(item.expense ?? 0)
+      current.surplus += Number(item.surplus ?? 0)
+      current.transactionCount += Number(item.transactionCount ?? 0)
+      current.transactions = [...current.transactions, ...item.transactions]
+      periodSummaryMap.set(item.key, current)
+    })
+  })
+
+  const incomeBreakdown = finalizeBreakdownItems(incomeBreakdownMap, summary.income)
+  const expenseBreakdown = finalizeBreakdownItems(expenseBreakdownMap, summary.expense)
+  const trendPoints = Array.from(trendMap.values()).sort((left, right) => left.key.localeCompare(right.key))
+  const periodSummaries = Array.from(periodSummaryMap.values())
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .map((item) => ({
+      ...item,
+      transactions: [...item.transactions].sort(compareTransactionsDesc),
+    }))
+
+  const first = results[0]
+  return {
+    userId: first?.userId ?? 0,
+    period: analysisPeriod.value,
+    month: analysisPeriod.value === 'month' ? (first?.month ?? activeMonth.value) : null,
+    year: analysisPeriod.value === 'year' ? (first?.year ?? activeYear.value) : null,
+    summary,
+    incomeBreakdown,
+    expenseBreakdown,
+    trendPoints,
+    periodSummaries,
+  } satisfies TransactionAnalysis
+}
+
+function mergeBreakdownItems(
+  target: Map<string, TransactionAnalysisCategoryBreakdownItem>,
+  source: TransactionAnalysisCategoryBreakdownItem[],
+) {
+  source.forEach((item) => {
+    const key = `${item.categoryId ?? item.categoryName}`
+    const current = target.get(key) ?? {
+      categoryId: item.categoryId,
+      categoryName: item.categoryName,
+      categoryIcon: item.categoryIcon,
+      categoryColor: item.categoryColor,
+      amount: 0,
+      percent: 0,
+      transactionCount: 0,
+    }
+    current.amount += Number(item.amount ?? 0)
+    current.transactionCount += Number(item.transactionCount ?? 0)
+    target.set(key, current)
+  })
+}
+
+function finalizeBreakdownItems(
+  source: Map<string, TransactionAnalysisCategoryBreakdownItem>,
+  totalAmount: number,
+) {
+  return Array.from(source.values())
+    .map((item) => ({
+      ...item,
+      percent: totalAmount > 0 ? (Number(item.amount ?? 0) / totalAmount) * 100 : 0,
+    }))
+    .sort((left, right) => Number(right.amount ?? 0) - Number(left.amount ?? 0))
+}
+
+function compareTransactionsDesc(left: Transaction, right: Transaction) {
+  const leftTime = parseTime(left.occurredAt)
+  const rightTime = parseTime(right.occurredAt)
+  if (leftTime !== rightTime) {
+    return rightTime - leftTime
+  }
+  return Number(right.id ?? 0) - Number(left.id ?? 0)
+}
+
+function parseTime(value?: string | null) {
+  if (!value) {
+    return 0
+  }
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime()
 }
 
 function syncSelectedSummary() {
@@ -530,8 +728,8 @@ function buildDateKey(date: Date) {
 }
 
 function formatMonthDayLabel(key: string) {
-  const [yearText, monthText, dayText] = key.split('-')
-  if (!yearText || !monthText || !dayText) {
+  const [, monthText, dayText] = key.split('-')
+  if (!monthText || !dayText) {
     return key
   }
   return `${Number(monthText)}月${Number(dayText)}日`
@@ -547,7 +745,9 @@ function formatYearMonthLabel(key: string) {
 
 function detailMetaText(transaction: Transaction) {
   const category = transaction.categoryName || (transaction.type === 'income' ? '收入' : '支出')
-  return `${category} · ${formatTime(transaction.occurredAt)}`
+  return [transaction.accountName, category, formatTime(transaction.occurredAt)]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function detailAmountText(transaction: Transaction) {
@@ -567,7 +767,23 @@ function formatTime(value: string) {
 
 <template>
   <section class="analysis-page" aria-label="收支分析">
-    <PageHeader title="收支分析" back-to="/finance" back-label="返回财务首页" />
+    <PageHeader title="收支分析" back-to="/finance" back-label="返回财务首页">
+      <label v-if="canSwitchFamilyView" class="analysis-family-switch">
+        <select v-model="familyView" class="analysis-family-switch-select" aria-label="切换家庭成员收支分析视角">
+          <option
+            v-for="option in familyViewOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+    </PageHeader>
+
+    <p v-if="familyViewHint" class="analysis-view-hint">
+      {{ familyViewHint }}
+    </p>
 
     <SegmentedControl v-model="period" :options="periodOptions" label="月年切换" />
 
@@ -584,12 +800,12 @@ function formatTime(value: string) {
           :key="item.label"
           type="button"
           :class="['summary-item', { active: summaryTab === item.label }]"
-        @click="summaryTab = item.label"
-      >
-        <strong>{{ item.label }}</strong>
-        <AmountText tag="span" :value="item.amount" :tone="item.tone" />
-      </button>
-    </section>
+          @click="summaryTab = item.label"
+        >
+          <strong>{{ item.label }}</strong>
+          <AmountText tag="span" :value="item.amount" :tone="item.tone" />
+        </button>
+      </section>
 
       <section v-if="summaryTab !== '结余'" class="card">
         <header class="card-head">

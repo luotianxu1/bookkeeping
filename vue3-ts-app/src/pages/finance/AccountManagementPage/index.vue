@@ -17,6 +17,7 @@ import {
   type Account,
   type AccountType,
 } from '@/api/modules/finance'
+import { getFamilyOverview, type FamilyMember } from '@/api/modules/auth'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import type { AccountGroup, AccountOverview } from '@/types/account'
@@ -27,6 +28,13 @@ const DEBT_ACCOUNT_CODES = new Set(['debt'])
 const LIABILITY_ACCOUNT_CODES = new Set(['liability'])
 const CONTACT_LINKED_ACCOUNT_CODES = new Set(['debt', 'human_relation'])
 const ACCOUNT_GROUP_COLLAPSE_STORAGE_KEY = 'finance-account-management-group-collapse'
+
+type FamilyViewOption = {
+  value: string
+  label: string
+  userId?: number
+  kind: 'self' | 'member' | 'total'
+}
 
 const showCreateAccountModal = ref(false)
 const accountName = ref('')
@@ -53,6 +61,8 @@ const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const collapsedGroupState = ref<Record<string, boolean>>({})
+const familyMembers = ref<FamilyMember[]>([])
+const familyView = ref('self')
 const isDebtAccountTypeSelected = computed(() => CONTACT_LINKED_ACCOUNT_CODES.has(accountType.value))
 const isLiabilityAccountTypeSelected = computed(() => LIABILITY_ACCOUNT_CODES.has(accountType.value))
 const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
@@ -67,9 +77,92 @@ const contactOptions = computed(() => [
     value: String(contact.id),
   })),
 ])
+const currentUser = computed(() => getStoredCurrentUser())
+const familyRoster = computed(() => {
+  const roster = new Map<number, { userId: number; displayName: string }>()
+  const me = currentUser.value
+
+  if (me) {
+    roster.set(me.id, {
+      userId: me.id,
+      displayName: me.displayName?.trim() || me.username || '我',
+    })
+  }
+
+  familyMembers.value.forEach((member) => {
+    roster.set(member.userId, {
+      userId: member.userId,
+      displayName: member.displayName?.trim() || `成员${member.userId}`,
+    })
+  })
+
+  return Array.from(roster.values())
+})
+const familyViewOptions = computed<FamilyViewOption[]>(() => {
+  const me = currentUser.value
+  if (!me) {
+    return []
+  }
+
+  const options: FamilyViewOption[] = [
+    { value: 'self', label: '我的数据', userId: me.id, kind: 'self' },
+  ]
+
+  if (familyRoster.value.length > 1) {
+    options.unshift({ value: 'total', label: '家庭总计', kind: 'total' })
+  }
+
+  familyRoster.value
+    .filter((member) => member.userId !== me.id)
+    .forEach((member) => {
+      options.push({
+        value: `member-${member.userId}`,
+        label: member.displayName,
+        userId: member.userId,
+        kind: 'member',
+      })
+    })
+
+  return options
+})
+const selectedFamilyView = computed<FamilyViewOption>(() =>
+  familyViewOptions.value.find((option) => option.value === familyView.value)
+  ?? familyViewOptions.value[0]
+  ?? { value: 'self', label: '我的数据', kind: 'self' },
+)
+const canSwitchFamilyView = computed(() => familyViewOptions.value.length > 1)
+const isSelfView = computed(() => selectedFamilyView.value.kind === 'self')
+const isReadOnlyFamilyView = computed(() => selectedFamilyView.value.kind !== 'self')
+const selectedViewerUserIds = computed(() => {
+  if (selectedFamilyView.value.kind === 'total') {
+    return familyRoster.value.map((member) => member.userId)
+  }
+
+  if (selectedFamilyView.value.userId) {
+    return [selectedFamilyView.value.userId]
+  }
+
+  return currentUser.value ? [currentUser.value.id] : []
+})
+const viewerNameByUserId = computed(() => new Map(
+  familyRoster.value.map((member) => [member.userId, member.displayName]),
+))
+const familyViewHint = computed(() => {
+  if (!isReadOnlyFamilyView.value) {
+    return ''
+  }
+
+  return selectedFamilyView.value.kind === 'total'
+    ? '当前为家庭总计视角，可查看全家账户汇总。'
+    : `当前查看 ${selectedFamilyView.value.label} 的账户数据。`
+})
 
 const accountOverview = computed<AccountOverview>(() => ({
-  label: '总资产',
+  label: selectedFamilyView.value.kind === 'total'
+    ? '家庭总资产'
+    : selectedFamilyView.value.kind === 'member'
+      ? `${selectedFamilyView.value.label}资产`
+      : '总资产',
   amount: formatAmount(
     accounts.value
       .filter((account) => account.includeInNetWorth && account.status === 'active')
@@ -122,37 +215,39 @@ const accountGroups = computed<AccountGroup[]>(() => {
       storageKey: groupStorageKey,
       title,
       amount: formatAmount(groupAccounts.reduce((total, account) => total + getSignedBalance(account), 0)),
-      path: groupCode === 'cash'
+      path: isSelfView.value && groupCode === 'cash'
         ? '/finance/accounts/cash'
-        : DEBT_ACCOUNT_CODES.has(groupCode ?? '')
+        : isSelfView.value && DEBT_ACCOUNT_CODES.has(groupCode ?? '')
           ? '/finance/accounts/debt'
-        : LIABILITY_ACCOUNT_CODES.has(groupCode ?? '')
+        : isSelfView.value && LIABILITY_ACCOUNT_CODES.has(groupCode ?? '')
           ? '/finance/accounts/liability'
-        : groupCode === 'human_relation'
+        : isSelfView.value && groupCode === 'human_relation'
           ? '/finance/accounts/human-relation'
-        : groupCode === 'gold'
+        : isSelfView.value && groupCode === 'gold'
           ? '/finance/accounts/gold'
-        : groupCode === 'investment'
+        : isSelfView.value && groupCode === 'investment'
           ? '/finance/accounts/investment'
         : undefined,
       collapsed: collapsedGroupState.value[groupStorageKey] ?? false,
       items: groupAccounts.map((account) => ({
           id: account.id,
           icon: getAccountIcon(account.icon, account.accountTypeCode),
-          name: account.name,
+          name: isReadOnlyFamilyView.value
+            ? `${account.name} · ${viewerNameByUserId.value.get(account.userId) ?? `成员${account.userId}`}`
+            : account.name,
           subtitle: account.remark ?? account.accountTypeName ?? '',
           amount: formatAmount(getSignedBalance(account)),
-          path: account.accountTypeCode === 'cash'
+          path: isSelfView.value && account.accountTypeCode === 'cash'
             ? `/finance/accounts/cash/${account.id}`
-            : DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
+            : isSelfView.value && DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
               ? `/finance/accounts/debt/${account.id}`
-            : LIABILITY_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
+            : isSelfView.value && LIABILITY_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
               ? `/finance/accounts/liability/${account.id}`
-              : account.accountTypeCode === 'human_relation'
+              : isSelfView.value && account.accountTypeCode === 'human_relation'
                 ? `/finance/accounts/human-relation/${account.id}`
-              : account.accountTypeCode === 'gold'
+              : isSelfView.value && account.accountTypeCode === 'gold'
                 ? `/finance/accounts/gold/position?accountId=${account.id}`
-            : account.accountTypeCode === 'investment'
+            : isSelfView.value && account.accountTypeCode === 'investment'
               ? `/finance/accounts/investment/${account.id}`
               : undefined,
       })),
@@ -182,6 +277,13 @@ watch(showCreateAccountModal, (visible) => {
   }
 })
 
+watch(familyView, () => {
+  if (showCreateAccountModal.value) {
+    closeCreateAccountModal()
+  }
+  void loadAccounts()
+})
+
 watch(accountType, (nextType) => {
   const selectedType = accountTypes.value.find((type) => type.code === nextType)
   if (selectedType) {
@@ -203,8 +305,34 @@ watch(accountType, (nextType) => {
 
 onMounted(() => {
   restoreCollapsedGroupState()
-  loadAccounts()
+  void initializePage()
 })
+
+async function initializePage() {
+  await loadFamilyMembers()
+  await loadAccounts()
+}
+
+async function loadFamilyMembers() {
+  const me = currentUser.value
+  if (!me) {
+    familyMembers.value = []
+    familyView.value = 'self'
+    return
+  }
+
+  try {
+    const familyOverview = await getFamilyOverview()
+    familyMembers.value = familyOverview.hasFamily ? familyOverview.members : []
+  } catch {
+    familyMembers.value = []
+  }
+
+  const validValues = new Set(familyViewOptions.value.map((option) => option.value))
+  if (!validValues.has(familyView.value)) {
+    familyView.value = 'self'
+  }
+}
 
 function openCreateAccountModal() {
   resetCreateAccountForm()
@@ -319,9 +447,10 @@ async function saveAccount() {
 }
 
 async function loadAccounts() {
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
+  const me = currentUser.value
+  if (!me) {
     accountListError.value = '请先登录后查看账户'
+    accounts.value = []
     return
   }
 
@@ -329,13 +458,15 @@ async function loadAccounts() {
   accountListError.value = ''
 
   try {
+    const targetUserIds = selectedViewerUserIds.value
     const [accountList, typeList] = await Promise.all([
-      getAccounts({ userId: currentUser.id, status: 'active' }),
+      Promise.all(targetUserIds.map((userId) => getAccounts({ userId, status: 'active' }))),
       getAccountTypes({ status: 'active' }),
     ])
-    accounts.value = accountList
+    accounts.value = accountList.flat()
     accountTypes.value = typeList
   } catch (error) {
+    accounts.value = []
     accountListError.value = error instanceof Error ? error.message : '账户列表加载失败'
   } finally {
     isLoadingAccounts.value = false
@@ -551,16 +682,32 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
       :type="feedbackType"
     />
 
-    <PageHeader title="账户管理" back-to="/finance" back-label="返回财务首页" />
+    <PageHeader title="账户管理" back-to="/finance" back-label="返回财务首页">
+      <label v-if="canSwitchFamilyView" class="account-family-switch">
+        <select v-model="familyView" class="account-family-switch-select" aria-label="切换家庭成员账户视角">
+          <option
+            v-for="option in familyViewOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+    </PageHeader>
 
     <AccountOverviewCard :overview="accountOverview" />
+
+    <p v-if="familyViewHint" class="account-view-hint">
+      {{ familyViewHint }}
+    </p>
 
     <p v-if="accountListError" class="account-list-message account-list-message-error">
       {{ accountListError }}
     </p>
     <CommonLoading v-else-if="isLoadingAccounts" />
     <p v-else-if="accountGroups.length === 0" class="account-list-message">
-      暂无账户
+      {{ selectedFamilyView.kind === 'total' ? '当前家庭暂无账户' : '暂无账户' }}
     </p>
 
     <div v-else class="account-groups">
@@ -572,7 +719,12 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
       />
     </div>
 
-    <FloatingAddButton aria-label="新增账户" storage-key="account-management" @click="openCreateAccountModal" />
+    <FloatingAddButton
+      v-if="isSelfView"
+      aria-label="新增账户"
+      storage-key="account-management"
+      @click="openCreateAccountModal"
+    />
 
     <CommonModal
       v-model="showCreateAccountModal"

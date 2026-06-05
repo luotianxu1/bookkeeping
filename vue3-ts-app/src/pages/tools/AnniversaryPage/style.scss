@@ -7,33 +7,10 @@
   color: var(--color-text-primary);
 }
 
-.anniversary-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.anniversary-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.anniversary-header-left h1 {
-  margin: 0;
+.anniversary-page :deep(.page-header h1) {
   font-size: 24px;
   line-height: 1.2;
   color: #0f172a;
-}
-
-.anniversary-back {
-  width: 24px;
-  height: 24px;
-  display: inline-grid;
-  place-items: center;
-  color: #0f172a;
-  font-size: 18px;
-  font-weight: 700;
 }
 
 .anniversary-hero {

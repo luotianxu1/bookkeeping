@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 收支列表页：还原 Pencil「收支列表页」画板中的筛选与日期分组流水。
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { deleteTransaction, getAccounts, getAccountTypes, getTransactions, type Transaction } from '@/api/modules/finance'
 import CommonButton from '@/components/common/CommonButton/index.vue'
@@ -9,6 +9,7 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
+import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
 import type { Transaction as DayTransaction } from '@/types/finance'
@@ -27,6 +28,18 @@ const deleteError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
+const transactionRequestSerial = ref(0)
+const {
+  familyView,
+  familyViewOptions,
+  selectedFamilyView,
+  canSwitchFamilyView,
+  isSelfView,
+  isReadOnlyFamilyView,
+  selectedViewerUserIds,
+  viewerNameByUserId,
+  loadFamilyMembers,
+} = useFinanceFamilyView()
 
 const filteredTransactions = computed(() => {
   if (activeFilter.value === '收入') {
@@ -40,12 +53,37 @@ const filteredTransactions = computed(() => {
   return transactions.value
 })
 const dayGroups = computed(() => buildTransactionDayGroups(filteredTransactions.value))
+const familyViewHint = computed(() => {
+  if (!isReadOnlyFamilyView.value) {
+    return ''
+  }
 
-onMounted(() => {
-  loadCashTransactions()
+  return selectedFamilyView.value.kind === 'total'
+    ? '当前为家庭总计视角，可查看全家收支记录。'
+    : `当前查看 ${selectedFamilyView.value.label} 的收支记录。`
 })
 
+onMounted(() => {
+  void initializePage()
+})
+
+watch(familyView, () => {
+  if (showDeleteConfirmModal.value && !deletingId.value) {
+    closeDeleteConfirm()
+  }
+  void loadCashTransactions()
+})
+
+async function initializePage() {
+  await loadFamilyMembers()
+  await loadCashTransactions()
+}
+
 function openEditTransaction(transaction: DayTransaction) {
+  if (!isSelfView.value) {
+    return
+  }
+
   if (!transaction.id || transaction.sourceType !== 'transaction' || !transaction.accountId || !transaction.categoryId || !transaction.occurredAt) {
     showFeedback('当前记录暂不支持修改', 'error')
     return
@@ -67,12 +105,13 @@ function openEditTransaction(transaction: DayTransaction) {
 }
 
 async function loadCashTransactions() {
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
+  if (selectedViewerUserIds.value.length === 0) {
     transactionListError.value = '请先登录后查看收支记录'
     return
   }
 
+  const requestSerial = transactionRequestSerial.value + 1
+  transactionRequestSerial.value = requestSerial
   isLoadingTransactions.value = true
   transactionListError.value = ''
 
@@ -80,31 +119,64 @@ async function loadCashTransactions() {
     const accountTypes = await getAccountTypes({ status: 'active' })
     const cashType = accountTypes.find((type) => type.code === 'cash')
     if (!cashType) {
+      if (requestSerial !== transactionRequestSerial.value) {
+        return
+      }
       transactions.value = []
       transactionListError.value = '现金账户类型不存在'
       return
     }
 
-    const [cashAccounts, transactionList] = await Promise.all([
-      getAccounts({
-        userId: currentUser.id,
-        accountTypeId: cashType.id,
-        status: 'active',
+    const userResults = await Promise.all(
+      selectedViewerUserIds.value.map(async (userId) => {
+        const [cashAccounts, transactionList] = await Promise.all([
+          getAccounts({
+            userId,
+            accountTypeId: cashType.id,
+            status: 'active',
+          }),
+          getTransactions({
+            userId,
+          }),
+        ])
+
+        const cashAccountIds = new Set(cashAccounts.map((account) => account.id))
+        const viewerName = viewerNameByUserId.value.get(userId)
+
+        return transactionList
+          .filter((transaction) => cashAccountIds.has(transaction.accountId))
+          .map((transaction) => ({
+            ...transaction,
+            accountName: isReadOnlyFamilyView.value && selectedFamilyView.value.kind === 'total' && viewerName
+              ? `${viewerName} · ${transaction.accountName ?? '现金账户'}`
+              : transaction.accountName,
+          }))
       }),
-      getTransactions({
-        userId: currentUser.id,
-      }),
-    ])
-    const cashAccountIds = new Set(cashAccounts.map((account) => account.id))
-    transactions.value = transactionList.filter((transaction) => cashAccountIds.has(transaction.accountId))
+    )
+
+    if (requestSerial !== transactionRequestSerial.value) {
+      return
+    }
+
+    transactions.value = userResults.flat()
   } catch (error) {
+    if (requestSerial !== transactionRequestSerial.value) {
+      return
+    }
+    transactions.value = []
     transactionListError.value = error instanceof Error ? error.message : '收支记录加载失败'
   } finally {
-    isLoadingTransactions.value = false
+    if (requestSerial === transactionRequestSerial.value) {
+      isLoadingTransactions.value = false
+    }
   }
 }
 
 function openDeleteConfirm(transaction: DayTransaction) {
+  if (!isSelfView.value) {
+    return
+  }
+
   pendingDeleteTransaction.value = transaction
   deleteError.value = ''
   showDeleteConfirmModal.value = true
@@ -161,7 +233,23 @@ function showFeedback(message: string, type: 'success' | 'error') {
       :type="feedbackType"
     />
 
-    <PageHeader title="收支列表" back-to="/finance" back-label="返回财务首页" />
+    <PageHeader title="收支列表" back-to="/finance" back-label="返回财务首页">
+      <label v-if="canSwitchFamilyView" class="transaction-family-switch">
+        <select v-model="familyView" class="transaction-family-switch-select" aria-label="切换家庭成员收支视角">
+          <option
+            v-for="option in familyViewOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+    </PageHeader>
+
+    <p v-if="familyViewHint" class="transaction-view-hint">
+      {{ familyViewHint }}
+    </p>
 
     <SegmentedControl
       v-model="activeFilter"
@@ -184,7 +272,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
           :key="group.date"
           :group="group"
           summary-mode="stacked"
-          show-delete
+          :show-delete="isSelfView"
           :deleting-id="deletingId"
           @edit="openEditTransaction"
           @delete="openDeleteConfirm"

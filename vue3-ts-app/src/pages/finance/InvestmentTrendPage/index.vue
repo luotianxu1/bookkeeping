@@ -6,16 +6,18 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
+import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import {
   getAssetTrend,
   type AssetTrend,
   type AssetTrendAllocation,
+  type AssetTrendContributor,
   type AssetTrendPoint,
   type AssetTrendRange,
 } from '@/api/modules/finance'
-import { getStoredCurrentUser } from '@/utils/current-user'
 
 type TrendRangeLabel = '近7日' | '近30日' | '年内' | '全部'
+
 interface RangeDetailPoint {
   key: string
   label: string
@@ -49,10 +51,23 @@ const isLoading = ref(false)
 const pageError = ref('')
 const chartRef = ref<HTMLDivElement | null>(null)
 const isDark = ref(false)
+const requestSerial = ref(0)
+const isInitialized = ref(false)
 
 let mediaQuery: MediaQueryList | null = null
 let echartsLib: (typeof import('echarts')) | null = null
 let chartIns: ECharts | null = null
+
+const {
+  currentUser,
+  familyView,
+  familyViewOptions,
+  selectedFamilyView,
+  canSwitchFamilyView,
+  isReadOnlyFamilyView,
+  selectedViewerUserIds,
+  loadFamilyMembers,
+} = useFinanceFamilyView()
 
 const accountId = computed(() => {
   const raw = route.query.accountId
@@ -60,6 +75,25 @@ const accountId = computed(() => {
   const parsed = Number(normalized)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 })
+const showFamilySwitch = computed(() => !accountId.value && canSwitchFamilyView.value)
+const effectiveUserIds = computed(() => {
+  if (accountId.value) {
+    return currentUser.value ? [currentUser.value.id] : []
+  }
+  return selectedViewerUserIds.value
+})
+const familyViewHint = computed(() => {
+  if (!showFamilySwitch.value || !isReadOnlyFamilyView.value) {
+    return ''
+  }
+
+  return selectedFamilyView.value.kind === 'total'
+    ? '当前为家庭总计视角，可查看全家资产趋势。'
+    : `当前查看 ${selectedFamilyView.value.label} 的资产趋势。`
+})
+const requestKey = computed(() => (
+  `${showFamilySwitch.value ? selectedFamilyView.value.value : 'self'}:${accountId.value ?? 'all'}:${activeRange.value}`
+))
 
 const backTo = computed(() => (
   accountId.value ? `/finance/accounts/investment/${accountId.value}` : '/finance'
@@ -251,6 +285,17 @@ const chartOption = computed<EChartsCoreOption>(() => {
   }
 })
 
+watch(requestKey, () => {
+  if (!isInitialized.value) {
+    return
+  }
+  void loadTrend()
+})
+
+watch([trend, isDark], () => {
+  renderChart()
+}, { deep: true })
+
 function updateThemeState() {
   isDark.value = Boolean(mediaQuery?.matches)
 }
@@ -284,36 +329,217 @@ function onResize() {
   chartIns?.resize()
 }
 
+onMounted(async () => {
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  updateThemeState()
+  mediaQuery.addEventListener('change', handleThemeChange)
+  await ensureEcharts()
+  await loadFamilyMembers()
+  isInitialized.value = true
+  await loadTrend()
+  renderChart()
+  window.addEventListener('resize', onResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize)
+  mediaQuery?.removeEventListener('change', handleThemeChange)
+  chartIns?.dispose()
+  chartIns = null
+})
+
 async function loadTrend() {
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
+  if (effectiveUserIds.value.length === 0) {
     pageError.value = '请先登录后查看资产趋势'
     trend.value = null
     return
   }
 
+  const currentRequest = requestSerial.value + 1
+  requestSerial.value = currentRequest
   isLoading.value = true
   pageError.value = ''
 
   try {
-    const result = await getAssetTrend({
-      userId: currentUser.id,
-      accountId: accountId.value,
-      range: rangeMap[activeRange.value],
-    })
-    trend.value = result
-    const normalizedRange = reverseRangeMap[(result.range as AssetTrendRange) ?? 'ytd']
+    const results = await Promise.all(
+      effectiveUserIds.value.map((userId) => getAssetTrend({
+        userId,
+        accountId: accountId.value,
+        range: rangeMap[activeRange.value],
+      })),
+    )
+
+    if (currentRequest !== requestSerial.value) {
+      return
+    }
+
+    const merged = mergeAssetTrendResults(results)
+    trend.value = merged
+    const normalizedRange = reverseRangeMap[(merged.range as AssetTrendRange) ?? 'ytd']
     if (normalizedRange) {
       activeRange.value = normalizedRange
     }
   } catch (error) {
+    if (currentRequest !== requestSerial.value) {
+      return
+    }
     trend.value = null
     pageError.value = error instanceof Error ? error.message : '资产趋势加载失败'
   } finally {
-    isLoading.value = false
-    await nextTick()
-    renderChart()
+    if (currentRequest === requestSerial.value) {
+      isLoading.value = false
+      await nextTick()
+      renderChart()
+    }
   }
+}
+
+function mergeAssetTrendResults(results: AssetTrend[]) {
+  if (results.length === 1) {
+    return results[0]
+  }
+
+  const first = results[0]
+  const pointOrder: string[] = []
+  const trendPointMap = new Map<string, AssetTrendPoint>()
+  const allocationOrder: string[] = []
+  const allocationMap = new Map<string, AssetTrendAllocation>()
+  const contributorMap = new Map<string, AssetTrendContributor>()
+
+  let totalAssets = 0
+  let cumulativeProfit = 0
+  let periodChangeAmount = 0
+  let startDate = first?.startDate ?? ''
+  let endDate = first?.endDate ?? ''
+  let lastSyncedAt = first?.lastSyncedAt ?? null
+
+  results.forEach((result) => {
+    totalAssets += Number(result.totalAssets ?? 0)
+    cumulativeProfit += Number(result.cumulativeProfit ?? 0)
+    periodChangeAmount += Number(result.periodChangeAmount ?? 0)
+    startDate = pickEarlierDate(startDate, result.startDate)
+    endDate = pickLaterDate(endDate, result.endDate)
+    lastSyncedAt = pickLaterDateTime(lastSyncedAt, result.lastSyncedAt)
+
+    result.trendPoints.forEach((item) => {
+      if (!trendPointMap.has(item.key)) {
+        pointOrder.push(item.key)
+        trendPointMap.set(item.key, {
+          key: item.key,
+          label: item.label,
+          value: 0,
+        })
+      }
+      const current = trendPointMap.get(item.key)!
+      current.value += Number(item.value ?? 0)
+    })
+
+    result.allocations.forEach((item) => {
+      const key = `${item.accountTypeCode ?? 'unknown'}:${item.label}`
+      if (!allocationMap.has(key)) {
+        allocationOrder.push(key)
+        allocationMap.set(key, {
+          accountTypeCode: item.accountTypeCode,
+          label: item.label,
+          balance: 0,
+          percent: 0,
+        })
+      }
+      const current = allocationMap.get(key)!
+      current.balance += Number(item.balance ?? 0)
+    })
+
+    result.contributors.forEach((item) => {
+      const key = `${item.accountTypeCode ?? 'unknown'}:${item.accountName}`
+      const current = contributorMap.get(key) ?? {
+        accountId: item.accountId,
+        accountName: item.accountName,
+        accountTypeCode: item.accountTypeCode,
+        accountTypeLabel: item.accountTypeLabel,
+        contributionAmount: 0,
+        contributionRate: 0,
+      }
+      current.contributionAmount += Number(item.contributionAmount ?? 0)
+      contributorMap.set(key, current)
+    })
+  })
+
+  const mergedTrendPoints = pointOrder
+    .map((key) => trendPointMap.get(key))
+    .filter((item): item is AssetTrendPoint => Boolean(item))
+
+  const mergedAllocations = allocationOrder
+    .map((key) => allocationMap.get(key))
+    .filter((item): item is AssetTrendAllocation => Boolean(item))
+    .map((item) => ({
+      ...item,
+      percent: totalAssets > 0 ? (Number(item.balance ?? 0) / totalAssets) * 100 : 0,
+    }))
+
+  const mergedContributors = Array.from(contributorMap.values())
+    .map((item) => ({
+      ...item,
+      contributionRate: totalAssets > 0 ? (Number(item.contributionAmount ?? 0) / totalAssets) * 100 : 0,
+    }))
+    .sort((left, right) => Number(right.contributionAmount ?? 0) - Number(left.contributionAmount ?? 0))
+
+  const previousTotal = mergedTrendPoints.length > 1
+    ? Number(mergedTrendPoints[mergedTrendPoints.length - 2]?.value ?? 0)
+    : 0
+  const periodChangeRate = previousTotal > 0
+    ? (periodChangeAmount / previousTotal) * 100
+    : 0
+  const cumulativeProfitRate = totalAssets > 0
+    ? (cumulativeProfit / totalAssets) * 100
+    : 0
+
+  return {
+    userId: first?.userId ?? 0,
+    accountId: first?.accountId ?? null,
+    range: first?.range ?? rangeMap[activeRange.value],
+    rangeLabel: first?.rangeLabel ?? '',
+    startDate,
+    endDate,
+    totalAssets,
+    cumulativeProfit,
+    cumulativeProfitRate,
+    periodChangeAmount,
+    periodChangeRate,
+    lastSyncedAt,
+    trendPoints: mergedTrendPoints,
+    allocations: mergedAllocations,
+    contributors: mergedContributors,
+  } satisfies AssetTrend
+}
+
+function pickEarlierDate(current: string, candidate?: string | null) {
+  if (!candidate) {
+    return current
+  }
+  if (!current) {
+    return candidate
+  }
+  return new Date(candidate).getTime() < new Date(current).getTime() ? candidate : current
+}
+
+function pickLaterDate(current: string, candidate?: string | null) {
+  if (!candidate) {
+    return current
+  }
+  if (!current) {
+    return candidate
+  }
+  return new Date(candidate).getTime() > new Date(current).getTime() ? candidate : current
+}
+
+function pickLaterDateTime(current?: string | null, candidate?: string | null) {
+  if (!candidate) {
+    return current ?? null
+  }
+  if (!current) {
+    return candidate
+  }
+  return new Date(candidate).getTime() > new Date(current).getTime() ? candidate : current
 }
 
 function getAllocationTrackStyle(item: AssetTrendAllocation) {
@@ -403,10 +629,10 @@ function formatDateTime(value?: string | null) {
   })
 }
 
-function getTrendYAxisBounds(values: number[]): TrendYAxisBounds {
+function getTrendYAxisBounds(values: number[]) {
   const normalized = values.filter((value) => Number.isFinite(value))
   if (normalized.length === 0) {
-    return {}
+    return {} satisfies TrendYAxisBounds
   }
 
   const minValue = Math.min(...normalized)
@@ -418,7 +644,7 @@ function getTrendYAxisBounds(values: number[]): TrendYAxisBounds {
     return {
       min: minValue,
       max: maxValue + padding,
-    }
+    } satisfies TrendYAxisBounds
   }
 
   const center = (minValue + maxValue) / 2
@@ -429,38 +655,29 @@ function getTrendYAxisBounds(values: number[]): TrendYAxisBounds {
   return {
     min: minValue,
     max: maxValue + padding,
-  }
+  } satisfies TrendYAxisBounds
 }
-
-onMounted(async () => {
-  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  updateThemeState()
-  mediaQuery.addEventListener('change', handleThemeChange)
-  await ensureEcharts()
-  await loadTrend()
-  renderChart()
-  window.addEventListener('resize', onResize)
-})
-
-watch(activeRange, () => {
-  void loadTrend()
-})
-
-watch([trend, isDark], () => {
-  renderChart()
-}, { deep: true })
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', onResize)
-  mediaQuery?.removeEventListener('change', handleThemeChange)
-  chartIns?.dispose()
-  chartIns = null
-})
 </script>
 
 <template>
   <section class="investment-trend-page" aria-label="资产趋势">
-    <PageHeader title="资产趋势" :back-to="backTo" :back-label="backLabel" />
+    <PageHeader title="资产趋势" :back-to="backTo" :back-label="backLabel">
+      <label v-if="showFamilySwitch" class="trend-family-switch">
+        <select v-model="familyView" class="trend-family-switch-select" aria-label="切换家庭成员资产趋势视角">
+          <option
+            v-for="option in familyViewOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+    </PageHeader>
+
+    <p v-if="familyViewHint" class="trend-view-hint">
+      {{ familyViewHint }}
+    </p>
 
     <p v-if="pageError" class="investment-trend-message investment-trend-message-error">{{ pageError }}</p>
     <CommonLoading v-else-if="isLoading" />

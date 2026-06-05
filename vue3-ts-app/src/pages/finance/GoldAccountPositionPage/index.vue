@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 黄金账户持仓页：对接黄金聚合查询接口，并补充持仓新增、修改、删除能力。
 import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
@@ -11,6 +11,7 @@ import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
+import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   createInvestmentPosition,
   createInvestmentTransaction,
@@ -31,7 +32,6 @@ import { refreshGoldPriceCache, useGoldPriceCache } from '@/utils/gold-price-cac
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const route = useRoute()
-const router = useRouter()
 
 const isLoading = ref(false)
 const isSavingPosition = ref(false)
@@ -215,15 +215,6 @@ async function loadGoldPosition() {
       isLoading.value = false
     }
   }
-}
-
-function goBack() {
-  if (window.history.length > 1) {
-    router.back()
-    return
-  }
-
-  router.push('/finance/accounts/gold')
 }
 
 async function refreshGoldData() {
@@ -769,10 +760,7 @@ function toApiDateTime(date: Date) {
       :type="feedbackType"
     />
 
-    <header class="gold-position-header">
-      <button class="gold-position-back" type="button" aria-label="返回黄金账户" @click="goBack">
-        ← 黄金账户持仓
-      </button>
+    <PageHeader title="黄金账户持仓" back-to="/finance/accounts/gold" back-label="返回黄金账户">
       <button
         class="gold-position-refresh"
         type="button"
@@ -782,7 +770,7 @@ function toApiDateTime(date: Date) {
       >
         <span :class="['gold-position-refresh-icon', { spinning: isRefreshingGold }]">↻</span>
       </button>
-    </header>
+    </PageHeader>
 
     <p v-if="pageError" class="gold-position-message gold-position-message-error">
       {{ pageError }}

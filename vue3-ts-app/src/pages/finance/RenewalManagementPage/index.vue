@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
@@ -9,6 +8,7 @@ import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
+import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   createRenewalSubscription,
   deleteRenewalSubscription,
@@ -44,7 +44,6 @@ type RenewalCardView = {
   raw: RenewalSubscription
 }
 
-const router = useRouter()
 const subscriptions = ref<RenewalSubscription[]>([])
 const fundingAccounts = ref<Account[]>([])
 const summary = ref<RenewalSubscriptionSummary>({
@@ -196,14 +195,6 @@ const renewalCards = computed<RenewalCardView[]>(() =>
 onMounted(() => {
   void loadPage()
 })
-
-function goBack() {
-  if (window.history.length > 1) {
-    router.back()
-    return
-  }
-  router.push('/finance/more-features')
-}
 
 async function loadPage() {
   const currentUser = getStoredCurrentUser()
@@ -542,18 +533,9 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <CommonLoading v-else-if="isLoading" />
 
     <template v-else>
-      <header class="renewal-top-bar">
-        <button
-          type="button"
-          class="renewal-back-button"
-          aria-label="返回更多功能"
-          @click="goBack"
-        >
-          <span>&lt;</span>
-          <strong>续费管理</strong>
-        </button>
+      <PageHeader title="续费管理" back-to="/finance/more-features" back-label="返回更多功能">
         <button type="button" class="renewal-create-action" @click="openCreateModal">新增</button>
-      </header>
+      </PageHeader>
 
       <section class="renewal-summary-card" aria-label="续费总览">
         <AmountText

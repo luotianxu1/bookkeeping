@@ -86,7 +86,7 @@ async function logout() {
   <section class="profile-page" aria-label="我的页面">
     <section class="profile-user-card" aria-label="用户信息">
       <div class="avatar">{{ avatarText }}</div>
-      <h1>{{ displayName }}</h1>
+      <h2>{{ displayName }}</h2>
     </section>
 
     <section class="profile-menu-card" aria-label="我的功能列表">

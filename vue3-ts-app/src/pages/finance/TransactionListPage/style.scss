@@ -3,6 +3,58 @@
   gap: var(--space-6);
 }
 
+.transaction-family-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: min(46vw, 168px);
+  min-height: 32px;
+  padding: 0 30px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgba(29, 78, 216, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  color: var(--color-brand);
+}
+
+.transaction-family-switch::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-65%) rotate(45deg);
+  pointer-events: none;
+}
+
+.transaction-family-switch-select {
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: var(--font-size-12);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.transaction-view-hint {
+  margin: -2px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  line-height: 1.5;
+}
+
 .transaction-list-groups {
   display: grid;
   gap: var(--space-6);
@@ -45,4 +97,16 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-6);
+}
+
+@media (max-width: 480px) {
+  .transaction-family-switch {
+    max-width: min(56vw, 168px);
+  }
+}
+
+@media (max-width: 360px) {
+  .transaction-family-switch {
+    max-width: 100%;
+  }
 }

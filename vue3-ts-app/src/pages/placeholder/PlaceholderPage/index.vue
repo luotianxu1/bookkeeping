@@ -3,14 +3,15 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useRoute } from 'vue-router'
+import PageHeader from '@/components/common/PageHeader/index.vue'
 
 const route = useRoute()
-const pageTitle = computed(() => route.meta.title)
+const pageTitle = computed(() => String(route.meta.title ?? '页面'))
 </script>
 
 <template>
   <section class="placeholder-page" :aria-label="`${pageTitle}页面`">
-    <h1>{{ pageTitle }}</h1>
+    <PageHeader :title="pageTitle" back-to="/finance" back-label="返回财务首页" />
     <p>该页面将根据 Pencil 设计稿继续实现。</p>
     <RouterLink
       v-if="route.path === '/profile'"

@@ -152,7 +152,7 @@ function resolveManagementPath(card: Pick<FoodManagementCard, 'key' | 'path'>) {
     <template v-if="!pageError && homeData">
       <section class="hero-card">
         <div class="hero-title-wrap">
-          <h1>{{ homeData.heroTitle }}</h1>
+          <h2>{{ homeData.heroTitle }}</h2>
         </div>
 
         <div class="hero-actions">

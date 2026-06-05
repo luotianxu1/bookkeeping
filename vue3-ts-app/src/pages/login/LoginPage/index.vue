@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getCurrentUser, login } from '@/api/modules/auth'
 import { ApiError } from '@/api/request'
 import { clearStoredToken, setStoredToken } from '@/utils/auth-token'
@@ -65,10 +66,10 @@ async function submitLogin() {
 
 <template>
   <section class="login-page" aria-label="登录">
-    <header class="login-header">
-      <h1>登录</h1>
+    <div class="login-header">
+      <PageHeader title="登录" />
       <p>继续记录你们的账单、菜单、纪念日和每一天的小事。</p>
-    </header>
+    </div>
 
     <div class="login-form-wrap">
       <section class="login-form-card">

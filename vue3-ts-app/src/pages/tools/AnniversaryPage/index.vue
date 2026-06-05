@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
+import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import {
   createAnniversary,
@@ -31,8 +31,6 @@ const tabOptions = [
   { label: '本月', value: 'month' },
   { label: '全部', value: 'all' },
 ]
-
-const router = useRouter()
 
 const activeTab = ref<AnniversaryTab>('month')
 const anniversaries = ref<Anniversary[]>([])
@@ -130,10 +128,6 @@ async function loadAnniversaries() {
   } finally {
     isLoading.value = false
   }
-}
-
-function goBack() {
-  router.push('/tools')
 }
 
 function openCreateModal() {
@@ -372,14 +366,7 @@ function pad(value: number) {
   />
 
   <section class="anniversary-page" aria-label="纪念日页面">
-    <header class="anniversary-header">
-      <div class="anniversary-header-left">
-        <button class="anniversary-back" type="button" aria-label="返回" @click="goBack">
-          ←
-        </button>
-        <h1>纪念日</h1>
-      </div>
-    </header>
+    <PageHeader title="纪念日" back-to="/tools" back-label="返回工具页" prefer-back-to />
 
     <section class="anniversary-hero" aria-label="纪念日统计">
       <div class="anniversary-hero-content">

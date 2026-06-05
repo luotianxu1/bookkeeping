@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // 联系人管理页：按最新画板还原为纯列表页，并保留增删改查弹窗。
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
+import PageHeader from '@/components/common/PageHeader/index.vue'
 import { createContact, deleteContact, getContacts, updateContact, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
@@ -21,8 +21,6 @@ type ContactCardPreset = {
 type ContactDisplayCard = Contact & ContactCardPreset & {
   avatarLetter: string
 }
-
-const router = useRouter()
 
 const contacts = ref<Contact[]>([])
 const isLoading = ref(false)
@@ -270,9 +268,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
-function goBack() {
-  router.push('/tools')
-}
 </script>
 
 <template>
@@ -283,16 +278,7 @@ function goBack() {
   />
 
   <section class="contacts-page" aria-label="联系人管理">
-    <header class="contacts-header">
-      <div class="contacts-header-left">
-        <button class="contacts-back" type="button" aria-label="返回" @click="goBack">
-          ←
-        </button>
-        <div class="contacts-title-wrap">
-          <h1>联系人管理</h1>
-        </div>
-      </div>
-    </header>
+    <PageHeader title="联系人管理" back-to="/tools" back-label="返回工具页" prefer-back-to />
 
     <p v-if="pageError" class="contacts-message contacts-message-error">
       {{ pageError }}

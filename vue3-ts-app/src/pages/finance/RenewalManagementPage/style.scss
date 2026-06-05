@@ -4,16 +4,6 @@
   padding-bottom: var(--space-72);
 }
 
-.renewal-top-bar {
-  width: 100%;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.renewal-back-button,
 .renewal-create-action,
 .renewal-card-action {
   padding: 0;
@@ -21,25 +11,7 @@
   background: transparent;
 }
 
-.renewal-back-button {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #0f172a;
-}
-
-.renewal-back-button span,
-.renewal-back-button strong {
-  line-height: 1;
-}
-
-.renewal-back-button span {
-  font-size: 18px;
-  font-weight: 500;
-}
-
-.renewal-back-button strong {
+.renewal-management-page :deep(.page-header h1) {
   font-size: 18px;
   font-weight: 700;
 }
