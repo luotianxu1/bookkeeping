@@ -65,7 +65,7 @@ async function submitRegister() {
 <template>
   <section class="register-page" aria-label="注册">
     <div class="register-header">
-      <PageHeader title="注册" />
+      <PageHeader title="注册" :show-back="false" />
       <p>使用用户名和密码创建新账号。</p>
     </div>
 

@@ -26,6 +26,7 @@ public class AuthService {
 
     private static final String ACTIVE_STATUS = "active";
     private static final String ARCHIVED_STATUS = "archived";
+    private static final String DISABLED_STATUS = "disabled";
     private static final String INVITE_CODE_PREFIX = "FAMILY-";
     private static final String INVITE_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     private static final int INVITE_CODE_LENGTH = 8;
@@ -147,6 +148,23 @@ public class AuthService {
         return buildFamilyOverview(currentUser, family);
     }
 
+    @Transactional
+    public void deleteAccount(String username) {
+        UserEntity currentUser = requireActiveUserEntity(username);
+        Long familyId = currentUser.getFamilyId();
+
+        if (familyId != null) {
+            FamilyEntity family = requireActiveFamily(familyId);
+            if (currentUser.getId().equals(family.getOwnerUserId())) {
+                handleOwnerAccountDeletion(currentUser, family);
+            } else {
+                updateUserFamilyId(currentUser.getId(), null);
+            }
+        }
+
+        disableUserAccount(currentUser.getId());
+    }
+
     private Optional<UserAccount> findActiveByLogin(String login) {
         LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<UserEntity>()
             .eq(UserEntity::getStatus, ACTIVE_STATUS)
@@ -221,12 +239,34 @@ public class AuthService {
         return entity;
     }
 
-    private FamilyOverviewResponse buildFamilyOverview(UserEntity currentUser, FamilyEntity family) {
-        LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<UserEntity>()
-            .eq(UserEntity::getFamilyId, family.getId())
-            .eq(UserEntity::getStatus, ACTIVE_STATUS);
+    private void handleOwnerAccountDeletion(UserEntity currentUser, FamilyEntity family) {
+        List<UserEntity> activeMembers = listActiveFamilyUsers(family.getId()).stream()
+            .filter(user -> !user.getId().equals(currentUser.getId()))
+            .toList();
 
-        List<FamilyMemberResponse> members = userMapper.selectList(wrapper).stream()
+        if (activeMembers.isEmpty()) {
+            archiveFamily(family.getId());
+            updateUserFamilyId(currentUser.getId(), null);
+            return;
+        }
+
+        UserEntity nextOwner = activeMembers.stream()
+            .min(Comparator.comparing(UserEntity::getId))
+            .orElseThrow();
+
+        transferFamilyOwner(family.getId(), nextOwner.getId());
+        updateUserFamilyId(currentUser.getId(), null);
+    }
+
+    private List<UserEntity> listActiveFamilyUsers(Long familyId) {
+        LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<UserEntity>()
+            .eq(UserEntity::getFamilyId, familyId)
+            .eq(UserEntity::getStatus, ACTIVE_STATUS);
+        return userMapper.selectList(wrapper);
+    }
+
+    private FamilyOverviewResponse buildFamilyOverview(UserEntity currentUser, FamilyEntity family) {
+        List<FamilyMemberResponse> members = listActiveFamilyUsers(family.getId()).stream()
             .sorted(Comparator
                 .comparing((UserEntity user) -> !user.getId().equals(family.getOwnerUserId()))
                 .thenComparing(UserEntity::getId))
@@ -246,6 +286,28 @@ public class AuthService {
         LambdaUpdateWrapper<UserEntity> wrapper = new LambdaUpdateWrapper<UserEntity>()
             .eq(UserEntity::getId, userId)
             .set(UserEntity::getFamilyId, familyId);
+        userMapper.update(null, wrapper);
+    }
+
+    private void transferFamilyOwner(Long familyId, Long ownerUserId) {
+        LambdaUpdateWrapper<FamilyEntity> wrapper = new LambdaUpdateWrapper<FamilyEntity>()
+            .eq(FamilyEntity::getId, familyId)
+            .set(FamilyEntity::getOwnerUserId, ownerUserId);
+        familyMapper.update(null, wrapper);
+    }
+
+    private void archiveFamily(Long familyId) {
+        LambdaUpdateWrapper<FamilyEntity> wrapper = new LambdaUpdateWrapper<FamilyEntity>()
+            .eq(FamilyEntity::getId, familyId)
+            .set(FamilyEntity::getStatus, ARCHIVED_STATUS);
+        familyMapper.update(null, wrapper);
+    }
+
+    private void disableUserAccount(Long userId) {
+        LambdaUpdateWrapper<UserEntity> wrapper = new LambdaUpdateWrapper<UserEntity>()
+            .eq(UserEntity::getId, userId)
+            .set(UserEntity::getStatus, DISABLED_STATUS)
+            .set(UserEntity::getFamilyId, null);
         userMapper.update(null, wrapper);
     }
 

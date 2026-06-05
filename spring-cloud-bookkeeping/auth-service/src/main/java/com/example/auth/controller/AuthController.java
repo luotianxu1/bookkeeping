@@ -87,6 +87,13 @@ public class AuthController {
         return Result.ok(authService.unbindFamilyMember(username, userId));
     }
 
+    @DeleteMapping("/account")
+    @Operation(summary = "注销当前账号", description = "停用当前登录账号，并按规则处理家庭归属")
+    public Result<Void> deleteAccount(@AuthenticationPrincipal String username) {
+        authService.deleteAccount(username);
+        return Result.<Void>ok().message("账号已注销");
+    }
+
     @GetMapping("/me")
     @Operation(summary = "获取当前登录用户", description = "需要在 Authorization 头中传入 Bearer Token")
     @Parameter(

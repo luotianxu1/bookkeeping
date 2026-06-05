@@ -72,3 +72,7 @@ export function joinFamily(params: JoinFamilyParams) {
 export function unbindFamilyMember(userId: number) {
   return requestDelete<FamilyOverview>(authRequest, `/api/auth/family/members/${userId}`)
 }
+
+export function deleteCurrentAccount() {
+  return requestDelete<void>(authRequest, '/api/auth/account')
+}

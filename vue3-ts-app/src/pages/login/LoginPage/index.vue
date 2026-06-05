@@ -52,8 +52,7 @@ async function submitLogin() {
     })
     const currentUser = await getCurrentUser()
     setStoredCurrentUser(currentUser)
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/finance'
-    await router.push(redirect)
+    await router.push('/')
   } catch (error) {
     clearStoredToken()
     clearStoredCurrentUser()
@@ -67,7 +66,7 @@ async function submitLogin() {
 <template>
   <section class="login-page" aria-label="登录">
     <div class="login-header">
-      <PageHeader title="登录" />
+      <PageHeader title="登录" :show-back="false" />
       <p>继续记录你们的账单、菜单、纪念日和每一天的小事。</p>
     </div>
 

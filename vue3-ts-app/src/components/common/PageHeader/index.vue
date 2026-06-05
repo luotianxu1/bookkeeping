@@ -8,6 +8,7 @@ const props = defineProps<{
   backTo?: string
   backLabel?: string
   preferBackTo?: boolean
+  showBack?: boolean
 }>()
 
 const router = useRouter()
@@ -67,7 +68,13 @@ function normalizePath(path: string) {
 <template>
   <header class="page-header">
     <div class="page-header-main">
-      <button class="page-header-back" type="button" :aria-label="backLabel ?? '返回'" @click="goBack">
+      <button
+        v-if="showBack !== false"
+        class="page-header-back"
+        type="button"
+        :aria-label="backLabel ?? '返回'"
+        @click="goBack"
+      >
         &lt;
       </button>
       <h1>{{ title }}</h1>

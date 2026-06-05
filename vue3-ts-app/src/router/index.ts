@@ -18,7 +18,7 @@ export const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/login',
+      redirect: () => (getStoredToken() ? '/finance' : '/login'),
     },
     ...financeRoutes,
     ...mainRoutes,
