@@ -52,7 +52,7 @@ async function goLogin() {
       :show-close="false"
       :close-on-overlay="false"
     >
-      <p class="auth-prompt-message">登录后可以继续使用账本功能。</p>
+      <p class="auth-prompt-message">登录后可以继续使用当前内容。</p>
 
       <template #footer>
         <CommonButton class="auth-prompt-button" @click="goLogin">确认</CommonButton>

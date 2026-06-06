@@ -619,7 +619,7 @@ function handleResize() {
           <article v-for="order in orders" :key="order.id" class="overview-order-card">
             <div class="overview-order-head">
               <div>
-                <strong>{{ order.customerName }}</strong>
+                <strong>{{ orderTypeLabel(order.orderType) }}</strong>
                 <p>{{ formatDateTime(order.shootAt) }}</p>
               </div>
               <div class="overview-order-tags">

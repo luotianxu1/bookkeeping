@@ -11,7 +11,6 @@ public class PhotographyOrderResponse {
     private Long id;
     private String orderNo;
     private Long userId;
-    private String customerName;
     private String contactInfo;
     private String orderType;
     private String status;

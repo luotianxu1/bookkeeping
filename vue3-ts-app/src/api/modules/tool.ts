@@ -156,7 +156,6 @@ export interface PhotographyOrder {
   id: number
   orderNo: string
   userId: number
-  customerName: string
   contactInfo?: string | null
   orderType: PhotographyOrderType | string
   status: PhotographyOrderStatus | string
@@ -187,7 +186,6 @@ export interface PhotographyOrderQuery {
 
 export interface SavePhotographyOrderParams {
   userId: number
-  customerName: string
   contactInfo?: string | null
   orderType: PhotographyOrderType
   shootAt: string

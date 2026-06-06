@@ -96,8 +96,6 @@ public class PhotographyOrderService {
             .eq(userId != null, PhotographyOrderEntity::getUserId, userId)
             .eq(shouldFilterStatus(status), PhotographyOrderEntity::getStatus, normalizeStatus(status))
             .and(StringUtils.hasText(keyword), query -> query
-                .like(PhotographyOrderEntity::getCustomerName, keyword.trim())
-                .or()
                 .like(PhotographyOrderEntity::getContactInfo, keyword.trim())
                 .or()
                 .like(PhotographyOrderEntity::getAddress, keyword.trim())
@@ -148,7 +146,7 @@ public class PhotographyOrderService {
         PhotographyOrderEntity entity = new PhotographyOrderEntity();
         entity.setOrderNo(generateOrderNo());
         entity.setUserId(request.getUserId());
-        entity.setCustomerName(request.getCustomerName().trim());
+        entity.setCustomerName(buildOrderDisplayName(orderType));
         entity.setContactInfo(trimNullable(request.getContactInfo()));
         entity.setOrderType(orderType);
         entity.setShootAt(request.getShootAt());
@@ -163,18 +161,19 @@ public class PhotographyOrderService {
         if (depositAmount.compareTo(BigDecimal.ZERO) > 0) {
             AccountEntity depositAccount = requireCashAccount(request.getUserId(), request.getDepositAccountId());
             CategoryEntity incomeCategory = requirePhotographyIncomeCategory(request.getUserId());
+            LocalDateTime depositReceivedAt = LocalDateTime.now();
             TransactionEntity depositTransaction = createIncomeTransaction(
                 request.getUserId(),
                 depositAccount,
                 incomeCategory,
                 depositAmount,
-                request.getShootAt(),
-                buildTransactionTitle(entity.getCustomerName(), "订金"),
+                depositReceivedAt,
+                buildTransactionTitle(orderType, "订金"),
                 buildTransactionRemark(orderType, entity.getAddress(), entity.getRemark())
             );
             entity.setDepositAccountId(depositAccount.getId());
             entity.setDepositTransactionId(depositTransaction.getId());
-            entity.setDepositReceivedAt(depositTransaction.getOccurredAt());
+            entity.setDepositReceivedAt(depositReceivedAt);
         }
 
         photographyOrderMapper.insert(entity);
@@ -206,7 +205,7 @@ public class PhotographyOrderService {
                 incomeCategory,
                 finalAmount,
                 occurredAt,
-                buildTransactionTitle(entity.getCustomerName(), "尾款"),
+                buildTransactionTitle(entity.getOrderType(), "尾款"),
                 buildTransactionRemark(entity.getOrderType(), entity.getAddress(), entity.getRemark())
             );
             entity.setFinalAccountId(finalAccount.getId());
@@ -416,8 +415,12 @@ public class PhotographyOrderService {
         transactionMapper.updateById(transaction);
     }
 
-    private String buildTransactionTitle(String customerName, String suffix) {
-        return "摄影" + suffix + " - " + customerName;
+    private String buildTransactionTitle(String orderType, String suffix) {
+        return "摄影" + suffix + " - " + buildOrderDisplayName(orderType);
+    }
+
+    private String buildOrderDisplayName(String orderType) {
+        return toOrderTypeLabel(orderType) + "订单";
     }
 
     private String buildTransactionRemark(String orderType, String address, String remark) {
@@ -838,7 +841,6 @@ public class PhotographyOrderService {
         response.setId(entity.getId());
         response.setOrderNo(entity.getOrderNo());
         response.setUserId(entity.getUserId());
-        response.setCustomerName(entity.getCustomerName());
         response.setContactInfo(entity.getContactInfo());
         response.setOrderType(entity.getOrderType());
         response.setStatus(entity.getStatus());

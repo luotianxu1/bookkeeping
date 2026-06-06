@@ -1,22 +1,21 @@
-package com.example.auth.config;
+package com.example.common.security;
 
-import com.example.common.security.JwtTokenAuthenticationFilter;
-import com.example.common.security.SecurityErrorWriter;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
-public class SecurityConfig {
+@ConditionalOnMissingBean(SecurityFilterChain.class)
+public class DefaultSecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(
+    public SecurityFilterChain defaultSecurityFilterChain(
         HttpSecurity http,
         JwtTokenAuthenticationFilter jwtTokenAuthenticationFilter,
         SecurityErrorWriter securityErrorWriter
@@ -32,10 +31,8 @@ public class SecurityConfig {
                     securityErrorWriter.write(response, HttpServletResponse.SC_FORBIDDEN, "没有访问权限"))
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(
-                    "/api/auth/login",
-                    "/api/auth/register",
                     "/actuator/health",
                     "/error",
                     "/doc.html",
@@ -49,10 +46,5 @@ public class SecurityConfig {
             )
             .addFilterBefore(jwtTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 }

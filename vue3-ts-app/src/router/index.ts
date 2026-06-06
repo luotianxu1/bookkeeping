@@ -25,20 +25,11 @@ export const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from) => {
+router.beforeEach((to) => {
   if (to.name === 'login' || to.name === 'register' || getStoredToken()) {
     return true
   }
 
   showAuthPrompt(to.fullPath)
-  if (from.name && from.name !== 'login') {
-    return from.fullPath
-  }
-
-  return {
-    path: '/login',
-    query: {
-      redirect: to.fullPath,
-    },
-  }
+  return true
 })

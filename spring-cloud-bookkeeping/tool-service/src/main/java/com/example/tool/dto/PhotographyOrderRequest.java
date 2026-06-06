@@ -15,10 +15,6 @@ public class PhotographyOrderRequest {
     @NotNull(message = "用户ID不能为空")
     private Long userId;
 
-    @NotBlank(message = "客户姓名不能为空")
-    @Size(max = 80, message = "客户姓名不能超过80个字符")
-    private String customerName;
-
     @Size(max = 120, message = "联系方式不能超过120个字符")
     private String contactInfo;
 

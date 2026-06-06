@@ -72,7 +72,6 @@ const feedbackType = ref<'success' | 'error'>('success')
 
 const selectedOrder = ref<PhotographyOrder | null>(null)
 
-const formCustomerName = ref('')
 const formOrderType = ref<PhotographyOrderType>('first_birthday')
 const formShootAt = ref('')
 const formContactInfo = ref('')
@@ -223,7 +222,6 @@ function closeCreateModal() {
 }
 
 function resetCreateForm() {
-  formCustomerName.value = ''
   formOrderType.value = 'first_birthday'
   formShootAt.value = buildDefaultDateTimeLocal()
   formContactInfo.value = ''
@@ -245,15 +243,10 @@ async function saveOrder() {
     return
   }
 
-  const customerName = formCustomerName.value.trim()
   const depositAmount = parseAmount(formDepositAmount.value)
   const finalAmount = parseAmount(formFinalAmount.value)
   const totalAmount = roundAmount(depositAmount + finalAmount)
 
-  if (!customerName) {
-    createFormError.value = '请输入客户姓名'
-    return
-  }
   if (!formShootAt.value) {
     createFormError.value = '请选择拍摄时间'
     return
@@ -277,7 +270,6 @@ async function saveOrder() {
   try {
     await createPhotographyOrder({
       userId: currentUser.id,
-      customerName,
       contactInfo: nullableText(formContactInfo.value),
       orderType: formOrderType.value,
       shootAt: normalizeDateTimeLocal(formShootAt.value),
@@ -491,10 +483,6 @@ function amountTextClass(value: number | string | null | undefined) {
   return Number(value ?? 0) === 0 ? 'is-zero' : ''
 }
 
-function avatarLabel(name: string) {
-  return name.trim().slice(0, 1) || '摄'
-}
-
 function isFinalPaid(order: PhotographyOrder) {
   return Boolean(order.finalReceivedAt)
 }
@@ -557,15 +545,13 @@ function buildCurrentMonth() {
       >
         <div class="order-card-top">
           <div class="order-card-customer">
-            <span class="order-card-avatar">{{ avatarLabel(order.customerName) }}</span>
             <div>
-              <strong>{{ order.customerName }}</strong>
+              <strong>{{ orderTypeLabel(order.orderType) }}</strong>
               <p>{{ formatDateTime(order.shootAt) }}</p>
             </div>
           </div>
 
           <div class="order-card-meta">
-            <span class="order-card-type">{{ orderTypeLabel(order.orderType) }}</span>
             <span :class="['order-card-deposit', depositStatusClass(order)]">{{ depositStatusLabel(order) }}</span>
           </div>
         </div>
@@ -607,7 +593,6 @@ function buildCurrentMonth() {
 
     <CommonModal v-model="showCreateModal" title="新增摄影订单" size="compact" @close="createFormError = ''">
       <div class="order-form">
-        <CommonInput v-model="formCustomerName" label="客户姓名" placeholder="请输入客户昵称或宝宝姓名" />
         <CommonSelect v-model="formOrderType" label="订单类型" :options="typeOptions" />
         <CommonInput v-model="formShootAt" label="拍摄时间" input-type="datetime-local" />
         <CommonInput v-model="formContactInfo" label="联系方式" placeholder="138****2001 / 微信同号" />
@@ -641,7 +626,7 @@ function buildCurrentMonth() {
     <CommonModal v-model="showCollectModal" title="确认收尾款" size="compact" @close="collectFormError = ''">
       <div v-if="selectedOrder" class="collect-modal">
         <p class="collect-modal-subtitle">
-          {{ selectedOrder.customerName }} · {{ orderTypeLabel(selectedOrder.orderType) }} · {{ formatDateTime(selectedOrder.shootAt) }}
+          {{ orderTypeLabel(selectedOrder.orderType) }} · {{ formatDateTime(selectedOrder.shootAt) }}
         </p>
         <section class="collect-amount-card">
           <span>待收尾款</span>

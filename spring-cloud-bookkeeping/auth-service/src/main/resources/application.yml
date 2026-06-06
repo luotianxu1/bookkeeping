@@ -14,7 +14,7 @@ app:
   jwt:
     # 至少 32 字节
     secret: "change-this-to-a-long-secret-key-at-least-32-bytes"
-    expiration-seconds: 7200
+    expiration-seconds: 604800
 
 knife4j:
   enable: true
