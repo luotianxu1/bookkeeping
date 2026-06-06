@@ -439,10 +439,20 @@ async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: s
 
   const baseInfo = baseResult.status === 'fulfilled' ? baseResult.value?.Datas ?? {} : {}
   const officialPrice = Number(baseInfo.DWJZ)
+  const cumulativePrice = Number(baseInfo.LJJZ)
   const latestPrice = officialPrice
   const changePercent = Number(baseInfo.RZDF)
   const updatedAt = baseInfo.FSRQ
-  const chartPoints = trendResult.status === 'fulfilled' ? buildFundTrendPoints(trendResult.value) : []
+  const chartPoints = trendResult.status === 'fulfilled'
+    ? buildFundTrendPoints(
+        trendResult.value,
+        { label: updatedAt, value: cumulativePrice },
+        { label: updatedAt, value: latestPrice },
+      )
+    : mergeLatestFundTrendPoint([], {
+        label: updatedAt,
+        value: Number.isFinite(cumulativePrice) ? cumulativePrice : latestPrice,
+      })
   fullFundChartPoints.value = chartPoints
 
   mergeDetail({
@@ -450,7 +460,7 @@ async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: s
     latestPrice: Number.isFinite(latestPrice) ? latestPrice : baseDetail.latestPrice,
     changePercent: Number.isFinite(changePercent) ? changePercent : baseDetail.changePercent,
     updatedAt: updatedAt || baseDetail.updatedAt,
-    source: '东方财富',
+    source: '东方财富（累计净值）',
     chartType: 'line',
     chartPoints: filterFundTrendPoints(chartPoints, selectedFundTrendRange.value),
     marketStats: [
@@ -506,13 +516,15 @@ async function loadStockMarketData(baseDetail: InvestmentAssetDetail, stockCode:
 }
 
 function renderLineChart(points: InvestmentChartPoint[]) {
+  const isFundTrendChart = detail.value?.productType === 'fund'
+  const baselineValue = resolveLineChartBaseline(points, isFundTrendChart)
   const costPrice = chartCostBaseline.value
-  const tradeMarkerSeries = buildTradeMarkerSeries(points, 'line')
+  const tradeMarkerSeries = isFundTrendChart ? [] : buildTradeMarkerSeries(points, 'line')
   const series: Array<Record<string, any>> = [
     {
-      name: '单位净值',
+      name: isFundTrendChart ? '累计净值' : '单位净值',
       type: 'line',
-      smooth: true,
+      smooth: false,
       showSymbol: false,
       data: points.map((point) => point.value ?? null),
       lineStyle: { width: 2 },
@@ -520,7 +532,7 @@ function renderLineChart(points: InvestmentChartPoint[]) {
     },
   ]
 
-  if (costPrice !== null) {
+  if (!isFundTrendChart && costPrice !== null) {
     series.push({
       name: '持仓成本价',
       type: 'line',
@@ -549,7 +561,14 @@ function renderLineChart(points: InvestmentChartPoint[]) {
         const title = items[0]?.axisValueLabel || items[0]?.axisValue || '--'
         const lines = [title]
         for (const item of items) {
-          lines.push(`${item.marker}${item.seriesName} ${formatPriceWithChange(getTooltipPointValue(item), 4)}`)
+          const pointValue = getTooltipPointValue(item)
+          lines.push(
+            `${item.marker}${item.seriesName} ${
+              isFundTrendChart
+                ? formatValueWithBaselinePercent(pointValue, 4, baselineValue)
+                : formatPriceWithChange(pointValue, 4)
+            }`,
+          )
         }
         return lines.join('<br/>')
       },
@@ -579,11 +598,11 @@ function renderLineChart(points: InvestmentChartPoint[]) {
       axisLabel: {
         color: '#64748B',
         fontSize: 10,
-        formatter: (value: number) => formatAxisChangeLabel(value),
+        formatter: (value: number) => formatAxisChangeLabel(value, baselineValue),
       },
       splitLine: { lineStyle: { color: '#EDF2FB' } },
     },
-    dataZoom: [{ type: 'inside', start: 60, end: 100 }],
+    dataZoom: [{ type: 'inside', start: 0, end: 100 }],
     series,
   })
 }
@@ -1307,9 +1326,27 @@ function fetchFundTrend(fundCode: string) {
   })
 }
 
-function buildFundTrendPoints(trend: { netWorthTrend: any[] }) {
-  const rows = Array.isArray(trend.netWorthTrend) ? trend.netWorthTrend : []
-  return rows
+function buildFundTrendPoints(
+  trend: { netWorthTrend: any[]; acWorthTrend?: any[] },
+  latestAccumulativePoint?: { label?: string | null; value?: number | null },
+  latestNetPoint?: { label?: string | null; value?: number | null },
+) {
+  const acRows = Array.isArray(trend.acWorthTrend) ? trend.acWorthTrend : []
+  if (acRows.length > 0) {
+    const points = acRows
+      .map((item) => ({ ts: Number(item?.[0]), value: Number(item?.[1]) }))
+      .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.value))
+      .sort((a, b) => a.ts - b.ts)
+      .map((item) => ({
+        label: formatDate(item.ts),
+        value: item.value,
+      }))
+
+    return mergeLatestFundTrendPoint(points, latestAccumulativePoint)
+  }
+
+  const netRows = Array.isArray(trend.netWorthTrend) ? trend.netWorthTrend : []
+  const points = netRows
     .map((item) => ({ ts: Number(item?.x), value: Number(item?.y) }))
     .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.value))
     .sort((a, b) => a.ts - b.ts)
@@ -1317,6 +1354,31 @@ function buildFundTrendPoints(trend: { netWorthTrend: any[] }) {
       label: formatDate(item.ts),
       value: item.value,
     }))
+
+  return mergeLatestFundTrendPoint(points, latestNetPoint ?? latestAccumulativePoint)
+}
+
+function mergeLatestFundTrendPoint(
+  points: InvestmentChartPoint[],
+  latestPoint?: { label?: string | null; value?: number | null },
+) {
+  const normalizedLabel = normalizeDateLabel(latestPoint?.label || '')
+  const numericValue = Number(latestPoint?.value)
+  if (!normalizedLabel || !Number.isFinite(numericValue)) {
+    return points
+  }
+
+  const merged = points.filter((point) => normalizeDateLabel(point.label) !== normalizedLabel)
+  merged.push({
+    label: normalizedLabel,
+    value: numericValue,
+  })
+  merged.sort((left, right) => {
+    const leftDate = parsePointLabelDate(left.label)?.getTime() ?? 0
+    const rightDate = parsePointLabelDate(right.label)?.getTime() ?? 0
+    return leftDate - rightDate
+  })
+  return merged
 }
 
 function applyFundTrendRange() {
@@ -1548,8 +1610,7 @@ function getTooltipPointValue(item: any) {
   return item?.value
 }
 
-function getChangePercentByBaseline(value: unknown) {
-  const baseline = chartCostBaseline.value
+function getChangePercentByBaseline(value: unknown, baseline = chartCostBaseline.value) {
   const numeric = Number(value)
   if (!baseline || !Number.isFinite(numeric)) {
     return null
@@ -1557,25 +1618,29 @@ function getChangePercentByBaseline(value: unknown) {
   return ((numeric - baseline) / baseline) * 100
 }
 
-function formatAxisChangeLabel(value: unknown) {
-  const percent = getChangePercentByBaseline(value)
+function formatAxisChangeLabel(value: unknown, baseline = chartCostBaseline.value) {
+  const percent = getChangePercentByBaseline(value, baseline)
   if (percent === null) {
     return '--'
   }
   return `${percent > 0 ? '+' : ''}${formatNumber(percent)}%`
 }
 
-function formatPriceWithChange(value: unknown, digits: number) {
+function formatPriceWithChange(value: unknown, digits: number, baseline = chartCostBaseline.value) {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) {
     return '--'
   }
-  const percent = getChangePercentByBaseline(numeric)
+  const percent = getChangePercentByBaseline(numeric, baseline)
   const priceText = formatNumber(numeric, digits)
   if (percent === null) {
     return priceText
   }
   return `${priceText}（${percent > 0 ? '+' : ''}${formatNumber(percent)}%）`
+}
+
+function formatValueWithBaselinePercent(value: unknown, digits: number, baseline: number | null) {
+  return formatPriceWithChange(value, digits, baseline)
 }
 
 function formatTooltipPointValue(value: unknown, digits: number) {
@@ -1621,6 +1686,17 @@ function formatNumber(value: number, digits = 2) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(value)
+}
+
+function resolveLineChartBaseline(points: InvestmentChartPoint[], isFundTrendChart: boolean) {
+  if (isFundTrendChart) {
+    const firstPoint = points.find((point) => Number.isFinite(Number(point.value)))
+    const firstValue = Number(firstPoint?.value)
+    return Number.isFinite(firstValue) && firstValue > 0 ? firstValue : null
+  }
+
+  const costPrice = Number(chartCostBaseline.value)
+  return Number.isFinite(costPrice) && costPrice > 0 ? costPrice : null
 }
 
 function formatPercentValue(value: number, digits = 2) {
@@ -1732,14 +1808,14 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
 
       <section class="investment-detail-card" aria-label="行情走势">
         <header class="investment-detail-card-head">
-          <h2>{{ detail.chartType === 'candlestick' ? '股票日K走势' : '业绩走势' }}</h2>
+          <h2>{{ detail.chartType === 'candlestick' ? '股票日K走势' : '累计净值走势' }}</h2>
           <span>{{ externalStatus || detail.source || '行情接口' }}</span>
         </header>
         <SegmentedControl
           v-if="detail.productType === 'fund'"
           v-model="selectedFundTrendRange"
           :options="fundTrendRangeOptions"
-          label="基金业绩走势区间切换"
+          label="基金累计净值区间切换"
           class="investment-detail-trend-range"
           variant="surface"
         />

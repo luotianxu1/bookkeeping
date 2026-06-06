@@ -3673,6 +3673,7 @@ public class InvestmentService {
         JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
         JsonNode estimateInfo = fetchFundEstimateInfo(product.getSymbol());
         BigDecimal officialPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
+        BigDecimal cumulativePrice = safeDecimal(baseInfo.path("LJJZ").asText(null));
         BigDecimal latestPrice = officialPrice;
         BigDecimal changePercent = safeDecimal(baseInfo.path("RZDF").asText(null));
         String updatedAt = baseInfo.path("FSRQ").asText(null);
@@ -3686,7 +3687,7 @@ public class InvestmentService {
         response.setChartType("line");
         response.setFundRedeemFeeOptions(buildFundRedeemFeeOptions(product.getSymbol()));
         response.setSource("东方财富");
-        response.setDescription("基金详情和近一年走势来自东方财富公开接口。");
+        response.setDescription("基金详情和累计净值走势来自东方财富公开接口。");
         response.setMarketStats(List.of(
             stat("资产类型", "基金", null),
             stat("基金代码", product.getSymbol(), null),
@@ -3699,7 +3700,7 @@ public class InvestmentService {
             stat("申购状态", blankToDash(baseInfo.path("SGZT").asText(null)), null),
             stat("赎回状态", blankToDash(baseInfo.path("SHZT").asText(null)), null)
         ));
-        response.setChartPoints(fetchFundTrendPoints(product.getSymbol()));
+        response.setChartPoints(fetchFundTrendPoints(product.getSymbol(), latestPrice, cumulativePrice, updatedAt));
     }
 
     private void fillStockDetail(InvestmentAssetDetailResponse response, InvestmentProductEntity product) {
@@ -4041,7 +4042,12 @@ public class InvestmentService {
         return Math.max((int) ChronoUnit.DAYS.between(acquiredDate, appliedDate), 0);
     }
 
-    private List<InvestmentChartPointResponse> fetchFundTrendPoints(String code) {
+    private List<InvestmentChartPointResponse> fetchFundTrendPoints(
+        String code,
+        BigDecimal latestPrice,
+        BigDecimal latestCumulativePrice,
+        String latestDate
+    ) {
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(
                     "https://fund.eastmoney.com/pingzhongdata/" + URLEncoder.encode(code, StandardCharsets.UTF_8) + ".js?v=" + System.currentTimeMillis()
@@ -4052,30 +4058,82 @@ public class InvestmentService {
                 .build();
             HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
             String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
-            JsonNode rows = objectMapper.readTree(extractJsArray(body, "Data_netWorthTrend"));
-            if (!rows.isArray()) {
+            JsonNode acRows = objectMapper.readTree(extractJsArray(body, "Data_ACWorthTrend"));
+            if (acRows.isArray() && !acRows.isEmpty()) {
+                return mergeLatestFundTrendPoint(buildFundAccumulativeTrendPoints(acRows), latestCumulativePrice, latestDate);
+            }
+            JsonNode netRows = objectMapper.readTree(extractJsArray(body, "Data_netWorthTrend"));
+            if (!netRows.isArray()) {
                 return Collections.emptyList();
             }
-            List<InvestmentChartPointResponse> points = new ArrayList<>();
-            long cutoff = System.currentTimeMillis() - 365L * 24L * 60L * 60L * 1000L;
-            for (JsonNode row : rows) {
-                long timestamp = row.path("x").asLong(0);
-                if (timestamp < cutoff) {
-                    continue;
-                }
-                BigDecimal value = safeDecimal(row.path("y").asText(null));
-                if (value == null) {
-                    continue;
-                }
-                InvestmentChartPointResponse point = new InvestmentChartPointResponse();
-                point.setLabel(java.time.Instant.ofEpochMilli(timestamp).atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDate().toString());
-                point.setValue(value);
-                points.add(point);
-            }
-            return points;
+            return mergeLatestFundTrendPoint(buildFundNetWorthTrendPoints(netRows), latestPrice, latestDate);
         } catch (Exception ex) {
-            return Collections.emptyList();
+            BigDecimal fallbackPrice = latestCumulativePrice != null ? latestCumulativePrice : latestPrice;
+            return mergeLatestFundTrendPoint(new ArrayList<>(), fallbackPrice, latestDate);
         }
+    }
+
+    private List<InvestmentChartPointResponse> buildFundAccumulativeTrendPoints(JsonNode rows) {
+        List<InvestmentChartPointResponse> points = new ArrayList<>();
+        long cutoff = System.currentTimeMillis() - 3L * 365L * 24L * 60L * 60L * 1000L;
+        for (JsonNode row : rows) {
+            long timestamp = row.path(0).asLong(0);
+            if (timestamp < cutoff) {
+                continue;
+            }
+            BigDecimal value = safeDecimal(row.path(1).asText(null));
+            if (value == null) {
+                continue;
+            }
+            InvestmentChartPointResponse point = new InvestmentChartPointResponse();
+            point.setLabel(java.time.Instant.ofEpochMilli(timestamp).atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDate().toString());
+            point.setValue(value);
+            points.add(point);
+        }
+        return points;
+    }
+
+    private List<InvestmentChartPointResponse> buildFundNetWorthTrendPoints(JsonNode rows) {
+        List<InvestmentChartPointResponse> points = new ArrayList<>();
+        long cutoff = System.currentTimeMillis() - 3L * 365L * 24L * 60L * 60L * 1000L;
+        for (JsonNode row : rows) {
+            long timestamp = row.path("x").asLong(0);
+            if (timestamp < cutoff) {
+                continue;
+            }
+            BigDecimal value = safeDecimal(row.path("y").asText(null));
+            if (value == null) {
+                continue;
+            }
+            InvestmentChartPointResponse point = new InvestmentChartPointResponse();
+            point.setLabel(java.time.Instant.ofEpochMilli(timestamp).atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDate().toString());
+            point.setValue(value);
+            points.add(point);
+        }
+        return points;
+    }
+
+    private List<InvestmentChartPointResponse> mergeLatestFundTrendPoint(
+        List<InvestmentChartPointResponse> points,
+        BigDecimal latestPrice,
+        String latestDate
+    ) {
+        LocalDate quoteDate = safeDate(latestDate);
+        if (quoteDate == null || latestPrice == null) {
+            return points;
+        }
+
+        String normalizedDate = quoteDate.toString();
+        List<InvestmentChartPointResponse> merged = points.stream()
+            .filter(point -> !normalizedDate.equals(point.getLabel()))
+            .collect(Collectors.toCollection(ArrayList::new));
+
+        InvestmentChartPointResponse latestPoint = new InvestmentChartPointResponse();
+        latestPoint.setLabel(normalizedDate);
+        latestPoint.setValue(latestPrice);
+        merged.add(latestPoint);
+        merged.sort(Comparator.comparing(point -> safeDate(point.getLabel()), Comparator.nullsLast(Comparator.naturalOrder())));
+        return merged;
     }
 
     private List<InvestmentDividendPlanEntity> fetchFundDividendPlans(InvestmentProductEntity product) {
