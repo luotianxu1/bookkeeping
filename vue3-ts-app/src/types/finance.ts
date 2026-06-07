@@ -56,4 +56,6 @@ export type FinanceOverview = {
   budgetUsageLabel: string
   /** 预算使用率数值，用于进度条宽度。 */
   budgetUsagePercent: number
+  /** 预算是否已经超出。 */
+  isBudgetExceeded: boolean
 }

@@ -55,6 +55,10 @@ h1 {
   background: conic-gradient(var(--color-green-weak) var(--usage), var(--color-brand-soft) 0);
 }
 
+.budget-ring-danger {
+  background: conic-gradient(var(--color-danger) var(--usage), var(--color-danger-soft) 0);
+}
+
 .budget-ring-inner {
   width: 46px;
   height: 46px;
@@ -76,7 +80,7 @@ h1 {
 
 .budget-ring-inner strong {
   color: var(--color-finance-title);
-  font-size: var(--font-size-12);
+  font-size: 10px;
   font-weight: 700;
   line-height: 1;
 }

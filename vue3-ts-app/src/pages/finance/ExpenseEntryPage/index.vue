@@ -399,7 +399,6 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
     <section v-if="entryType !== '转账'" class="expense-detail-card" aria-label="分类与详情">
       <CommonLoading v-if="loading" />
       <div class="category-section">
-        <p class="category-section-title">一级分类</p>
         <div class="category-grid">
           <button
             v-for="item in primaryCategoryOptions"
@@ -417,7 +416,6 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
       <template v-if="secondaryCategoryOptions.length > 0">
         <div class="expense-divider"></div>
         <div class="category-section">
-          <p class="category-section-title">二级分类</p>
           <div class="category-grid">
             <button
               v-for="item in secondaryCategoryOptions"

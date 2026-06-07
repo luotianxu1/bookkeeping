@@ -19,6 +19,7 @@ defineProps<{
       <div class="budget-ring-wrap" :aria-label="`预算使用 ${overview.budgetUsageLabel}`">
         <div
           class="budget-ring"
+          :class="{ 'budget-ring-danger': overview.isBudgetExceeded }"
           :style="{ '--usage': `${overview.budgetUsagePercent}%` }"
         >
           <div class="budget-ring-inner">

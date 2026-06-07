@@ -36,7 +36,9 @@ const deleteError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
-const dayGroups = computed(() => buildTransactionDayGroups(transactions.value))
+const dayGroups = computed(() => buildTransactionDayGroups(
+  transactions.value.filter((transaction) => isWithinRecentWeek(transaction.occurredAt)),
+))
 
 onMounted(() => {
   void loadCashTransactions()
@@ -141,6 +143,7 @@ function updateOverview(
   const budgetUsagePercent = budgetAmount > 0
     ? (monthlyExpense / budgetAmount) * 100
     : 0
+  const isBudgetExceeded = budgetAmount > 0 && budgetUsagePercent > 100
 
   overview.value = {
     ...overview.value,
@@ -150,6 +153,7 @@ function updateOverview(
     budget: budgetAmount > 0 ? `月预算 ${formatAmount(budgetAmount)}` : '月预算 未设置',
     budgetUsageLabel: budgetAmount > 0 ? `已用 ${formatPercent(budgetUsagePercent)}` : '已用 0%',
     budgetUsagePercent: budgetAmount > 0 ? Math.min(Math.max(budgetUsagePercent, 0), 100) : 0,
+    isBudgetExceeded,
   }
 }
 
@@ -176,6 +180,20 @@ function isSameMonth(value: string, monthKey: string) {
 
   const dateMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
   return dateMonthKey === monthKey
+}
+
+function isWithinRecentWeek(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return false
+  }
+
+  const now = new Date()
+  const start = new Date(now)
+  start.setHours(0, 0, 0, 0)
+  start.setDate(start.getDate() - 6)
+
+  return date.getTime() >= start.getTime() && date.getTime() <= now.getTime()
 }
 
 function formatAmount(value: number) {

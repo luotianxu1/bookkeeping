@@ -9,6 +9,7 @@ export const financeOverview: FinanceOverview = {
   budget: '月预算 15,000',
   budgetUsageLabel: '已用 31.9%',
   budgetUsagePercent: 31.9,
+  isBudgetExceeded: false,
 }
 
 export const financeDayGroups: DayGroup[] = [
