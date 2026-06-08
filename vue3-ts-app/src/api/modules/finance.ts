@@ -930,10 +930,33 @@ export interface InvestmentDividendIncomeSummary {
   holdingCount: number
 }
 
+export interface InvestmentFixedExpense {
+  id: number
+  userId: number
+  name: string
+  amount: number
+  currencyCode?: string | null
+  sortOrder?: number | null
+  status?: string | null
+  remark?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface SaveInvestmentFixedExpenseParams {
+  userId: number
+  name: string
+  amount: number
+  currencyCode?: string
+  sortOrder?: number
+  remark?: string | null
+}
+
 export interface InvestmentDividendIncomePage {
   userId: number
   summary: InvestmentDividendIncomeSummary
   items: InvestmentDividendIncomeItem[]
+  fixedExpenses?: InvestmentFixedExpense[]
   updatedAt?: string | null
 }
 
@@ -1415,6 +1438,34 @@ export function deleteInvestmentAutoInvestPlan(id: number, userId: number) {
 
 export function getInvestmentDividendIncome(userId: number) {
   return requestGet<InvestmentDividendIncomePage>(financeRequest, '/api/finance/investments/dividend-income', {
+    params: { userId },
+  })
+}
+
+export function getInvestmentFixedExpenses(userId: number) {
+  return requestGet<InvestmentFixedExpense[]>(financeRequest, '/api/finance/investments/fixed-expenses', {
+    params: { userId },
+  })
+}
+
+export function createInvestmentFixedExpense(params: SaveInvestmentFixedExpenseParams) {
+  return requestPost<InvestmentFixedExpense, SaveInvestmentFixedExpenseParams>(
+    financeRequest,
+    '/api/finance/investments/fixed-expenses',
+    params,
+  )
+}
+
+export function updateInvestmentFixedExpense(id: number, params: SaveInvestmentFixedExpenseParams) {
+  return requestPut<InvestmentFixedExpense, SaveInvestmentFixedExpenseParams>(
+    financeRequest,
+    `/api/finance/investments/fixed-expenses/${id}`,
+    params,
+  )
+}
+
+export function deleteInvestmentFixedExpense(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/investments/fixed-expenses/${id}`, {
     params: { userId },
   })
 }

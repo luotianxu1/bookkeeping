@@ -24,6 +24,8 @@ import com.example.finance.dto.FundProfitPageSummaryMetricResponse;
 import com.example.finance.dto.FundProfitPageSummaryResponse;
 import com.example.finance.dto.FundProfitSelectionResponse;
 import com.example.finance.dto.FundProfitTrendPointResponse;
+import com.example.finance.dto.InvestmentFixedExpenseRequest;
+import com.example.finance.dto.InvestmentFixedExpenseResponse;
 import com.example.finance.dto.InvestmentPositionRequest;
 import com.example.finance.dto.InvestmentPositionResponse;
 import com.example.finance.dto.InvestmentProductRequest;
@@ -40,6 +42,7 @@ import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.InvestmentAutoInvestPlanEntity;
 import com.example.finance.entity.InvestmentDividendPlanEntity;
 import com.example.finance.entity.InvestmentDividendRecordEntity;
+import com.example.finance.entity.InvestmentFixedExpenseEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
 import com.example.finance.entity.InvestmentPriceQuoteEntity;
 import com.example.finance.entity.InvestmentProductEntity;
@@ -49,6 +52,7 @@ import com.example.finance.mapper.AccountTypeMapper;
 import com.example.finance.mapper.InvestmentAutoInvestPlanMapper;
 import com.example.finance.mapper.InvestmentDividendPlanMapper;
 import com.example.finance.mapper.InvestmentDividendRecordMapper;
+import com.example.finance.mapper.InvestmentFixedExpenseMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
 import com.example.finance.mapper.InvestmentPriceQuoteMapper;
 import com.example.finance.mapper.InvestmentProductMapper;
@@ -188,6 +192,7 @@ public class InvestmentService {
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_UNIT_NAME = "份";
     private static final String ACTIVE_STATUS = "active";
+    private static final String DELETED_STATUS = "deleted";
     private static final String INVESTMENT_ACCOUNT_TYPE_CODE = "investment";
     private static final String NORMAL_STATUS = "normal";
     private static final String VOIDED_STATUS = "voided";
@@ -225,6 +230,7 @@ public class InvestmentService {
     private final InvestmentAutoInvestPlanMapper autoInvestPlanMapper;
     private final InvestmentDividendPlanMapper dividendPlanMapper;
     private final InvestmentDividendRecordMapper dividendRecordMapper;
+    private final InvestmentFixedExpenseMapper fixedExpenseMapper;
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
     private final InvestmentPriceQuoteMapper priceQuoteMapper;
@@ -240,6 +246,7 @@ public class InvestmentService {
         InvestmentAutoInvestPlanMapper autoInvestPlanMapper,
         InvestmentDividendPlanMapper dividendPlanMapper,
         InvestmentDividendRecordMapper dividendRecordMapper,
+        InvestmentFixedExpenseMapper fixedExpenseMapper,
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         InvestmentPriceQuoteMapper priceQuoteMapper,
@@ -252,6 +259,7 @@ public class InvestmentService {
         this.autoInvestPlanMapper = autoInvestPlanMapper;
         this.dividendPlanMapper = dividendPlanMapper;
         this.dividendRecordMapper = dividendRecordMapper;
+        this.fixedExpenseMapper = fixedExpenseMapper;
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.priceQuoteMapper = priceQuoteMapper;
@@ -2097,6 +2105,50 @@ public class InvestmentService {
             .toList();
     }
 
+    public List<InvestmentFixedExpenseResponse> listFixedExpenses(Long userId) {
+        return fixedExpenseMapper.selectList(new LambdaQueryWrapper<InvestmentFixedExpenseEntity>()
+                .eq(InvestmentFixedExpenseEntity::getUserId, userId)
+                .eq(InvestmentFixedExpenseEntity::getStatus, ACTIVE_STATUS)
+                .orderByAsc(InvestmentFixedExpenseEntity::getSortOrder)
+                .orderByAsc(InvestmentFixedExpenseEntity::getId))
+            .stream()
+            .map(this::toFixedExpenseResponse)
+            .toList();
+    }
+
+    @Transactional
+    public InvestmentFixedExpenseResponse createFixedExpense(InvestmentFixedExpenseRequest request) {
+        InvestmentFixedExpenseEntity entity = fillFixedExpenseEntity(new InvestmentFixedExpenseEntity(), request);
+        entity.setStatus(ACTIVE_STATUS);
+        entity.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : resolveNextFixedExpenseSortOrder(request.getUserId()));
+        fixedExpenseMapper.insert(entity);
+        return toFixedExpenseResponse(fixedExpenseMapper.selectById(entity.getId()));
+    }
+
+    @Transactional
+    public Optional<InvestmentFixedExpenseResponse> updateFixedExpense(Long id, InvestmentFixedExpenseRequest request) {
+        InvestmentFixedExpenseEntity entity = fixedExpenseMapper.selectOne(new LambdaQueryWrapper<InvestmentFixedExpenseEntity>()
+            .eq(InvestmentFixedExpenseEntity::getId, id)
+            .eq(InvestmentFixedExpenseEntity::getUserId, request.getUserId())
+            .eq(InvestmentFixedExpenseEntity::getStatus, ACTIVE_STATUS)
+            .last("LIMIT 1"));
+        if (entity == null) {
+            return Optional.empty();
+        }
+        fillFixedExpenseEntity(entity, request);
+        fixedExpenseMapper.updateById(entity);
+        return Optional.of(toFixedExpenseResponse(fixedExpenseMapper.selectById(entity.getId())));
+    }
+
+    @Transactional
+    public boolean deleteFixedExpense(Long id, Long userId) {
+        return fixedExpenseMapper.update(null, new LambdaUpdateWrapper<InvestmentFixedExpenseEntity>()
+            .set(InvestmentFixedExpenseEntity::getStatus, DELETED_STATUS)
+            .eq(InvestmentFixedExpenseEntity::getId, id)
+            .eq(InvestmentFixedExpenseEntity::getUserId, userId)
+            .eq(InvestmentFixedExpenseEntity::getStatus, ACTIVE_STATUS)) > 0;
+    }
+
     public InvestmentDividendIncomePageResponse dividendIncome(Long userId) {
         List<InvestmentPositionEntity> sourcePositions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
             .eq(InvestmentPositionEntity::getUserId, userId)
@@ -2189,6 +2241,7 @@ public class InvestmentService {
         response.setUserId(userId);
         response.setSummary(summary);
         response.setItems(items);
+        response.setFixedExpenses(listFixedExpenses(userId));
         response.setUpdatedAt(updatedAt);
         return response;
     }
@@ -4920,7 +4973,57 @@ public class InvestmentService {
         response.setUserId(userId);
         response.setSummary(summary);
         response.setItems(Collections.emptyList());
+        response.setFixedExpenses(listFixedExpenses(userId));
         response.setUpdatedAt(null);
+        return response;
+    }
+
+    private InvestmentFixedExpenseEntity fillFixedExpenseEntity(InvestmentFixedExpenseEntity entity, InvestmentFixedExpenseRequest request) {
+        entity.setUserId(request.getUserId());
+        entity.setName(request.getName() == null ? null : request.getName().trim());
+        entity.setAmount(defaultZero(request.getAmount()).setScale(2, RoundingMode.HALF_UP));
+        entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode().trim() : DEFAULT_CURRENCY_CODE);
+        if (request.getSortOrder() != null) {
+            entity.setSortOrder(request.getSortOrder());
+        } else if (entity.getSortOrder() == null) {
+            entity.setSortOrder(resolveNextFixedExpenseSortOrder(request.getUserId()));
+        }
+        entity.setRemark(StringUtils.hasText(request.getRemark()) ? request.getRemark().trim() : null);
+        if (!StringUtils.hasText(entity.getStatus())) {
+            entity.setStatus(ACTIVE_STATUS);
+        }
+        return entity;
+    }
+
+    private int resolveNextFixedExpenseSortOrder(Long userId) {
+        return fixedExpenseMapper.selectList(new LambdaQueryWrapper<InvestmentFixedExpenseEntity>()
+                .eq(InvestmentFixedExpenseEntity::getUserId, userId)
+                .eq(InvestmentFixedExpenseEntity::getStatus, ACTIVE_STATUS)
+                .orderByDesc(InvestmentFixedExpenseEntity::getSortOrder)
+                .last("LIMIT 1"))
+            .stream()
+            .map(InvestmentFixedExpenseEntity::getSortOrder)
+            .filter(Objects::nonNull)
+            .findFirst()
+            .map(value -> value + 1)
+            .orElse(1);
+    }
+
+    private InvestmentFixedExpenseResponse toFixedExpenseResponse(InvestmentFixedExpenseEntity entity) {
+        if (entity == null) {
+            return null;
+        }
+        InvestmentFixedExpenseResponse response = new InvestmentFixedExpenseResponse();
+        response.setId(entity.getId());
+        response.setUserId(entity.getUserId());
+        response.setName(entity.getName());
+        response.setAmount(entity.getAmount());
+        response.setCurrencyCode(entity.getCurrencyCode());
+        response.setSortOrder(entity.getSortOrder());
+        response.setStatus(entity.getStatus());
+        response.setRemark(entity.getRemark());
+        response.setCreatedAt(entity.getCreatedAt());
+        response.setUpdatedAt(entity.getUpdatedAt());
         return response;
     }
 
@@ -4990,7 +5093,8 @@ public class InvestmentService {
         if (product == null || !supportsDividendProfile(product)) {
             return;
         }
-        if (product.getDividendEvaluatedAt() != null) {
+        if (product.getDividendEvaluatedAt() != null
+            && product.getDividendEvaluatedAt().toLocalDate().isEqual(LocalDate.now())) {
             return;
         }
         evaluateDividendProfile(product);
@@ -5139,32 +5243,37 @@ public class InvestmentService {
             && latestPayDate != null
             && !latestPayDate.isBefore(today.minusYears(2));
 
-        Map<Integer, BigDecimal> yearlyDividendPerUnit = new TreeMap<>(Comparator.reverseOrder());
-        for (InvestmentDividendPlanEntity plan : recentPlans) {
-            Integer year = resolveDividendPlanYear(plan, today);
-            if (year == null) {
-                continue;
-            }
-            BigDecimal netDividendPerUnit = resolveNetDividendPerUnit(plan);
-            yearlyDividendPerUnit.merge(year, netDividendPerUnit, BigDecimal::add);
-        }
-
-        List<BigDecimal> latestYearlyDividends = yearlyDividendPerUnit.values().stream()
+        long positivePlanCount = recentPlans.stream()
+            .map(this::resolveNetDividendPerUnit)
             .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
-            .limit(DIVIDEND_HISTORY_YEARS)
-            .toList();
-        if (latestYearlyDividends.size() < MIN_STABLE_DIVIDEND_YEARS) {
+            .count();
+        if (positivePlanCount < MIN_STABLE_DIVIDEND_YEARS) {
             stable = false;
         }
 
-        BigDecimal total = latestYearlyDividends.stream()
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal averageAnnualDividendPerUnit = latestYearlyDividends.isEmpty()
+        LocalDate trailingYearStart = today.minusYears(1);
+        long trailingYearDividendCount = recentPlans.stream()
+            .filter(plan -> {
+                LocalDate recencyDate = dividendPlanRecencyDate(plan);
+                return recencyDate != null && !recencyDate.isBefore(trailingYearStart) && !recencyDate.isAfter(today);
+            })
+            .map(this::resolveNetDividendPerUnit)
+            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
+            .count();
+
+        BigDecimal latestDividendPerUnit = recentPlans.stream()
+            .map(this::resolveNetDividendPerUnit)
+            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
+            .findFirst()
+            .orElse(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
+        BigDecimal predictedAnnualDividendPerUnit = latestDividendPerUnit == null
             ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
-            : total.divide(BigDecimal.valueOf(latestYearlyDividends.size()), 6, RoundingMode.HALF_UP);
+            : defaultZero(latestDividendPerUnit)
+                .multiply(BigDecimal.valueOf(Math.max(trailingYearDividendCount, 1)))
+                .setScale(6, RoundingMode.HALF_UP);
         return new DividendProfile(
             stable,
-            averageAnnualDividendPerUnit,
+            predictedAnnualDividendPerUnit,
             recentYears.size(),
             latestPayDate,
             StringUtils.hasText(source)

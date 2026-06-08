@@ -10,5 +10,6 @@ public class InvestmentDividendIncomePageResponse {
     private Long userId;
     private InvestmentDividendIncomeSummaryResponse summary;
     private List<InvestmentDividendIncomeItemResponse> items;
+    private List<InvestmentFixedExpenseResponse> fixedExpenses;
     private LocalDateTime updatedAt;
 }

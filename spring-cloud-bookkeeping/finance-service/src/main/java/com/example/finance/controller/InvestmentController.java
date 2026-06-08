@@ -5,6 +5,8 @@ import com.example.finance.dto.InvestmentAssetDetailResponse;
 import com.example.finance.dto.InvestmentAutoInvestPlanRequest;
 import com.example.finance.dto.InvestmentAutoInvestPlanResponse;
 import com.example.finance.dto.InvestmentDividendIncomePageResponse;
+import com.example.finance.dto.InvestmentFixedExpenseRequest;
+import com.example.finance.dto.InvestmentFixedExpenseResponse;
 import com.example.finance.dto.InvestmentDividendResponse;
 import com.example.finance.dto.InvestmentPositionRequest;
 import com.example.finance.dto.InvestmentPositionResponse;
@@ -240,5 +242,42 @@ public class InvestmentController {
         @RequestParam(name = "userId") @NotNull Long userId
     ) {
         return Result.ok(investmentService.dividendIncome(userId));
+    }
+
+    @GetMapping("/fixed-expenses")
+    @Operation(summary = "查询投资固定支出")
+    public Result<List<InvestmentFixedExpenseResponse>> listFixedExpenses(
+        @RequestParam(name = "userId") @NotNull Long userId
+    ) {
+        return Result.ok(investmentService.listFixedExpenses(userId));
+    }
+
+    @PostMapping("/fixed-expenses")
+    @Operation(summary = "新增投资固定支出")
+    public Result<InvestmentFixedExpenseResponse> createFixedExpense(@Valid @RequestBody InvestmentFixedExpenseRequest request) {
+        return Result.ok(investmentService.createFixedExpense(request));
+    }
+
+    @PutMapping("/fixed-expenses/{id}")
+    @Operation(summary = "修改投资固定支出")
+    public Result<InvestmentFixedExpenseResponse> updateFixedExpense(
+        @PathVariable("id") @NotNull Long id,
+        @Valid @RequestBody InvestmentFixedExpenseRequest request
+    ) {
+        return investmentService.updateFixedExpense(id, request)
+            .map(Result::ok)
+            .orElseGet(() -> Result.<InvestmentFixedExpenseResponse>fail().code(404).message("固定支出不存在"));
+    }
+
+    @DeleteMapping("/fixed-expenses/{id}")
+    @Operation(summary = "删除投资固定支出")
+    public Result<Void> deleteFixedExpense(
+        @PathVariable("id") @NotNull Long id,
+        @RequestParam(name = "userId") @NotNull Long userId
+    ) {
+        if (!investmentService.deleteFixedExpense(id, userId)) {
+            return Result.<Void>fail().code(404).message("固定支出不存在");
+        }
+        return Result.ok();
     }
 }

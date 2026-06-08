@@ -20,20 +20,14 @@
 }
 
 .summary-card,
-.holding-card {
+.holding-card,
+.expense-card {
   display: grid;
   gap: var(--space-6);
   padding: var(--space-12);
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-12);
   background: var(--color-white);
-}
-
-.summary-title {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-12);
-  font-weight: 600;
 }
 
 .summary-row {
@@ -63,6 +57,128 @@
 .summary-footnote {
   margin: 0;
   color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.expense-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.expense-coverage-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.expense-coverage-item {
+  display: grid;
+  gap: var(--space-8);
+  padding: 12px;
+  border-radius: var(--radius-12);
+  border: 1px solid #d7dde8;
+  background: #f8fafc;
+}
+
+.expense-coverage-item.is-covered {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.expense-coverage-item.is-partial {
+  border-color: #dbeafe;
+  background: #f8fbff;
+}
+
+.expense-coverage-main {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.expense-coverage-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.expense-coverage-top strong,
+.expense-coverage-top span {
+  margin: 0;
+  font-size: var(--font-size-13);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.expense-progress-track {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.24);
+}
+
+.expense-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #86efac 0%, #22c55e 100%);
+}
+
+.expense-coverage-item.is-pending .expense-progress-fill {
+  background: linear-gradient(90deg, #cbd5e1 0%, #94a3b8 100%);
+}
+
+.expense-coverage-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.expense-coverage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.expense-coverage-actions button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.16);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.expense-coverage-actions button:disabled {
+  opacity: 0.45;
+}
+
+.expense-coverage-actions .danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.expense-modal-form {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.expense-modal-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.expense-form-error {
+  margin: 0;
+  color: var(--color-danger);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
