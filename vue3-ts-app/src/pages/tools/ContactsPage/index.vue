@@ -28,6 +28,7 @@ const isSaving = ref(false)
 const isDeleting = ref(false)
 const pageError = ref('')
 const formError = ref('')
+const isManageMode = ref(false)
 const showContactModal = ref(false)
 const showDeleteModal = ref(false)
 const editingContact = ref<Contact | null>(null)
@@ -108,7 +109,7 @@ function getFallbackTone(contact: Contact) {
 
 function maskPhone(phone?: string | null) {
   if (!phone) {
-    return '未填写'
+    return ''
   }
 
   const digits = phone.replace(/\s+/g, '')
@@ -123,6 +124,14 @@ function openCreateModal() {
   editingContact.value = null
   resetForm()
   showContactModal.value = true
+}
+
+function toggleManageMode() {
+  isManageMode.value = !isManageMode.value
+}
+
+function showContactFooter(contact: ContactDisplayCard) {
+  return Boolean(contact.bottomNote) || isManageMode.value
 }
 
 function openEditModal(contact: Contact) {
@@ -278,7 +287,11 @@ function showFeedback(message: string, type: 'success' | 'error') {
   />
 
   <section class="contacts-page" aria-label="联系人管理">
-    <PageHeader title="联系人管理" back-to="/tools" back-label="返回工具页" prefer-back-to />
+    <PageHeader title="联系人管理" back-to="/tools" back-label="返回工具页" prefer-back-to>
+      <button type="button" class="contacts-manage-button" @click="toggleManageMode">
+        {{ isManageMode ? '完成' : '编辑' }}
+      </button>
+    </PageHeader>
 
     <p v-if="pageError" class="contacts-message contacts-message-error">
       {{ pageError }}
@@ -307,7 +320,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
             </div>
           </div>
           <div class="contact-card-meta">
-            <strong>
+            <strong v-if="contact.phoneText">
               {{ contact.phoneText }}
             </strong>
             <span v-if="contact.statusLabel" class="contact-status-pill">
@@ -316,9 +329,9 @@ function showFeedback(message: string, type: 'success' | 'error') {
           </div>
         </div>
 
-        <div class="contact-card-bottom">
+        <div v-if="showContactFooter(contact)" class="contact-card-bottom">
           <span v-if="contact.bottomNote" class="contact-card-note">{{ contact.bottomNote }}</span>
-          <div class="contact-card-actions">
+          <div v-if="isManageMode" class="contact-card-actions">
             <button type="button" class="contact-action contact-action-edit" @click="openEditModal(contact)">
               编辑
             </button>

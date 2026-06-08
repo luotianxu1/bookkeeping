@@ -488,6 +488,22 @@ function depositStatusClass(order: PhotographyOrder) {
   return isShotByTime(order) ? 'order-card-deposit--shot' : 'order-card-deposit--pending'
 }
 
+function finalStatusLabel(order: PhotographyOrder) {
+  if (Number(order.finalAmount ?? 0) <= 0) {
+    return '无尾款'
+  }
+
+  return isFinalPaid(order) ? '尾款已收' : '待收尾款'
+}
+
+function finalStatusClass(order: PhotographyOrder) {
+  if (Number(order.finalAmount ?? 0) <= 0) {
+    return 'order-card-final--empty'
+  }
+
+  return isFinalPaid(order) ? 'order-card-final--paid' : 'order-card-final--pending'
+}
+
 function amountTextClass(value: number | string | null | undefined) {
   return Number(value ?? 0) === 0 ? 'is-zero' : ''
 }
@@ -562,6 +578,7 @@ function buildCurrentMonth() {
 
           <div class="order-card-meta">
             <span :class="['order-card-deposit', depositStatusClass(order)]">{{ depositStatusLabel(order) }}</span>
+            <span :class="['order-card-final', finalStatusClass(order)]">{{ finalStatusLabel(order) }}</span>
           </div>
         </div>
 

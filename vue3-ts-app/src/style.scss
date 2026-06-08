@@ -1,6 +1,8 @@
 .stage {
   min-height: 100dvh;
+  height: 100dvh;
   background: var(--color-bg-page);
+  overflow: hidden;
 }
 
 :global(.page-fade-enter-active),

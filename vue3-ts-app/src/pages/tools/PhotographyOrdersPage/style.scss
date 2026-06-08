@@ -163,7 +163,8 @@
 }
 
 .order-card-type,
-.order-card-deposit {
+.order-card-deposit,
+.order-card-final {
   padding: 0 8px;
   min-height: 22px;
   display: inline-grid;
@@ -191,6 +192,26 @@
 .order-card-deposit--pending {
   color: #c2410c;
   background: #fff7ed;
+}
+
+.order-card-final {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.order-card-final--paid {
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.order-card-final--pending {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.order-card-final--empty {
+  color: #64748b;
+  background: #f1f5f9;
 }
 
 .order-card-amounts {

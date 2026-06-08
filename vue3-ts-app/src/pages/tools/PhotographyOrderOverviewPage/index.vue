@@ -60,11 +60,6 @@ const selectedCalendarDate = computed(() => (
     : overview.value?.selectedValue ?? calendarSelectedDate.value ?? null
 ))
 const showCalendarOrders = computed(() => viewMode.value === 'calendar' && orders.value.length > 0)
-const calendarFocusLabel = computed(() => (
-  viewMode.value === 'calendar' && selectedCalendarDate.value
-    ? formatDateLabel(selectedCalendarDate.value)
-    : ''
-))
 
 const periodTitle = computed(() => {
   if (!overview.value) return '订单列表'
@@ -374,7 +369,24 @@ function receivedAmount(order: PhotographyOrder) {
 }
 
 function statusLabel(order: PhotographyOrder) {
-  return order.status === 'shot' ? '已拍摄' : '未拍摄'
+  if (isShotByTime(order)) {
+    return '已拍摄'
+  }
+
+  return Number(order.depositAmount ?? 0) > 0 ? '已付订金' : '未付订金'
+}
+
+function statusClass(order: PhotographyOrder) {
+  return isShotByTime(order) ? 'overview-order-tag--shot' : 'overview-order-tag--pending'
+}
+
+function isShotByTime(order: PhotographyOrder, now = Date.now()) {
+  const shootAt = new Date(order.shootAt).getTime()
+  return Number.isFinite(shootAt) && shootAt <= now
+}
+
+function hasOrderFoot(order: PhotographyOrder) {
+  return Boolean(order.address || order.contactInfo || order.remark)
 }
 
 function typeAccent(type: string) {
@@ -536,13 +548,6 @@ function handleResize() {
           :model-value="yearWindowEnd"
           @update:model-value="yearWindowEnd = $event"
         />
-
-        <span v-if="calendarFocusLabel" class="overview-focus-chip">
-          {{ calendarFocusLabel }}
-        </span>
-        <span v-else-if="viewMode === 'year'" class="overview-focus-chip">
-          近5年窗口
-        </span>
       </div>
 
       <div class="overview-stats-grid">
@@ -626,7 +631,7 @@ function handleResize() {
                 <span class="overview-order-tag" :style="{ color: typeAccent(order.orderType), backgroundColor: `${typeAccent(order.orderType)}14` }">
                   {{ orderTypeLabel(order.orderType) }}
                 </span>
-                <span class="overview-order-tag overview-order-tag--status">
+                <span :class="['overview-order-tag', 'overview-order-tag--status', statusClass(order)]">
                   {{ statusLabel(order) }}
                 </span>
               </div>
@@ -639,7 +644,7 @@ function handleResize() {
               </div>
             </div>
 
-            <div class="overview-order-foot">
+            <div v-if="hasOrderFoot(order)" class="overview-order-foot">
               <p v-if="order.address">地址：{{ order.address }}</p>
               <p v-if="order.contactInfo">联系方式：{{ order.contactInfo }}</p>
               <p v-if="order.remark">备注：{{ order.remark }}</p>

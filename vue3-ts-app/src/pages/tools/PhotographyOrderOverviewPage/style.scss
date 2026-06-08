@@ -69,17 +69,6 @@
   white-space: nowrap;
 }
 
-.overview-focus-chip {
-  min-height: 32px;
-  padding: 0 12px;
-  border: 1px solid #dbe7ff;
-  border-radius: 999px;
-  color: var(--color-brand);
-  font-size: var(--font-size-12);
-  font-weight: 700;
-  background: #eff6ff;
-}
-
 .overview-stats-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -111,6 +100,11 @@
 .bucket-card-metrics b.is-zero,
 .overview-order-metrics strong.is-zero {
   color: #94a3b8;
+}
+
+.overview-stat-card p {
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .calendar-weekdays,
@@ -337,6 +331,14 @@
   background: #ffffff;
 }
 
+.overview-order-head strong {
+  display: block;
+  color: #0f172a;
+  font-size: var(--font-size-14);
+  line-height: 1.2;
+  font-weight: 700;
+}
+
 .overview-order-tags {
   display: flex;
   align-items: center;
@@ -358,6 +360,16 @@
 .overview-order-tag--status {
   color: #475569;
   background: #f1f5f9;
+}
+
+.overview-order-tag--shot {
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.overview-order-tag--pending {
+  color: #c2410c;
+  background: #fff7ed;
 }
 
 .overview-order-metrics {

@@ -13,8 +13,8 @@ const route = useRoute()
 const router = useRouter()
 const activeSection = computed<AppSection>(() => route.meta.section ?? 'finance')
 const screenLabel = computed<string>(() => route.meta.title ?? '财务首页')
-const tabRootPaths = new Set(['/finance', '/food', '/tools', '/profile'])
-const showBottomNav = computed<boolean>(() => tabRootPaths.has(route.path))
+const bottomNavVisiblePaths = new Set(['/finance', '/food', '/tools', '/profile'])
+const showBottomNav = computed<boolean>(() => bottomNavVisiblePaths.has(route.path))
 
 async function goLogin() {
   const redirect = authPromptRedirect.value
