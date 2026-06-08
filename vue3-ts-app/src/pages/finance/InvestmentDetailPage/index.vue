@@ -36,6 +36,11 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 
 type FundTrendRange = '1m' | '3m' | '6m' | '1y' | '3y'
 type TradeFundFeeMode = 'auto' | `manual-${number}`
+type FundTrendValueMode = 'cumulative' | 'net'
+type FundTrendValueEntry = {
+  cumulative?: number | null
+  net?: number | null
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -83,6 +88,8 @@ const isDeletingPosition = ref(false)
 const deleteError = ref('')
 const selectedFundTrendRange = ref<FundTrendRange>('3m')
 const fullFundChartPoints = ref<InvestmentChartPoint[]>([])
+const fundTrendValueMap = ref<Record<string, FundTrendValueEntry>>({})
+const fundTrendValueMode = ref<FundTrendValueMode>('cumulative')
 let chart: ECharts | null = null
 
 const positionId = computed(() => {
@@ -155,7 +162,13 @@ const showAutoInvestSection = computed(() => isFundPosition.value && !isPendingS
 const currentUnitName = computed(() => detail.value?.unitName || detail.value?.position.unitName || '份')
 const chartCostBaseline = computed(() => {
   const costPrice = Number(currentPosition.value?.avgCostPrice ?? 0)
-  return Number.isFinite(costPrice) && costPrice > 0 ? costPrice : null
+  if (!Number.isFinite(costPrice) || costPrice <= 0) {
+    return null
+  }
+  if (!isFundPosition.value || detail.value?.chartType !== 'line' || fundTrendValueMode.value !== 'cumulative') {
+    return costPrice
+  }
+  return resolveFundCumulativeCostBaseline() ?? costPrice
 })
 const tradeModalTitle = computed(() => currentTradeAction.value === 'buy' ? '加仓' : '减仓')
 const tradeAmountLabel = computed(() => {
@@ -373,6 +386,8 @@ async function loadDetail() {
   pageError.value = ''
   try {
     fullFundChartPoints.value = []
+    fundTrendValueMap.value = {}
+    fundTrendValueMode.value = 'cumulative'
     selectedFundTrendRange.value = '3m'
     const currentUser = getStoredCurrentUser()
     const [detailData, transactionList, planList, accountList] = await Promise.all([
@@ -454,6 +469,17 @@ async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: s
   const latestPrice = officialPrice
   const changePercent = Number(baseInfo.RZDF)
   const updatedAt = baseInfo.FSRQ
+  const trendValueContext = trendResult.status === 'fulfilled'
+    ? buildFundTrendValueContext(
+        trendResult.value,
+        { label: updatedAt, value: cumulativePrice },
+        { label: updatedAt, value: latestPrice },
+      )
+    : buildFundTrendValueContext(
+        { netWorthTrend: [], acWorthTrend: [] },
+        { label: updatedAt, value: cumulativePrice },
+        { label: updatedAt, value: latestPrice },
+      )
   const chartPoints = trendResult.status === 'fulfilled'
     ? buildFundTrendPoints(
         trendResult.value,
@@ -465,6 +491,8 @@ async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: s
         value: Number.isFinite(cumulativePrice) ? cumulativePrice : latestPrice,
       })
   fullFundChartPoints.value = chartPoints
+  fundTrendValueMap.value = trendValueContext.values
+  fundTrendValueMode.value = trendValueContext.mode
 
   mergeDetail({
     name: baseInfo.SHORTNAME || baseDetail.name,
@@ -711,6 +739,7 @@ function renderStockChart(points: InvestmentChartPoint[]) {
 }
 
 function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line' | 'candlestick') {
+  const isFundLineChart = chartType === 'line' && detail.value?.productType === 'fund'
   const pointMap = new Map(points.map((point) => [normalizeDateLabel(point.label), point]))
   const buyData: Array<Record<string, any>> = []
   const sellData: Array<Record<string, any>> = []
@@ -720,7 +749,8 @@ function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line
       continue
     }
 
-    const point = pointMap.get(normalizeDateLabel(entry.tradeAt))
+    const tradeDateLabel = resolveTradeMarkerDateLabel(entry, isFundLineChart)
+    const point = pointMap.get(tradeDateLabel)
     if (!point) {
       continue
     }
@@ -729,7 +759,9 @@ function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line
     const fallbackPrice = chartType === 'candlestick'
       ? Number(point.close ?? point.open ?? point.high ?? point.low ?? point.value)
       : Number(point.value ?? point.close ?? point.open ?? point.high ?? point.low)
-    const targetPrice = Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : fallbackPrice
+    const targetPrice = isFundLineChart
+      ? fallbackPrice
+      : Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : fallbackPrice
     if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
       continue
     }
@@ -780,6 +812,118 @@ function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line
   }
 
   return result
+}
+
+function resolveTradeMarkerDateLabel(entry: InvestmentTransaction, isFundLineChart: boolean) {
+  if (!isFundLineChart) {
+    return normalizeDateLabel(entry.tradeAt)
+  }
+
+  const candidateDates = [
+    entry.settlementAppliedDate,
+    entry.settlementConfirmedAt,
+    entry.tradeAt,
+  ]
+
+  for (const candidate of candidateDates) {
+    const normalized = normalizeDateLabel(candidate || '')
+    if (normalized) {
+      return normalized
+    }
+  }
+
+  return ''
+}
+
+function resolveFundCumulativeCostBaseline() {
+  const currentHoldingQuantity = Number(currentPosition.value?.holdingQuantity ?? 0)
+  if (!Number.isFinite(currentHoldingQuantity) || currentHoldingQuantity <= 0) {
+    return null
+  }
+
+  let holdingQuantity = 0
+  let cumulativeCostAmount = 0
+
+  const sortedTransactions = transactions.value
+    .filter((entry) => entry.tradeType === 'buy' || entry.tradeType === 'sell')
+    .filter((entry) => entry.settlementStatus !== 'pending')
+    .slice()
+    .sort(compareFundCostTransactions)
+
+  for (const entry of sortedTransactions) {
+    const quantity = Number(entry.quantity)
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      continue
+    }
+
+    if (entry.tradeType === 'buy') {
+      const cumulativeValue = Number(resolveFundTradeCumulativeValue(entry))
+      if (!Number.isFinite(cumulativeValue) || cumulativeValue <= 0) {
+        continue
+      }
+      holdingQuantity += quantity
+      cumulativeCostAmount += cumulativeValue * quantity
+      continue
+    }
+
+    if (holdingQuantity <= 0) {
+      continue
+    }
+
+    const soldQuantity = Math.min(quantity, holdingQuantity)
+    const averageCost = cumulativeCostAmount / holdingQuantity
+    cumulativeCostAmount -= averageCost * soldQuantity
+    holdingQuantity -= soldQuantity
+  }
+
+  if (holdingQuantity <= 0 || cumulativeCostAmount <= 0) {
+    return null
+  }
+
+  const quantityDiff = Math.abs(holdingQuantity - currentHoldingQuantity)
+  if (quantityDiff > Math.max(0.01, currentHoldingQuantity * 0.01)) {
+    return null
+  }
+
+  const baseline = cumulativeCostAmount / holdingQuantity
+  return Number.isFinite(baseline) && baseline > 0 ? baseline : null
+}
+
+function compareFundCostTransactions(left: InvestmentTransaction, right: InvestmentTransaction) {
+  const leftTime = resolveFundCostTransactionTime(left)
+  const rightTime = resolveFundCostTransactionTime(right)
+  if (leftTime !== rightTime) {
+    return leftTime - rightTime
+  }
+  return Number(left.id ?? 0) - Number(right.id ?? 0)
+}
+
+function resolveFundCostTransactionTime(entry: InvestmentTransaction) {
+  if (entry.settlementAppliedDate) {
+    const appliedTime = new Date(`${entry.settlementAppliedDate}T00:00:00`).getTime()
+    if (Number.isFinite(appliedTime)) {
+      return appliedTime
+    }
+  }
+
+  const fallbackTime = new Date(entry.settlementConfirmedAt || entry.tradeAt).getTime()
+  return Number.isFinite(fallbackTime) ? fallbackTime : 0
+}
+
+function resolveFundTradeCumulativeValue(entry: InvestmentTransaction) {
+  const dateLabel = resolveTradeMarkerDateLabel(entry, true)
+  if (!dateLabel) {
+    return null
+  }
+
+  const trendEntry = fundTrendValueMap.value[dateLabel]
+  const cumulativeValue = Number(trendEntry?.cumulative)
+  if (Number.isFinite(cumulativeValue) && cumulativeValue > 0) {
+    return cumulativeValue
+  }
+
+  const fallbackValue = Number(trendEntry?.net)
+  return Number.isFinite(fallbackValue) && fallbackValue > 0 ? fallbackValue : null
 }
 
 function disposeChart() {
@@ -1367,6 +1511,60 @@ function buildFundTrendPoints(
     }))
 
   return mergeLatestFundTrendPoint(points, latestNetPoint ?? latestAccumulativePoint)
+}
+
+function buildFundTrendValueContext(
+  trend: { netWorthTrend: any[]; acWorthTrend?: any[] },
+  latestAccumulativePoint?: { label?: string | null; value?: number | null },
+  latestNetPoint?: { label?: string | null; value?: number | null },
+) {
+  const values: Record<string, FundTrendValueEntry> = {}
+  const acRows = Array.isArray(trend.acWorthTrend) ? trend.acWorthTrend : []
+  const netRows = Array.isArray(trend.netWorthTrend) ? trend.netWorthTrend : []
+
+  for (const item of acRows) {
+    const ts = Number(item?.[0])
+    const value = Number(item?.[1])
+    if (!Number.isFinite(ts) || !Number.isFinite(value) || value <= 0) {
+      continue
+    }
+    setFundTrendValue(values, formatDate(ts), 'cumulative', value)
+  }
+
+  for (const item of netRows) {
+    const ts = Number(item?.x)
+    const value = Number(item?.y)
+    if (!Number.isFinite(ts) || !Number.isFinite(value) || value <= 0) {
+      continue
+    }
+    setFundTrendValue(values, formatDate(ts), 'net', value)
+  }
+
+  setFundTrendValue(values, latestAccumulativePoint?.label, 'cumulative', latestAccumulativePoint?.value)
+  setFundTrendValue(values, latestNetPoint?.label, 'net', latestNetPoint?.value)
+
+  const hasCumulative = Object.values(values).some((entry) => Number.isFinite(Number(entry.cumulative)) && Number(entry.cumulative) > 0)
+  return {
+    values,
+    mode: hasCumulative ? 'cumulative' as const : 'net' as const,
+  }
+}
+
+function setFundTrendValue(
+  values: Record<string, FundTrendValueEntry>,
+  label: string | null | undefined,
+  key: keyof FundTrendValueEntry,
+  rawValue: unknown,
+) {
+  const normalizedLabel = normalizeDateLabel(label || '')
+  const value = Number(rawValue)
+  if (!normalizedLabel || !Number.isFinite(value) || value <= 0) {
+    return
+  }
+  values[normalizedLabel] = {
+    ...(values[normalizedLabel] ?? {}),
+    [key]: value,
+  }
 }
 
 function mergeLatestFundTrendPoint(

@@ -1,11 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
-import { getInvestmentDividendIncome, type InvestmentDividendIncomePage } from '@/api/modules/finance'
+import {
+  getInvestmentDividendIncome,
+  type InvestmentDividendIncomeItem,
+  type InvestmentDividendIncomePage,
+} from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
+const router = useRouter()
 const isLoading = ref(false)
 const pageError = ref('')
 const pageData = ref<InvestmentDividendIncomePage | null>(null)
@@ -96,6 +102,13 @@ function formatDateTime(value: string) {
   const minute = String(date.getMinutes()).padStart(2, '0')
   return `${month}/${day} ${hour}:${minute}`
 }
+
+function openHoldingDetail(item: InvestmentDividendIncomeItem) {
+  if (!item.positionId) {
+    return
+  }
+  router.push({ path: '/finance/accounts/investment/detail', query: { positionId: item.positionId } })
+}
 </script>
 
 <template>
@@ -128,9 +141,6 @@ function formatDateTime(value: string) {
     </section>
 
     <section class="holding-card" aria-label="持仓分红计划">
-      <header class="holding-card-head">
-        <strong>稳定分红持仓 {{ summary.holdingCount }} 项</strong>
-      </header>
       <header class="holding-header">
         <span class="holding-spacer" />
         <div class="holding-header-right">
@@ -143,7 +153,12 @@ function formatDateTime(value: string) {
         暂无符合条件的稳定分红股票或基金持仓
       </p>
 
-      <article v-for="item in holdings" :key="item.productId" class="holding-row">
+      <article
+        v-for="item in holdings"
+        :key="item.productId"
+        :class="['holding-row', { clickable: !!item.positionId }]"
+        @click="openHoldingDetail(item)"
+      >
         <div class="holding-left">
           <p>{{ item.productName }}</p>
           <small>{{ formatHoldingAmountText(item.marketValue, item.holdingQuantity, item.unitName) }}</small>

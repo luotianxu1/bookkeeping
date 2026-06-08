@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 
 @Data
 public class InvestmentDividendIncomeItemResponse {
+    private Long positionId;
     private Long productId;
     private String productName;
     private String productSymbol;

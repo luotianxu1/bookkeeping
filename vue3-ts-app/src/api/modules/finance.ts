@@ -907,6 +907,7 @@ export interface InvestmentDividendRecord {
 }
 
 export interface InvestmentDividendIncomeItem {
+  positionId?: number | null
   productId: number
   productName: string
   productSymbol?: string | null

@@ -43,6 +43,8 @@ const monthAnchor = ref(new Date().getFullYear())
 const yearAnchor = ref(new Date().getFullYear())
 const pageData = ref<FundProfitPage | null>(null)
 const isLoading = ref(false)
+const isDetailLoading = ref(false)
+const isCalendarLoading = ref(false)
 const pageError = ref('')
 
 const isDayView = computed(() => selectedView.value === 'day')
@@ -292,7 +294,7 @@ const viewModel = computed({
     }
     selectedView.value = value as FundProfitView
     selectedKey.value = ''
-    void loadPage()
+    void loadPage({ calendarOnly: true })
   },
 })
 
@@ -300,7 +302,7 @@ onMounted(() => {
   void loadPage()
 })
 
-async function loadPage() {
+async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean }) {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看基金收益'
@@ -308,7 +310,15 @@ async function loadPage() {
     return
   }
 
-  isLoading.value = true
+  const detailOnly = Boolean(options?.detailOnly && pageData.value)
+  const calendarOnly = Boolean(options?.calendarOnly && pageData.value && !detailOnly)
+  if (detailOnly) {
+    isDetailLoading.value = true
+  } else if (calendarOnly) {
+    isCalendarLoading.value = true
+  } else {
+    isLoading.value = true
+  }
   pageError.value = ''
 
   try {
@@ -320,13 +330,25 @@ async function loadPage() {
       selected: selectedKey.value || undefined,
     })
 
-    pageData.value = data
-    syncPageState(data)
+    if (detailOnly && pageData.value) {
+      mergeDetailSelection(data)
+    } else if (calendarOnly && pageData.value) {
+      mergeCalendarSelection(data)
+    } else {
+      pageData.value = data
+      syncPageState(data)
+    }
   } catch (error) {
     pageData.value = null
     pageError.value = error instanceof Error ? error.message : '基金收益加载失败'
   } finally {
-    isLoading.value = false
+    if (detailOnly) {
+      isDetailLoading.value = false
+    } else if (calendarOnly) {
+      isCalendarLoading.value = false
+    } else {
+      isLoading.value = false
+    }
   }
 }
 
@@ -358,6 +380,55 @@ function syncPageState(data: FundProfitPage) {
   }
 }
 
+function mergeDetailSelection(data: FundProfitPage) {
+  if (!pageData.value) {
+    pageData.value = data
+    syncPageState(data)
+    return
+  }
+
+  selectedKey.value = data.selectedKey
+  pageData.value = {
+    ...pageData.value,
+    selectedKey: data.selectedKey,
+    selection: data.selection,
+    details: data.details,
+    calendarItems: pageData.value.calendarItems.map((item) => ({
+      ...item,
+      selected: item.key === data.selectedKey,
+    })),
+  }
+}
+
+function mergeCalendarSelection(data: FundProfitPage) {
+  if (!pageData.value) {
+    pageData.value = data
+    syncPageState(data)
+    return
+  }
+
+  selectedView.value = normalizeView(data.view)
+  selectedKey.value = data.selectedKey
+
+  if (selectedView.value === 'day') {
+    dayAnchor.value = data.anchor || dayAnchor.value
+  } else if (selectedView.value === 'month') {
+    monthAnchor.value = Number.parseInt(data.anchor, 10) || monthAnchor.value
+  } else {
+    yearAnchor.value = Number.parseInt(data.anchor, 10) || yearAnchor.value
+  }
+
+  pageData.value = {
+    ...pageData.value,
+    view: data.view,
+    anchor: data.anchor,
+    selectedKey: data.selectedKey,
+    calendarItems: data.calendarItems,
+    selection: data.selection,
+    details: data.details,
+  }
+}
+
 function resolveAnchorValue() {
   if (selectedView.value === 'month') {
     return String(monthAnchor.value)
@@ -380,7 +451,7 @@ function handleCalendarSelect(item: FundProfitCalendarCell) {
     return
   }
   selectedKey.value = item.key
-  void loadPage()
+  void loadPage({ detailOnly: true })
 }
 
 function handlePeriodSelect(item: FundProfitCalendarCell) {
@@ -392,7 +463,7 @@ function handlePeriodSelect(item: FundProfitCalendarCell) {
     dayAnchor.value = item.startDate.slice(0, 7)
     selectedView.value = 'day'
     selectedKey.value = ''
-    void loadPage()
+    void loadPage({ calendarOnly: true })
     return
   }
 
@@ -400,7 +471,7 @@ function handlePeriodSelect(item: FundProfitCalendarCell) {
     monthAnchor.value = Number.parseInt(item.startDate.slice(0, 4), 10) || monthAnchor.value
     selectedView.value = 'month'
     selectedKey.value = ''
-    void loadPage()
+    void loadPage({ calendarOnly: true })
     return
   }
 
@@ -416,7 +487,7 @@ function shiftCalendarAnchor(offset: number) {
     yearAnchor.value += offset
   }
   selectedKey.value = ''
-  void loadPage()
+  void loadPage({ calendarOnly: true })
 }
 
 function openDetail(item: FundProfitDetail) {
@@ -566,17 +637,6 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
           <div class="summary-account-pill">{{ summaryPillText }}</div>
         </div>
 
-        <div class="fund-profit-summary-stats">
-          <article class="summary-stat-card">
-            <span>持仓市值</span>
-            <strong>{{ formatCurrency(pageData.summary.holdingAmount) }}</strong>
-          </article>
-          <article class="summary-stat-card">
-            <span>累计投入</span>
-            <strong>{{ formatCurrency(pageData.summary.investedAmount) }}</strong>
-          </article>
-        </div>
-
         <p class="summary-hint">{{ summaryHint }}</p>
       </section>
 
@@ -675,7 +735,9 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
           </span>
         </div>
 
-        <template v-if="isDayView">
+        <p v-if="isCalendarLoading" class="empty-text">日历加载中...</p>
+
+        <template v-else-if="isDayView">
           <div class="calendar-box">
             <div class="weekday-row">
               <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
@@ -695,7 +757,7 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
                   @click="handlePeriodSelect(item)"
                 >
                   <strong>{{ item.label }}</strong>
-                  <span>{{ item.profit === null || item.profit === undefined ? '--' : formatSignedCurrency(item.profit, 0) }}</span>
+                  <span>{{ item.profit === null || item.profit === undefined ? '--' : formatCurrency(item.profit, 0) }}</span>
                 </button>
               </template>
             </div>
@@ -719,7 +781,7 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
               <AmountText
                 tag="strong"
                 class="period-card-value"
-                :value="item.profit === null || item.profit === undefined ? '--' : formatSignedCurrency(item.profit)"
+                :value="item.profit === null || item.profit === undefined ? '--' : formatCurrency(item.profit)"
                 :tone="getTone(Number(item.profit ?? 0))"
               />
               <span class="period-card-side">
@@ -750,7 +812,8 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
           </button>
         </div>
 
-        <p v-if="visibleDetails.length === 0" class="empty-text">当前筛选下暂无基金收益明细</p>
+        <p v-if="isDetailLoading" class="empty-text">明细加载中...</p>
+        <p v-else-if="visibleDetails.length === 0" class="empty-text">当前筛选下暂无基金收益明细</p>
 
         <template v-else>
           <button

@@ -394,6 +394,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <AmountText
                 tag="strong"
                 tone="auto"
+                font-size="12px"
                 :value="formatMetricValue(metric.value, metric.isRate)"
               />
             </div>

@@ -4956,8 +4956,17 @@ public class InvestmentService {
         }
         BigDecimal estimatedDividendAmount = holdingQuantity.multiply(predictedAnnualDividendPerUnit)
             .setScale(2, RoundingMode.HALF_UP);
+        Long targetPositionId = positions.stream()
+            .filter(position -> position.getId() != null)
+            .max(Comparator
+                .comparing(this::resolvePositionMarketValue)
+                .thenComparing(InvestmentPositionEntity::getUpdatedAt, Comparator.nullsFirst(LocalDateTime::compareTo))
+                .thenComparing(InvestmentPositionEntity::getId))
+            .map(InvestmentPositionEntity::getId)
+            .orElse(null);
 
         InvestmentDividendIncomeItemResponse response = new InvestmentDividendIncomeItemResponse();
+        response.setPositionId(targetPositionId);
         response.setProductId(productId);
         response.setProductName(product == null ? "-" : product.getName());
         response.setProductSymbol(product == null ? null : product.getSymbol());
@@ -4971,6 +4980,10 @@ public class InvestmentService {
         response.setActualDividendAmount(scaleMoney(actualDividendAmount));
         response.setActualDividendRate(scaleRate(rate(actualDividendAmount, costAmount)));
         return response;
+    }
+
+    private BigDecimal resolvePositionMarketValue(InvestmentPositionEntity position) {
+        return defaultZero(position == null ? null : position.getMarketValue());
     }
 
     private void ensureDividendProfile(InvestmentProductEntity product) {

@@ -1,6 +1,10 @@
 <script setup lang="ts">
 // 通用金额文本：统一金额显示和正负颜色规则，便于后续扩展格式化能力。
-import { computed } from 'vue'
+import { computed, useAttrs } from 'vue'
+
+defineOptions({
+  inheritAttrs: false,
+})
 
 type AmountTone = 'auto' | 'positive' | 'negative' | 'neutral' | 'inherit'
 
@@ -15,6 +19,7 @@ const props = withDefaults(defineProps<{
   showSign?: boolean
   showUnit?: boolean
   unit?: string
+  fontSize?: string
 }>(), {
   tag: 'span',
   tone: 'auto',
@@ -22,6 +27,7 @@ const props = withDefaults(defineProps<{
   showUnit: false,
   unit: '¥',
 })
+const attrs = useAttrs()
 
 const text = computed(() => String(props.value ?? ''))
 const trimmedText = computed(() => text.value.trim())
@@ -89,7 +95,14 @@ const displayText = computed(() => {
 </script>
 
 <template>
-  <component :is="tag" :class="['amount-text', toneClass]">{{ displayText }}</component>
+  <component
+    :is="tag"
+    v-bind="attrs"
+    :class="['amount-text', toneClass, attrs.class]"
+    :style="[attrs.style, props.fontSize ? { fontSize: props.fontSize } : undefined]"
+  >
+    {{ displayText }}
+  </component>
 </template>
 
 <style scoped lang="scss" src="./style.scss"></style>

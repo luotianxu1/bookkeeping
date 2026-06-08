@@ -538,8 +538,8 @@ function getHoldingMarketValueLabel(position: InvestmentPosition) {
 
 function getHoldingMarketValue(position: InvestmentPosition) {
   return isPendingSubscription(position)
-    ? formatCurrency(position.costAmount, 0)
-    : formatCurrency(position.marketValue, 0)
+    ? formatCurrency(position.costAmount, 2)
+    : formatCurrency(position.marketValue, 2)
 }
 
 function getHoldingActionLabel(position: InvestmentPosition) {
@@ -690,7 +690,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
           </div>
           <div class="investment-summary-side">
             <span>今日盈亏</span>
-            <AmountText tag="strong" class="investment-summary-profit" :value="summaryDayProfitText" />
+            <AmountText tag="strong" class="investment-summary-profit" font-size="18px" :value="summaryDayProfitText" />
             <AmountText tag="span" class="investment-summary-rate" :value="summaryDayProfitRateText" />
           </div>
         </div>
@@ -702,6 +702,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <AmountText
                 tag="strong"
                 class="investment-metric-value"
+                font-size="12px"
                 :value="metric.isRate ? `${formatAmount(metric.value)}%` : formatAmount(metric.value)"
               />
             </div>
