@@ -32,7 +32,7 @@ type InvestmentAccountCard = {
   marketValue: number
   stockCount: number
   fundCount: number
-  dayProfit: number
+  dayProfit: number | null
   totalProfit: number
 }
 
@@ -106,7 +106,9 @@ const investmentAccountCards = computed<InvestmentAccountCard[]>(() =>
       marketValue: Number(account.currentBalance ?? 0),
       stockCount,
       fundCount,
-      dayProfit: accountPositions.reduce((total, position) => total + Number(position.dayProfit ?? 0), 0),
+      dayProfit: accountPositions.length > 0 && accountPositions.every((position) => position.dayProfit !== null && position.dayProfit !== undefined)
+        ? accountPositions.reduce((total, position) => total + Number(position.dayProfit), 0)
+        : null,
       totalProfit: accountPositions.reduce(
         (total, position) => total + Number(position.cumulativeProfit ?? 0) + Number(position.holdingProfit ?? 0),
         0,
@@ -297,7 +299,10 @@ async function confirmDelete() {
   }
 }
 
-function formatMetricValue(value: number, isRate: boolean, isCount = false) {
+function formatMetricValue(value: number | null | undefined, isRate: boolean, isCount = false) {
+  if (value === null || value === undefined) {
+    return '--'
+  }
   if (isCount) {
     return String(value)
   }
@@ -326,6 +331,14 @@ function formatSignedRate(value: number) {
 function formatSignedCurrency(value: number) {
   const sign = value > 0 ? '+' : value < 0 ? '-' : ''
   return `${sign}¥${formatAmount(value)}`
+}
+
+function formatNullableSignedCurrency(value?: number | null) {
+  return value === null || value === undefined ? '--' : formatSignedCurrency(value)
+}
+
+function formatNullableSignedRate(value?: number | null) {
+  return value === null || value === undefined ? '--' : formatSignedRate(value)
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {
@@ -370,7 +383,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
           </div>
           <div class="investment-list-summary-side">
             <span>今日收益率</span>
-            <AmountText tag="strong" :value="formatSignedRate(summary.dayProfitRate)" />
+            <AmountText tag="strong" :value="formatNullableSignedRate(summary.dayProfitRate)" />
           </div>
         </div>
 
@@ -423,7 +436,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 <AmountText
                   tag="strong"
                   class="investment-account-list-card-profit-value"
-                  :value="formatSignedCurrency(card.dayProfit)"
+                  :value="formatNullableSignedCurrency(card.dayProfit)"
                   show-sign
                   show-unit
                 />

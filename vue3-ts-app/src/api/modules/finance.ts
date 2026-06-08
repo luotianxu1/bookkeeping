@@ -570,8 +570,8 @@ export interface SaveInvestmentProductParams {
 export interface InvestmentSummary {
   userId: number
   totalMarketValue: number
-  dayProfit: number
-  dayProfitRate: number
+  dayProfit?: number | null
+  dayProfitRate?: number | null
   holdingProfit: number
   holdingProfitRate: number
   cumulativeProfit: number
@@ -723,8 +723,8 @@ export interface FundProfitPageAccount {
 export interface FundProfitPageSummaryMetric {
   key: 'today' | '7d' | 'month' | string
   label: string
-  profit: number
-  profitRate: number
+  profit?: number | null
+  profitRate?: number | null
 }
 
 export interface FundProfitPageSummary {
@@ -764,8 +764,8 @@ export interface FundProfitSelection {
   startDate: string
   endDate: string
   comparisonDate: string
-  profit: number
-  profitRate: number
+  profit?: number | null
+  profitRate?: number | null
   positiveFundCount: number
   negativeFundCount: number
 }
@@ -832,8 +832,8 @@ export interface InvestmentPosition {
   avgCostPrice: number
   currentPrice: number
   marketValue: number
-  dayProfit: number
-  dayProfitRate: number
+  dayProfit?: number | null
+  dayProfitRate?: number | null
   holdingProfit: number
   holdingProfitRate: number
   cumulativeProfit: number

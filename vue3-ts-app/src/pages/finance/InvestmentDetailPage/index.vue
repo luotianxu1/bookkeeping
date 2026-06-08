@@ -81,7 +81,7 @@ const isSavingAutoInvest = ref(false)
 const showDeleteModal = ref(false)
 const isDeletingPosition = ref(false)
 const deleteError = ref('')
-const selectedFundTrendRange = ref<FundTrendRange>('1y')
+const selectedFundTrendRange = ref<FundTrendRange>('3m')
 const fullFundChartPoints = ref<InvestmentChartPoint[]>([])
 let chart: ECharts | null = null
 
@@ -105,36 +105,47 @@ const todayProfitValue = computed(() => {
   if (currentPosition.value?.subscriptionStatus === 'pending') {
     return '--'
   }
-  return formatCurrency(Number(detail.value?.position?.dayProfit ?? 0))
+  if (detail.value?.position?.dayProfit === null || detail.value?.position?.dayProfit === undefined) {
+    return '--'
+  }
+  return formatCurrency(Number(detail.value.position.dayProfit))
 })
 const todayProfitTone = computed<'positive' | 'negative' | 'neutral'>(() => {
   if (currentPosition.value?.subscriptionStatus === 'pending') {
     return 'neutral'
   }
-  return toneByNumber(Number(detail.value?.position?.dayProfit ?? 0))
-})
-const todayValue = computed(() => {
-  const changePercent = detail.value?.changePercent
-  if (changePercent !== null && changePercent !== undefined) {
-    return `${formatNumber(Number(changePercent))}%`
-  }
-  return formatNumber(Number(detail.value?.position?.dayProfitRate ?? 0)) + '%'
-})
-const todayTone = computed<'positive' | 'negative' | 'neutral'>(() => {
-  const changePercent = Number(detail.value?.changePercent)
-  const fallbackRate = Number(detail.value?.position?.dayProfitRate ?? 0)
-  const value = Number.isFinite(changePercent) ? changePercent : fallbackRate
-  if (!Number.isFinite(value) || value === 0) {
+  if (detail.value?.position?.dayProfit === null || detail.value?.position?.dayProfit === undefined) {
     return 'neutral'
   }
-  return value > 0 ? 'positive' : 'negative'
+  return toneByNumber(Number(detail.value.position.dayProfit))
+})
+const todayValue = computed(() => {
+  if (detail.value?.position?.dayProfitRate === null || detail.value?.position?.dayProfitRate === undefined) {
+    return '--'
+  }
+  return formatNumber(Number(detail.value.position.dayProfitRate)) + '%'
+})
+const todayTone = computed<'positive' | 'negative' | 'neutral'>(() => {
+  const fallbackRate = detail.value?.position?.dayProfitRate
+  const resolvedValue = fallbackRate === null || fallbackRate === undefined ? null : Number(fallbackRate)
+  if (resolvedValue === null || !Number.isFinite(resolvedValue) || resolvedValue === 0) {
+    return 'neutral'
+  }
+  return resolvedValue > 0 ? 'positive' : 'negative'
 })
 const dividendRecords = computed<InvestmentDividendRecord[]>(() => detail.value?.dividendRecords ?? [])
+const showTodayMetrics = computed(() => {
+  if (currentPosition.value?.subscriptionStatus === 'pending') {
+    return false
+  }
+  return isTodayMarketData(currentPosition.value?.lastSyncedAt)
+})
 const displayUpdatedAt = computed(() => {
   if (currentPosition.value?.subscriptionStatus === 'pending') {
     return '待确认'
   }
-  return detail.value?.updatedAt ? `同步于 ${detail.value.updatedAt}` : '同步于 --'
+  const syncedAt = formatDateTimeLabel(currentPosition.value?.lastSyncedAt)
+  return syncedAt === '--' ? '同步于 --' : `同步于 ${syncedAt}`
 })
 const transactionCountText = computed(() => `共 ${transactions.value.length} 条`)
 const currentPosition = computed<InvestmentPosition | null>(() => detail.value?.position ?? null)
@@ -362,7 +373,7 @@ async function loadDetail() {
   pageError.value = ''
   try {
     fullFundChartPoints.value = []
-    selectedFundTrendRange.value = '1y'
+    selectedFundTrendRange.value = '3m'
     const currentUser = getStoredCurrentUser()
     const [detailData, transactionList, planList, accountList] = await Promise.all([
       getInvestmentPositionDetail(positionId.value),
@@ -519,7 +530,7 @@ function renderLineChart(points: InvestmentChartPoint[]) {
   const isFundTrendChart = detail.value?.productType === 'fund'
   const baselineValue = resolveLineChartBaseline(points, isFundTrendChart)
   const costPrice = chartCostBaseline.value
-  const tradeMarkerSeries = isFundTrendChart ? [] : buildTradeMarkerSeries(points, 'line')
+  const tradeMarkerSeries = buildTradeMarkerSeries(points, 'line')
   const series: Array<Record<string, any>> = [
     {
       name: isFundTrendChart ? '累计净值' : '单位净值',
@@ -532,9 +543,9 @@ function renderLineChart(points: InvestmentChartPoint[]) {
     },
   ]
 
-  if (!isFundTrendChart && costPrice !== null) {
+  if (costPrice !== null) {
     series.push({
-      name: '持仓成本价',
+      name: isFundTrendChart ? '持仓成本' : '持仓成本价',
       type: 'line',
       smooth: false,
       showSymbol: false,
@@ -1550,6 +1561,22 @@ function formatDateInput(value: Date) {
   return `${year}-${month}-${day}`
 }
 
+function isTodayMarketData(value?: string | null) {
+  if (!value) {
+    return false
+  }
+  const normalized = value.trim().replace(' ', 'T')
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) {
+    const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+    if (!matched) {
+      return false
+    }
+    return value.slice(0, 10) === formatDateInput(new Date())
+  }
+  return formatDateInput(date) === formatDateInput(new Date())
+}
+
 function formatAutoInvestFrequency(value: string) {
   if (value === 'daily') return '每日定投'
   return value === 'monthly' ? '每月定投' : '每周定投'
@@ -1778,7 +1805,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
             <AmountText tag="p" class="investment-detail-summary-amount" tone="inherit" :value="summaryAmount" />
             <p class="investment-detail-summary-updated">{{ displayUpdatedAt }}</p>
           </div>
-          <div class="investment-detail-summary-side">
+          <div v-if="showTodayMetrics" class="investment-detail-summary-side">
             <div class="investment-detail-summary-metric">
               <span>当日盈亏</span>
               <AmountText tag="strong" :tone="todayProfitTone" :value="todayProfitValue" />

@@ -217,6 +217,7 @@ public class InvestmentService {
     private static final DateTimeFormatter NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
     private static final DateTimeFormatter FUND_ESTIMATE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter FUND_ESTIMATE_TIME_WITH_SECOND_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter POSITION_SYNC_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final InvestmentProductMapper productMapper;
     private final InvestmentPositionMapper positionMapper;
@@ -500,13 +501,16 @@ public class InvestmentService {
         BigDecimal totalMarketValue = sum(positions, InvestmentPositionEntity::getMarketValue);
         BigDecimal holdingProfit = sum(positions, InvestmentPositionEntity::getHoldingProfit);
         BigDecimal cumulativeProfit = sum(positions, InvestmentPositionEntity::getCumulativeProfit);
-        BigDecimal dayProfit = sum(positions, InvestmentPositionEntity::getDayProfit);
+        boolean allPositionsSyncedToday = !positions.isEmpty() && positions.stream().allMatch(this::hasTodayDayProfit);
+        BigDecimal dayProfit = allPositionsSyncedToday
+            ? sum(positions, InvestmentPositionEntity::getDayProfit)
+            : null;
 
         InvestmentSummaryResponse response = new InvestmentSummaryResponse();
         response.setUserId(userId);
         response.setTotalMarketValue(totalMarketValue);
         response.setDayProfit(dayProfit);
-        response.setDayProfitRate(rate(dayProfit, totalMarketValue.subtract(dayProfit)));
+        response.setDayProfitRate(dayProfit == null ? null : rate(dayProfit, totalMarketValue.subtract(dayProfit)));
         response.setHoldingProfit(holdingProfit);
         response.setHoldingProfitRate(rate(holdingProfit, totalMarketValue.subtract(holdingProfit)));
         response.setCumulativeProfit(cumulativeProfit);
@@ -1371,6 +1375,7 @@ public class InvestmentService {
         BigDecimal holdingAmount = sum(context.positions(), InvestmentPositionEntity::getMarketValue);
         BigDecimal investedAmount = sum(context.positions(), InvestmentPositionEntity::getCostAmount);
         BigDecimal totalProfit = sum(context.positions(), InvestmentPositionEntity::getCumulativeProfit);
+        boolean todayProfitAvailable = hasTodayFundProfitData(context.positions(), context.latestDate());
 
         response.setHoldingAmount(holdingAmount);
         response.setInvestedAmount(investedAmount);
@@ -1381,14 +1386,20 @@ public class InvestmentService {
 
         LocalDate latestDate = context.latestDate();
         List<FundProfitPageSummaryMetricResponse> shortcuts = new ArrayList<>();
-        shortcuts.add(buildFundProfitShortcutMetric(context, "today", "今日", new FundProfitPeriodMeta(
+        shortcuts.add(buildFundProfitShortcutMetric(
+            context,
+            "today",
+            "今日",
+            new FundProfitPeriodMeta(
             "day",
             latestDate.toString(),
             "今日",
             latestDate,
             latestDate,
             latestDate.minusDays(1)
-        )));
+            ),
+            todayProfitAvailable
+        ));
         shortcuts.add(buildFundProfitShortcutMetric(context, "7d", "近7日", new FundProfitPeriodMeta(
             "day",
             latestDate.minusDays(6).toString(),
@@ -1407,7 +1418,7 @@ public class InvestmentService {
             monthStart.minusDays(1)
         )));
 
-        response.setActiveShortcut("day".equals(view) ? "today" : "month");
+        response.setActiveShortcut("day".equals(view) && todayProfitAvailable ? "today" : "month");
         response.setShortcuts(shortcuts);
         return response;
     }
@@ -1418,12 +1429,22 @@ public class InvestmentService {
         String label,
         FundProfitPeriodMeta period
     ) {
+        return buildFundProfitShortcutMetric(context, key, label, period, true);
+    }
+
+    private FundProfitPageSummaryMetricResponse buildFundProfitShortcutMetric(
+        FundProfitPageContext context,
+        String key,
+        String label,
+        FundProfitPeriodMeta period,
+        boolean visible
+    ) {
         FundProfitAggregate aggregate = aggregateFundProfit(buildPositionPeriodProfitMap(context, period).values());
         FundProfitPageSummaryMetricResponse item = new FundProfitPageSummaryMetricResponse();
         item.setKey(key);
         item.setLabel(label);
-        item.setProfit(aggregate.profit());
-        item.setProfitRate(aggregate.profitRate());
+        item.setProfit(visible ? aggregate.profit() : null);
+        item.setProfitRate(visible ? aggregate.profitRate() : null);
         return item;
     }
 
@@ -2017,6 +2038,10 @@ public class InvestmentService {
 
     public int executeDueAutoInvestPlans() {
         LocalDate today = LocalDate.now();
+        if (isNonTradingDay(today)) {
+            log.info("基金定投执行跳过：{} 为休市日，顺延至下一个交易日", today);
+            return 0;
+        }
         List<InvestmentAutoInvestPlanEntity> plans = autoInvestPlanMapper.selectList(new LambdaQueryWrapper<InvestmentAutoInvestPlanEntity>()
             .eq(InvestmentAutoInvestPlanEntity::getStatus, AUTO_INVEST_STATUS_ACTIVE)
             .le(InvestmentAutoInvestPlanEntity::getNextExecuteDate, today)
@@ -2369,6 +2394,12 @@ public class InvestmentService {
         }
 
         LocalDate currentExecuteDate = plan.getNextExecuteDate();
+        LocalDate effectiveExecuteDate = nextTradingDay(currentExecuteDate);
+        if (effectiveExecuteDate.isAfter(today)) {
+            log.info("基金定投执行跳过：计划顺延至下一个交易日，planId={}, nextExecuteDate={}, effectiveExecuteDate={}",
+                planId, currentExecuteDate, effectiveExecuteDate);
+            return false;
+        }
         LocalDateTime executedAt = LocalDateTime.now();
         LocalDate nextExecuteDate = resolveNextAutoInvestExecuteDate(plan.getFrequency(), currentExecuteDate, today);
         int claimedRows = autoInvestPlanMapper.update(null, new LambdaUpdateWrapper<InvestmentAutoInvestPlanEntity>()
@@ -2401,7 +2432,7 @@ public class InvestmentService {
         request.setFeeAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         request.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         request.setCurrencyCode(plan.getCurrencyCode());
-        request.setTradeAt(today.atTime(9, 5));
+        request.setTradeAt(effectiveExecuteDate.atTime(9, 5));
         request.setFundingAccountId(plan.getFundingAccountId());
         request.setSubscriptionTimeSlot(SUBSCRIPTION_TIME_SLOT_BEFORE_1500);
         request.setRemark(buildAutoInvestExecutionRemark(plan));
@@ -2426,15 +2457,17 @@ public class InvestmentService {
     }
 
     private LocalDate resolveNextAutoInvestExecuteDate(String frequency, LocalDate currentDate, LocalDate today) {
-        LocalDate next = currentDate;
+        LocalDate rawNext = currentDate;
+        LocalDate next;
         do {
             if (AUTO_INVEST_FREQUENCY_MONTHLY.equals(frequency)) {
-                next = next.plusMonths(1);
+                rawNext = rawNext.plusMonths(1);
             } else if (AUTO_INVEST_FREQUENCY_WEEKLY.equals(frequency)) {
-                next = next.plusWeeks(1);
+                rawNext = rawNext.plusWeeks(1);
             } else {
-                next = next.plusDays(1);
+                rawNext = rawNext.plusDays(1);
             }
+            next = nextTradingDay(rawNext);
         } while (!next.isAfter(today));
         return next;
     }
@@ -3107,6 +3140,7 @@ public class InvestmentService {
 
     private InvestmentPositionResponse toPositionResponse(InvestmentPositionEntity entity, InvestmentProductEntity product, AccountEntity account) {
         InvestmentPositionResponse response = new InvestmentPositionResponse();
+        boolean dayProfitVisible = hasTodayDayProfit(entity);
         response.setId(entity.getId());
         response.setUserId(entity.getUserId());
         response.setAccountId(entity.getAccountId());
@@ -3127,8 +3161,8 @@ public class InvestmentService {
         response.setAvgCostPrice(entity.getAvgCostPrice());
         response.setCurrentPrice(entity.getCurrentPrice());
         response.setMarketValue(entity.getMarketValue());
-        response.setDayProfit(entity.getDayProfit());
-        response.setDayProfitRate(entity.getDayProfitRate());
+        response.setDayProfit(dayProfitVisible ? entity.getDayProfit() : null);
+        response.setDayProfitRate(dayProfitVisible ? entity.getDayProfitRate() : null);
         response.setHoldingProfit(entity.getHoldingProfit());
         response.setHoldingProfitRate(entity.getHoldingProfitRate());
         response.setCumulativeProfit(entity.getCumulativeProfit());
@@ -3661,7 +3695,13 @@ public class InvestmentService {
         }
         return List.of(
             stat("所属账户", blankToDash(position.getAccountName()), null),
-            stat("持仓数量", moneyText(position.getHoldingQuantity(), 2) + " " + blankToDefault(position.getUnitName(), DEFAULT_UNIT_NAME), null),
+            stat(
+                "持仓数量",
+                moneyText(position.getHoldingQuantity(), 2)
+                    + " " + blankToDefault(position.getUnitName(), DEFAULT_UNIT_NAME)
+                    + "（更新于 " + blankToDash(formatPositionSyncTime(position.getLastSyncedAt())) + "）",
+                null
+            ),
             stat("持仓成本价", priceText(position.getAvgCostPrice(), position.getProductType()), null),
             stat("当前市值", currencyText(position.getMarketValue(), 2), null),
             stat("持仓收益", currencyText(position.getHoldingProfit(), 2), tone(position.getHoldingProfit())),
@@ -4756,6 +4796,23 @@ public class InvestmentService {
         }
         return raw.substring(0, 4) + "-" + raw.substring(4, 6) + "-" + raw.substring(6, 8)
             + " " + raw.substring(8, 10) + ":" + raw.substring(10, 12) + ":" + raw.substring(12, 14);
+    }
+
+    private String formatPositionSyncTime(LocalDateTime value) {
+        return value == null ? null : value.format(POSITION_SYNC_TIME_FORMAT);
+    }
+
+    private boolean hasTodayDayProfit(InvestmentPositionEntity position) {
+        return position != null
+            && position.getLastSyncedAt() != null
+            && LocalDate.now().equals(position.getLastSyncedAt().toLocalDate());
+    }
+
+    private boolean hasTodayFundProfitData(List<InvestmentPositionEntity> positions, LocalDate latestDate) {
+        return latestDate != null
+            && LocalDate.now().equals(latestDate)
+            && !positions.isEmpty()
+            && positions.stream().allMatch(this::hasTodayDayProfit);
     }
 
     private InvestmentDividendResponse toDividendRecordResponse(InvestmentDividendRecordEntity entity) {

@@ -79,6 +79,26 @@ const summaryTitle = computed(() => {
 })
 
 const summaryPillText = computed(() => `${pageData.value?.summary.fundCount ?? 0}只持仓基金`)
+const summaryMetricProfitText = computed(() =>
+  selectedSummaryMetric.value?.profit === null || selectedSummaryMetric.value?.profit === undefined
+    ? '--'
+    : formatSignedCurrency(selectedSummaryMetric.value.profit),
+)
+const summaryMetricProfitTone = computed(() =>
+  selectedSummaryMetric.value?.profit === null || selectedSummaryMetric.value?.profit === undefined
+    ? 'neutral'
+    : getTone(Number(selectedSummaryMetric.value.profit)),
+)
+const summaryMetricRateText = computed(() =>
+  selectedSummaryMetric.value?.profitRate === null || selectedSummaryMetric.value?.profitRate === undefined
+    ? '--'
+    : formatRate(selectedSummaryMetric.value.profitRate),
+)
+const summaryMetricRateTone = computed(() =>
+  selectedSummaryMetric.value?.profitRate === null || selectedSummaryMetric.value?.profitRate === undefined
+    ? 'neutral'
+    : getTone(Number(selectedSummaryMetric.value.profitRate)),
+)
 
 const summaryHint = computed(() => {
   const syncText = formatDateTime(pageData.value?.summary.lastSyncedAt ?? pageData.value?.lastSyncedAt)
@@ -154,7 +174,7 @@ const detailPeriodLabel = computed(() => {
   if (selectedView.value === 'year') {
     return selectionLabel.value
   }
-  return '当日'
+  return selectionLabel.value
 })
 
 const dayCalendarCells = computed<Array<FundProfitCalendarCell | null>>(() => {
@@ -531,16 +551,14 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
               <AmountText
                 tag="strong"
                 class="summary-amount"
-                :value="selectedSummaryMetric?.profit ?? 0"
-                :tone="getTone(Number(selectedSummaryMetric?.profit ?? 0))"
-                show-sign
-                show-unit
+                :value="summaryMetricProfitText"
+                :tone="summaryMetricProfitTone"
               />
               <AmountText
                 tag="span"
                 class="summary-rate-inline"
-                :value="selectedSummaryMetric ? formatRate(selectedSummaryMetric.profitRate) : '--'"
-                :tone="getTone(Number(selectedSummaryMetric?.profitRate ?? 0))"
+                :value="summaryMetricRateText"
+                :tone="summaryMetricRateTone"
               />
             </div>
           </div>

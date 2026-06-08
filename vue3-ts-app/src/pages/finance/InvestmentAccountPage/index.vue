@@ -122,6 +122,12 @@ const totalSummaryProfitRate = computed(() => {
   }
   return (totalSummaryProfit.value / currentCostAmount) * 100
 })
+const summaryDayProfitText = computed(() =>
+  summary.value.dayProfit === null || summary.value.dayProfit === undefined ? '--' : formatAmount(summary.value.dayProfit),
+)
+const summaryDayProfitRateText = computed(() =>
+  summary.value.dayProfitRate === null || summary.value.dayProfitRate === undefined ? '--' : `${formatAmount(summary.value.dayProfitRate)}%`,
+)
 
 const summaryMetrics = computed(() => [
   { label: '持仓盈亏', value: summary.value.holdingProfit },
@@ -511,6 +517,21 @@ function getHoldingQuantityTag(position: InvestmentPosition) {
   return quantityText || '待确认'
 }
 
+function getHoldingSyncText(position: InvestmentPosition) {
+  if (!position.lastSyncedAt) {
+    return ''
+  }
+  const date = new Date(position.lastSyncedAt)
+  if (Number.isNaN(date.getTime())) {
+    return `更新 ${position.lastSyncedAt}`
+  }
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `更新 ${month}-${day} ${hour}:${minute}`
+}
+
 function getHoldingMarketValueLabel(position: InvestmentPosition) {
   return isPendingSubscription(position) ? '申购金额' : '持仓市值'
 }
@@ -526,18 +547,27 @@ function getHoldingActionLabel(position: InvestmentPosition) {
 }
 
 function getHoldingActionValue(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? formatCurrency(position.costAmount, 0) : formatCurrency(position.dayProfit)
+  if (isPendingSubscription(position)) {
+    return formatCurrency(position.costAmount, 0)
+  }
+  return position.dayProfit === null || position.dayProfit === undefined ? '--' : formatCurrency(position.dayProfit)
 }
 
 function getHoldingActionRate(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? '' : `${formatAmount(position.dayProfitRate)}%`
+  if (isPendingSubscription(position)) {
+    return ''
+  }
+  return position.dayProfitRate === null || position.dayProfitRate === undefined ? '--' : `${formatAmount(position.dayProfitRate)}%`
 }
 
 function getHoldingActionTone(position: InvestmentPosition) {
   if (isPendingSubscription(position)) {
     return 'inherit' as const
   }
-  const dayProfit = Number(position.dayProfit ?? 0)
+  if (position.dayProfit === null || position.dayProfit === undefined) {
+    return 'neutral' as const
+  }
+  const dayProfit = Number(position.dayProfit)
   if (!Number.isFinite(dayProfit) || dayProfit === 0) {
     return 'neutral' as const
   }
@@ -660,8 +690,8 @@ function showFeedback(message: string, type: 'success' | 'error') {
           </div>
           <div class="investment-summary-side">
             <span>今日盈亏</span>
-            <AmountText tag="strong" class="investment-summary-profit" :value="formatAmount(summary.dayProfit)" />
-            <AmountText tag="span" class="investment-summary-rate" :value="`${formatAmount(summary.dayProfitRate)}%`" />
+            <AmountText tag="strong" class="investment-summary-profit" :value="summaryDayProfitText" />
+            <AmountText tag="span" class="investment-summary-rate" :value="summaryDayProfitRateText" />
           </div>
         </div>
 
@@ -735,6 +765,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 <div class="holding-primary-line">
                   <AmountText tag="strong" class="holding-panel-value" tone="inherit" :value="getHoldingPrimaryValue(holding)" />
                   <span class="holding-quantity-tag">{{ getHoldingQuantityTag(holding) }}</span>
+                  <span v-if="getHoldingSyncText(holding)" class="holding-sync-tag">{{ getHoldingSyncText(holding) }}</span>
                 </div>
               </div>
               <div class="holding-panel-field is-end">
