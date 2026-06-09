@@ -34,6 +34,7 @@ const expenseSaving = ref(false)
 const pageData = ref<InvestmentDividendIncomePage | null>(null)
 const currentUserId = ref<number | null>(null)
 const expenseItems = ref<FixedExpenseItem[]>([])
+const isExpenseEditing = ref(false)
 const showExpenseModal = ref(false)
 const editingExpenseId = ref<number | null>(null)
 const expenseName = ref('')
@@ -54,6 +55,7 @@ const updateText = computed(() => {
   return updatedAt ? `数据更新于 ${formatDateTime(updatedAt)}` : ''
 })
 const estimatedMonthlyIncome = computed(() => summary.value.estimatedDividendAmount / 12)
+const expenseModalTitle = computed(() => editingExpenseId.value ? '修改固定支出' : '新增固定支出')
 const expenseCoverageItems = computed<ExpenseCoverageItem[]>(() => {
   let remaining = estimatedMonthlyIncome.value
   return expenseItems.value.map((item) => {
@@ -74,8 +76,6 @@ const expenseCoverageItems = computed<ExpenseCoverageItem[]>(() => {
     }
   })
 })
-const expenseModalTitle = computed(() => editingExpenseId.value ? '修改固定支出' : '新增固定支出')
-
 onMounted(() => {
   void loadPageData()
 })
@@ -133,6 +133,20 @@ function formatSignedPercent(value: number) {
     return '0.00%'
   }
   return `${value > 0 ? '+' : '-'}${formatAmount(value)}%`
+}
+
+function formatPlainCurrency(value: number) {
+  if (!Number.isFinite(value) || value === 0) {
+    return '¥0.00'
+  }
+  return `${value < 0 ? '-' : ''}¥${formatAmount(value)}`
+}
+
+function formatPlainPercent(value: number) {
+  if (!Number.isFinite(value) || value === 0) {
+    return '0.00%'
+  }
+  return `${value < 0 ? '-' : ''}${formatAmount(value)}%`
 }
 
 function formatHoldingAmountText(value: number, quantity: number, unitName?: string | null) {
@@ -260,6 +274,14 @@ async function submitExpenseItem() {
   }
 }
 
+function getCoveragePercentText(item: ExpenseCoverageItem) {
+  return `${formatAmount(item.coveredPercent)}%`
+}
+
+function toggleExpenseEditing() {
+  isExpenseEditing.value = !isExpenseEditing.value
+}
+
 function deleteExpenseItem(id: number) {
   void removeExpenseItem(id)
 }
@@ -276,58 +298,14 @@ async function removeExpenseItem(id: number) {
   }
 }
 
-function moveExpenseItem(index: number, direction: -1 | 1) {
-  void reorderExpenseItem(index, direction)
-}
+function getCoverageBackgroundStyle(item: ExpenseCoverageItem) {
+  const percent = Math.max(0, Math.min(100, item.coveredPercent))
+  const activeColor = '#86efac'
+  const baseColor = '#f8fafc'
 
-async function reorderExpenseItem(index: number, direction: -1 | 1) {
-  const targetIndex = index + direction
-  if (targetIndex < 0 || targetIndex >= expenseItems.value.length) {
-    return
+  return {
+    background: `linear-gradient(90deg, ${activeColor} 0%, ${activeColor} ${percent}%, ${baseColor} ${percent}%, ${baseColor} 100%)`,
   }
-  if (!currentUserId.value) {
-    return
-  }
-
-  const next = expenseItems.value.slice()
-  const currentItem = next[index]
-  const targetItem = next[targetIndex]
-  if (!currentItem || !targetItem) {
-    return
-  }
-
-  next[index] = { ...targetItem, sortOrder: currentItem.sortOrder }
-  next[targetIndex] = { ...currentItem, sortOrder: targetItem.sortOrder }
-  expenseItems.value = normalizeExpenseItems(next)
-
-  try {
-    await Promise.all([
-      updateInvestmentFixedExpense(currentItem.id, {
-        userId: currentUserId.value,
-        name: currentItem.name,
-        amount: currentItem.amount,
-        currencyCode: currentItem.currencyCode || 'CNY',
-        sortOrder: targetItem.sortOrder ?? targetIndex + 1,
-        remark: currentItem.remark ?? null,
-      }),
-      updateInvestmentFixedExpense(targetItem.id, {
-        userId: currentUserId.value,
-        name: targetItem.name,
-        amount: targetItem.amount,
-        currencyCode: targetItem.currencyCode || 'CNY',
-        sortOrder: currentItem.sortOrder ?? index + 1,
-        remark: targetItem.remark ?? null,
-      }),
-    ])
-    await refreshExpenseItems()
-  } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '固定支出排序保存失败'
-    await loadPageData()
-  }
-}
-
-function getCoveragePercentText(item: ExpenseCoverageItem) {
-  return `${formatAmount(item.coveredPercent)}%`
 }
 </script>
 
@@ -362,7 +340,12 @@ function getCoveragePercentText(item: ExpenseCoverageItem) {
     <section class="expense-card" aria-label="固定支出覆盖">
       <header class="expense-card-head">
         <div />
-        <CommonButton variant="secondary" size="sm" @click="openCreateExpenseModal">新增支出</CommonButton>
+        <div class="expense-card-actions">
+          <CommonButton variant="secondary" size="sm" @click="toggleExpenseEditing">
+            {{ isExpenseEditing ? '完成' : '编辑' }}
+          </CommonButton>
+          <CommonButton variant="secondary" size="sm" @click="openCreateExpenseModal">新增支出</CommonButton>
+        </div>
       </header>
 
       <p v-if="expenseCoverageItems.length === 0" class="dividend-message">
@@ -371,36 +354,35 @@ function getCoveragePercentText(item: ExpenseCoverageItem) {
 
       <div v-else class="expense-coverage-list">
         <article
-          v-for="(item, index) in expenseCoverageItems"
+          v-for="item in expenseCoverageItems"
           :key="item.id"
-          :class="['expense-coverage-item', `is-${item.status}`]"
+          :class="['expense-coverage-item', `is-${item.status}`, { 'is-editing': isExpenseEditing }]"
+          :style="getCoverageBackgroundStyle(item)"
         >
           <div class="expense-coverage-main">
             <div class="expense-coverage-top">
               <strong>{{ item.name }}</strong>
               <span>{{ formatMonthlyIncome(item.amount) }}</span>
             </div>
-            <div class="expense-progress-track">
-              <span class="expense-progress-fill" :style="{ width: `${Math.min(100, item.coveredPercent)}%` }"></span>
-            </div>
             <p class="expense-coverage-note">
-              <template v-if="item.status === 'covered'">
-                已覆盖 100%
-              </template>
-              <template v-else-if="item.status === 'partial'">
-                已覆盖 {{ formatMonthlyIncome(item.coveredAmount) }} · 剩余可覆盖 {{ getCoveragePercentText(item) }}
-              </template>
-              <template v-else>
-                暂未覆盖
-              </template>
+              {{ getCoveragePercentText(item) }}
             </p>
-          </div>
-
-          <div class="expense-coverage-actions">
-            <button type="button" :disabled="index === 0" @click="moveExpenseItem(index, -1)">上移</button>
-            <button type="button" :disabled="index === expenseCoverageItems.length - 1" @click="moveExpenseItem(index, 1)">下移</button>
-            <button type="button" @click="openEditExpenseModal(item)">编辑</button>
-            <button type="button" class="danger" @click="deleteExpenseItem(item.id)">删除</button>
+            <div v-if="isExpenseEditing" class="expense-coverage-actions">
+              <button type="button" class="expense-action-icon" aria-label="修改" @click="openEditExpenseModal(item)">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M4 20h4.75L19 9.75 14.25 5 4 15.25V20Zm3.5-1.5H5.5v-2l8.75-8.75 2 2L7.5 18.5ZM18.3 4.95l.75-.75a1.5 1.5 0 0 1 2.12 0l.63.63a1.5 1.5 0 0 1 0 2.12l-.75.75-2.75-2.75Z"
+                  />
+                </svg>
+              </button>
+              <button type="button" class="expense-action-icon danger" aria-label="删除" @click="deleteExpenseItem(item.id)">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M9 3.75h6a1.25 1.25 0 0 1 1.25 1.25V6H20a.75.75 0 0 1 0 1.5h-1.03l-.72 10.12A2.5 2.5 0 0 1 15.76 20H8.24a2.5 2.5 0 0 1-2.49-2.38L5.03 7.5H4a.75.75 0 0 1 0-1.5h3.75V5A1.25 1.25 0 0 1 9 3.75Zm1.5 2.25h3V5.25h-3V6Zm-3.24 1.5.68 9.99c.03.53.47.95 1 .95h7.52c.53 0 .97-.42 1-.95l.68-9.99H7.26Zm2.49 2.25a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75Zm4.5 0a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75Z"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </article>
       </div>
@@ -410,6 +392,7 @@ function getCoveragePercentText(item: ExpenseCoverageItem) {
       <header class="holding-header">
         <span class="holding-spacer" />
         <div class="holding-header-right">
+          <span>股息率</span>
           <span>预估分红</span>
           <span>预估月薪</span>
         </div>
@@ -434,20 +417,22 @@ function getCoveragePercentText(item: ExpenseCoverageItem) {
           <div class="value-column">
             <AmountText
               tag="strong"
-              :value="formatSignedCurrency(item.estimatedDividendAmount)"
-              :tone="amountTone(item.estimatedDividendAmount)"
-            />
-            <AmountText
-              tag="small"
-              :value="formatSignedPercent(item.estimatedDividendRate)"
+              :value="formatPlainPercent(item.estimatedDividendRate)"
               :tone="amountTone(item.estimatedDividendRate)"
             />
           </div>
           <div class="value-column">
             <AmountText
               tag="strong"
+              :value="formatPlainCurrency(item.estimatedDividendAmount)"
+              :tone="amountTone(item.estimatedDividendAmount)"
+            />
+          </div>
+          <div class="value-column">
+            <AmountText
+              tag="strong"
               :value="formatMonthlyIncome(item.estimatedDividendAmount / 12)"
-              tone="inherit"
+              :tone="amountTone(item.estimatedDividendAmount)"
             />
           </div>
         </div>

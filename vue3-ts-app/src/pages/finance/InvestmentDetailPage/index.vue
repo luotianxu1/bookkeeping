@@ -168,7 +168,7 @@ const chartCostBaseline = computed(() => {
   if (!isFundPosition.value || detail.value?.chartType !== 'line' || fundTrendValueMode.value !== 'cumulative') {
     return costPrice
   }
-  return resolveFundCumulativeCostBaseline() ?? costPrice
+  return resolveFundCumulativeChartCostBaseline() ?? costPrice
 })
 const tradeModalTitle = computed(() => currentTradeAction.value === 'buy' ? '加仓' : '减仓')
 const tradeAmountLabel = computed(() => {
@@ -835,14 +835,18 @@ function resolveTradeMarkerDateLabel(entry: InvestmentTransaction, isFundLineCha
   return ''
 }
 
-function resolveFundCumulativeCostBaseline() {
+function resolveFundCumulativeChartCostBaseline() {
   const currentHoldingQuantity = Number(currentPosition.value?.holdingQuantity ?? 0)
   if (!Number.isFinite(currentHoldingQuantity) || currentHoldingQuantity <= 0) {
     return null
   }
+  const currentCostAmount = Number(currentPosition.value?.costAmount ?? 0)
+  if (!Number.isFinite(currentCostAmount) || currentCostAmount <= 0) {
+    return null
+  }
 
   let holdingQuantity = 0
-  let cumulativeCostAmount = 0
+  let cumulativeOffsetAmount = 0
 
   const sortedTransactions = transactions.value
     .filter((entry) => entry.tradeType === 'buy' || entry.tradeType === 'sell')
@@ -857,12 +861,12 @@ function resolveFundCumulativeCostBaseline() {
     }
 
     if (entry.tradeType === 'buy') {
-      const cumulativeValue = Number(resolveFundTradeCumulativeValue(entry))
-      if (!Number.isFinite(cumulativeValue) || cumulativeValue <= 0) {
+      const cumulativeOffset = Number(resolveFundTradeCumulativeOffset(entry))
+      if (!Number.isFinite(cumulativeOffset) || cumulativeOffset < 0) {
         continue
       }
       holdingQuantity += quantity
-      cumulativeCostAmount += cumulativeValue * quantity
+      cumulativeOffsetAmount += cumulativeOffset * quantity
       continue
     }
 
@@ -871,21 +875,21 @@ function resolveFundCumulativeCostBaseline() {
     }
 
     const soldQuantity = Math.min(quantity, holdingQuantity)
-    const averageCost = cumulativeCostAmount / holdingQuantity
-    cumulativeCostAmount -= averageCost * soldQuantity
+    const averageOffset = cumulativeOffsetAmount / holdingQuantity
+    cumulativeOffsetAmount -= averageOffset * soldQuantity
     holdingQuantity -= soldQuantity
   }
 
-  if (holdingQuantity <= 0 || cumulativeCostAmount <= 0) {
+  if (holdingQuantity <= 0) {
     return null
   }
 
   const quantityDiff = Math.abs(holdingQuantity - currentHoldingQuantity)
   if (quantityDiff > Math.max(0.01, currentHoldingQuantity * 0.01)) {
-    return null
+    return Number(currentPosition.value?.avgCostPrice ?? 0) || null
   }
 
-  const baseline = cumulativeCostAmount / holdingQuantity
+  const baseline = (currentCostAmount + cumulativeOffsetAmount) / currentHoldingQuantity
   return Number.isFinite(baseline) && baseline > 0 ? baseline : null
 }
 
@@ -924,6 +928,32 @@ function resolveFundTradeCumulativeValue(entry: InvestmentTransaction) {
 
   const fallbackValue = Number(trendEntry?.net)
   return Number.isFinite(fallbackValue) && fallbackValue > 0 ? fallbackValue : null
+}
+
+function resolveFundTradeNetValue(entry: InvestmentTransaction) {
+  const confirmedPrice = Number(entry.price)
+  if (Number.isFinite(confirmedPrice) && confirmedPrice > 0) {
+    return confirmedPrice
+  }
+
+  const dateLabel = resolveTradeMarkerDateLabel(entry, true)
+  if (!dateLabel) {
+    return null
+  }
+
+  const trendEntry = fundTrendValueMap.value[dateLabel]
+  const netValue = Number(trendEntry?.net)
+  return Number.isFinite(netValue) && netValue > 0 ? netValue : null
+}
+
+function resolveFundTradeCumulativeOffset(entry: InvestmentTransaction) {
+  const cumulativeValue = Number(resolveFundTradeCumulativeValue(entry))
+  const netValue = Number(resolveFundTradeNetValue(entry))
+  if (!Number.isFinite(cumulativeValue) || cumulativeValue <= 0 || !Number.isFinite(netValue) || netValue <= 0) {
+    return null
+  }
+
+  return Math.max(cumulativeValue - netValue, 0)
 }
 
 function disposeChart() {

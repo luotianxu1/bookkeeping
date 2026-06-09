@@ -1,6 +1,7 @@
 .dividend-income-page {
   display: grid;
   gap: var(--space-6);
+  min-width: 0;
 }
 
 .dividend-message {
@@ -24,6 +25,7 @@
 .expense-card {
   display: grid;
   gap: var(--space-6);
+  min-width: 0;
   padding: var(--space-12);
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-12);
@@ -68,99 +70,101 @@
   gap: var(--space-8);
 }
 
+.expense-card-actions {
+  display: flex;
+  gap: var(--space-8);
+}
+
 .expense-coverage-list {
   display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-8);
 }
 
 .expense-coverage-item {
+  position: relative;
   display: grid;
-  gap: var(--space-8);
-  padding: 12px;
+  grid-template-rows: 1fr;
+  gap: var(--space-4);
+  align-content: space-between;
+  padding: 10px;
+  aspect-ratio: 1 / 1;
   border-radius: var(--radius-12);
   border: 1px solid #d7dde8;
   background: #f8fafc;
+  box-sizing: border-box;
 }
 
 .expense-coverage-item.is-covered {
   border-color: #bbf7d0;
-  background: #f0fdf4;
 }
 
 .expense-coverage-item.is-partial {
   border-color: #dbeafe;
-  background: #f8fbff;
+}
+
+.expense-coverage-item.is-pending {
+  border-color: #cbd5e1;
 }
 
 .expense-coverage-main {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-4);
+  height: 100%;
+  align-content: space-between;
 }
 
 .expense-coverage-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-8);
+  display: grid;
+  gap: var(--space-4);
 }
 
 .expense-coverage-top strong,
 .expense-coverage-top span {
   margin: 0;
-  font-size: var(--font-size-13);
+  font-size: var(--font-size-12);
   font-weight: 700;
   color: var(--color-text-primary);
 }
 
-.expense-progress-track {
-  width: 100%;
-  height: 8px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.24);
-}
-
-.expense-progress-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #86efac 0%, #22c55e 100%);
-}
-
-.expense-coverage-item.is-pending .expense-progress-fill {
-  background: linear-gradient(90deg, #cbd5e1 0%, #94a3b8 100%);
+.expense-coverage-top span {
+  text-align: left;
 }
 
 .expense-coverage-note {
   margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-12);
-  font-weight: 500;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-11);
+  font-weight: 600;
 }
 
 .expense-coverage-actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 6px;
+  justify-content: flex-start;
 }
 
-.expense-coverage-actions button {
-  min-height: 28px;
-  padding: 0 10px;
+.expense-action-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 0;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.78);
   color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
-.expense-coverage-actions button:disabled {
-  opacity: 0.45;
+.expense-action-icon svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
 }
 
-.expense-coverage-actions .danger {
-  background: rgba(239, 68, 68, 0.12);
+.expense-action-icon.danger {
   color: #b91c1c;
 }
 
@@ -202,7 +206,7 @@
 }
 
 .holding-spacer {
-  width: 120px;
+  width: 108px;
   height: var(--space-1);
 }
 
@@ -212,7 +216,7 @@
 }
 
 .holding-header-right span {
-  width: var(--space-72);
+  width: 64px;
   text-align: right;
   color: var(--color-text-muted);
   font-size: var(--font-size-12);
@@ -224,6 +228,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-6);
+  min-width: 0;
   padding: 6px 0;
   border-bottom: 1px solid var(--color-bg-soft-2);
 }
@@ -241,6 +246,8 @@
 }
 
 .holding-left {
+  flex: 1;
+  min-width: 0;
   display: grid;
   gap: var(--space-2);
 }
@@ -251,24 +258,31 @@
 }
 
 .holding-left p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text-primary);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
 
 .holding-left small {
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--color-text-muted);
   font-size: var(--font-size-12);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .holding-right {
+  flex: 0 0 auto;
   display: flex;
   gap: 0;
 }
 
 .value-column {
-  width: var(--space-72);
+  width: 64px;
   display: grid;
   gap: var(--space-2);
   justify-items: end;
