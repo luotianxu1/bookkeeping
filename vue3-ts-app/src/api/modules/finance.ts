@@ -1019,6 +1019,38 @@ export interface InvestmentDividendIncomePage {
   updatedAt?: string | null
 }
 
+export interface InvestmentDividendForecastRequest {
+  productType: InvestmentProductType
+  symbol: string
+  name?: string
+  market?: string | null
+  exchangeCode?: string | null
+  currencyCode?: string
+  unitName?: string
+  latestPrice?: number | null
+  holdingQuantity?: number
+  holdingAmount?: number
+}
+
+export interface InvestmentDividendForecast {
+  productType: InvestmentProductType | string
+  productTypeLabel: string
+  symbol: string
+  name: string
+  market?: string | null
+  unitName?: string | null
+  currentPrice: number
+  basisYear: number
+  lastYearDividendCount: number
+  lastYearDividendPerUnit: number
+  estimatedHoldingQuantity: number
+  estimatedHoldingAmount: number
+  estimatedDividendAmount: number
+  estimatedDividendRate: number
+  calculationNote: string
+  source?: string | null
+}
+
 export interface InvestmentTransaction {
   id: number
   transactionNo: string
@@ -1515,6 +1547,14 @@ export function getInvestmentDividendIncome(userId: number) {
   return requestGet<InvestmentDividendIncomePage>(financeRequest, '/api/finance/investments/dividend-income', {
     params: { userId },
   })
+}
+
+export function getInvestmentDividendForecast(params: InvestmentDividendForecastRequest) {
+  return requestPost<InvestmentDividendForecast, InvestmentDividendForecastRequest>(
+    financeRequest,
+    '/api/finance/investments/dividend-forecast',
+    params,
+  )
 }
 
 export function getInvestmentFixedExpenses(userId: number) {

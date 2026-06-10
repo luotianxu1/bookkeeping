@@ -15,6 +15,7 @@ import GoldLiquidationPage from '@/pages/finance/GoldLiquidationPage/index.vue'
 import ProfitForecastPage from '@/pages/finance/ProfitForecastPage/index.vue'
 import FundProfitPage from '@/pages/finance/FundProfitPage/index.vue'
 import DividendIncomePage from '@/pages/finance/DividendIncomePage/index.vue'
+import DividendForecastPage from '@/pages/finance/DividendForecastPage/index.vue'
 import BudgetManagementPage from '@/pages/finance/BudgetManagementPage/index.vue'
 import RenewalManagementPage from '@/pages/finance/RenewalManagementPage/index.vue'
 import ExpenseEntryPage from '@/pages/finance/ExpenseEntryPage/index.vue'
@@ -130,6 +131,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '攒股收息',
+    },
+  },
+  {
+    path: '/finance/dividend-forecast',
+    name: 'finance-dividend-forecast',
+    component: DividendForecastPage,
+    meta: {
+      section: 'finance',
+      title: '收息预测',
     },
   },
   {

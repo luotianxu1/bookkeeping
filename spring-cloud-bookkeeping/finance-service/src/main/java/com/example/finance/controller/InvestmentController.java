@@ -5,6 +5,8 @@ import com.example.finance.dto.InvestmentAssetDetailResponse;
 import com.example.finance.dto.InvestmentAutoInvestPlanRequest;
 import com.example.finance.dto.InvestmentAutoInvestPlanResponse;
 import com.example.finance.dto.InvestmentDividendIncomePageResponse;
+import com.example.finance.dto.InvestmentDividendForecastRequest;
+import com.example.finance.dto.InvestmentDividendForecastResponse;
 import com.example.finance.dto.InvestmentFixedExpenseRequest;
 import com.example.finance.dto.InvestmentFixedExpenseResponse;
 import com.example.finance.dto.InvestmentDividendResponse;
@@ -249,6 +251,14 @@ public class InvestmentController {
         @RequestParam(name = "userId") @NotNull Long userId
     ) {
         return Result.ok(investmentService.dividendIncome(userId));
+    }
+
+    @PostMapping("/dividend-forecast")
+    @Operation(summary = "查询收息预测")
+    public Result<InvestmentDividendForecastResponse> dividendForecast(
+        @Valid @RequestBody InvestmentDividendForecastRequest request
+    ) {
+        return Result.ok(investmentService.dividendForecast(request));
     }
 
     @GetMapping("/fixed-expenses")

@@ -412,7 +412,10 @@ async function lookupProductByKeyword(keyword = addAssetKeyword.value) {
   formError.value = ''
 
   try {
-    const products = await getInvestmentProducts({ keyword: searchKeyword })
+    const products = await getInvestmentProducts({
+      keyword: searchKeyword,
+      productType: addAssetCategory.value,
+    })
     const normalizedKeyword = searchKeyword.toUpperCase()
     const matchedProducts = products.slice().sort((left, right) => {
       const leftScore = getProductMatchScore(left, searchKeyword, normalizedKeyword)

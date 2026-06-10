@@ -6,6 +6,8 @@ import com.example.finance.dto.InvestmentDividendResponse;
 import com.example.finance.dto.InvestmentDividendIncomeItemResponse;
 import com.example.finance.dto.InvestmentDividendIncomePageResponse;
 import com.example.finance.dto.InvestmentDividendIncomeSummaryResponse;
+import com.example.finance.dto.InvestmentDividendForecastRequest;
+import com.example.finance.dto.InvestmentDividendForecastResponse;
 import com.example.finance.dto.InvestmentAssetDetailResponse;
 import com.example.finance.dto.InvestmentAutoInvestPlanRequest;
 import com.example.finance.dto.InvestmentAutoInvestPlanResponse;
@@ -285,6 +287,97 @@ public class InvestmentService {
         evaluateDividendProfile(entity);
         productMapper.insert(entity);
         return toProductResponse(productMapper.selectById(entity.getId()));
+    }
+
+    public InvestmentDividendForecastResponse dividendForecast(InvestmentDividendForecastRequest request) {
+        String productType = normalizeForecastProductType(request.getProductType());
+        String symbol = normalizeForecastSymbol(request.getSymbol());
+        BigDecimal requestedQuantity = request.getHoldingQuantity() == null
+            ? null
+            : request.getHoldingQuantity().setScale(6, RoundingMode.HALF_UP);
+        BigDecimal requestedAmount = request.getHoldingAmount() == null
+            ? null
+            : request.getHoldingAmount().setScale(2, RoundingMode.HALF_UP);
+
+        if ((requestedQuantity == null || requestedQuantity.compareTo(BigDecimal.ZERO) <= 0)
+            && (requestedAmount == null || requestedAmount.compareTo(BigDecimal.ZERO) <= 0)) {
+            throw new IllegalArgumentException("请输入持仓数量或持仓金额");
+        }
+
+        InvestmentProductEntity product = resolveForecastProduct(request, productType, symbol);
+        int basisYear = LocalDate.now().minusYears(1).getYear();
+        List<InvestmentDividendPlanEntity> historicalPlans = FUND_PRODUCT_TYPE.equals(productType)
+            ? fetchFundHistoricalDividendPlans(product)
+            : fetchStockForecastDividendPlans(product, basisYear);
+        List<InvestmentDividendPlanEntity> lastYearPlans = historicalPlans.stream()
+            .filter(plan -> isDividendPlanInYear(plan, basisYear))
+            .sorted(Comparator.comparing(this::dividendPlanRecencyDate))
+            .toList();
+
+        long positivePlanCount = lastYearPlans.stream()
+            .map(this::resolveNetDividendPerUnit)
+            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
+            .count();
+        if (positivePlanCount <= 0) {
+            throw new IllegalArgumentException("该资产去年暂无可用分红记录");
+        }
+
+        BigDecimal lastYearDividendPerUnit = lastYearPlans.stream()
+            .map(this::resolveNetDividendPerUnit)
+            .filter(Objects::nonNull)
+            .reduce(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP), BigDecimal::add)
+            .setScale(6, RoundingMode.HALF_UP);
+        if (lastYearDividendPerUnit.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("该资产去年暂无可用分红金额");
+        }
+
+        BigDecimal currentPrice = resolveForecastCurrentPrice(product, request.getLatestPrice());
+        BigDecimal estimatedHoldingQuantity = requestedQuantity;
+        if ((estimatedHoldingQuantity == null || estimatedHoldingQuantity.compareTo(BigDecimal.ZERO) <= 0)
+            && requestedAmount != null && requestedAmount.compareTo(BigDecimal.ZERO) > 0) {
+            if (currentPrice.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("未获取到当前价格，无法按持仓金额估算份额");
+            }
+            estimatedHoldingQuantity = requestedAmount.divide(currentPrice, 6, RoundingMode.HALF_UP);
+        }
+        if (estimatedHoldingQuantity == null || estimatedHoldingQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("持仓数量不正确");
+        }
+
+        BigDecimal estimatedHoldingAmount = requestedAmount != null && requestedAmount.compareTo(BigDecimal.ZERO) > 0
+            ? requestedAmount
+            : estimatedHoldingQuantity.multiply(currentPrice).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal estimatedDividendAmount = estimatedHoldingQuantity.multiply(lastYearDividendPerUnit)
+            .setScale(2, RoundingMode.HALF_UP);
+
+        InvestmentDividendForecastResponse response = new InvestmentDividendForecastResponse();
+        response.setProductType(productType);
+        response.setProductTypeLabel(resolveProductTypeLabel(productType));
+        response.setSymbol(product.getSymbol());
+        response.setName(product.getName());
+        response.setMarket(product.getMarket());
+        response.setUnitName(blankToDefault(product.getUnitName(), FUND_PRODUCT_TYPE.equals(productType) ? DEFAULT_UNIT_NAME : "股"));
+        response.setCurrentPrice(currentPrice);
+        response.setBasisYear(basisYear);
+        response.setLastYearDividendCount((int) positivePlanCount);
+        response.setLastYearDividendPerUnit(lastYearDividendPerUnit);
+        response.setEstimatedHoldingQuantity(scaleQuantity(estimatedHoldingQuantity));
+        response.setEstimatedHoldingAmount(scaleMoney(estimatedHoldingAmount));
+        response.setEstimatedDividendAmount(scaleMoney(estimatedDividendAmount));
+        response.setEstimatedDividendRate(scaleRate(rate(estimatedDividendAmount, estimatedHoldingAmount)));
+        response.setCalculationNote(String.format(
+            "按 %d 年 %d 次分红、每%s合计 %s 元估算",
+            basisYear,
+            positivePlanCount,
+            blankToDefault(product.getUnitName(), FUND_PRODUCT_TYPE.equals(productType) ? DEFAULT_UNIT_NAME : "股"),
+            lastYearDividendPerUnit.setScale(4, RoundingMode.HALF_UP).toPlainString()
+        ));
+        response.setSource(lastYearPlans.stream()
+            .map(InvestmentDividendPlanEntity::getSource)
+            .filter(StringUtils::hasText)
+            .findFirst()
+            .orElse(null));
+        return response;
     }
 
     public List<InvestmentPositionResponse> listPositions(Long userId, Long accountId, String productType, String status) {
@@ -4651,20 +4744,147 @@ public class InvestmentService {
         return deduplicateProducts(mergedProducts);
     }
 
+    private String normalizeForecastProductType(String productType) {
+        if (!StringUtils.hasText(productType)) {
+            throw new IllegalArgumentException("产品类型不能为空");
+        }
+        String normalized = productType.trim().toLowerCase(Locale.ROOT);
+        if (!FUND_PRODUCT_TYPE.equals(normalized) && !"stock".equals(normalized)) {
+            throw new IllegalArgumentException("当前仅支持基金或股票");
+        }
+        return normalized;
+    }
+
+    private String normalizeForecastSymbol(String symbol) {
+        if (!StringUtils.hasText(symbol)) {
+            throw new IllegalArgumentException("产品代码不能为空");
+        }
+        return symbol.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private InvestmentProductEntity resolveForecastProduct(
+        InvestmentDividendForecastRequest request,
+        String productType,
+        String symbol
+    ) {
+        InvestmentProductResponse externalProduct = resolveExternalForecastProduct(productType, symbol).orElse(null);
+        InvestmentProductEntity product = new InvestmentProductEntity();
+        product.setProductType(productType);
+        product.setSymbol(symbol);
+        product.setName(externalProduct != null && StringUtils.hasText(externalProduct.getName())
+            ? externalProduct.getName()
+            : blankToDefault(request.getName(), symbol));
+        product.setShortName(product.getName());
+        product.setMarket(externalProduct != null && StringUtils.hasText(externalProduct.getMarket())
+            ? externalProduct.getMarket()
+            : request.getMarket());
+        product.setExchangeCode(externalProduct != null && StringUtils.hasText(externalProduct.getExchangeCode())
+            ? externalProduct.getExchangeCode()
+            : request.getExchangeCode());
+        product.setCurrencyCode(externalProduct != null && StringUtils.hasText(externalProduct.getCurrencyCode())
+            ? externalProduct.getCurrencyCode()
+            : blankToDefault(request.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
+        product.setUnitName(externalProduct != null && StringUtils.hasText(externalProduct.getUnitName())
+            ? externalProduct.getUnitName()
+            : blankToDefault(request.getUnitName(), FUND_PRODUCT_TYPE.equals(productType) ? DEFAULT_UNIT_NAME : "股"));
+        product.setPricePrecision(externalProduct != null && externalProduct.getPricePrecision() != null
+            ? externalProduct.getPricePrecision()
+            : (FUND_PRODUCT_TYPE.equals(productType) ? 4 : 2));
+        product.setStatus(ACTIVE_STATUS);
+        return product;
+    }
+
+    private Optional<InvestmentProductResponse> resolveExternalForecastProduct(String productType, String symbol) {
+        if (FUND_PRODUCT_TYPE.equals(productType)) {
+            return fetchFundProduct(symbol);
+        }
+        return fetchStockProduct(symbol).or(() -> fetchTencentStockProduct(symbol));
+    }
+
+    private BigDecimal resolveForecastCurrentPrice(InvestmentProductEntity product, BigDecimal fallbackLatestPrice) {
+        Optional<InvestmentProductResponse> externalProduct = resolveExternalForecastProduct(product.getProductType(), product.getSymbol());
+        if (externalProduct.isPresent() && externalProduct.get().getLatestPrice() != null
+            && externalProduct.get().getLatestPrice().compareTo(BigDecimal.ZERO) > 0) {
+            return externalProduct.get().getLatestPrice().setScale(6, RoundingMode.HALF_UP);
+        }
+        if (fallbackLatestPrice != null && fallbackLatestPrice.compareTo(BigDecimal.ZERO) > 0) {
+            return fallbackLatestPrice.setScale(6, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private String resolveProductTypeLabel(String productType) {
+        if (FUND_PRODUCT_TYPE.equals(productType)) {
+            return "基金";
+        }
+        if ("stock".equals(productType)) {
+            return "股票";
+        }
+        return "投资资产";
+    }
+
     private List<InvestmentProductResponse> deduplicateProducts(List<InvestmentProductResponse> products) {
         return new ArrayList<>(products.stream()
             .filter(Objects::nonNull)
-                .collect(Collectors.toMap(
-                item -> String.join("|",
-                    safeText(item.getProductType()),
-                    safeText(item.getSymbol()),
-                    safeText(item.getMarket())
-                ),
+            .collect(Collectors.toMap(
+                this::productDedupKey,
                 Function.identity(),
-                (left, right) -> left,
+                this::pickPreferredProduct,
                 LinkedHashMap::new
             ))
             .values());
+    }
+
+    private String productDedupKey(InvestmentProductResponse product) {
+        return String.join("|",
+            normalizeDedupPart(product == null ? null : product.getProductType()).toLowerCase(Locale.ROOT),
+            normalizeDedupPart(product == null ? null : product.getSymbol()).toUpperCase(Locale.ROOT),
+            normalizeDedupName(product)
+        );
+    }
+
+    private InvestmentProductResponse pickPreferredProduct(InvestmentProductResponse left, InvestmentProductResponse right) {
+        return productCompletenessScore(right) > productCompletenessScore(left) ? right : left;
+    }
+
+    private int productCompletenessScore(InvestmentProductResponse product) {
+        if (product == null) {
+            return 0;
+        }
+        int score = 0;
+        if (product.getLatestPrice() != null && product.getLatestPrice().compareTo(BigDecimal.ZERO) > 0) {
+            score += 16;
+        }
+        if (StringUtils.hasText(product.getExchangeCode())) {
+            score += 8;
+        }
+        if (StringUtils.hasText(product.getMarket())) {
+            score += 4;
+        }
+        if (StringUtils.hasText(product.getCurrencyCode())) {
+            score += 2;
+        }
+        if (StringUtils.hasText(product.getUnitName())) {
+            score += 1;
+        }
+        if (StringUtils.hasText(product.getName())) {
+            score += Math.min(product.getName().trim().length(), 20);
+        }
+        return score;
+    }
+
+    private String normalizeDedupName(InvestmentProductResponse product) {
+        String name = product == null ? null : blankToDefault(product.getName(), product.getShortName());
+        if (!StringUtils.hasText(name)) {
+            return "";
+        }
+        return name.trim()
+            .replaceAll("[\\s()（）\\-_.]+", "")
+            .toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeDedupPart(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private String safeText(String value) {
@@ -5388,12 +5608,109 @@ public class InvestmentService {
         }
     }
 
+    private List<InvestmentDividendPlanEntity> fetchStockForecastDividendPlans(InvestmentProductEntity product, int basisYear) {
+        if (product == null || !StringUtils.hasText(product.getSymbol())) {
+            return Collections.emptyList();
+        }
+        try {
+            String filter = URLEncoder.encode("(SECURITY_CODE=\"" + product.getSymbol() + "\")", StandardCharsets.UTF_8);
+            HttpRequest request = HttpRequest.newBuilder(URI.create(
+                    "https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_SHAREBONUS_DET"
+                        + "&columns=ALL"
+                        + "&filter=" + filter
+                        + "&pageNumber=1&pageSize=50&sortColumns=REPORT_DATE&sortTypes=-1&source=WEB&client=WEB"
+                ))
+                .timeout(Duration.ofSeconds(10))
+                .header("User-Agent", "Mozilla/5.0")
+                .header("Accept", "application/json,text/plain,*/*")
+                .GET()
+                .build();
+            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+                return Collections.emptyList();
+            }
+
+            JsonNode rows = objectMapper.readTree(new String(httpResponse.body(), StandardCharsets.UTF_8))
+                .path("result")
+                .path("data");
+            if (!rows.isArray()) {
+                return Collections.emptyList();
+            }
+
+            List<InvestmentDividendPlanEntity> plans = new ArrayList<>();
+            for (JsonNode row : rows) {
+                BigDecimal pretaxBonus = safeDecimal(row.path("PRETAX_BONUS_RMB").asText(null));
+                if (pretaxBonus == null || pretaxBonus.compareTo(BigDecimal.ZERO) <= 0) {
+                    continue;
+                }
+
+                LocalDate reportDate = safeDate(row.path("REPORT_DATE").asText(null));
+                LocalDate exDividendDate = safeDate(row.path("EX_DIVIDEND_DATE").asText(null));
+                LocalDate recordDate = safeDate(row.path("EQUITY_RECORD_DATE").asText(null));
+                LocalDate planNoticeDate = safeDate(row.path("PLAN_NOTICE_DATE").asText(null));
+                LocalDate noticeDate = safeDate(row.path("NOTICE_DATE").asText(null));
+                LocalDate publishDate = safeDate(row.path("PUBLISH_DATE").asText(null));
+                Integer dividendYear = resolveStockDividendYear(row, exDividendDate != null ? exDividendDate : reportDate);
+                if (dividendYear == null || dividendYear != basisYear) {
+                    continue;
+                }
+
+                LocalDate referenceDate = firstNonNullDate(exDividendDate, recordDate, noticeDate, planNoticeDate, publishDate, reportDate);
+                if (referenceDate == null) {
+                    continue;
+                }
+
+                InvestmentDividendPlanEntity plan = new InvestmentDividendPlanEntity();
+                plan.setProductId(product.getId());
+                plan.setDividendYear(dividendYear);
+                plan.setRecordDate(recordDate != null ? recordDate : referenceDate);
+                plan.setExDividendDate(exDividendDate);
+                plan.setPayDate(referenceDate);
+                plan.setDividendPerUnit(pretaxBonus.divide(BigDecimal.TEN, 6, RoundingMode.HALF_UP));
+                plan.setTaxRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+                plan.setCurrencyCode(blankToDefault(product.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
+                plan.setStatus(exDividendDate != null ? resolveDividendPlanStatus(exDividendDate) : "confirmed");
+                plan.setSource(STOCK_DIVIDEND_HISTORY_SOURCE);
+                plan.setRemark(joinDividendPlanRemark(
+                    row.path("ASSIGN_PROGRESS").asText(null),
+                    row.path("IMPL_PLAN_PROFILE").asText(null)
+                ));
+                plans.add(plan);
+            }
+            return plans;
+        } catch (Exception ex) {
+            return Collections.emptyList();
+        }
+    }
+
     private Integer resolveStockDividendYear(JsonNode row, LocalDate fallbackDate) {
         LocalDate reportDate = safeDate(row.path("REPORT_DATE").asText(null));
         if (reportDate != null) {
             return reportDate.getYear();
         }
         return fallbackDate == null ? null : fallbackDate.getYear();
+    }
+
+    private LocalDate firstNonNullDate(LocalDate... dates) {
+        if (dates == null) {
+            return null;
+        }
+        for (LocalDate date : dates) {
+            if (date != null) {
+                return date;
+            }
+        }
+        return null;
+    }
+
+    private String joinDividendPlanRemark(String progress, String profile) {
+        if (StringUtils.hasText(progress) && StringUtils.hasText(profile)) {
+            return progress.trim() + " · " + profile.trim();
+        }
+        if (StringUtils.hasText(progress)) {
+            return progress.trim();
+        }
+        return StringUtils.hasText(profile) ? profile.trim() : null;
     }
 
     private DividendProfile buildDividendProfile(
@@ -5502,6 +5819,18 @@ public class InvestmentService {
             return plan.getExDividendDate().getYear();
         }
         return today.getYear();
+    }
+
+    private boolean isDividendPlanInYear(InvestmentDividendPlanEntity plan, int basisYear) {
+        if (plan == null) {
+            return false;
+        }
+        Integer dividendYear = resolveDividendPlanYear(plan, LocalDate.now());
+        if (dividendYear != null && dividendYear > 0) {
+            return dividendYear == basisYear;
+        }
+        LocalDate recencyDate = dividendPlanRecencyDate(plan);
+        return recencyDate != null && recencyDate.getYear() == basisYear;
     }
 
     private BigDecimal resolveNetDividendPerUnit(InvestmentDividendPlanEntity plan) {
