@@ -2,6 +2,7 @@ package com.example.finance.controller;
 
 import com.example.common.result.Result;
 import com.example.finance.dto.TransactionAnalysisResponse;
+import com.example.finance.dto.TransactionPageResponse;
 import com.example.finance.dto.TransactionRequest;
 import com.example.finance.dto.TransactionResponse;
 import com.example.finance.service.TransactionService;
@@ -19,7 +20,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Validated
 @RestController
@@ -41,6 +44,20 @@ public class TransactionController {
         @RequestParam(name = "accountId", required = false) Long accountId
     ) {
         return Result.ok(transactionService.list(userId, type, accountId));
+    }
+
+    @GetMapping("/page")
+    @Operation(summary = "分页查询收支流水列表")
+    public Result<TransactionPageResponse> page(
+        @RequestParam(name = "userId", required = false) Long userId,
+        @RequestParam(name = "userIds", required = false) String userIds,
+        @RequestParam(name = "type", required = false) String type,
+        @RequestParam(name = "accountId", required = false) Long accountId,
+        @RequestParam(name = "cashOnly", required = false, defaultValue = "false") boolean cashOnly,
+        @RequestParam(name = "page", required = false, defaultValue = "1") Integer page,
+        @RequestParam(name = "pageSize", required = false, defaultValue = "50") Integer pageSize
+    ) {
+        return Result.ok(transactionService.page(parseUserIds(userId, userIds), type, accountId, cashOnly, page, pageSize));
     }
 
     @GetMapping("/accounts/{accountId}")
@@ -89,5 +106,20 @@ public class TransactionController {
             return Result.<Void>fail().code(404).message("收支记录不存在");
         }
         return Result.ok();
+    }
+
+    private List<Long> parseUserIds(Long userId, String userIds) {
+        if (userId != null) {
+            return List.of(userId);
+        }
+        if (userIds == null || userIds.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(userIds.split(","))
+            .map(String::trim)
+            .filter(value -> !value.isEmpty())
+            .map(Long::valueOf)
+            .distinct()
+            .collect(Collectors.toList());
     }
 }

@@ -296,6 +296,21 @@ export interface TransactionQuery {
   accountId?: number
 }
 
+export interface TransactionPageQuery extends TransactionQuery {
+  userIds?: string
+  cashOnly?: boolean
+  page?: number
+  pageSize?: number
+}
+
+export interface TransactionPage {
+  items: Transaction[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
 export type TransactionAnalysisPeriod = 'month' | 'year'
 
 export interface TransactionAnalysisSummary {
@@ -1310,6 +1325,10 @@ export function updateTransaction(id: number, params: UpdateTransactionParams) {
 
 export function getTransactions(params: TransactionQuery = {}) {
   return requestGet<Transaction[]>(financeRequest, '/api/finance/transactions', { params })
+}
+
+export function getTransactionPage(params: TransactionPageQuery = {}) {
+  return requestGet<TransactionPage>(financeRequest, '/api/finance/transactions/page', { params })
 }
 
 export function getTransactionAnalysis(params: TransactionAnalysisQuery) {

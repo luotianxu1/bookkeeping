@@ -2,7 +2,7 @@
 // 收支列表页：还原 Pencil「收支列表页」画板中的筛选与日期分组流水。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { deleteTransaction, getAccounts, getAccountTypes, getTransactions, type Transaction } from '@/api/modules/finance'
+import { deleteTransaction, getTransactionPage, type Transaction, type TransactionType } from '@/api/modules/finance'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -16,9 +16,13 @@ import type { Transaction as DayTransaction } from '@/types/finance'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
 
 const filterOptions = ['全部', '收入', '支出']
+const TRANSACTION_PAGE_SIZE = 50
 const activeFilter = ref(filterOptions[0])
 const router = useRouter()
 const transactions = ref<Transaction[]>([])
+const currentPage = ref(1)
+const totalPages = ref(1)
+const totalItems = ref(0)
 const isLoadingTransactions = ref(false)
 const transactionListError = ref('')
 const deletingId = ref<number | null>(null)
@@ -41,18 +45,16 @@ const {
   loadFamilyMembers,
 } = useFinanceFamilyView()
 
-const filteredTransactions = computed(() => {
+const currentTransactionType = computed<TransactionType | undefined>(() => {
   if (activeFilter.value === '收入') {
-    return transactions.value.filter((transaction) => transaction.type === 'income')
+    return 'income'
   }
-
   if (activeFilter.value === '支出') {
-    return transactions.value.filter((transaction) => transaction.type === 'expense')
+    return 'expense'
   }
-
-  return transactions.value
+  return undefined
 })
-const dayGroups = computed(() => buildTransactionDayGroups(filteredTransactions.value))
+const dayGroups = computed(() => buildTransactionDayGroups(transactions.value))
 const familyViewHint = computed(() => {
   if (!isReadOnlyFamilyView.value) {
     return ''
@@ -62,12 +64,17 @@ const familyViewHint = computed(() => {
     ? '当前为家庭总计视角，可查看全家收支记录。'
     : `当前查看 ${selectedFamilyView.value.label} 的收支记录。`
 })
+const hasPagination = computed(() => totalPages.value > 1)
+const paginationSummary = computed(() => `第 ${currentPage.value} / ${totalPages.value} 页，共 ${totalItems.value} 条`)
+const canGoPrevPage = computed(() => currentPage.value > 1)
+const canGoNextPage = computed(() => currentPage.value < totalPages.value)
 
 onMounted(() => {
   void initializePage()
 })
 
-watch(familyView, () => {
+watch([familyView, activeFilter], () => {
+  currentPage.value = 1
   if (showDeleteConfirmModal.value && !deletingId.value) {
     closeDeleteConfirm()
   }
@@ -106,6 +113,9 @@ function openEditTransaction(transaction: DayTransaction) {
 
 async function loadCashTransactions() {
   if (selectedViewerUserIds.value.length === 0) {
+    transactions.value = []
+    totalItems.value = 0
+    totalPages.value = 1
     transactionListError.value = '请先登录后查看收支记录'
     return
   }
@@ -116,60 +126,59 @@ async function loadCashTransactions() {
   transactionListError.value = ''
 
   try {
-    const accountTypes = await getAccountTypes({ status: 'active' })
-    const cashType = accountTypes.find((type) => type.code === 'cash')
-    if (!cashType) {
-      if (requestSerial !== transactionRequestSerial.value) {
-        return
-      }
-      transactions.value = []
-      transactionListError.value = '现金账户类型不存在'
-      return
-    }
-
-    const userResults = await Promise.all(
-      selectedViewerUserIds.value.map(async (userId) => {
-        const [cashAccounts, transactionList] = await Promise.all([
-          getAccounts({
-            userId,
-            accountTypeId: cashType.id,
-            status: 'active',
-          }),
-          getTransactions({
-            userId,
-          }),
-        ])
-
-        const cashAccountIds = new Set(cashAccounts.map((account) => account.id))
-        const viewerName = viewerNameByUserId.value.get(userId)
-
-        return transactionList
-          .filter((transaction) => cashAccountIds.has(transaction.accountId))
-          .map((transaction) => ({
-            ...transaction,
-            accountName: isReadOnlyFamilyView.value && selectedFamilyView.value.kind === 'total' && viewerName
-              ? `${viewerName} · ${transaction.accountName ?? '现金账户'}`
-              : transaction.accountName,
-          }))
-      }),
-    )
+    const pageData = await getTransactionPage({
+      userIds: selectedViewerUserIds.value.join(','),
+      type: currentTransactionType.value,
+      cashOnly: true,
+      page: currentPage.value,
+      pageSize: TRANSACTION_PAGE_SIZE,
+    })
 
     if (requestSerial !== transactionRequestSerial.value) {
       return
     }
 
-    transactions.value = userResults.flat()
+    transactions.value = pageData.items.map((transaction) => {
+      const viewerName = viewerNameByUserId.value.get(transaction.userId)
+      return {
+        ...transaction,
+        accountName: isReadOnlyFamilyView.value && selectedFamilyView.value.kind === 'total' && viewerName
+          ? `${viewerName} · ${transaction.accountName ?? '现金账户'}`
+          : transaction.accountName,
+      }
+    })
+    currentPage.value = pageData.page
+    totalItems.value = pageData.total
+    totalPages.value = pageData.totalPages
   } catch (error) {
     if (requestSerial !== transactionRequestSerial.value) {
       return
     }
     transactions.value = []
+    totalItems.value = 0
+    totalPages.value = 1
     transactionListError.value = error instanceof Error ? error.message : '收支记录加载失败'
   } finally {
     if (requestSerial === transactionRequestSerial.value) {
       isLoadingTransactions.value = false
     }
   }
+}
+
+function goToPrevPage() {
+  if (!canGoPrevPage.value || isLoadingTransactions.value) {
+    return
+  }
+  currentPage.value -= 1
+  void loadCashTransactions()
+}
+
+function goToNextPage() {
+  if (!canGoNextPage.value || isLoadingTransactions.value) {
+    return
+  }
+  currentPage.value += 1
+  void loadCashTransactions()
 }
 
 function openDeleteConfirm(transaction: DayTransaction) {
@@ -277,6 +286,26 @@ function showFeedback(message: string, type: 'success' | 'error') {
           @edit="openEditTransaction"
           @delete="openDeleteConfirm"
         />
+
+        <div v-if="hasPagination" class="transaction-pagination" aria-label="收支记录分页">
+          <button
+            class="transaction-pagination-button"
+            type="button"
+            :disabled="!canGoPrevPage || isLoadingTransactions"
+            @click="goToPrevPage"
+          >
+            上一页
+          </button>
+          <span class="transaction-pagination-summary">{{ paginationSummary }}</span>
+          <button
+            class="transaction-pagination-button"
+            type="button"
+            :disabled="!canGoNextPage || isLoadingTransactions"
+            @click="goToNextPage"
+          >
+            下一页
+          </button>
+        </div>
       </template>
     </section>
 

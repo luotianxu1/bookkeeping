@@ -6,6 +6,7 @@ import com.example.finance.dto.TransactionAnalysisPeriodSummaryResponse;
 import com.example.finance.dto.TransactionAnalysisResponse;
 import com.example.finance.dto.TransactionAnalysisSummaryResponse;
 import com.example.finance.dto.TransactionAnalysisTrendPointResponse;
+import com.example.finance.dto.TransactionPageResponse;
 import com.example.finance.dto.TransactionRequest;
 import com.example.finance.dto.TransactionResponse;
 import com.example.finance.entity.AccountEntity;
@@ -30,6 +31,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -67,6 +69,8 @@ public class TransactionService {
     private static final String CATEGORY_COLOR_DEBT = "#F59E0B";
     private static final String CATEGORY_COLOR_HUMAN_RELATION = "#8B5CF6";
     private static final DateTimeFormatter TRANSACTION_NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private static final int DEFAULT_PAGE_SIZE = 50;
+    private static final int MAX_PAGE_SIZE = 200;
 
     private final TransactionMapper transactionMapper;
     private final AccountMapper accountMapper;
@@ -104,6 +108,39 @@ public class TransactionService {
         List<DebtRecordEntity> debtRecords = loadDebtRecords(userId, type, accountId);
         List<HumanRelationRecordEntity> humanRelationRecords = loadHumanRelationRecords(userId, type, accountId);
         return mergeResponses(transactions, debtRecords, humanRelationRecords);
+    }
+
+    public TransactionPageResponse page(
+        List<Long> userIds,
+        String type,
+        Long accountId,
+        boolean cashOnly,
+        Integer page,
+        Integer pageSize
+    ) {
+        int normalizedPageSize = normalizePageSize(pageSize);
+        int normalizedPage = page == null || page < 1 ? 1 : page;
+        List<TransactionResponse> transactions = loadMergedTransactions(userIds, type, accountId);
+        if (cashOnly) {
+            Set<Long> cashAccountIds = loadCashAccountIds(userIds);
+            transactions = transactions.stream()
+                .filter(transaction -> transaction.getAccountId() != null && cashAccountIds.contains(transaction.getAccountId()))
+                .toList();
+        }
+
+        int total = transactions.size();
+        int totalPages = total == 0 ? 1 : (int) Math.ceil((double) total / normalizedPageSize);
+        int resolvedPage = Math.min(normalizedPage, totalPages);
+        int fromIndex = Math.min((resolvedPage - 1) * normalizedPageSize, total);
+        int toIndex = Math.min(fromIndex + normalizedPageSize, total);
+
+        TransactionPageResponse response = new TransactionPageResponse();
+        response.setItems(transactions.subList(fromIndex, toIndex));
+        response.setTotal(total);
+        response.setPage(resolvedPage);
+        response.setPageSize(normalizedPageSize);
+        response.setTotalPages(totalPages);
+        return response;
     }
 
     public TransactionAnalysisResponse getAnalysis(Long userId, String period, String month, Integer year) {
@@ -335,6 +372,32 @@ public class TransactionService {
         return prefix + timePart + randomPart;
     }
 
+    private int normalizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize <= 0) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(pageSize, MAX_PAGE_SIZE);
+    }
+
+    private List<TransactionResponse> loadMergedTransactions(Collection<Long> userIds, String type, Long accountId) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+
+        LambdaQueryWrapper<TransactionEntity> wrapper = new LambdaQueryWrapper<TransactionEntity>()
+            .in(TransactionEntity::getUserId, userIds)
+            .eq(StringUtils.hasText(type), TransactionEntity::getType, type)
+            .eq(accountId != null, TransactionEntity::getAccountId, accountId)
+            .eq(TransactionEntity::getStatus, DEFAULT_STATUS)
+            .orderByDesc(TransactionEntity::getOccurredAt)
+            .orderByDesc(TransactionEntity::getId);
+
+        List<TransactionEntity> transactions = transactionMapper.selectList(wrapper);
+        List<DebtRecordEntity> debtRecords = loadDebtRecords(userIds, type, accountId);
+        List<HumanRelationRecordEntity> humanRelationRecords = loadHumanRelationRecords(userIds, type, accountId);
+        return mergeResponses(transactions, debtRecords, humanRelationRecords);
+    }
+
     private List<TransactionResponse> mergeResponses(
         List<TransactionEntity> transactions,
         List<DebtRecordEntity> debtRecords,
@@ -434,6 +497,30 @@ public class TransactionService {
         return debtRecordMapper.selectList(wrapper);
     }
 
+    private List<DebtRecordEntity> loadDebtRecords(Collection<Long> userIds, String type, Long accountId) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+        if (StringUtils.hasText(type) && !TYPE_EXPENSE.equals(type) && !TYPE_INCOME.equals(type)) {
+            return List.of();
+        }
+
+        LambdaQueryWrapper<DebtRecordEntity> wrapper = new LambdaQueryWrapper<DebtRecordEntity>()
+            .in(DebtRecordEntity::getUserId, userIds)
+            .eq(accountId != null, DebtRecordEntity::getFundingAccountId, accountId)
+            .eq(DebtRecordEntity::getStatus, DEBT_RECORD_ACTIVE_STATUS)
+            .orderByDesc(DebtRecordEntity::getOccurredAt)
+            .orderByDesc(DebtRecordEntity::getId);
+
+        if (TYPE_INCOME.equals(type)) {
+            wrapper.eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_RECEIVABLE);
+        } else if (TYPE_EXPENSE.equals(type)) {
+            wrapper.eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_PAYABLE);
+        }
+
+        return debtRecordMapper.selectList(wrapper);
+    }
+
     private List<HumanRelationRecordEntity> loadHumanRelationRecords(Long userId, String type, Long accountId) {
         if (StringUtils.hasText(type) && !TYPE_EXPENSE.equals(type) && !TYPE_INCOME.equals(type)) {
             return List.of();
@@ -441,6 +528,30 @@ public class TransactionService {
 
         LambdaQueryWrapper<HumanRelationRecordEntity> wrapper = new LambdaQueryWrapper<HumanRelationRecordEntity>()
             .eq(userId != null, HumanRelationRecordEntity::getUserId, userId)
+            .eq(accountId != null, HumanRelationRecordEntity::getFundingAccountId, accountId)
+            .eq(HumanRelationRecordEntity::getStatus, HUMAN_RELATION_RECORD_ACTIVE_STATUS)
+            .orderByDesc(HumanRelationRecordEntity::getOccurredAt)
+            .orderByDesc(HumanRelationRecordEntity::getId);
+
+        if (TYPE_INCOME.equals(type)) {
+            wrapper.eq(HumanRelationRecordEntity::getDirection, HUMAN_RELATION_DIRECTION_INCOMING);
+        } else if (TYPE_EXPENSE.equals(type)) {
+            wrapper.eq(HumanRelationRecordEntity::getDirection, HUMAN_RELATION_DIRECTION_OUTGOING);
+        }
+
+        return humanRelationRecordMapper.selectList(wrapper);
+    }
+
+    private List<HumanRelationRecordEntity> loadHumanRelationRecords(Collection<Long> userIds, String type, Long accountId) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+        if (StringUtils.hasText(type) && !TYPE_EXPENSE.equals(type) && !TYPE_INCOME.equals(type)) {
+            return List.of();
+        }
+
+        LambdaQueryWrapper<HumanRelationRecordEntity> wrapper = new LambdaQueryWrapper<HumanRelationRecordEntity>()
+            .in(HumanRelationRecordEntity::getUserId, userIds)
             .eq(accountId != null, HumanRelationRecordEntity::getFundingAccountId, accountId)
             .eq(HumanRelationRecordEntity::getStatus, HUMAN_RELATION_RECORD_ACTIVE_STATUS)
             .orderByDesc(HumanRelationRecordEntity::getOccurredAt)
@@ -562,6 +673,27 @@ public class TransactionService {
 
         return accountMapper.selectList(new LambdaQueryWrapper<AccountEntity>()
                 .eq(AccountEntity::getUserId, userId)
+                .eq(AccountEntity::getAccountTypeId, cashAccountType.getId())
+                .eq(AccountEntity::getStatus, ACTIVE_ACCOUNT_STATUS))
+            .stream()
+            .map(AccountEntity::getId)
+            .collect(Collectors.toSet());
+    }
+
+    private Set<Long> loadCashAccountIds(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Set.of();
+        }
+
+        AccountTypeEntity cashAccountType = accountTypeMapper.selectOne(new LambdaQueryWrapper<AccountTypeEntity>()
+            .eq(AccountTypeEntity::getCode, CASH_ACCOUNT_TYPE_CODE)
+            .last("LIMIT 1"));
+        if (cashAccountType == null) {
+            return Set.of();
+        }
+
+        return accountMapper.selectList(new LambdaQueryWrapper<AccountEntity>()
+                .in(AccountEntity::getUserId, userIds)
                 .eq(AccountEntity::getAccountTypeId, cashAccountType.getId())
                 .eq(AccountEntity::getStatus, ACTIVE_ACCOUNT_STATUS))
             .stream()
