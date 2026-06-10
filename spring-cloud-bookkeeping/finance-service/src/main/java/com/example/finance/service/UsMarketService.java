@@ -33,10 +33,6 @@ public class UsMarketService {
     private static final int READ_TIMEOUT_MILLIS = 2500;
     private static final String SINA_SPX_QUOTE_URL = "https://hq.sinajs.cn/list=gb_$inx";
     private static final String NFIN_NDX_CHART_URL = "https://api.nfin.dev/v1/quote/NDX/chart?assetclass=index";
-    private static final String SPX_TREND_IMAGE_URL = "https://webquotepic.eastmoney.com/GetPic.aspx?nid=100.SPX&imageType=rs";
-    private static final String SPX_KLINE_IMAGE_URL = "https://webquoteklinepic.eastmoney.com/GetPic.aspx?nid=100.SPX&imageType=ks";
-    private static final String NDX_TREND_IMAGE_URL = "https://webquotepic.eastmoney.com/GetPic.aspx?nid=100.NDX&imageType=rs";
-    private static final String NDX_KLINE_IMAGE_URL = "https://webquoteklinepic.eastmoney.com/GetPic.aspx?nid=100.NDX&imageType=ks";
     private static final DateTimeFormatter NFIN_TIME_FORMATTER = DateTimeFormatter.ofPattern("MMM d, yyyy h:mm a", Locale.ENGLISH);
 
     private final ObjectMapper objectMapper;
@@ -128,8 +124,6 @@ public class UsMarketService {
             "SPX",
             "标普500",
             "S&P 500",
-            SPX_TREND_IMAGE_URL,
-            SPX_KLINE_IMAGE_URL,
             "新浪财经国际指数"
         );
         quote.setPrice(scaleMoney(price));
@@ -139,6 +133,7 @@ public class UsMarketService {
         quote.setOpenPrice(scaleMoney(openPrice));
         quote.setHighPrice(scaleMoney(highPrice));
         quote.setLowPrice(scaleMoney(lowPrice));
+        quote.setChartPoints(buildSp500ChartPoints(previousClose, openPrice, highPrice, lowPrice, price));
         quote.setUpdatedAt(LocalDateTime.now(DEFAULT_ZONE));
         quote.setMarketTimeLabel(blankToNull(fields[25]));
         return quote;
@@ -181,8 +176,6 @@ public class UsMarketService {
             "NDX",
             "纳指100",
             "NASDAQ-100",
-            NDX_TREND_IMAGE_URL,
-            NDX_KLINE_IMAGE_URL,
             "Nasdaq 图表镜像"
         );
         quote.setPrice(scaleMoney(price));
@@ -192,6 +185,7 @@ public class UsMarketService {
         quote.setOpenPrice(scaleMoney(openPrice));
         quote.setHighPrice(scaleMoney(highPrice));
         quote.setLowPrice(scaleMoney(lowPrice));
+        quote.setChartPoints(buildNdxChartPoints(chartNode));
         quote.setMarketTimeLabel(blankToNull(dataNode.path("timeAsOf").asText()));
         quote.setUpdatedAt(parseMarketTime(dataNode.path("timeAsOf").asText()));
         return quote;
@@ -201,18 +195,78 @@ public class UsMarketService {
         String code,
         String name,
         String alias,
-        String trendImageUrl,
-        String klineImageUrl,
         String source
     ) {
         UsMarketResponse.UsMarketIndexQuote quote = new UsMarketResponse.UsMarketIndexQuote();
         quote.setCode(code);
         quote.setName(name);
         quote.setAlias(alias);
-        quote.setTrendImageUrl(trendImageUrl);
-        quote.setKlineImageUrl(klineImageUrl);
         quote.setSource(source);
         return quote;
+    }
+
+    private List<UsMarketResponse.UsMarketChartPoint> buildSp500ChartPoints(
+        BigDecimal previousClose,
+        BigDecimal openPrice,
+        BigDecimal highPrice,
+        BigDecimal lowPrice,
+        BigDecimal latestPrice
+    ) {
+        List<UsMarketResponse.UsMarketChartPoint> points = new ArrayList<>();
+        addChartPoint(points, "昨收", previousClose);
+        addChartPoint(points, "开盘", openPrice);
+        addChartPoint(points, "最高", highPrice);
+        addChartPoint(points, "最低", lowPrice);
+        addChartPoint(points, "最新", latestPrice);
+        return points;
+    }
+
+    private List<UsMarketResponse.UsMarketChartPoint> buildNdxChartPoints(JsonNode chartNode) {
+        List<UsMarketResponse.UsMarketChartPoint> points = new ArrayList<>();
+        if (chartNode == null || !chartNode.isArray() || chartNode.isEmpty()) {
+            return points;
+        }
+
+        int size = chartNode.size();
+        int step = Math.max(size / 48, 1);
+        for (int index = 0; index < size; index += step) {
+            JsonNode point = chartNode.get(index);
+            BigDecimal value = point.path("y").isNumber() ? point.path("y").decimalValue() : decimal(point.path("y").asText());
+            if (value == null) {
+                continue;
+            }
+
+            String label = blankToNull(point.path("z").path("dateTime").asText());
+            if (label == null) {
+                label = String.valueOf(index + 1);
+            }
+            addChartPoint(points, label, value);
+        }
+
+        JsonNode lastPoint = chartNode.get(size - 1);
+        BigDecimal lastValue = lastPoint.path("y").isNumber() ? lastPoint.path("y").decimalValue() : decimal(lastPoint.path("y").asText());
+        if (lastValue != null) {
+            String label = blankToNull(lastPoint.path("z").path("dateTime").asText());
+            if (points.isEmpty() || !label.equals(points.get(points.size() - 1).getLabel())) {
+                addChartPoint(points, label == null ? "最新" : label, lastValue);
+            }
+        }
+
+        return points;
+    }
+
+    private void addChartPoint(
+        List<UsMarketResponse.UsMarketChartPoint> points,
+        String label,
+        BigDecimal value
+    ) {
+        if (value == null) {
+            return;
+        }
+        UsMarketResponse.UsMarketChartPoint point = new UsMarketResponse.UsMarketChartPoint();
+        point.setLabel(label);
+        point.setPrice(scaleMoney(value));
+        points.add(point);
     }
 
     private JsonNode fetchJson(String url) throws Exception {
@@ -255,8 +309,7 @@ public class UsMarketService {
         target.setHighPrice(source.getHighPrice());
         target.setLowPrice(source.getLowPrice());
         target.setMarketTimeLabel(source.getMarketTimeLabel());
-        target.setTrendImageUrl(source.getTrendImageUrl());
-        target.setKlineImageUrl(source.getKlineImageUrl());
+        target.setChartPoints(source.getChartPoints());
         target.setUpdatedAt(source.getUpdatedAt());
         target.setSource(source.getSource());
         target.setStale(stale);

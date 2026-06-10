@@ -100,6 +100,41 @@
   font-weight: 500;
 }
 
+.investment-detail-dividend-reminder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.investment-detail-dividend-reminder-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.investment-detail-dividend-reminder-text {
+  min-width: 0;
+  color: #1e3a8a;
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
 .investment-detail-actions {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -115,6 +150,14 @@
   font-size: var(--font-size-14);
   font-weight: 700;
   box-shadow: 0 8px 20px rgba(148, 163, 184, 0.08);
+}
+
+.investment-detail-action-button:disabled {
+  border-color: var(--color-border);
+  background: var(--color-bg-card-soft);
+  color: var(--color-text-subtle);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .investment-detail-action-button.buy {
@@ -648,4 +691,77 @@
 
 .investment-detail-transaction-right .trend-down {
   color: var(--color-success);
+}
+
+:global(:root[data-theme='dark']) .investment-detail-dividend-reminder {
+  border: 1px solid rgba(96, 165, 250, 0.42);
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.34) 0%, rgba(37, 99, 235, 0.2) 100%);
+  box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.08), 0 10px 24px rgba(15, 23, 42, 0.22);
+}
+
+:global(:root[data-theme='dark']) .investment-detail-dividend-reminder-badge {
+  background: rgba(191, 219, 254, 0.2);
+  color: #eff6ff;
+  box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.16);
+}
+
+:global(:root[data-theme='dark']) .investment-detail-dividend-reminder-text {
+  color: #f8fbff;
+}
+
+:global(:root[data-theme='dark']) .investment-detail-dividend-item {
+  border-color: #31506f;
+  background: linear-gradient(180deg, rgba(20, 32, 54, 0.96) 0%, rgba(16, 26, 43, 0.98) 100%);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.06);
+}
+
+:global(:root[data-theme='dark']) .investment-detail-dividend-title strong,
+:global(:root[data-theme='dark']) .investment-detail-dividend-grid strong {
+  color: #f8fafc;
+}
+
+:global(:root[data-theme='dark']) .investment-detail-dividend-title span,
+:global(:root[data-theme='dark']) .investment-detail-dividend-grid span {
+  color: #94a3b8;
+}
+
+:global(:root[data-theme='dark']) .investment-detail-dividend-status {
+  color: #93c5fd;
+}
+
+.investment-detail-page.is-dark .investment-detail-dividend-item {
+  border-color: #31506f;
+  background: linear-gradient(180deg, rgba(20, 32, 54, 0.96) 0%, rgba(16, 26, 43, 0.98) 100%);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.06);
+}
+
+.investment-detail-page.is-dark .investment-detail-dividend-title strong,
+.investment-detail-page.is-dark .investment-detail-dividend-grid strong {
+  color: #f8fafc;
+}
+
+.investment-detail-page.is-dark .investment-detail-dividend-title span,
+.investment-detail-page.is-dark .investment-detail-dividend-grid span {
+  color: #94a3b8;
+}
+
+.investment-detail-page.is-dark .investment-detail-dividend-status {
+  color: #93c5fd;
+}
+
+.investment-detail-page.is-dark .investment-detail-action-button {
+  border-color: #334155;
+  background: #162033;
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.22);
+}
+
+.investment-detail-page.is-dark .investment-detail-action-button.edit {
+  color: #cbd5e1;
+}
+
+.investment-detail-page.is-dark .investment-detail-action-button:disabled {
+  border-color: #253045;
+  background: #101826;
+  color: #64748b;
+  box-shadow: none;
 }

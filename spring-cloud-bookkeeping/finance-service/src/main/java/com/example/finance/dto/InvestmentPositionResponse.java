@@ -35,6 +35,10 @@ public class InvestmentPositionResponse {
     private Boolean includeInNetWorth;
     private String status;
     private LocalDateTime lastSyncedAt;
+    private Boolean hasRecentDividendPlan;
+    private String recentDividendStatus;
+    private LocalDate recentDividendDate;
+    private BigDecimal recentDividendPerUnit;
     private String subscriptionStatus;
     private LocalDate subscriptionAppliedDate;
     private LocalDate subscriptionExpectedConfirmDate;

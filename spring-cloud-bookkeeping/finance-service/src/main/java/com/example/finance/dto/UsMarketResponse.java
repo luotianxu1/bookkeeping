@@ -27,10 +27,15 @@ public class UsMarketResponse {
         private BigDecimal highPrice;
         private BigDecimal lowPrice;
         private String marketTimeLabel;
-        private String trendImageUrl;
-        private String klineImageUrl;
+        private List<UsMarketChartPoint> chartPoints;
         private LocalDateTime updatedAt;
         private String source;
         private boolean stale;
+    }
+
+    @Data
+    public static class UsMarketChartPoint {
+        private String label;
+        private BigDecimal price;
     }
 }

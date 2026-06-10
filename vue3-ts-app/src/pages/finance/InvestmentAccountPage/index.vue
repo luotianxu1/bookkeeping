@@ -21,7 +21,6 @@ import {
   runInvestmentFundSyncTask,
   type Account,
   type InvestmentAutoInvestPlan,
-  type InvestmentFundSyncSummary,
   type InvestmentPosition,
   type InvestmentProduct,
   type InvestmentProductType,
@@ -68,10 +67,13 @@ const addAssetSymbol = ref('')
 const addAssetMarket = ref('')
 const addAssetCategory = ref<InvestmentProductType>('fund')
 const addAssetFundingAccount = ref('')
+const addAssetQuantity = ref('')
 const addAssetAmount = ref('')
 const addAssetCurrentPrice = ref('')
 const addAssetSubscriptionTimeSlot = ref<'before_1500' | 'after_1500'>('before_1500')
 const isLookingUpProduct = ref(false)
+const addAssetSearchResults = ref<InvestmentProduct[]>([])
+const selectedAddAssetResultId = ref('')
 const productLookupMessage = ref('')
 let isFillingProduct = false
 let refreshVisibilityTimer: number | null = null
@@ -103,6 +105,7 @@ const showInvestmentTabSwitch = computed(() => {
 })
 
 const isFundSubscriptionDraft = computed(() => addAssetCategory.value === 'fund')
+const isQuantityBasedDraft = computed(() => addAssetCategory.value !== 'fund')
 const pendingAmountsByPositionId = computed(() => {
   const pendingMap = new Map<number, number>()
   for (const entry of transactions.value) {
@@ -174,6 +177,8 @@ watch(addAssetKeyword, (nextKeyword) => {
     return
   }
 
+  addAssetSearchResults.value = []
+  selectedAddAssetResultId.value = ''
   clearProductFields()
 })
 
@@ -259,11 +264,9 @@ async function refreshFundData() {
 
   isRefreshingFunds.value = true
   try {
-    const summary: InvestmentFundSyncSummary = await runInvestmentFundSyncTask()
-    await loadInvestmentData()
-    showFeedback(buildFundRefreshSuccessMessage(summary), 'success')
-  } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '基金数据刷新失败', 'error')
+    await runInvestmentFundSyncTask()
+  } catch {
+    // Intentionally ignore the task result to keep the frontend unchanged.
   } finally {
     isRefreshingFunds.value = false
   }
@@ -307,9 +310,11 @@ async function saveAsset() {
   const fundingAccountId = Number(addAssetFundingAccount.value)
   const normalizedFundingAccountId = Number.isFinite(fundingAccountId) && fundingAccountId > 0 ? fundingAccountId : undefined
   const currentPrice = Number(addAssetCurrentPrice.value)
-  const costAmount = Number(addAssetAmount.value)
+  const holdingQuantity = Number(addAssetQuantity.value)
+  const amountInput = Number(addAssetAmount.value)
   const isFundProduct = addAssetCategory.value === 'fund'
-  const quantity = !isFundProduct && currentPrice > 0 ? costAmount / currentPrice : 0
+  let stockHoldingQuantity: number | undefined
+  let costAmount = 0
 
   if (!addAssetName.value.trim() || !addAssetSymbol.value.trim()) {
     formError.value = '请先搜索并选择有效资产'
@@ -319,17 +324,32 @@ async function saveAsset() {
     formError.value = '当前投资账户不存在'
     return
   }
-  if (!Number.isFinite(costAmount) || costAmount <= 0) {
-    formError.value = '请输入买入金额'
-    return
-  }
-  if (!isFundProduct && (!Number.isFinite(currentPrice) || currentPrice <= 0)) {
-    formError.value = '未获取到当前价格，请重新搜索资产'
-    return
-  }
-  if (!isFundProduct && (!Number.isFinite(quantity) || quantity <= 0)) {
-    formError.value = '买入金额或当前价格不正确'
-    return
+  if (isFundProduct) {
+    if (!Number.isFinite(amountInput) || amountInput <= 0) {
+      formError.value = '请输入买入金额'
+      return
+    }
+    costAmount = amountInput
+  } else {
+    if (!Number.isFinite(holdingQuantity) || holdingQuantity <= 0) {
+      formError.value = '请输入持仓份数'
+      return
+    }
+    if (!Number.isFinite(amountInput) || amountInput <= 0) {
+      formError.value = '请输入成本价'
+      return
+    }
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+      formError.value = '未获取到当前价格，请重新搜索资产'
+      return
+    }
+    const normalizedHoldingQuantity = Number(holdingQuantity.toFixed(6))
+    if (!Number.isFinite(normalizedHoldingQuantity) || normalizedHoldingQuantity <= 0) {
+      formError.value = '持仓份数或成本不正确'
+      return
+    }
+    stockHoldingQuantity = normalizedHoldingQuantity
+    costAmount = Number((normalizedHoldingQuantity * amountInput).toFixed(2))
   }
 
   isSaving.value = true
@@ -350,8 +370,8 @@ async function saveAsset() {
         status: 'active',
         remark: null,
       },
-      holdingQuantity: isFundProduct ? undefined : Number(quantity.toFixed(6)),
-      availableQuantity: isFundProduct ? undefined : Number(quantity.toFixed(6)),
+      holdingQuantity: stockHoldingQuantity,
+      availableQuantity: stockHoldingQuantity,
       frozenQuantity: 0,
       costAmount: Number(costAmount.toFixed(2)),
       currentPrice: isFundProduct ? undefined : currentPrice,
@@ -394,22 +414,93 @@ async function lookupProductByKeyword(keyword = addAssetKeyword.value) {
   try {
     const products = await getInvestmentProducts({ keyword: searchKeyword })
     const normalizedKeyword = searchKeyword.toUpperCase()
-    const matchedProduct = products.find((product) => product.symbol.toUpperCase() === normalizedKeyword)
-      ?? products.find((product) => product.name.includes(searchKeyword))
-      ?? products[0]
+    const matchedProducts = products.slice().sort((left, right) => {
+      const leftScore = getProductMatchScore(left, searchKeyword, normalizedKeyword)
+      const rightScore = getProductMatchScore(right, searchKeyword, normalizedKeyword)
+      return rightScore - leftScore
+    })
 
-    if (!matchedProduct) {
+    if (matchedProducts.length === 0) {
+      addAssetSearchResults.value = []
+      selectedAddAssetResultId.value = ''
       clearProductFields()
       productLookupMessage.value = '未找到该资产，请确认代码或名称'
       return
     }
 
-    fillProductFields(matchedProduct)
+    addAssetSearchResults.value = matchedProducts
+    selectedAddAssetResultId.value = ''
+    clearProductFields()
+    productLookupMessage.value = `找到 ${matchedProducts.length} 个资产，请选择`
   } catch (error) {
+    addAssetSearchResults.value = []
+    selectedAddAssetResultId.value = ''
     productLookupMessage.value = error instanceof Error ? error.message : '代码识别失败'
   } finally {
     isLookingUpProduct.value = false
   }
+}
+
+function getProductMatchScore(product: InvestmentProduct, keyword: string, normalizedKeyword: string) {
+  const symbol = product.symbol.toUpperCase()
+  const name = product.name
+
+  if (symbol === normalizedKeyword) {
+    return 400
+  }
+  if (symbol.startsWith(normalizedKeyword)) {
+    return 300
+  }
+  if (name === keyword) {
+    return 200
+  }
+  if (name.includes(keyword)) {
+    return 100
+  }
+  return 0
+}
+
+function getAddAssetResultKey(product: InvestmentProduct) {
+  const fallbackId = Number(product.id)
+  if (Number.isFinite(fallbackId) && fallbackId > 0) {
+    return `id:${fallbackId}`
+  }
+  return [
+    product.productType || 'unknown',
+    product.market || '',
+    product.exchangeCode || '',
+    product.symbol || '',
+    product.name || '',
+  ].join('|')
+}
+
+function selectAddAssetProduct(productKey: string) {
+  selectedAddAssetResultId.value = productKey
+  const targetProduct = addAssetSearchResults.value.find((item) => getAddAssetResultKey(item) === productKey)
+  if (!targetProduct) {
+    clearProductFields()
+    productLookupMessage.value = '未找到该资产，请重新选择'
+    return
+  }
+  fillProductFields(targetProduct)
+}
+
+function getAddAssetResultLabel(product: InvestmentProduct) {
+  return `${product.symbol} ${product.name}`
+}
+
+function getAddAssetResultMeta(product: InvestmentProduct) {
+  const typeLabel = product.productType === 'stock'
+    ? '股票'
+    : product.productType === 'fund'
+      ? '基金'
+      : '投资资产'
+  const marketLabel = product.market?.trim() ? ` · ${product.market}` : ''
+  return `${typeLabel}${marketLabel}`
+}
+
+function isAddAssetProductSelected(product: InvestmentProduct) {
+  return selectedAddAssetResultId.value === getAddAssetResultKey(product)
 }
 
 function fillProductFields(product: InvestmentProduct) {
@@ -418,11 +509,11 @@ function fillProductFields(product: InvestmentProduct) {
   addAssetSymbol.value = product.symbol
   addAssetKeyword.value = `${product.symbol} ${product.name}`
   isFillingProduct = false
+  selectedAddAssetResultId.value = getAddAssetResultKey(product)
   addAssetMarket.value = product.market || ''
   addAssetCategory.value = product.productType
-  if (product.latestPrice && product.latestPrice > 0) {
-    addAssetCurrentPrice.value = String(product.latestPrice)
-  }
+  addAssetCurrentPrice.value = product.latestPrice && product.latestPrice > 0 ? String(product.latestPrice) : ''
+  addAssetSearchResults.value = []
   productLookupMessage.value = product.productType === 'fund'
     ? `已识别：${product.name}，将按场外基金金额申购并在确认后生成份额`
     : `已识别：${product.name}`
@@ -452,9 +543,12 @@ function resetAddForm() {
   addAssetMarket.value = ''
   addAssetCategory.value = 'fund'
   addAssetFundingAccount.value = ''
+  addAssetQuantity.value = ''
   addAssetAmount.value = ''
   addAssetCurrentPrice.value = ''
   addAssetSubscriptionTimeSlot.value = 'before_1500'
+  addAssetSearchResults.value = []
+  selectedAddAssetResultId.value = ''
   productLookupMessage.value = ''
   formError.value = ''
 }
@@ -666,6 +760,33 @@ function hasAutoInvestPlan(position: InvestmentPosition) {
   return position.productType === 'fund' && autoInvestPositionIds.value.has(position.id)
 }
 
+function hasRecentDividendReminder(position: InvestmentPosition) {
+  return position.productType === 'fund' && Boolean(position.hasRecentDividendPlan && position.recentDividendDate)
+}
+
+function getDividendReminderLabel(position: InvestmentPosition) {
+  const status = position.recentDividendStatus
+  if (status === 'paid') {
+    return '最近已分红'
+  }
+  if (status === 'planned') {
+    return '计划分红'
+  }
+  if (status === 'cancelled') {
+    return '分红取消'
+  }
+  return '已公告分红'
+}
+
+function getDividendReminderText(position: InvestmentPosition) {
+  const dateText = formatMonthDay(position.recentDividendDate)
+  const perUnit = Number(position.recentDividendPerUnit ?? 0)
+  if (!Number.isFinite(perUnit) || perUnit <= 0) {
+    return `${dateText} 分红`
+  }
+  return `${dateText} · ${perUnit.toFixed(4)}/${position.unitName || '份'}`
+}
+
 function formatAmount(value: number) {
   return new Intl.NumberFormat('zh-CN', {
     minimumFractionDigits: 2,
@@ -707,9 +828,6 @@ function isAfterFundRefreshTime(date: Date) {
   return hours > 21 || (hours === 21 && minutes >= 30)
 }
 
-function buildFundRefreshSuccessMessage(summary: InvestmentFundSyncSummary) {
-  return `基金数据已刷新：更新 ${summary.syncedPositions} 条持仓，写入 ${summary.syncedDividendPlans} 条分红计划，结算 ${summary.settledCount} 条交易`
-}
 </script>
 
 <template>
@@ -726,11 +844,10 @@ function buildFundRefreshSuccessMessage(summary: InvestmentFundSyncSummary) {
         class="investment-account-header-refresh"
         variant="secondary"
         size="sm"
-        :disabled="isRefreshingFunds"
-        :aria-label="isRefreshingFunds ? '基金数据刷新中' : '刷新所有基金数据'"
+        aria-label="刷新所有基金数据"
         @click="refreshFundData"
     >
-        {{ isRefreshingFunds ? '刷新中...' : '刷新基金' }}
+        刷新基金
       </CommonButton>
     </PageHeader>
 
@@ -841,6 +958,11 @@ function buildFundRefreshSuccessMessage(summary: InvestmentFundSyncSummary) {
               />
             </p>
 
+            <div v-if="hasRecentDividendReminder(holding)" class="holding-dividend-notice">
+              <span class="holding-dividend-badge">{{ getDividendReminderLabel(holding) }}</span>
+              <span class="holding-dividend-text">{{ getDividendReminderText(holding) }}</span>
+            </div>
+
             <div class="holding-divider"></div>
 
             <div class="holding-panel-row">
@@ -874,19 +996,34 @@ function buildFundRefreshSuccessMessage(summary: InvestmentFundSyncSummary) {
 
     <CommonModal v-model="showAddModal" title="添加资产" size="compact" :show-close="false">
       <div class="investment-add-modal-form">
-        <label class="investment-search-field" aria-label="输入代码或名称">
-          <input
-            v-model="addAssetKeyword"
-            type="search"
-            inputmode="search"
-            placeholder="输入代码或名称"
-            @keydown.enter.prevent="lookupProductByKeyword()"
-          />
-          <button type="button" :disabled="isLookingUpProduct" @click="lookupProductByKeyword()">
-            <span aria-hidden="true">⌕</span>
-            {{ isLookingUpProduct ? '搜索中' : '搜索' }}
-          </button>
-        </label>
+        <div class="investment-search-dropdown">
+          <label class="investment-search-field" aria-label="输入代码或名称">
+            <input
+              v-model="addAssetKeyword"
+              type="search"
+              inputmode="search"
+              placeholder="输入代码或名称"
+              @keydown.enter.prevent="lookupProductByKeyword()"
+            />
+            <button type="button" :disabled="isLookingUpProduct" @click="lookupProductByKeyword()">
+              <span aria-hidden="true">⌕</span>
+              {{ isLookingUpProduct ? '搜索中' : '搜索' }}
+            </button>
+          </label>
+
+          <div v-if="addAssetSearchResults.length > 0" class="investment-search-results" aria-label="搜索结果">
+            <button
+              v-for="product in addAssetSearchResults"
+              :key="getAddAssetResultKey(product)"
+              type="button"
+              :class="['investment-search-result-item', { active: isAddAssetProductSelected(product) }]"
+              @click="selectAddAssetProduct(getAddAssetResultKey(product))"
+            >
+              <strong>{{ getAddAssetResultLabel(product) }}</strong>
+              <span>{{ getAddAssetResultMeta(product) }}</span>
+            </button>
+          </div>
+        </div>
 
         <label v-if="isFundSubscriptionDraft" class="investment-add-modal-field">
           <span>申购时点</span>
@@ -907,8 +1044,22 @@ function buildFundRefreshSuccessMessage(summary: InvestmentFundSyncSummary) {
           </select>
         </label>
 
+        <label v-if="isQuantityBasedDraft" class="investment-add-modal-field">
+          <span>持仓份数</span>
+          <input
+            v-model="addAssetQuantity"
+            class="investment-field-control"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            placeholder="0.00"
+            aria-label="持仓份数"
+          />
+        </label>
+
         <label class="investment-add-modal-field">
-          <span>买入金额</span>
+          <span>{{ isFundSubscriptionDraft ? '买入金额' : '成本价' }}</span>
           <input
             v-model="addAssetAmount"
             class="investment-field-control"
@@ -917,7 +1068,7 @@ function buildFundRefreshSuccessMessage(summary: InvestmentFundSyncSummary) {
             step="0.01"
             inputmode="decimal"
             placeholder="0.00"
-            aria-label="买入金额"
+            :aria-label="isFundSubscriptionDraft ? '买入金额' : '成本价'"
           />
         </label>
         <p v-if="formError" class="investment-add-error">{{ formError }}</p>

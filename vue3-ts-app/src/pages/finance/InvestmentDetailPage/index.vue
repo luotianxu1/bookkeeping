@@ -162,6 +162,25 @@ const isPendingSubscription = computed(() => currentPosition.value?.subscription
 const isFundPosition = computed(() => (detail.value?.productType || currentPosition.value?.productType) === 'fund')
 const showAutoInvestSection = computed(() => isFundPosition.value && !isPendingSubscription.value)
 const currentUnitName = computed(() => detail.value?.unitName || detail.value?.position.unitName || '份')
+const showDividendReminder = computed(() =>
+  isFundPosition.value
+  && Boolean(currentPosition.value?.hasRecentDividendPlan && currentPosition.value?.recentDividendDate),
+)
+const dividendReminderLabel = computed(() => {
+  const status = currentPosition.value?.recentDividendStatus
+  if (status === 'paid') return '最近已分红'
+  if (status === 'planned') return '计划分红'
+  if (status === 'cancelled') return '分红取消'
+  return '已公告分红'
+})
+const dividendReminderText = computed(() => {
+  const dateText = formatDividendDate(currentPosition.value?.recentDividendDate)
+  const perUnit = Number(currentPosition.value?.recentDividendPerUnit ?? 0)
+  if (!Number.isFinite(perUnit) || perUnit <= 0) {
+    return `${dateText} 分红`
+  }
+  return `${dateText} · ${formatNumber(perUnit, 4)} / ${currentUnitName.value}`
+})
 const chartCostBaseline = computed(() => {
   const costPrice = Number(currentPosition.value?.avgCostPrice ?? 0)
   if (!Number.isFinite(costPrice) || costPrice <= 0) {
@@ -566,6 +585,8 @@ function renderLineChart(points: InvestmentChartPoint[]) {
   const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
   const brandColor = rootStyle.getPropertyValue('--color-brand').trim()
   const brandStrongColor = rootStyle.getPropertyValue('--color-brand-strong').trim()
+  const warningStrongColor = rootStyle.getPropertyValue('--color-warning-strong').trim()
+  const dangerColor = rootStyle.getPropertyValue('--color-danger').trim()
   const isFundTrendChart = detail.value?.productType === 'fund'
   const baselineValue = resolveLineChartBaseline(points, isFundTrendChart)
   const costPrice = chartCostBaseline.value
@@ -589,9 +610,11 @@ function renderLineChart(points: InvestmentChartPoint[]) {
       smooth: false,
       showSymbol: false,
       data: points.map(() => costPrice),
+      itemStyle: { color: warningStrongColor },
       lineStyle: {
         width: 1.5,
         type: 'dashed',
+        color: warningStrongColor,
       },
     })
   }
@@ -599,7 +622,7 @@ function renderLineChart(points: InvestmentChartPoint[]) {
   series.push(...tradeMarkerSeries)
 
   chart?.setOption({
-    color: [brandColor, '#F59E0B', brandStrongColor, '#DC2626'],
+    color: [brandColor, warningStrongColor, brandStrongColor, dangerColor],
     tooltip: {
       trigger: 'axis',
       confine: true,
@@ -2034,7 +2057,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
 </script>
 
 <template>
-  <section class="investment-detail-page" aria-label="投资详情">
+  <section :class="['investment-detail-page', { 'is-dark': isDark }]" aria-label="投资详情">
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -2067,6 +2090,10 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
               <AmountText tag="strong" :tone="todayTone" :value="todayValue" />
             </div>
           </div>
+        </div>
+        <div v-if="showDividendReminder" class="investment-detail-dividend-reminder">
+          <span class="investment-detail-dividend-reminder-badge">{{ dividendReminderLabel }}</span>
+          <span class="investment-detail-dividend-reminder-text">{{ dividendReminderText }}</span>
         </div>
       </section>
 

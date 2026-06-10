@@ -224,11 +224,15 @@ export interface UsMarketIndexQuote {
   highPrice?: number | null
   lowPrice?: number | null
   marketTimeLabel?: string | null
-  trendImageUrl: string
-  klineImageUrl: string
+  chartPoints: UsMarketChartPoint[]
   updatedAt: string
   source: string
   stale: boolean
+}
+
+export interface UsMarketChartPoint {
+  label: string
+  price: number
 }
 
 export interface UsMarketOverview {
@@ -867,6 +871,10 @@ export interface InvestmentPosition {
   includeInNetWorth: boolean
   status: string
   lastSyncedAt?: string | null
+  hasRecentDividendPlan?: boolean | null
+  recentDividendStatus?: string | null
+  recentDividendDate?: string | null
+  recentDividendPerUnit?: number | null
   subscriptionStatus?: 'confirmed' | 'pending' | string | null
   subscriptionAppliedDate?: string | null
   subscriptionExpectedConfirmDate?: string | null

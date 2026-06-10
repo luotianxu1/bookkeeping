@@ -1,16 +1,27 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { ECharts, EChartsCoreOption } from 'echarts'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
-import { getUsMarketOverview, type UsMarketIndexQuote, type UsMarketOverview } from '@/api/modules/finance'
+import { getUsMarketOverview, type UsMarketChartPoint, type UsMarketIndexQuote, type UsMarketOverview } from '@/api/modules/finance'
 
 const marketOverview = ref<UsMarketOverview | null>(null)
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 const errorMessage = ref('')
+const isDark = ref(false)
 let refreshTimer: ReturnType<typeof window.setTimeout> | null = null
+let mediaQuery: MediaQueryList | null = null
+let echartsLib: (typeof import('echarts')) | null = null
+const chartRefs = new Map<string, HTMLDivElement>()
+const chartInstances = new Map<string, ECharts>()
 
-const indices = computed(() => marketOverview.value?.indices ?? [])
+const indices = computed<UsMarketIndexQuote[]>(() => (
+  (marketOverview.value?.indices ?? []).map((item) => ({
+    ...item,
+    chartPoints: normalizeChartPoints(item.chartPoints),
+  }))
+))
 const pageFootText = computed(() => {
   if (!marketOverview.value?.updatedAt) {
     return '等待行情更新'
@@ -63,6 +74,32 @@ async function loadOverview(silent = false) {
   }
 }
 
+function normalizeChartPoints(points: unknown): UsMarketChartPoint[] {
+  if (!Array.isArray(points)) {
+    return []
+  }
+
+  return points
+    .map((point) => {
+      if (!point || typeof point !== 'object') {
+        return null
+      }
+
+      const candidate = point as Partial<UsMarketChartPoint>
+      const label = typeof candidate.label === 'string' ? candidate.label : ''
+      const price = Number(candidate.price)
+      if (!label || !Number.isFinite(price)) {
+        return null
+      }
+
+      return {
+        label,
+        price,
+      }
+    })
+    .filter((point): point is UsMarketChartPoint => point !== null)
+}
+
 function formatNumber(value?: number | null, fractionDigits = 2) {
   return Number(value ?? 0).toLocaleString('zh-CN', {
     minimumFractionDigits: fractionDigits,
@@ -100,12 +137,141 @@ function formatTime(value?: string) {
   return `${year}年${month}月${day}日 ${hour}:${minute}:${second}`
 }
 
-onMounted(() => {
+function setChartRef(code: string, element: Element | null) {
+  if (element instanceof HTMLDivElement) {
+    chartRefs.set(code, element)
+    renderCharts()
+    return
+  }
+
+  chartRefs.delete(code)
+  const chart = chartInstances.get(code)
+  chart?.dispose()
+  chartInstances.delete(code)
+}
+
+function updateThemeState() {
+  isDark.value = Boolean(mediaQuery?.matches)
+}
+
+function handleThemeChange() {
+  updateThemeState()
+}
+
+async function ensureEcharts() {
+  if (!echartsLib) {
+    echartsLib = await import('echarts')
+  }
+  return echartsLib
+}
+
+function buildChartOption(item: UsMarketIndexQuote): EChartsCoreOption {
+  const isPositive = Number(item.changePercent ?? 0) >= 0
+  const lineColor = isPositive ? '#ef4444' : '#16a34a'
+  const axisText = isDark.value ? '#8FA3C7' : '#94A3B8'
+  const axisLine = isDark.value ? '#253045' : '#CBD5E1'
+  const splitLine = isDark.value ? '#1E293B' : '#E2E8F0'
+  const areaStart = isPositive ? 'rgba(239,68,68,0.22)' : 'rgba(22,163,74,0.20)'
+  const areaEnd = isPositive ? 'rgba(239,68,68,0.04)' : 'rgba(22,163,74,0.04)'
+
+  return {
+    animation: false,
+    grid: { left: 8, right: 8, top: 12, bottom: 18, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: isDark.value ? '#0F172A' : '#FFFFFF',
+      borderColor: isDark.value ? '#253045' : '#E2E8F0',
+      textStyle: { color: isDark.value ? '#E2E8F0' : '#0F172A' },
+      valueFormatter: (value: number | string) => formatNumber(Number(value ?? 0)),
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: item.chartPoints.map((point) => point.label),
+      axisLine: { lineStyle: { color: axisLine } },
+      axisTick: { show: false },
+      axisLabel: { color: axisText, fontSize: 11, hideOverlap: true },
+    },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: axisText, fontSize: 11 },
+      splitLine: { lineStyle: { color: splitLine } },
+    },
+    series: [
+      {
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        data: item.chartPoints.map((point) => point.price),
+        lineStyle: { width: 3, color: lineColor },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: areaStart },
+              { offset: 1, color: areaEnd },
+            ],
+          },
+        },
+      },
+    ],
+  }
+}
+
+function renderCharts() {
+  if (!echartsLib) return
+
+  for (const item of indices.value) {
+    const element = chartRefs.get(item.code)
+    if (!element || item.chartPoints.length === 0) {
+      continue
+    }
+
+    let chart = chartInstances.get(item.code)
+    if (!chart) {
+      chart = echartsLib.init(element)
+      chartInstances.set(item.code, chart)
+    }
+    chart.setOption(buildChartOption(item), true)
+  }
+}
+
+function resizeCharts() {
+  chartInstances.forEach((chart) => chart.resize())
+}
+
+onMounted(async () => {
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  updateThemeState()
+  mediaQuery.addEventListener('change', handleThemeChange)
+  await ensureEcharts()
   void loadOverview()
+  window.addEventListener('resize', resizeCharts)
+})
+
+watch(indices, async () => {
+  await nextTick()
+  renderCharts()
+}, { deep: true, flush: 'post' })
+
+watch(isDark, () => {
+  renderCharts()
 })
 
 onBeforeUnmount(() => {
   clearRefreshTimer()
+  window.removeEventListener('resize', resizeCharts)
+  mediaQuery?.removeEventListener('change', handleThemeChange)
+  chartInstances.forEach((chart) => chart.dispose())
+  chartInstances.clear()
+  chartRefs.clear()
 })
 </script>
 
@@ -152,11 +318,8 @@ onBeforeUnmount(() => {
           <p>{{ item.name }}趋势</p>
           <span>{{ item.code }}</span>
         </header>
-        <img class="chart-image" :src="item.trendImageUrl" :alt="`${item.name}趋势图`">
-        <div class="chart-actions">
-          <a :href="item.trendImageUrl" target="_blank" rel="noreferrer">查看趋势图</a>
-          <a :href="item.klineImageUrl" target="_blank" rel="noreferrer">查看K线图</a>
-        </div>
+        <div :ref="(element) => setChartRef(item.code, element as Element | null)" class="chart-canvas" />
+        <p v-if="item.chartPoints.length === 0" class="market-message">暂无可用走势数据</p>
       </article>
     </section>
 
@@ -165,7 +328,7 @@ onBeforeUnmount(() => {
         <p>数据说明</p>
         <span>行情聚合</span>
       </header>
-      <p>标普500采用国际指数实时报价，纳指100采用 Nasdaq 图表镜像，趋势图使用东方财富公开图像。</p>
+      <p>标普500使用实时报价字段生成关键节点图，纳指100使用真实时间序列数据绘制 ECharts 趋势图。</p>
       <p>当外部源暂时异常时，会自动保留最近一次成功抓取的数据，避免页面空白。</p>
     </section>
   </section>

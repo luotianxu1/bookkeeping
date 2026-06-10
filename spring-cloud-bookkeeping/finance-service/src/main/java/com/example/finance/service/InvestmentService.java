@@ -217,6 +217,7 @@ public class InvestmentService {
     private static final int QDII_FUND_CONFIRM_DAYS = 2;
     private static final int DIVIDEND_HISTORY_YEARS = 3;
     private static final int MIN_STABLE_DIVIDEND_YEARS = 2;
+    private static final int RECENT_DIVIDEND_PLAN_WINDOW_DAYS = 30;
     private static final LocalTime FUND_SUBSCRIPTION_CUTOFF_TIME = LocalTime.of(15, 0);
     private static final Set<String> POSITION_ACCOUNT_TYPE_CODES = Set.of("investment", "gold");
     private static final DateTimeFormatter NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
@@ -3247,10 +3248,27 @@ public class InvestmentService {
             .stream().collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
         Map<Long, AccountEntity> accounts = accountMapper.selectByIds(positions.stream().map(InvestmentPositionEntity::getAccountId).collect(Collectors.toSet()))
             .stream().collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
-        return positions.stream().map(item -> toPositionResponse(item, products.get(item.getProductId()), accounts.get(item.getAccountId()))).toList();
+        Map<Long, InvestmentDividendPlanEntity> recentDividendPlans = loadRecentDividendPlans(products.values());
+        return positions.stream()
+            .map(item -> toPositionResponse(
+                item,
+                products.get(item.getProductId()),
+                accounts.get(item.getAccountId()),
+                recentDividendPlans.get(item.getProductId())
+            ))
+            .toList();
     }
 
     private InvestmentPositionResponse toPositionResponse(InvestmentPositionEntity entity, InvestmentProductEntity product, AccountEntity account) {
+        return toPositionResponse(entity, product, account, resolveRecentDividendPlan(product));
+    }
+
+    private InvestmentPositionResponse toPositionResponse(
+        InvestmentPositionEntity entity,
+        InvestmentProductEntity product,
+        AccountEntity account,
+        InvestmentDividendPlanEntity recentDividendPlan
+    ) {
         InvestmentPositionResponse response = new InvestmentPositionResponse();
         boolean dayProfitVisible = hasTodayDayProfit(entity);
         response.setId(entity.getId());
@@ -3282,6 +3300,7 @@ public class InvestmentService {
         response.setIncludeInNetWorth(entity.getIncludeInNetWorth());
         response.setStatus(entity.getStatus());
         response.setLastSyncedAt(entity.getLastSyncedAt());
+        applyRecentDividendPlanSummary(response, recentDividendPlan);
         response.setSubscriptionStatus(entity.getSubscriptionStatus());
         response.setSubscriptionAppliedDate(entity.getSubscriptionAppliedDate());
         response.setSubscriptionExpectedConfirmDate(entity.getSubscriptionExpectedConfirmDate());
@@ -3290,6 +3309,81 @@ public class InvestmentService {
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
         return response;
+    }
+
+    private Map<Long, InvestmentDividendPlanEntity> loadRecentDividendPlans(Collection<InvestmentProductEntity> products) {
+        if (products == null || products.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Set<Long> fundProductIds = products.stream()
+            .filter(Objects::nonNull)
+            .filter(product -> FUND_PRODUCT_TYPE.equals(product.getProductType()))
+            .map(InvestmentProductEntity::getId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        if (fundProductIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        LocalDate today = LocalDate.now();
+        LocalDate windowStart = today.minusDays(RECENT_DIVIDEND_PLAN_WINDOW_DAYS);
+        LocalDate windowEnd = today.plusDays(RECENT_DIVIDEND_PLAN_WINDOW_DAYS);
+        Map<Long, InvestmentDividendPlanEntity> recentPlans = new HashMap<>();
+
+        dividendPlanMapper.selectList(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
+                .in(InvestmentDividendPlanEntity::getProductId, fundProductIds)
+                .orderByDesc(InvestmentDividendPlanEntity::getPayDate)
+                .orderByDesc(InvestmentDividendPlanEntity::getRecordDate)
+                .orderByDesc(InvestmentDividendPlanEntity::getExDividendDate)
+                .orderByDesc(InvestmentDividendPlanEntity::getUpdatedAt))
+            .stream()
+            .filter(plan -> isRecentDividendPlan(plan, windowStart, windowEnd))
+            .forEach(plan -> recentPlans.merge(plan.getProductId(), plan, this::pickLaterDividendPlan));
+        return recentPlans;
+    }
+
+    private InvestmentDividendPlanEntity resolveRecentDividendPlan(InvestmentProductEntity product) {
+        if (product == null || !FUND_PRODUCT_TYPE.equals(product.getProductType()) || product.getId() == null) {
+            return null;
+        }
+        return loadRecentDividendPlans(List.of(product)).get(product.getId());
+    }
+
+    private boolean isRecentDividendPlan(
+        InvestmentDividendPlanEntity plan,
+        LocalDate windowStart,
+        LocalDate windowEnd
+    ) {
+        if (plan == null || plan.getProductId() == null || "cancelled".equals(plan.getStatus())) {
+            return false;
+        }
+        if (resolveNetDividendPerUnit(plan).compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+        LocalDate recencyDate = dividendPlanRecencyDate(plan);
+        return recencyDate != null && !recencyDate.isBefore(windowStart) && !recencyDate.isAfter(windowEnd);
+    }
+
+    private void applyRecentDividendPlanSummary(
+        InvestmentPositionResponse response,
+        InvestmentDividendPlanEntity recentDividendPlan
+    ) {
+        boolean hasRecentPlan = recentDividendPlan != null;
+        response.setHasRecentDividendPlan(hasRecentPlan);
+        if (!hasRecentPlan) {
+            response.setRecentDividendStatus(null);
+            response.setRecentDividendDate(null);
+            response.setRecentDividendPerUnit(null);
+            return;
+        }
+
+        LocalDate recencyDate = dividendPlanRecencyDate(recentDividendPlan);
+        String status = StringUtils.hasText(recentDividendPlan.getStatus())
+            ? recentDividendPlan.getStatus()
+            : resolveDividendPlanStatus(recencyDate);
+        response.setRecentDividendStatus(status);
+        response.setRecentDividendDate(recencyDate);
+        response.setRecentDividendPerUnit(resolveNetDividendPerUnit(recentDividendPlan));
     }
 
     private List<InvestmentTransactionResponse> toTransactionResponses(List<InvestmentTransactionEntity> transactions) {
@@ -4524,21 +4618,57 @@ public class InvestmentService {
     }
 
     private List<InvestmentProductResponse> fetchExternalProducts(String keyword, String productType) {
-        if (keyword.matches("\\d{6}") && (!StringUtils.hasText(productType) || "fund".equals(productType))) {
+        List<InvestmentProductResponse> mergedProducts = new ArrayList<>();
+
+        if (keyword.matches("\\d{6}") && !StringUtils.hasText(productType)) {
             Optional<InvestmentProductResponse> fund = fetchFundProduct(keyword);
             if (fund.isPresent()) {
-                return List.of(fund.get());
+                mergedProducts.add(fund.get());
             }
-        }
-
-        if (keyword.matches("\\d{6}") && (!StringUtils.hasText(productType) || "stock".equals(productType))) {
-            Optional<InvestmentProductResponse> stock = fetchStockProduct(keyword);
+            Optional<InvestmentProductResponse> stock = fetchStockProduct(keyword)
+                .or(() -> fetchTencentStockProduct(keyword));
             if (stock.isPresent()) {
-                return List.of(stock.get());
+                mergedProducts.add(stock.get());
             }
         }
 
-        return fetchEastMoneyProducts(keyword, productType);
+        if (keyword.matches("\\d{6}") && "fund".equals(productType)) {
+            Optional<InvestmentProductResponse> fund = fetchFundProduct(keyword);
+            if (fund.isPresent()) {
+                mergedProducts.add(fund.get());
+            }
+        }
+
+        if (keyword.matches("\\d{6}") && "stock".equals(productType)) {
+            Optional<InvestmentProductResponse> stock = fetchStockProduct(keyword)
+                .or(() -> fetchTencentStockProduct(keyword));
+            if (stock.isPresent()) {
+                mergedProducts.add(stock.get());
+            }
+        }
+
+        mergedProducts.addAll(fetchEastMoneyProducts(keyword, productType));
+        return deduplicateProducts(mergedProducts);
+    }
+
+    private List<InvestmentProductResponse> deduplicateProducts(List<InvestmentProductResponse> products) {
+        return new ArrayList<>(products.stream()
+            .filter(Objects::nonNull)
+                .collect(Collectors.toMap(
+                item -> String.join("|",
+                    safeText(item.getProductType()),
+                    safeText(item.getSymbol()),
+                    safeText(item.getMarket())
+                ),
+                Function.identity(),
+                (left, right) -> left,
+                LinkedHashMap::new
+            ))
+            .values());
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value;
     }
 
     private Optional<InvestmentProductResponse> fetchFundProduct(String code) {
@@ -4602,7 +4732,6 @@ public class InvestmentService {
             return java.util.stream.StreamSupport.stream(rows.spliterator(), false)
                 .map(row -> toExternalProductFromSuggestion(row, productType))
                 .flatMap(Optional::stream)
-                .limit(8)
                 .toList();
         } catch (Exception ex) {
             return Collections.emptyList();
