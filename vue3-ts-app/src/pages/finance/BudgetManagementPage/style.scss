@@ -6,7 +6,7 @@
 .budget-summary-card,
 .budget-history-item {
   border: 1px solid var(--color-bg-soft-2);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .budget-summary-card {
@@ -89,7 +89,7 @@
 
 .budget-action-danger {
   border: 1px solid #fca5a5;
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: #dc2626;
 }
 

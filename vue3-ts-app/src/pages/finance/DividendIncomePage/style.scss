@@ -9,7 +9,7 @@
   padding: var(--space-16) var(--space-12);
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-12);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   font-size: var(--font-size-14);
   font-weight: 500;
@@ -29,7 +29,7 @@
   padding: var(--space-12);
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-12);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .summary-row {
@@ -90,28 +90,58 @@
   padding: 10px;
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-12);
-  border: 1px solid #d7dde8;
-  background: #f8fafc;
+  border: 1px solid var(--color-dividend-coverage-card-border);
+  background: var(--color-dividend-coverage-card-bg);
   box-sizing: border-box;
+  overflow: hidden;
+  --coverage-scale: 0;
+  --coverage-fill: var(--color-dividend-coverage-covered-fill);
+}
+
+.expense-coverage-item::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--coverage-fill);
+  transform: scaleX(var(--coverage-scale));
+  transform-origin: left center;
+  pointer-events: none;
 }
 
 .expense-coverage-item.is-covered {
-  border-color: #bbf7d0;
+  border-color: var(--color-dividend-coverage-covered-border);
+  --coverage-fill: var(--color-dividend-coverage-covered-fill);
 }
 
 .expense-coverage-item.is-partial {
-  border-color: #dbeafe;
+  border-color: var(--color-dividend-coverage-partial-border);
+  --coverage-fill: var(--color-dividend-coverage-partial-fill);
 }
 
 .expense-coverage-item.is-pending {
-  border-color: #cbd5e1;
+  border-color: var(--color-dividend-coverage-pending-border);
+  --coverage-fill: var(--color-dividend-coverage-pending-fill);
+}
+
+.expense-coverage-item.is-editing {
+  aspect-ratio: auto;
+  min-height: auto;
+}
+
+.expense-coverage-item.is-editing .expense-coverage-main {
+  grid-template-rows: auto auto auto;
+  height: auto;
+  padding-bottom: 0;
 }
 
 .expense-coverage-main {
   display: grid;
+  grid-template-rows: auto auto 1fr;
   gap: var(--space-4);
   height: 100%;
-  align-content: space-between;
+  align-content: start;
+  position: relative;
+  z-index: 1;
 }
 
 .expense-coverage-top {
@@ -142,6 +172,7 @@
   display: flex;
   gap: 6px;
   justify-content: flex-start;
+  margin-top: 2px;
 }
 
 .expense-action-icon {
@@ -153,9 +184,9 @@
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--color-dividend-action-bg);
   color: var(--color-text-secondary);
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--color-dividend-action-shadow);
 }
 
 .expense-action-icon svg {
@@ -165,7 +196,13 @@
 }
 
 .expense-action-icon.danger {
-  color: #b91c1c;
+  color: var(--color-dividend-action-danger);
+}
+
+@for $i from 0 through 100 {
+  .expense-coverage-item.coverage-level-#{$i} {
+    --coverage-scale: #{$i * 0.01};
+  }
 }
 
 .expense-modal-form {

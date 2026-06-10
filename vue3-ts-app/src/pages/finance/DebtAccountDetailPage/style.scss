@@ -15,9 +15,9 @@
   min-height: 34px;
   flex: 0 0 auto;
   padding: 0 14px;
-  border: 1px solid #fecaca;
+  border: 1px solid var(--color-danger-soft);
   border-radius: var(--radius-12);
-  background: #fff5f5;
+  background: var(--color-danger-soft);
   color: var(--color-danger);
   font-size: var(--font-size-12);
   font-weight: 700;
@@ -30,7 +30,7 @@
   margin: 0;
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   font-size: var(--font-size-14);
   font-weight: 600;
@@ -49,7 +49,7 @@
   border: 1px solid var(--color-border-blue);
   border-radius: var(--radius-20);
   background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
-  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+  box-shadow: var(--color-finance-card-shadow);
 }
 
 .debt-detail-summary-top {
@@ -86,7 +86,7 @@
   align-items: center;
   padding: 0 12px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--color-fund-profit-pill-bg);
   color: var(--color-brand);
   font-size: var(--font-size-12);
   font-weight: 700;
@@ -112,17 +112,17 @@
   gap: 4px;
   padding: 10px 12px;
   border-radius: var(--radius-14);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--color-finance-metric-bg);
 }
 
 .debt-detail-metric span {
-  color: var(--color-text-muted);
+  color: var(--color-finance-metric-label);
   font-size: var(--font-size-12);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .debt-detail-metric strong {
-  color: var(--color-text-primary);
+  color: var(--color-finance-metric-value);
   font-size: var(--font-size-14);
   font-weight: 700;
 }
@@ -170,7 +170,7 @@
   align-items: center;
   padding: 0 12px;
   border-radius: 999px;
-  background: var(--color-white);
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-soft);
 }
 
@@ -203,7 +203,7 @@
   padding: 14px;
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .debt-record-card-main,
@@ -234,8 +234,8 @@
 }
 
 .debt-record-chip.is-payable {
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
 }
 
 .debt-record-remark {
@@ -264,7 +264,7 @@
 }
 
 .debt-record-amount.is-negative {
-  color: #b45309;
+  color: var(--color-warning-strong);
 }
 
 .debt-record-actions {
@@ -285,7 +285,7 @@
 }
 
 .debt-record-action.is-danger {
-  background: #fee2e2;
+  background: var(--color-danger-soft);
   color: var(--color-danger);
 }
 

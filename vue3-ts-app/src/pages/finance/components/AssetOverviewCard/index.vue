@@ -33,19 +33,19 @@ defineProps<{
     <div class="asset-metrics">
       <div class="asset-metric-item">
         <span>当月结余</span>
-        <AmountText tag="strong" :value="overview.monthlyBalance.replace('当月结余 ', '')" />
+        <AmountText tag="strong" tone="inherit" :value="overview.monthlyBalance.replace('当月结余 ', '')" />
       </div>
       <div class="asset-metric-item">
         <span>月预算</span>
-        <AmountText tag="strong" :value="overview.budget.replace('月预算 ', '')" />
+        <AmountText tag="strong" tone="inherit" :value="overview.budget.replace('月预算 ', '')" />
       </div>
       <div class="asset-metric-item">
         <span>收入</span>
-        <AmountText tag="strong" :value="overview.monthlyIncome.replace('收入 ', '')" />
+        <AmountText tag="strong" tone="inherit" :value="overview.monthlyIncome.replace('收入 ', '')" />
       </div>
       <div class="asset-metric-item">
         <span>支出</span>
-        <AmountText tag="strong" :value="overview.monthlyExpense.replace('支出 ', '')" />
+        <AmountText tag="strong" tone="inherit" :value="overview.monthlyExpense.replace('支出 ', '')" />
       </div>
     </div>
   </section>

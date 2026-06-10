@@ -110,7 +110,7 @@
   min-height: 42px;
   border-radius: var(--radius-14);
   border: 1px solid var(--color-bg-soft-2);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-primary);
   font-size: var(--font-size-14);
   font-weight: 700;
@@ -148,7 +148,7 @@
   margin: 0;
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-18);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   font-size: var(--font-size-14);
   font-weight: 600;
@@ -164,7 +164,7 @@
   padding: var(--space-14);
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-18);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .investment-detail-card h2 {
@@ -442,7 +442,7 @@
   padding: 0 12px;
   border: 0;
   border-radius: var(--radius-10);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-secondary);
   font-size: var(--font-size-12);
   font-weight: 700;
@@ -481,7 +481,7 @@
   padding: 10px 14px;
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-18);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .investment-detail-transaction-item {
@@ -616,7 +616,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--color-white);
+  background: var(--color-bg-card);
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.16);
   transition: transform 180ms ease;
 }

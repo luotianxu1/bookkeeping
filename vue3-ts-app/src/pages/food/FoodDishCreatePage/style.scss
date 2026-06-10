@@ -1,14 +1,9 @@
 .food-create-page {
-  --food-surface: #ffffff;
-  --food-surface-soft: #f8fafc;
-  --food-border: #e2e8f0;
-  --food-text: #0f172a;
-  --food-text-muted: #334155;
   min-height: calc(100dvh - 16px);
   display: grid;
   align-content: start;
   gap: var(--space-12);
-  color: var(--food-text);
+  color: var(--color-food-text);
 }
 
 .page-head :deep(.page-header h1),
@@ -17,16 +12,16 @@
 }
 
 .page-head :deep(.page-header h1) {
-  color: var(--food-text);
+  color: var(--color-food-text);
 }
 
 .form-card {
   display: grid;
   gap: var(--space-12);
   padding: 16px;
-  border: 1px solid var(--food-border);
+  border: 1px solid var(--color-food-border);
   border-radius: var(--radius-18);
-  background: var(--food-surface);
+  background: var(--color-food-surface);
 }
 
 .form-card h2 {
@@ -59,11 +54,11 @@
 .mini-row input,
 .step-box textarea {
   width: 100%;
-  border: 1px solid var(--food-border);
+  border: 1px solid var(--color-food-border);
   outline: none;
   border-radius: var(--radius-14);
-  background: var(--food-surface-soft);
-  color: var(--food-text);
+  background: var(--color-food-surface-soft);
+  color: var(--color-food-text);
   font-size: var(--font-size-14);
   line-height: 1.5;
 }
@@ -86,9 +81,9 @@
   align-content: center;
   justify-items: center;
   gap: var(--space-8);
-  border: 1px solid var(--food-border);
+  border: 1px solid var(--color-food-border);
   border-radius: var(--radius-16);
-  background: linear-gradient(180deg, #fff7ed 0%, var(--food-surface-soft) 100%);
+  background: linear-gradient(180deg, var(--color-food-upload-grad-start) 0%, var(--color-food-surface-soft) 100%);
   text-align: center;
 }
 
@@ -99,7 +94,7 @@
 }
 
 .upload-box span {
-  color: #2563eb;
+  color: var(--color-brand-strong);
   font-size: var(--font-size-13);
   line-height: 1.45;
   font-weight: 400;
@@ -131,8 +126,8 @@
 .row-remove {
   min-height: 48px;
   border-radius: var(--radius-14);
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--color-food-danger-soft-bg);
+  color: var(--color-food-danger-soft-text);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
@@ -142,9 +137,9 @@
   grid-template-columns: 28px minmax(0, 1fr) 52px;
   gap: var(--space-12);
   padding: 14px;
-  border: 1px solid var(--food-border);
+  border: 1px solid var(--color-food-border);
   border-radius: var(--radius-16);
-  background: var(--food-surface-soft);
+  background: var(--color-food-surface-soft);
 }
 
 .step-box span {
@@ -174,7 +169,7 @@
   margin: 0;
   padding: 24px 16px;
   border-radius: var(--radius-18);
-  background: var(--food-surface);
-  color: var(--food-text-muted);
+  background: var(--color-food-surface);
+  color: var(--color-text-secondary);
   text-align: center;
 }

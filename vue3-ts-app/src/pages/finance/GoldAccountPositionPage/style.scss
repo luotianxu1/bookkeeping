@@ -16,9 +16,9 @@
   display: inline-grid;
   place-items: center;
   flex: 0 0 28px;
-  border: 1px solid #dbe4f2;
+  border: 1px solid var(--color-border-soft);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-bg-card-glass);
   box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
 }
 
@@ -27,7 +27,7 @@
 }
 
 .gold-position-refresh-icon {
-  color: #2563eb;
+  color: var(--color-brand-strong);
   font-size: 16px;
   line-height: 1;
 }
@@ -39,27 +39,27 @@
 .gold-position-message {
   margin: 0;
   padding: 12px 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 13px;
 }
 
 .gold-position-message-error,
 .gold-position-form-error {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .gold-position-summary {
   padding: 14px;
   display: grid;
   gap: 8px;
-  border: 1px solid #d9e5ff;
+  border: 1px solid var(--color-border-blue);
   border-radius: 20px;
-  background: linear-gradient(135deg, #f4f8ff, #e5eeff);
-  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+  background: linear-gradient(135deg, var(--color-finance-bg-1), var(--color-finance-bg-2));
+  box-shadow: var(--color-finance-card-shadow);
 }
 
 .summary-head span {
-  color: #4f6ea8;
+  color: var(--color-finance-subtitle);
   font-size: 12px;
   font-weight: 500;
 }
@@ -78,7 +78,7 @@
 }
 
 .summary-weight-label {
-  color: #4f6ea8;
+  color: var(--color-finance-subtitle);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.2;
@@ -93,7 +93,7 @@
 
 .summary-weight-value {
   display: inline-block;
-  color: #facc15;
+  color: var(--color-chart-gold);
   font-size: 34px;
   line-height: 1.05;
   font-weight: 700;
@@ -108,34 +108,34 @@
   padding: 8px 12px;
   display: grid;
   gap: 2px;
-  border: 1px solid rgba(250, 204, 21, 0.28);
+  border: 1px solid var(--color-bg-orange-grad-2);
   border-radius: 14px;
-  background: rgba(255, 252, 235, 0.92);
+  background: var(--color-warning-soft);
 }
 
 .gold-price-chip-label {
-  color: #a16207;
+  color: var(--color-warning-strong);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
 .gold-price-chip-value {
-  color: #7c2d12;
+  color: var(--color-orange);
   font-size: 16px;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .gold-price-chip-time {
-  color: #92400e;
+  color: var(--color-warning-strong);
   font-size: 11px;
   font-weight: 500;
 }
 
 
 .liquidation-link {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-size: 11px;
   font-weight: 500;
   text-decoration: none;
@@ -153,18 +153,19 @@
 }
 
 .summary-grid span {
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 400;
 }
 
 .summary-grid strong {
+  color: var(--color-text-primary);
   font-size: 14px;
   font-weight: 700;
 }
 
 .summary-static-amount {
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .summary-grid :deep(.amount-text--positive),
@@ -178,12 +179,12 @@
 }
 
 .summary-grid :deep(.amount-text--neutral) {
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .position-section-title {
   margin: 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
@@ -197,11 +198,11 @@
 .position-card {
   width: 100%;
   padding: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border-soft);
   border-radius: 12px;
   display: grid;
   gap: 6px;
-  background: #ffffff;
+  background: var(--color-bg-card);
 }
 
 .position-card-main {
@@ -227,8 +228,8 @@
   border-radius: 9px;
   display: inline-grid;
   place-items: center;
-  color: #d97706;
-  background: #fef3c7;
+  color: var(--color-warning-strong);
+  background: var(--color-warning-soft);
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
@@ -243,14 +244,14 @@
 }
 
 .position-card-title {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 14px;
   font-weight: 700;
   line-height: 1.2;
 }
 
 .position-card-bottom span {
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 11px;
   font-weight: 600;
   line-height: 1.2;
@@ -284,19 +285,19 @@
 }
 
 .position-meta {
-  color: #334155 !important;
+  color: var(--color-text-secondary) !important;
 }
 
 .position-meta::before {
   content: '●';
-  color: #facc15;
+  color: var(--color-chart-gold);
   margin-right: 4px;
 }
 
 .gold-position-empty {
   margin: 0;
   padding: 16px 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 13px;
   text-align: center;
 }
@@ -308,13 +309,13 @@
 
 .gold-position-form-hint {
   margin: -2px 0 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
 
 .gold-position-form-hint-warning {
-  color: #b45309;
+  color: var(--color-orange);
 }
 
 .gold-position-card-actions {
@@ -339,7 +340,7 @@
 .gold-position-button-danger:deep(.common-button),
 .gold-position-button-danger {
   background: var(--color-danger) !important;
-  color: #ffffff !important;
+  color: var(--color-text-inverse) !important;
   border-color: var(--color-danger) !important;
 }
 
@@ -356,7 +357,7 @@
 
 .gold-delete-message {
   margin: 0;
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.6;

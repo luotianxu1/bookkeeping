@@ -46,7 +46,7 @@
 .calendar-message {
   margin: 0;
   border-radius: var(--radius-16);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   font-size: var(--font-size-14);
   font-weight: 600;
@@ -70,7 +70,7 @@
   gap: var(--space-10);
   padding: 14px;
   border-radius: var(--radius-20);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .calendar-weekdays,
@@ -89,7 +89,7 @@
 .calendar-weekdays span,
 .mini-weekdays span {
   text-align: center;
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-size: 11px;
   font-weight: 600;
 }
@@ -120,31 +120,31 @@
 .calendar-day-number {
   position: relative;
   z-index: 1;
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 14px;
   font-weight: 600;
   line-height: 1;
 }
 
 .calendar-day-lunar {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-size: 8px;
   font-weight: 500;
   line-height: 1;
 }
 
 .calendar-day-lunar.is-holiday {
-  color: #ef4444;
+  color: var(--color-danger);
   font-weight: 600;
 }
 
 .calendar-day-cell.is-weekend .calendar-day-number {
-  color: #1d4ed8;
+  color: var(--color-brand);
   font-weight: 700;
 }
 
 .calendar-day-cell.is-selected .calendar-day-number {
-  color: #ffffff;
+  color: var(--color-text-inverse);
   font-weight: 700;
 }
 
@@ -165,8 +165,8 @@
 }
 
 .calendar-day-badge.is-workday {
-  background: #f59e0b;
-  color: #ffffff;
+  background: var(--color-warning);
+  color: var(--color-text-inverse);
 }
 
 .calendar-day-cell.is-selected::before {
@@ -177,7 +177,7 @@
   width: 40px;
   height: 40px;
   border-radius: 999px;
-  background: #1d4ed8;
+  background: var(--color-brand);
   transform: translate(-50%, -50%);
 }
 
@@ -188,7 +188,7 @@
 }
 
 .calendar-day-cell.is-selected .calendar-day-lunar {
-  color: #ffffff;
+  color: var(--color-text-inverse);
   font-weight: 500;
 }
 
@@ -200,11 +200,11 @@
   width: 4px;
   height: 4px;
   border-radius: 999px;
-  background: #1d4ed8;
+  background: var(--color-brand);
 }
 
 .calendar-notes-card > strong {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 16px;
   font-weight: 700;
 }
@@ -218,7 +218,7 @@
 
 .calendar-note-item + .calendar-note-item {
   padding-top: 10px;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid var(--color-bg-soft-2);
 }
 
 .calendar-note-main {
@@ -227,7 +227,7 @@
 }
 
 .calendar-note-main strong {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -235,7 +235,7 @@
 .calendar-note-main p,
 .calendar-note-side span {
   margin: 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -254,16 +254,16 @@
 
 .calendar-note-side b.is-upcoming,
 .calendar-note-side b.is-today {
-  color: #1d4ed8;
+  color: var(--color-brand);
 }
 
 .calendar-note-side b.is-past {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
 }
 
 .calendar-empty {
   margin: 0;
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -279,13 +279,13 @@
   padding: 8px;
   border: 0;
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--color-bg-card);
   text-align: left;
   cursor: pointer;
 }
 
 .mini-month-card.active {
-  background: #eff6ff;
+  background: var(--color-bg-brand-soft);
 }
 
 .mini-month-head {
@@ -296,23 +296,23 @@
 }
 
 .mini-month-head strong {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 12px;
   font-weight: 700;
 }
 
 .mini-month-card.active .mini-month-head strong {
-  color: #1d4ed8;
+  color: var(--color-brand);
 }
 
 .mini-month-head span {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-size: 9px;
   font-weight: 600;
 }
 
 .mini-month-card.active .mini-month-head span {
-  color: #60a5fa;
+  color: var(--color-brand-strong);
 }
 
 .mini-weekdays {
@@ -331,7 +331,7 @@
   display: inline-flex;
   align-items: flex-start;
   justify-content: center;
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 7px;
   font-weight: 600;
   line-height: 1;
@@ -351,12 +351,12 @@
 }
 
 .mini-month-day.is-weekend {
-  color: #1d4ed8;
+  color: var(--color-brand);
   font-weight: 700;
 }
 
 .mini-month-day.is-holiday {
-  color: #ef4444;
+  color: var(--color-danger);
   font-weight: 700;
 }
 
@@ -371,11 +371,11 @@
 }
 
 .mini-month-mark-dot.is-holiday {
-  background: #ef4444;
+  background: var(--color-danger);
 }
 
 .mini-month-mark-dot.is-workday {
-  background: #f59e0b;
+  background: var(--color-warning);
   top: -1px;
   right: -1px;
   bottom: auto;
@@ -389,11 +389,11 @@
   justify-self: center;
   align-items: center;
   border-radius: 999px;
-  background: #1d4ed8;
-  color: #ffffff;
+  background: var(--color-brand);
+  color: var(--color-text-inverse);
   font-weight: 700;
 }
 
 .mini-month-day.is-selected .mini-month-mark-dot {
-  background: #ffffff;
+  background: var(--color-text-inverse);
 }

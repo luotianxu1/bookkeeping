@@ -33,7 +33,7 @@
   padding: 0 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-14);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .search-bar input {
@@ -63,7 +63,7 @@
   padding: 0 14px;
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   font-size: var(--font-size-12);
   font-weight: 600;
@@ -71,9 +71,9 @@
 }
 
 .category-pill.active {
-  border-color: #d4e5ff;
-  background: #eaf3ff;
-  color: #2563eb;
+  border-color: var(--color-food-pill-active-border);
+  background: var(--color-food-pill-active-bg);
+  color: var(--color-food-pill-active-text);
 }
 
 .ingredient-groups {
@@ -87,7 +87,7 @@
   padding: 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-18);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .group-head {
@@ -163,14 +163,14 @@
   font-size: var(--font-size-14);
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.18);
+  box-shadow: var(--color-food-danger-shadow);
 }
 
 .page-error {
   margin: 0;
   padding: 24px 16px;
   border-radius: var(--radius-18);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   text-align: center;
 }

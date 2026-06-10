@@ -282,6 +282,11 @@ function getCoveragePercentText(item: ExpenseCoverageItem) {
   return `${formatAmount(item.coveredPercent)}%`
 }
 
+function getCoverageLevelClass(item: ExpenseCoverageItem) {
+  const percent = Math.round(Math.max(0, Math.min(100, item.coveredPercent)))
+  return `coverage-level-${percent}`
+}
+
 function toggleExpenseEditing() {
   isExpenseEditing.value = !isExpenseEditing.value
 }
@@ -302,15 +307,6 @@ async function removeExpenseItem(id: number) {
   }
 }
 
-function getCoverageBackgroundStyle(item: ExpenseCoverageItem) {
-  const percent = Math.max(0, Math.min(100, item.coveredPercent))
-  const activeColor = '#86efac'
-  const baseColor = '#f8fafc'
-
-  return {
-    background: `linear-gradient(90deg, ${activeColor} 0%, ${activeColor} ${percent}%, ${baseColor} ${percent}%, ${baseColor} 100%)`,
-  }
-}
 </script>
 
 <template>
@@ -360,8 +356,7 @@ function getCoverageBackgroundStyle(item: ExpenseCoverageItem) {
         <article
           v-for="item in expenseCoverageItems"
           :key="item.id"
-          :class="['expense-coverage-item', `is-${item.status}`, { 'is-editing': isExpenseEditing }]"
-          :style="getCoverageBackgroundStyle(item)"
+          :class="['expense-coverage-item', `is-${item.status}`, getCoverageLevelClass(item), { 'is-editing': isExpenseEditing }]"
         >
           <div class="expense-coverage-main">
             <div class="expense-coverage-top">

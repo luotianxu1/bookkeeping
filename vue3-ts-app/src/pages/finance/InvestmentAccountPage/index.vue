@@ -729,7 +729,7 @@ function buildFundRefreshSuccessMessage(summary: InvestmentFundSyncSummary) {
         :disabled="isRefreshingFunds"
         :aria-label="isRefreshingFunds ? '基金数据刷新中' : '刷新所有基金数据'"
         @click="refreshFundData"
-      >
+    >
         {{ isRefreshingFunds ? '刷新中...' : '刷新基金' }}
       </CommonButton>
     </PageHeader>
@@ -887,13 +887,6 @@ function buildFundRefreshSuccessMessage(summary: InvestmentFundSyncSummary) {
             {{ isLookingUpProduct ? '搜索中' : '搜索' }}
           </button>
         </label>
-        <p v-if="productLookupMessage" class="investment-lookup-message">
-          {{ productLookupMessage }}
-        </p>
-
-        <p v-if="isFundSubscriptionDraft" class="investment-lookup-message">
-          场外基金按金额申购处理；若目标申购日净值已同步，系统会直接确认份额，否则会在净值同步后自动确认。QDII 基金净值通常更新更晚。
-        </p>
 
         <label v-if="isFundSubscriptionDraft" class="investment-add-modal-field">
           <span>申购时点</span>

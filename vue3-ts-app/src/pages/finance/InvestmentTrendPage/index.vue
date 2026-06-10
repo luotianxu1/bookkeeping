@@ -7,6 +7,7 @@ import AmountText from '@/components/common/AmountText/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
+import { useTheme } from '@/utils/theme'
 import {
   getAssetTrend,
   type AssetTrend,
@@ -50,11 +51,10 @@ const trend = ref<AssetTrend | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
 const chartRef = ref<HTMLDivElement | null>(null)
-const isDark = ref(false)
+const { isDark } = useTheme()
 const requestSerial = ref(0)
 const isInitialized = ref(false)
 
-let mediaQuery: MediaQueryList | null = null
 let echartsLib: (typeof import('echarts')) | null = null
 let chartIns: ECharts | null = null
 
@@ -203,20 +203,25 @@ const chartOption = computed<EChartsCoreOption>(() => {
     0,
   )
   const isSinglePoint = points.length === 1
-  const axisText = isDark.value ? '#8FA3C7' : '#94A3B8'
-  const axisLine = isDark.value ? '#253045' : '#CBD5E1'
-  const splitLine = isDark.value ? '#1E293B' : '#E2E8F0'
-  const areaStart = isDark.value ? 'rgba(37,99,235,0.34)' : 'rgba(37,99,235,0.20)'
-  const areaEnd = isDark.value ? 'rgba(37,99,235,0.04)' : 'rgba(37,99,235,0.02)'
+  const rootStyle = getComputedStyle(document.documentElement)
+  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
+  const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const areaStart = rootStyle.getPropertyValue('--color-chart-brand-area-start').trim()
+  const areaEnd = rootStyle.getPropertyValue('--color-chart-brand-area-end').trim()
+  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
+  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
+  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
+  const brandColor = rootStyle.getPropertyValue('--color-brand').trim()
 
   return {
     animation: false,
     grid: { left: 18, right: 18, top: 16, bottom: 8, containLabel: true },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: isDark.value ? '#0F172A' : '#FFFFFF',
-      borderColor: isDark.value ? '#253045' : '#E2E8F0',
-      textStyle: { color: isDark.value ? '#E2E8F0' : '#0F172A' },
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText },
       valueFormatter: (value: number | string) => `¥ ${formatCurrency(Number(value ?? 0))}`,
     },
     xAxis: {
@@ -255,13 +260,13 @@ const chartOption = computed<EChartsCoreOption>(() => {
         symbol: 'circle',
         symbolSize: isSinglePoint ? 10 : 6,
         data: pointValues,
-        lineStyle: { width: 4, color: '#2563EB' },
-        itemStyle: { color: '#2563EB' },
+        lineStyle: { width: 4, color: brandColor },
+        itemStyle: { color: brandColor },
         label: isSinglePoint
           ? {
               show: true,
               position: 'top',
-              color: isDark.value ? '#E2E8F0' : '#0F172A',
+              color: tooltipText,
               fontSize: 12,
               fontWeight: 700,
               formatter: ({ value }: { value: number | string }) => `¥ ${formatCurrency(Number(value ?? 0))}`,
@@ -296,14 +301,6 @@ watch([trend, isDark], () => {
   renderChart()
 }, { deep: true })
 
-function updateThemeState() {
-  isDark.value = Boolean(mediaQuery?.matches)
-}
-
-function handleThemeChange() {
-  updateThemeState()
-}
-
 async function ensureEcharts() {
   if (!echartsLib) {
     echartsLib = await import('echarts')
@@ -330,9 +327,6 @@ function onResize() {
 }
 
 onMounted(async () => {
-  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  updateThemeState()
-  mediaQuery.addEventListener('change', handleThemeChange)
   await ensureEcharts()
   await loadFamilyMembers()
   isInitialized.value = true
@@ -343,7 +337,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
-  mediaQuery?.removeEventListener('change', handleThemeChange)
   chartIns?.dispose()
   chartIns = null
 })
@@ -559,24 +552,24 @@ function getAllocationDotStyle(item: AssetTrendAllocation) {
 
 function getAccountTypeColors(value?: string | null) {
   if (value === 'cash') {
-    return { fill: '#16A34A', track: '#ECFDF5' }
+    return { fill: '#16A34A', track: isDark.value ? 'rgba(22, 101, 52, 0.24)' : '#ECFDF5' }
   }
   if (value === 'investment') {
-    return { fill: '#DC2626', track: '#FEF2F2' }
+    return { fill: '#DC2626', track: isDark.value ? 'rgba(127, 29, 29, 0.24)' : '#FEF2F2' }
   }
   if (value === 'gold') {
-    return { fill: '#D97706', track: '#FFF7ED' }
+    return { fill: '#D97706', track: isDark.value ? 'rgba(120, 53, 15, 0.24)' : '#FFF7ED' }
   }
   if (value === 'other_asset') {
-    return { fill: '#2563EB', track: '#EFF6FF' }
+    return { fill: '#2563EB', track: isDark.value ? '#18284D' : '#EFF6FF' }
   }
   if (value === 'debt' || value === 'liability' || value === 'other_liability' || value === 'credit_card') {
-    return { fill: '#7C3AED', track: '#F5F3FF' }
+    return { fill: '#7C3AED', track: isDark.value ? 'rgba(76, 29, 149, 0.24)' : '#F5F3FF' }
   }
   if (value === 'human_relation') {
-    return { fill: '#EA580C', track: '#FFF7ED' }
+    return { fill: '#EA580C', track: isDark.value ? 'rgba(124, 45, 18, 0.24)' : '#FFF7ED' }
   }
-  return { fill: '#64748B', track: '#F1F5F9' }
+  return { fill: '#64748B', track: isDark.value ? '#182233' : '#F1F5F9' }
 }
 
 function formatCurrency(value?: number | null) {

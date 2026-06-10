@@ -17,13 +17,13 @@
 
 .common-button-secondary {
   border: 1px solid var(--color-border-soft-2);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-secondary);
 }
 
 .common-button-primary {
   background: var(--color-brand);
-  color: var(--color-white);
+  color: var(--color-text-inverse);
 }
 
 .common-button:disabled {

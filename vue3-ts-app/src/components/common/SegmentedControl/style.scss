@@ -4,7 +4,7 @@
   grid-template-columns: repeat(var(--count), minmax(0, 1fr));
   padding: var(--space-4);
   border-radius: var(--radius-14);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   overflow: hidden;
 }
 
@@ -25,7 +25,7 @@
 }
 
 .segmented-control--surface .segmented-control-indicator {
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .segmented-control-item {

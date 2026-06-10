@@ -12,18 +12,18 @@
   display: grid;
   gap: var(--space-10);
   padding: 14px;
-  border: 1px solid #d9e5ff;
+  border: 1px solid var(--color-border-blue);
   border-radius: var(--radius-20);
-  background: linear-gradient(135deg, #f8fbff 0%, #eef4ff 100%);
-  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.18);
+  background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
+  box-shadow: var(--color-finance-card-shadow);
 }
 
 .overview-panel,
 .chart-card,
 .overview-orders-panel {
-  background: var(--color-white);
-  border-color: #e2e8f0;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  box-shadow: var(--color-shadow-soft);
 }
 
 .overview-picker-row,
@@ -80,8 +80,8 @@
   gap: 4px;
   padding: 12px;
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.84);
-  border: 1px solid rgba(219, 231, 255, 0.85);
+  background: var(--color-fund-profit-pill-bg);
+  border: 1px solid var(--color-fund-profit-pill-border);
 }
 
 .overview-stat-card span {
@@ -91,7 +91,7 @@
 }
 
 .overview-stat-card strong {
-  color: #dc2626;
+  color: var(--color-danger);
   font-size: 22px;
   line-height: 1.1;
 }
@@ -99,7 +99,7 @@
 .overview-stat-card strong.is-zero,
 .bucket-card-metrics b.is-zero,
 .overview-order-metrics strong.is-zero {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
 }
 
 .overview-stat-card p {
@@ -122,7 +122,7 @@
 
 .calendar-weekdays span {
   text-align: center;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: var(--font-size-11);
   font-weight: 700;
 }
@@ -141,10 +141,10 @@
   display: grid;
   gap: 8px;
   padding: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-16);
   text-align: left;
-  background: #f8fafc;
+  background: var(--color-bg-card-soft);
   cursor: pointer;
 }
 
@@ -152,10 +152,10 @@
   aspect-ratio: 1 / 1;
   place-items: center;
   padding: 10px;
-  border-color: #dbe7ff;
+  border-color: var(--color-border-blue-soft);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.96) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    linear-gradient(180deg, var(--color-bg-card) 0%, var(--color-bg-card-grad) 100%);
+  box-shadow: inset 0 1px 0 var(--color-fund-profit-pill-bg);
 }
 
 .bucket-card--calendar .calendar-card-center {
@@ -172,7 +172,7 @@
   font-size: 18px;
   line-height: 1;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .bucket-card--calendar .calendar-card-dot {
@@ -184,50 +184,50 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #2563eb;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  background: var(--color-brand-strong);
+  box-shadow: 0 0 0 4px var(--color-ring-focus);
 }
 
 .bucket-card--calendar.is-active {
-  border-color: #bfdbfe;
+  border-color: var(--color-bg-sky-grad-2);
   background:
-    radial-gradient(circle at top right, rgba(96, 165, 250, 0.18), transparent 42%),
-    linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+    radial-gradient(circle at top right, var(--color-ring-focus), transparent 42%),
+    linear-gradient(180deg, var(--color-bg-card) 0%, var(--color-bg-brand-soft) 100%);
 }
 
 .bucket-card--calendar.is-selected {
-  border-color: #2563eb;
+  border-color: var(--color-brand-strong);
   background:
-    linear-gradient(180deg, rgba(37, 99, 235, 0.16) 0%, rgba(219, 234, 254, 0.92) 100%);
+    linear-gradient(180deg, var(--color-bg-brand-tint) 0%, var(--color-bg-brand-soft) 100%);
   box-shadow:
-    0 12px 24px rgba(37, 99, 235, 0.18),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+    0 12px 24px var(--color-ring-focus),
+    inset 0 0 0 1px var(--color-fund-profit-pill-bg);
 }
 
 .bucket-card--calendar.is-selected .calendar-card-center strong {
-  color: #1d4ed8;
+  color: var(--color-brand);
 }
 
 .bucket-card--calendar.is-muted {
   opacity: 1;
   border-style: dashed;
-  border-color: #e2e8f0;
-  background: #f8fafc;
+  border-color: var(--color-border);
+  background: var(--color-bg-card-soft);
 }
 
 .bucket-card--calendar.is-muted .calendar-card-center strong {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
 }
 
 .bucket-card--calendar.is-muted .calendar-card-dot {
-  background: #cbd5e1;
+  background: var(--color-border);
   box-shadow: none;
 }
 
 .bucket-card.is-selected {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+  border-color: var(--color-bg-sky-grad-2);
+  background: var(--color-bg-brand-soft);
+  box-shadow: 0 8px 18px var(--color-ring-focus);
 }
 
 .bucket-card.is-muted {
@@ -235,7 +235,7 @@
 }
 
 .bucket-card.is-active .bucket-card-metrics b {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .bucket-card-head,
@@ -257,7 +257,7 @@
 }
 
 .bucket-card-metrics b {
-  color: #dc2626;
+  color: var(--color-danger);
   font-size: var(--font-size-12);
   line-height: 1.2;
 }
@@ -285,7 +285,7 @@
   padding: 24px 16px;
   border-radius: var(--radius-18);
   text-align: center;
-  background: #f8fafc;
+  background: var(--color-bg-card-soft);
 }
 
 .type-legend {
@@ -326,14 +326,14 @@
   display: grid;
   gap: var(--space-10);
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-16);
-  background: #ffffff;
+  background: var(--color-bg-card);
 }
 
 .overview-order-head strong {
   display: block;
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: var(--font-size-14);
   line-height: 1.2;
   font-weight: 700;
@@ -358,18 +358,18 @@
 }
 
 .overview-order-tag--status {
-  color: #475569;
-  background: #f1f5f9;
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-soft);
 }
 
 .overview-order-tag--shot {
-  color: #047857;
-  background: #ecfdf5;
+  color: var(--color-success-strong);
+  background: var(--color-bg-success-soft);
 }
 
 .overview-order-tag--pending {
-  color: #c2410c;
-  background: #fff7ed;
+  color: var(--color-orange);
+  background: var(--color-warning-soft);
 }
 
 .overview-order-metrics {
@@ -382,7 +382,7 @@
   gap: 4px;
   padding: 10px;
   border-radius: var(--radius-12);
-  background: #f8fafc;
+  background: var(--color-bg-card-soft);
 }
 
 .overview-order-metrics span {
@@ -393,11 +393,11 @@
 
 .overview-order-metrics strong {
   font-size: var(--font-size-13);
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .overview-order-metrics strong.income {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .overview-order-foot {

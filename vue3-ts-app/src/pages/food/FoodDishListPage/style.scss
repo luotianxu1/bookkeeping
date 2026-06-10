@@ -1,20 +1,14 @@
 .food-list-page {
-  --food-bg: #f8fafc;
-  --food-surface: #ffffff;
-  --food-surface-soft: #f8fafc;
-  --food-border: #e2e8f0;
-  --food-text: #0f172a;
-  --food-text-muted: #64748b;
   min-height: calc(100dvh - 16px);
   display: grid;
   align-content: start;
   gap: var(--space-12);
   padding-bottom: 96px;
-  color: var(--food-text);
+  color: var(--color-food-text);
 }
 
 .page-head :deep(.page-header h1) {
-  color: var(--food-text);
+  color: var(--color-food-text);
 }
 
 .search-bar {
@@ -24,16 +18,16 @@
   justify-content: space-between;
   gap: var(--space-12);
   padding: 0 14px;
-  border: 1px solid var(--food-border);
+  border: 1px solid var(--color-food-border);
   border-radius: var(--radius-14);
-  background: var(--food-surface);
+  background: var(--color-food-surface);
 }
 
 .search-bar input {
   flex: 1;
   border: 0;
   outline: none;
-  color: var(--food-text);
+  color: var(--color-food-text);
   background: transparent;
   font-size: var(--font-size-12);
 }
@@ -63,15 +57,15 @@
   display: grid;
   place-items: center;
   border-radius: 0;
-  background: var(--food-surface-soft);
-  color: var(--food-text-muted);
+  background: var(--color-food-surface-soft);
+  color: var(--color-food-text-muted);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
 
 .category-tab.active {
   border-radius: var(--radius-14);
-  background: var(--food-surface);
+  background: var(--color-food-surface);
   color: var(--color-brand);
 }
 
@@ -85,9 +79,9 @@
   display: grid;
   gap: var(--space-12);
   padding: 12px;
-  border: 1px solid var(--food-border);
+  border: 1px solid var(--color-food-border);
   border-radius: var(--radius-16);
-  background: var(--food-surface);
+  background: var(--color-food-surface);
 }
 
 .section-title {
@@ -115,23 +109,23 @@
 }
 
 .cover-blue {
-  color: #1d4ed8;
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: var(--color-food-cover-blue-text);
+  background: linear-gradient(135deg, var(--color-food-cover-blue-start) 0%, var(--color-food-cover-blue-end) 100%);
 }
 
 .cover-warm {
-  color: #7c2d12;
-  background: linear-gradient(135deg, #ffe7d6 0%, #fecaca 100%);
+  color: var(--color-food-cover-warm-text);
+  background: linear-gradient(135deg, var(--color-food-cover-warm-start) 0%, var(--color-food-cover-warm-end) 100%);
 }
 
 .cover-green {
-  color: #1e3a8a;
-  background: linear-gradient(135deg, #dcfce7 0%, #bae6fd 100%);
+  color: var(--color-food-cover-green-text);
+  background: linear-gradient(135deg, var(--color-food-cover-green-start) 0%, var(--color-food-cover-green-end) 100%);
 }
 
 .cover-dessert {
-  color: #1d4ed8;
-  background: linear-gradient(135deg, #fef3c7 0%, #fbcfe8 100%);
+  color: var(--color-food-cover-dessert-text);
+  background: linear-gradient(135deg, var(--color-food-cover-dessert-start) 0%, var(--color-food-cover-dessert-end) 100%);
 }
 
 .dish-copy {
@@ -145,12 +139,12 @@
 }
 
 .dish-copy span {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-size: var(--font-size-12);
 }
 
 .dish-copy em {
-  color: var(--food-text-muted);
+  color: var(--color-food-text-muted);
   font-style: normal;
   font-size: var(--font-size-12);
 }
@@ -173,14 +167,14 @@
   display: grid;
   gap: var(--space-8);
   padding: 12px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-food-panel-border);
   border-radius: var(--radius-16);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  background: var(--color-food-panel-bg);
+  box-shadow: var(--color-food-panel-shadow);
 }
 
 .selected-panel strong {
-  color: #7c2d12;
+  color: var(--color-food-cover-warm-text);
   font-size: var(--font-size-12);
 }
 
@@ -193,10 +187,10 @@
 .selected-chip {
   min-height: 30px;
   padding: 0 10px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--color-food-chip-border);
   border-radius: 999px;
-  background: #eff6ff;
-  color: var(--color-brand-strong);
+  background: var(--color-food-chip-bg);
+  color: var(--color-food-chip-text);
   font: inherit;
   font-size: var(--font-size-12);
 }
@@ -207,10 +201,10 @@
   justify-content: space-between;
   gap: 10px;
   padding: 8px 10px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-food-panel-border);
   border-radius: var(--radius-14);
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  box-shadow: 0 16px 28px rgba(29, 78, 216, 0.12);
+  background: linear-gradient(135deg, var(--color-food-selected-bar-start) 0%, var(--color-food-selected-bar-end) 100%);
+  box-shadow: var(--color-food-selected-bar-shadow);
 }
 
 .selected-trigger {
@@ -236,7 +230,7 @@
 
 .selected-trigger strong {
   display: block;
-  color: #7c2d12;
+  color: var(--color-food-cover-warm-text);
   font-size: var(--font-size-12);
   line-height: 1.2;
 }
@@ -247,14 +241,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-brand-strong);
+  color: var(--color-food-chip-text);
   font-size: var(--font-size-12);
   line-height: 1.2;
 }
 
 .selected-trigger em {
   flex-shrink: 0;
-  color: var(--food-text-muted);
+  color: var(--color-food-text-muted);
   font-size: var(--font-size-11);
   font-style: normal;
   line-height: 1.1;
@@ -268,7 +262,7 @@
   margin: 0;
   padding: 24px 16px;
   border-radius: var(--radius-18);
-  background: var(--food-surface);
-  color: var(--food-text-muted);
+  background: var(--color-food-surface);
+  color: var(--color-food-text-muted);
   text-align: center;
 }

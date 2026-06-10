@@ -9,10 +9,10 @@
   display: grid;
   gap: var(--space-10);
   padding: 14px;
-  border: 1px solid #d9e5ff;
+  border: 1px solid var(--color-border-blue);
   border-radius: var(--radius-20);
-  background: linear-gradient(135deg, #f4f8ff 0%, #e5eeff 100%);
-  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+  background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
+  box-shadow: var(--color-finance-card-shadow);
 }
 
 .orders-summary-head {
@@ -29,13 +29,13 @@
 }
 
 .orders-summary-pill {
-  border: 1px solid #d9e5ff;
+  border: 1px solid var(--color-border-blue);
   padding: 5px 10px;
   border-radius: 999px;
   color: var(--color-brand);
   font-size: var(--font-size-11);
   font-weight: 700;
-  background: #eff6ff;
+  background: var(--color-bg-brand-soft);
   cursor: pointer;
 }
 
@@ -58,9 +58,9 @@
   align-self: start;
   min-height: 32px;
   padding: 6px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--color-fund-profit-pill-border);
   border-radius: var(--radius-14);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--color-fund-profit-pill-bg);
   box-sizing: border-box;
 }
 
@@ -75,11 +75,11 @@
 }
 
 .orders-summary-type--blue strong {
-  color: #2563eb;
+  color: var(--color-brand-strong);
 }
 
 .orders-summary-type--green strong {
-  color: #0f766e;
+  color: var(--color-teal);
 }
 
 .orders-page-error,
@@ -103,16 +103,16 @@
   display: grid;
   gap: var(--space-8);
   padding: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-16);
-  background: var(--color-white);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  background: var(--color-bg-card);
+  box-shadow: var(--color-shadow-soft);
   cursor: pointer;
 }
 
 .order-card-expanded {
-  border-color: #bfdbfe;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.14);
+  border-color: var(--color-bg-sky-grad-2);
+  box-shadow: 0 8px 18px var(--color-ring-focus);
 }
 
 .order-card-top {
@@ -137,7 +137,7 @@
   color: var(--color-brand);
   font-size: var(--font-size-14);
   font-weight: 700;
-  background: #dbeafe;
+  background: var(--color-bg-brand-tint);
 }
 
 .order-card-customer strong {
@@ -175,43 +175,43 @@
 }
 
 .order-card-type {
-  color: #ea580c;
-  background: #fff3e0;
+  color: var(--color-warning-strong);
+  background: var(--color-warning-soft);
 }
 
 .order-card-deposit {
-  color: #c2410c;
-  background: #fff7ed;
+  color: var(--color-orange);
+  background: var(--color-warning-soft);
 }
 
 .order-card-deposit--shot {
-  color: #047857;
-  background: #ecfdf5;
+  color: var(--color-success-strong);
+  background: var(--color-bg-success-soft);
 }
 
 .order-card-deposit--pending {
-  color: #c2410c;
-  background: #fff7ed;
+  color: var(--color-orange);
+  background: var(--color-warning-soft);
 }
 
 .order-card-final {
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: var(--color-brand);
+  background: var(--color-bg-brand-soft);
 }
 
 .order-card-final--paid {
-  color: #047857;
-  background: #ecfdf5;
+  color: var(--color-success-strong);
+  background: var(--color-bg-success-soft);
 }
 
 .order-card-final--pending {
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: var(--color-brand);
+  background: var(--color-bg-brand-soft);
 }
 
 .order-card-final--empty {
-  color: #64748b;
-  background: #f1f5f9;
+  color: var(--color-text-muted);
+  background: var(--color-bg-soft);
 }
 
 .order-card-amounts {
@@ -227,7 +227,7 @@
   gap: var(--space-8);
   padding: 8px 10px;
   border-radius: var(--radius-12);
-  background: #f8fafc;
+  background: var(--color-bg-card-soft);
 }
 
 .order-card-amount span {
@@ -237,7 +237,7 @@
 }
 
 .order-card-amount strong {
-  color: #dc2626;
+  color: var(--color-danger);
   font-size: var(--font-size-13);
 }
 
@@ -261,15 +261,15 @@
 }
 
 .order-card-action-delete {
-  border: 1px solid #fecaca;
-  color: #dc2626;
-  background: var(--color-white);
+  border: 1px solid var(--color-danger-soft);
+  color: var(--color-danger);
+  background: var(--color-bg-card);
 }
 
 .order-card-action-primary {
   border: none;
-  color: var(--color-white);
-  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  color: var(--color-text-inverse);
+  background: linear-gradient(180deg, var(--color-brand-strong) 0%, var(--color-brand) 100%);
 }
 
 .order-card-action-primary:disabled {
@@ -319,12 +319,12 @@
   color: var(--color-text-primary);
   font: inherit;
   resize: vertical;
-  background: #f8fafc;
+  background: var(--color-bg-card-soft);
 }
 
 .order-form-error {
   margin: 0;
-  color: #dc2626;
+  color: var(--color-danger);
   font-size: var(--font-size-12);
 }
 
@@ -333,7 +333,7 @@
   gap: 4px;
   padding: 12px;
   border-radius: var(--radius-14);
-  background: #f8fafc;
+  background: var(--color-bg-card-soft);
 }
 
 .collect-amount-card span {
@@ -343,7 +343,7 @@
 }
 
 .collect-amount-card strong {
-  color: #dc2626;
+  color: var(--color-danger);
   font-size: 20px;
   line-height: 1.2;
 }
@@ -370,16 +370,16 @@
 }
 
 .orders-modal-actions :deep(.common-button-secondary) {
-  border-color: #e2e8f0;
-  color: #475569;
-  background: #ffffff;
+  border-color: var(--color-border);
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-card);
 }
 
 .orders-modal-actions :deep(.common-button-primary) {
-  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+  background: linear-gradient(180deg, var(--color-brand-strong) 0%, var(--color-brand) 100%);
 }
 
 .orders-modal-danger :deep(.common-button-primary),
 .orders-modal-actions :deep(.orders-modal-danger.common-button-primary) {
-  background: linear-gradient(180deg, #f87171 0%, #dc2626 100%);
+  background: var(--color-danger);
 }

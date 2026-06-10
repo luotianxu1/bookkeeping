@@ -6,18 +6,18 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import type { GoldPriceRange } from '@/api/modules/finance'
 import { ensureGoldPriceCache, getCachedGoldPrice, goldPriceCacheState, refreshGoldPriceCache } from '@/utils/gold-price-cache'
+import { useTheme } from '@/utils/theme'
 
 type TrendKey = '1日' | '7日' | '30日' | '1年'
 
 const activeTrend = ref<TrendKey>('1日')
 const trendOptions: TrendKey[] = ['1日', '7日', '30日', '1年']
 
-const isDark = ref(false)
+const { isDark } = useTheme()
 const chartRef = ref<HTMLDivElement | null>(null)
 const isRefreshingPrice = ref(false)
 const isLoadingTrend = ref(false)
 const goldPriceError = ref('')
-let mediaQuery: MediaQueryList | null = null
 let echartsLib: (typeof import('echarts')) | null = null
 let chartIns: ECharts | null = null
 
@@ -64,21 +64,25 @@ const jewelryRows = computed(() => (
 ))
 
 const chartOption = computed<EChartsCoreOption>(() => {
-  const axisText = isDark.value ? '#8FA3C7' : '#94A3B8'
-  const axisLine = isDark.value ? '#253045' : '#CBD5E1'
-  const splitLine = isDark.value ? '#1E293B' : '#E2E8F0'
-  const lineColor = isDark.value ? '#FACC15' : '#EAB308'
-  const areaStart = isDark.value ? 'rgba(250,204,21,0.34)' : 'rgba(234,179,8,0.24)'
-  const areaEnd = isDark.value ? 'rgba(250,204,21,0.03)' : 'rgba(234,179,8,0.04)'
+  const rootStyle = getComputedStyle(document.documentElement)
+  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
+  const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const lineColor = rootStyle.getPropertyValue('--color-chart-gold').trim()
+  const areaStart = rootStyle.getPropertyValue('--color-chart-gold-area-start').trim()
+  const areaEnd = rootStyle.getPropertyValue('--color-chart-gold-area-end').trim()
+  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
+  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
+  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
 
   return {
     animation: false,
     grid: { left: 8, right: 8, top: 14, bottom: 18, containLabel: true },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: isDark.value ? '#0F172A' : '#FFFFFF',
-      borderColor: isDark.value ? '#253045' : '#E2E8F0',
-      textStyle: { color: isDark.value ? '#E2E8F0' : '#0F172A' },
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText },
     },
     xAxis: {
       type: 'category',
@@ -128,14 +132,6 @@ const marketFootText = computed(() => {
 
   return `更新时间 ${formatTime(currentGoldPrice.value.updatedAt)}`
 })
-
-function updateThemeState() {
-  isDark.value = Boolean(mediaQuery?.matches)
-}
-
-function handleThemeChange() {
-  updateThemeState()
-}
 
 async function ensureEcharts() {
   if (!echartsLib) {
@@ -243,9 +239,6 @@ function formatTime(value?: string) {
 }
 
 onMounted(async () => {
-  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  updateThemeState()
-  mediaQuery.addEventListener('change', handleThemeChange)
   await ensureEcharts()
   await loadGoldPrice()
   renderChart()
@@ -262,7 +255,6 @@ watch([chartPoints, isDark], () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
-  mediaQuery?.removeEventListener('change', handleThemeChange)
   chartIns?.dispose()
   chartIns = null
 })

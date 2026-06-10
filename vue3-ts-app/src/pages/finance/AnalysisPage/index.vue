@@ -8,6 +8,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import YearPicker from '@/components/common/YearPicker/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
+import { useTheme } from '@/utils/theme'
 import {
   getTransactionAnalysis,
   type Transaction,
@@ -41,6 +42,7 @@ const analysis = ref<TransactionAnalysis | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
 const requestSerial = ref(0)
+const { isDark } = useTheme()
 
 const {
   familyView,
@@ -239,6 +241,10 @@ watch(isLoading, (loading) => {
     void syncCharts()
   }
 }, { flush: 'post' })
+
+watch(isDark, () => {
+  void syncCharts()
+})
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
@@ -572,6 +578,13 @@ async function syncCharts() {
 }
 
 function buildPieOption(): EChartsCoreOption {
+  const rootStyle = getComputedStyle(document.documentElement)
+  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
+  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
+  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
+
   if (breakdownItems.value.length === 0) {
     return {
       animation: false,
@@ -582,7 +595,7 @@ function buildPieOption(): EChartsCoreOption {
           top: 'middle',
           style: {
             text: summaryTab.value === '结余' ? '结余不按分类拆分' : '暂无数据',
-            fill: '#94A3B8',
+            fill: axisText,
             fontSize: 12,
             fontWeight: 500,
           },
@@ -595,7 +608,7 @@ function buildPieOption(): EChartsCoreOption {
           center: ['50%', '50%'],
           silent: true,
           label: { show: false },
-          data: [{ value: 1, itemStyle: { color: '#E2E8F0' } }],
+          data: [{ value: 1, itemStyle: { color: splitLine } }],
         },
       ],
     }
@@ -605,6 +618,9 @@ function buildPieOption(): EChartsCoreOption {
     animation: false,
     tooltip: {
       trigger: 'item',
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText },
       valueFormatter: (value: unknown) => formatAmount(Number(value ?? 0)),
     },
     series: [
@@ -626,6 +642,13 @@ function buildPieOption(): EChartsCoreOption {
 }
 
 function buildLineOption(): EChartsCoreOption {
+  const rootStyle = getComputedStyle(document.documentElement)
+  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
+  const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
+  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
+  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
   const metric = activeMetric.value
   const color = toneColorMap[metric]
   const data = (analysis.value?.trendPoints ?? []).map((point) => Number(point[metric] ?? 0))
@@ -647,6 +670,9 @@ function buildLineOption(): EChartsCoreOption {
       axisPointer: {
         type: 'shadow',
       },
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText },
       valueFormatter: (value: unknown) => {
         const numericValue = Number(value ?? 0)
         return metric === 'surplus' ? formatSignedAmount(numericValue) : formatAmount(numericValue)
@@ -656,24 +682,24 @@ function buildLineOption(): EChartsCoreOption {
       type: 'category',
       boundaryGap: true,
       data: (analysis.value?.trendPoints ?? []).map((point) => point.label),
-      axisLine: { lineStyle: { color: '#CBD5E1' } },
+      axisLine: { lineStyle: { color: axisLine } },
       axisTick: { show: false },
-      axisLabel: { color: '#94A3B8', fontSize: 11 },
+      axisLabel: { color: axisText, fontSize: 11 },
     },
     yAxis: {
       type: 'value',
       axisLine: {
         show: true,
-        lineStyle: { color: '#CBD5E1' },
+        lineStyle: { color: axisLine },
       },
       axisTick: { show: false },
       axisLabel: {
         show: true,
-        color: '#94A3B8',
+        color: axisText,
         fontSize: 11,
         formatter: (value: number) => formatAxisValue(value),
       },
-      splitLine: { lineStyle: { color: '#E2E8F0' } },
+      splitLine: { lineStyle: { color: splitLine } },
     },
     series: [
       {

@@ -20,7 +20,7 @@
   padding: var(--space-12);
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-12);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .summary-top {
@@ -39,9 +39,9 @@
   padding: 0 28px 0 12px;
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(29, 78, 216, 0.12);
+  border: 1px solid var(--color-border-blue-ultra-soft);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--color-bg-card-glass);
   color: var(--color-brand);
   font-size: var(--font-size-12);
   font-weight: 700;

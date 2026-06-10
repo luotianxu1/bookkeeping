@@ -17,7 +17,7 @@
 }
 
 .renewal-create-action {
-  color: #2563eb;
+  color: var(--color-brand-strong);
   font-size: 14px;
   font-weight: 600;
 }
@@ -29,7 +29,7 @@
   margin: 0;
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   font-size: var(--font-size-14);
   font-weight: 600;
@@ -45,10 +45,10 @@
   display: grid;
   gap: 10px;
   padding: 16px;
-  border: 1px solid #d9e5ff;
+  border: 1px solid var(--color-renewal-summary-border);
   border-radius: 20px;
-  background: linear-gradient(135deg, #f4f8ff 0%, #e5eeff 100%);
-  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+  background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
+  box-shadow: var(--color-renewal-summary-shadow);
 }
 
 .renewal-card-top,
@@ -76,14 +76,14 @@
 .renewal-delete-text,
 .renewal-empty-state p {
   margin: 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 12px;
   line-height: 1.35;
   font-weight: 500;
 }
 
 .renewal-summary-amount {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 34px;
   line-height: 1;
   font-weight: 700;
@@ -101,17 +101,17 @@
   gap: 4px;
   padding: 10px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--color-renewal-summary-metric-bg);
 }
 
 .renewal-summary-metric span {
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 11px;
   font-weight: 600;
 }
 
 .renewal-summary-metric strong {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 14px;
   font-weight: 700;
 }
@@ -128,19 +128,19 @@
   align-items: center;
   justify-content: center;
   padding: 0 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-renewal-filter-border);
   border-radius: 999px;
-  background: #ffffff;
-  color: #334155;
+  background: var(--color-renewal-filter-bg);
+  color: var(--color-text-secondary);
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .renewal-filter-chip-active {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-  color: #ffffff;
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  color: var(--color-text-inverse);
 }
 
 .renewal-list-section,
@@ -151,9 +151,9 @@
 
 .renewal-card,
 .renewal-empty-state {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-renewal-card-border);
   border-radius: 18px;
-  background: #ffffff;
+  background: var(--color-renewal-card-bg);
 }
 
 .renewal-card {
@@ -217,7 +217,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 16px;
   line-height: 1.2;
   font-weight: 700;
@@ -237,23 +237,23 @@
 }
 
 .renewal-card-status-today {
-  background: #fff4e8;
-  color: #c2410c;
+  background: var(--color-renewal-status-today-bg);
+  color: var(--color-renewal-status-today-text);
 }
 
 .renewal-card-status-soon {
-  background: #eef2ff;
-  color: #4338ca;
+  background: var(--color-renewal-status-soon-bg);
+  color: var(--color-renewal-status-soon-text);
 }
 
 .renewal-card-status-paused {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--color-renewal-status-paused-bg);
+  color: var(--color-renewal-status-paused-text);
 }
 
 .renewal-card-status-active {
-  background: #ecfeff;
-  color: #0f766e;
+  background: var(--color-renewal-status-active-bg);
+  color: var(--color-renewal-status-active-text);
 }
 
 .renewal-card-side {
@@ -267,7 +267,7 @@
 }
 
 .renewal-card-amount {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 18px;
   line-height: 1;
   font-weight: 700;
@@ -275,7 +275,7 @@
 }
 
 .renewal-card-cycle {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-size: 11px;
   line-height: 1;
   font-weight: 600;
@@ -302,15 +302,15 @@
 }
 
 .renewal-card-action.is-edit {
-  color: #2563eb;
+  color: var(--color-brand-strong);
 }
 
 .renewal-card-action.is-danger {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .renewal-card-action.is-success {
-  color: #16a34a;
+  color: var(--color-success);
 }
 
 .renewal-empty-state {
@@ -321,7 +321,7 @@
 }
 
 .renewal-empty-state strong {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 15px;
   font-weight: 700;
 }

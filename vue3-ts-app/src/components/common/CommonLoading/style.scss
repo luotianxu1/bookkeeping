@@ -10,7 +10,7 @@
 .common-loading-mask {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.36);
+  background: var(--color-overlay-soft);
   backdrop-filter: blur(2px);
 }
 
@@ -25,8 +25,8 @@
   padding: 22px 24px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: var(--radius-18);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.2);
+  background: var(--color-bg-card-glass);
+  box-shadow: var(--color-shadow-panel);
 }
 
 .common-loading-spinner {

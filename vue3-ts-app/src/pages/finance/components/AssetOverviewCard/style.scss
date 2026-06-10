@@ -7,7 +7,7 @@
   border: 1px solid var(--color-border-blue);
   border-radius: var(--radius-20);
   background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
-  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+  box-shadow: var(--color-finance-card-shadow);
 }
 
 .asset-main {
@@ -52,18 +52,18 @@ h1 {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: conic-gradient(var(--color-green-weak) var(--usage), var(--color-brand-soft) 0);
+  background: conic-gradient(var(--color-green-weak) var(--usage), var(--color-finance-budget-track) 0);
 }
 
 .budget-ring-danger {
-  background: conic-gradient(var(--color-danger) var(--usage), var(--color-danger-soft) 0);
+  background: conic-gradient(var(--color-danger) var(--usage), var(--color-finance-budget-danger-track) 0);
 }
 
 .budget-ring-inner {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: var(--color-finance-bg-1);
+  background: var(--color-finance-budget-inner-bg);
   display: grid;
   place-items: center;
   align-content: center;
@@ -99,17 +99,17 @@ h1 {
   gap: var(--space-6);
   padding: 6px 8px;
   border-radius: var(--radius-10);
-  background: rgba(255, 255, 255, 0.58);
+  background: var(--color-finance-metric-bg);
 }
 
 .asset-metric-item span {
-  color: var(--color-finance-subtitle);
+  color: var(--color-finance-metric-label);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
 
 .asset-metric-item strong {
-  color: var(--color-finance-title);
+  color: var(--color-finance-metric-value);
   font-size: var(--font-size-12);
   font-weight: 700;
 }

@@ -390,14 +390,15 @@ function hasOrderFoot(order: PhotographyOrder) {
 }
 
 function typeAccent(type: string) {
+  const rootStyle = getComputedStyle(document.documentElement)
   return {
-    wedding: '#F97316',
-    graduation: '#2563EB',
-    first_birthday: '#0F766E',
-    hundred_days: '#14B8A6',
-    engagement: '#EC4899',
-    thanks_banquet: '#8B5CF6',
-  }[type] ?? '#1D4ED8'
+    wedding: rootStyle.getPropertyValue('--color-warning-strong').trim(),
+    graduation: rootStyle.getPropertyValue('--color-brand-strong').trim(),
+    first_birthday: rootStyle.getPropertyValue('--color-success-strong').trim(),
+    hundred_days: rootStyle.getPropertyValue('--color-teal').trim(),
+    engagement: rootStyle.getPropertyValue('--color-danger').trim(),
+    thanks_banquet: rootStyle.getPropertyValue('--color-purple').trim(),
+  }[type] ?? rootStyle.getPropertyValue('--color-brand').trim()
 }
 
 function amountTextClass(value: number | string | null | undefined) {
@@ -441,30 +442,42 @@ function renderLineChart() {
   const displayedTrendPoints = resolveDisplayedTrendPoints()
   const labels = displayedTrendPoints.map((item) => item.label)
   const incomeValues = displayedTrendPoints.map((item) => Number(item.contractAmount ?? 0))
+  const rootStyle = getComputedStyle(document.documentElement)
+  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
+  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
+  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
+  const chartAxis = rootStyle.getPropertyValue('--color-chart-axis').trim()
+  const chartSplit = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const incomeColor = rootStyle.getPropertyValue('--color-danger').trim()
 
   const option: EChartsCoreOption = {
     grid: { left: 28, right: 18, top: 28, bottom: 28, containLabel: true },
-    tooltip: { trigger: 'axis' },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText },
+    },
     legend: {
       top: 0,
       right: 0,
       itemWidth: 10,
       itemHeight: 10,
-      textStyle: { color: '#64748B', fontSize: 11 },
+      textStyle: { color: chartAxis, fontSize: 11 },
     },
     xAxis: {
       type: 'category',
       data: labels,
-      axisLine: { lineStyle: { color: '#D9E5FF' } },
-      axisLabel: { color: '#64748B', fontSize: 11 },
+      axisLine: { lineStyle: { color: chartSplit } },
+      axisLabel: { color: chartAxis, fontSize: 11 },
     },
     yAxis: [
       {
         type: 'value',
         axisLine: { show: false },
-        splitLine: { lineStyle: { color: '#EDF2FB' } },
+        splitLine: { lineStyle: { color: chartSplit } },
         axisLabel: {
-          color: '#64748B',
+          color: chartAxis,
           fontSize: 11,
           formatter: (value: number) => `¥${value}`,
         },
@@ -476,8 +489,8 @@ function renderLineChart() {
         type: 'bar',
         data: incomeValues,
         barMaxWidth: 18,
-        itemStyle: { color: '#dc2626', borderRadius: [8, 8, 0, 0] },
-        emphasis: { itemStyle: { color: '#b91c1c' } },
+        itemStyle: { color: incomeColor, borderRadius: [8, 8, 0, 0] },
+        emphasis: { itemStyle: { color: incomeColor } },
       },
     ],
   }

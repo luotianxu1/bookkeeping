@@ -133,7 +133,7 @@
   margin: 0;
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   font-size: var(--font-size-14);
   font-weight: 600;
@@ -142,14 +142,6 @@
 .investment-message-error,
 .investment-add-error {
   color: var(--color-danger);
-}
-
-.investment-lookup-message {
-  margin: -2px 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-12);
-  font-weight: 500;
-  line-height: 1.4;
 }
 
 .investment-add-modal-actions {
@@ -191,7 +183,7 @@
   border: 1px solid var(--color-border-blue);
   border-radius: var(--radius-20);
   background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
-  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+  box-shadow: var(--color-finance-card-shadow);
 }
 
 .investment-summary-top {
@@ -208,20 +200,20 @@
 
 .investment-summary-main p {
   margin: 0;
-  color: var(--color-text-tertiary);
+  color: var(--color-finance-subtitle);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
 
 .investment-summary-main strong {
-  color: var(--color-text-primary);
+  color: var(--color-finance-title);
   font-size: var(--font-size-36);
   line-height: 1;
   font-weight: 700;
 }
 
 .investment-summary-main span {
-  color: var(--color-text-subtle);
+  color: var(--color-finance-subtitle);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -233,7 +225,7 @@
 }
 
 .investment-summary-side span {
-  color: var(--color-text-muted);
+  color: var(--color-finance-subtitle);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
@@ -350,9 +342,9 @@
   display: grid;
   gap: var(--space-8);
   padding: 12px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-18);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
   cursor: pointer;
 }
@@ -421,8 +413,8 @@
   white-space: nowrap;
   padding: 2px 6px;
   border-radius: var(--radius-pill);
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-finance-entry-icon-bg);
+  color: var(--color-finance-entry-icon-color);
   font-size: 9px;
   font-weight: 700;
   line-height: 1;
@@ -445,10 +437,10 @@
   align-items: center;
   white-space: nowrap;
   padding: 2px 6px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-pill);
-  background: var(--color-bg-page);
-  color: #64748b;
+  background: var(--color-bg-card-soft);
+  color: var(--color-text-muted);
   font-size: 9px;
   font-weight: 600;
   line-height: 1;
@@ -457,7 +449,7 @@
 }
 
 .holding-sync-tag {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-size: 9px;
   font-weight: 500;
   line-height: 1;
@@ -552,7 +544,7 @@
 .holding-divider {
   width: 100%;
   height: var(--space-1);
-  background: #eef2f7;
+  background: var(--color-border-soft);
 }
 
 .holding-pending-amount {
@@ -661,4 +653,63 @@
   font-weight: 700;
   line-height: 1;
   box-shadow: 0 12px 30px rgba(29, 78, 216, 0.32);
+}
+
+:global(:root[data-theme='dark']) .investment-account-header-refresh {
+  border-color: #253045;
+  background: linear-gradient(180deg, rgba(24, 40, 77, 0.98) 0%, rgba(18, 26, 43, 0.95) 100%);
+  color: #60a5fa;
+  box-shadow: 0 10px 18px rgba(2, 6, 23, 0.28);
+}
+
+:global(:root[data-theme='dark']) .investment-search-field button,
+:global(:root[data-theme='dark']) .investment-modal-button.primary {
+  background: #4f7cff;
+}
+
+:global(:root[data-theme='dark']) .investment-modal-button.secondary {
+  background: #182233;
+  color: #cbd5e1;
+}
+
+:global(:root[data-theme='dark']) .investment-metric-divider {
+  background: #253045;
+}
+
+:global(:root[data-theme='dark']) .investment-holding-card {
+  background: #121a2b;
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.3);
+}
+
+:global(:root[data-theme='dark']) .holding-card-right-top > span,
+:global(:root[data-theme='dark']) .holding-value-line > span,
+:global(:root[data-theme='dark']) .holding-panel-field > span,
+:global(:root[data-theme='dark']) .holding-sync-tag {
+  color: #94a3b8;
+}
+
+:global(:root[data-theme='dark']) .holding-card-right-top > span {
+  color: #cbd5e1;
+}
+
+:global(:root[data-theme='dark']) .holding-panel-value.is-secondary {
+  color: #cbd5e1;
+}
+
+:global(:root[data-theme='dark']) .holding-pnl-rate {
+  background: rgba(22, 101, 52, 0.24);
+  color: #4ade80;
+}
+
+:global(:root[data-theme='dark']) .holding-panel-field :deep(.holding-pnl-rate.amount-text--positive) {
+  background: rgba(220, 38, 38, 0.18);
+}
+
+:global(:root[data-theme='dark']) .holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral) {
+  background: #182233;
+  color: #cbd5e1;
+}
+
+:global(:root[data-theme='dark']) .holding-allocation-track {
+  background: #253045;
 }

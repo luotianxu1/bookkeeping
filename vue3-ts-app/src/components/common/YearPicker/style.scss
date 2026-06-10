@@ -6,7 +6,7 @@
   justify-content: space-between;
   padding: 0 12px;
   border-radius: var(--radius-12);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .year-picker-arrow {
@@ -34,7 +34,7 @@
   padding: var(--space-8);
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-12);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 }
 

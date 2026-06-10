@@ -260,71 +260,73 @@ function showFeedback(message: string, type: 'success' | 'error') {
 </script>
 
 <template>
-  <CommonFeedback
-    v-model="showFeedbackModal"
-    :message="feedbackMessage"
-    :type="feedbackType"
-  />
+  <section class="finance-home-page" aria-label="财务首页">
+    <CommonFeedback
+      v-model="showFeedbackModal"
+      :message="feedbackMessage"
+      :type="feedbackType"
+    />
 
-  <AssetOverviewCard :overview="overview" />
-  <section class="feature-block" aria-label="更多功能">
-    <header class="feature-header">
-      <strong>更多功能</strong>
-      <RouterLink class="feature-link" to="/finance/more-features" aria-label="进入更多功能">
-        >
-      </RouterLink>
-    </header>
-    <StatsEntry />
+    <AssetOverviewCard :overview="overview" />
+    <section class="feature-block" aria-label="更多功能">
+      <header class="feature-header">
+        <strong>更多功能</strong>
+        <RouterLink class="feature-link" to="/finance/more-features" aria-label="进入更多功能">
+          >
+        </RouterLink>
+      </header>
+      <StatsEntry />
+    </section>
+
+    <section class="records" aria-label="收支明细">
+      <p v-if="transactionListError" class="records-message records-message-error">
+        {{ transactionListError }}
+      </p>
+      <CommonLoading v-else-if="isLoadingTransactions" />
+      <p v-else-if="dayGroups.length === 0" class="records-message">
+        暂无收支记录
+      </p>
+
+      <template v-else>
+        <TransactionDayCard
+          v-for="group in dayGroups"
+          :key="group.date"
+          :group="group"
+          summary-mode="stacked"
+          show-delete
+          :deleting-id="deletingId"
+          @edit="openEditTransaction"
+          @delete="openDeleteConfirm"
+        />
+      </template>
+    </section>
+
+    <FloatingAddButton aria-label="新增记账" @click="openExpenseEntryPage" />
+
+    <CommonModal
+      v-model="showDeleteConfirmModal"
+      title="确认删除"
+      size="compact"
+      :close-on-overlay="!deletingId"
+      @close="closeDeleteConfirm"
+    >
+      <p class="transaction-delete-confirm-text">
+        删除后会同步恢复账户余额，确认删除这条收支记录吗？
+      </p>
+      <p v-if="deleteError" class="transaction-delete-error">{{ deleteError }}</p>
+
+      <template #footer>
+        <div class="transaction-delete-actions">
+          <CommonButton variant="secondary" :disabled="Boolean(deletingId)" @click="closeDeleteConfirm">
+            取消
+          </CommonButton>
+          <CommonButton variant="primary" :disabled="Boolean(deletingId)" @click="confirmDeleteTransaction">
+            {{ deletingId ? '删除中...' : '确认删除' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
   </section>
-
-  <section class="records" aria-label="收支明细">
-    <p v-if="transactionListError" class="records-message records-message-error">
-      {{ transactionListError }}
-    </p>
-    <CommonLoading v-else-if="isLoadingTransactions" />
-    <p v-else-if="dayGroups.length === 0" class="records-message">
-      暂无收支记录
-    </p>
-
-    <template v-else>
-      <TransactionDayCard
-        v-for="group in dayGroups"
-        :key="group.date"
-        :group="group"
-        summary-mode="stacked"
-        show-delete
-        :deleting-id="deletingId"
-        @edit="openEditTransaction"
-        @delete="openDeleteConfirm"
-      />
-    </template>
-  </section>
-
-  <FloatingAddButton aria-label="新增记账" @click="openExpenseEntryPage" />
-
-  <CommonModal
-    v-model="showDeleteConfirmModal"
-    title="确认删除"
-    size="compact"
-    :close-on-overlay="!deletingId"
-    @close="closeDeleteConfirm"
-  >
-    <p class="transaction-delete-confirm-text">
-      删除后会同步恢复账户余额，确认删除这条收支记录吗？
-    </p>
-    <p v-if="deleteError" class="transaction-delete-error">{{ deleteError }}</p>
-
-    <template #footer>
-      <div class="transaction-delete-actions">
-        <CommonButton variant="secondary" :disabled="Boolean(deletingId)" @click="closeDeleteConfirm">
-          取消
-        </CommonButton>
-        <CommonButton variant="primary" :disabled="Boolean(deletingId)" @click="confirmDeleteTransaction">
-          {{ deletingId ? '删除中...' : '确认删除' }}
-        </CommonButton>
-      </div>
-    </template>
-  </CommonModal>
 </template>
 
 <style scoped lang="scss" src="./style.scss"></style>

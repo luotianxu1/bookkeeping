@@ -44,7 +44,7 @@
   padding: 0 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-14);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .search-bar input {
@@ -80,7 +80,7 @@
   padding: 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-18);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   text-align: left;
 }
 
@@ -134,7 +134,7 @@
   font-size: var(--font-size-14);
   font-weight: 700;
   line-height: 1;
-  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.18);
+  box-shadow: var(--color-food-danger-shadow);
 }
 
 .category-delete-trigger:disabled {
@@ -143,28 +143,28 @@
 }
 
 .tone-blue {
-  color: #1e3a8a;
-  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: var(--color-food-tone-blue-text);
+  background: linear-gradient(135deg, var(--color-food-tone-blue-start) 0%, var(--color-food-tone-blue-end) 100%);
 }
 
 .tone-purple {
-  color: #5b21b6;
-  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  color: var(--color-food-tone-purple-text);
+  background: linear-gradient(135deg, var(--color-food-tone-purple-start) 0%, var(--color-food-tone-purple-end) 100%);
 }
 
 .tone-orange {
-  color: #9a3412;
-  background: linear-gradient(135deg, #fde68a 0%, #fbcfe8 100%);
+  color: var(--color-food-tone-orange-text);
+  background: linear-gradient(135deg, var(--color-food-tone-orange-start) 0%, var(--color-food-tone-orange-end) 100%);
 }
 
 .tone-sky {
-  color: #1d4ed8;
-  background: linear-gradient(135deg, #dbeafe 0%, #e9d5ff 100%);
+  color: var(--color-food-tone-sky-text);
+  background: linear-gradient(135deg, var(--color-food-tone-sky-start) 0%, var(--color-food-tone-sky-end) 100%);
 }
 
 .tone-green {
-  color: #15803d;
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: var(--color-food-tone-green-text);
+  background: linear-gradient(135deg, var(--color-food-tone-green-start) 0%, var(--color-food-tone-green-end) 100%);
 }
 
 .modal-mask {
@@ -173,7 +173,7 @@
   display: grid;
   place-items: center;
   padding: 22px;
-  background: rgba(15, 23, 42, 0.4);
+  background: var(--color-food-mask);
 }
 
 .modal-card {
@@ -183,7 +183,7 @@
   padding: 18px 16px 16px;
   border: 1px solid var(--color-border);
   border-radius: 28px;
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .field-block {
@@ -259,7 +259,7 @@
   margin: 0;
   padding: 24px 16px;
   border-radius: var(--radius-18);
-  background: var(--color-white);
+  background: var(--color-bg-card);
   color: var(--color-text-muted);
   text-align: center;
 }

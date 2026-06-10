@@ -1,24 +1,19 @@
 .food-detail-page {
-  --food-surface: #ffffff;
-  --food-border: #e2e8f0;
-  --food-text: #0f172a;
-  --food-text-muted: #64748b;
-  --food-soft: #eff6ff;
   min-height: calc(100dvh - 16px);
   display: grid;
   align-content: start;
   gap: var(--space-10);
-  color: var(--food-text);
+  color: var(--color-food-text);
 }
 
 .page-head :deep(.page-header h1) {
-  color: var(--food-text);
+  color: var(--color-food-text);
 }
 
 .hero-card,
 .info-card {
-  border: 1px solid var(--food-border);
-  background: var(--food-surface);
+  border: 1px solid var(--color-food-border);
+  background: var(--color-food-surface);
 }
 
 .hero-card {
@@ -32,23 +27,23 @@
 }
 
 .hero-card.cover-blue {
-  background: linear-gradient(135deg, #e0ecff 0%, #dbeafe 100%);
-  color: #0f172a;
+  background: linear-gradient(135deg, var(--color-food-cover-blue-start) 0%, var(--color-food-cover-blue-end) 100%);
+  color: var(--color-food-cover-blue-text);
 }
 
 .hero-card.cover-warm {
-  background: linear-gradient(135deg, #ffe7d6 0%, #fecaca 100%);
-  color: #7c2d12;
+  background: linear-gradient(135deg, var(--color-food-cover-warm-start) 0%, var(--color-food-cover-warm-end) 100%);
+  color: var(--color-food-cover-warm-text);
 }
 
 .hero-card.cover-green {
-  background: linear-gradient(135deg, #dcfce7 0%, #bae6fd 100%);
-  color: #0f172a;
+  background: linear-gradient(135deg, var(--color-food-cover-green-start) 0%, var(--color-food-cover-green-end) 100%);
+  color: var(--color-food-cover-green-text);
 }
 
 .hero-card.cover-dessert {
-  background: linear-gradient(135deg, #fef3c7 0%, #fbcfe8 100%);
-  color: #0f172a;
+  background: linear-gradient(135deg, var(--color-food-cover-dessert-start) 0%, var(--color-food-cover-dessert-end) 100%);
+  color: var(--color-food-cover-dessert-text);
 }
 
 .hero-card h2 {
@@ -58,7 +53,7 @@
 
 .hero-card p {
   margin: 0;
-  color: #2563eb;
+  color: var(--color-brand-strong);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
@@ -75,8 +70,8 @@
   place-items: center;
   padding: 0 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #7c2d12;
+  background: var(--color-food-hero-pill-bg);
+  color: var(--color-food-hero-pill-text);
   font-size: var(--font-size-12);
   font-weight: 700;
 }
@@ -94,7 +89,7 @@
 
 .info-card p {
   margin: 0;
-  color: var(--food-text-muted);
+  color: var(--color-food-text-muted);
   font-size: var(--font-size-12);
   line-height: 1.55;
 }
@@ -110,7 +105,7 @@
   display: grid;
   place-items: center;
   border-radius: var(--radius-12);
-  background: var(--food-soft);
+  background: var(--color-food-soft);
   color: var(--color-brand);
   font-size: var(--font-size-12);
   font-weight: 700;
@@ -130,7 +125,7 @@
 }
 
 .ingredient-row span {
-  color: var(--food-text-muted);
+  color: var(--color-food-text-muted);
   font-size: var(--font-size-12);
 }
 
@@ -142,7 +137,7 @@
   margin: 0;
   padding: 24px 16px;
   border-radius: var(--radius-18);
-  background: var(--food-surface);
-  color: var(--food-text-muted);
+  background: var(--color-food-surface);
+  color: var(--color-food-text-muted);
   text-align: center;
 }

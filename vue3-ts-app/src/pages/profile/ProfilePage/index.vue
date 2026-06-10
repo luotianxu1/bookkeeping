@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
+import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import { deleteCurrentAccount, getCurrentUser, getFamilyOverview, type CurrentUser } from '@/api/modules/auth'
 import { clearStoredToken } from '@/utils/auth-token'
 import {
@@ -12,6 +13,7 @@ import {
   getStoredCurrentUser,
   setStoredCurrentUser,
 } from '@/utils/current-user'
+import { useTheme } from '@/utils/theme'
 
 type ProfileMenuItem = {
   label: string
@@ -20,6 +22,7 @@ type ProfileMenuItem = {
 }
 
 const router = useRouter()
+const { isDark, setThemeMode } = useTheme()
 const currentUser = ref<CurrentUser | null>(getStoredCurrentUser())
 const familyMemberCount = ref<number | null>(null)
 const showDeleteAccountModal = ref(false)
@@ -42,6 +45,12 @@ const profileMenus = computed<ProfileMenuItem[]>(() => [
   { label: '消息通知' },
   { label: '关于我们' },
 ])
+const darkModeEnabled = computed({
+  get: () => isDark.value,
+  set: (value: boolean) => {
+    setThemeMode(value ? 'dark' : 'light')
+  },
+})
 
 onMounted(() => {
   void refreshCurrentUser()
@@ -163,6 +172,10 @@ function showFeedback(message: string, type: 'success' | 'error') {
         </span>
         <span v-if="index < profileMenus.length - 1" class="divider" aria-hidden="true"></span>
       </button>
+    </section>
+
+    <section class="profile-theme-card" aria-label="显示设置">
+      <CommonSwitch v-model="darkModeEnabled" label="暗黑模式" />
     </section>
 
     <div class="profile-action-group">

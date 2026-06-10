@@ -1,23 +1,15 @@
 .food-home-page {
-  --food-bg: #f8fafc;
-  --food-text: #0f172a;
-  --food-text-muted: #64748b;
-  --food-card-bg: #ffffff;
-  --food-card-border: #e2e8f0;
-  --food-hero-grad-start: #eff6ff;
-  --food-hero-grad-end: #dbeafe;
-  --food-hero-border: #bfdbfe;
   min-height: calc(100dvh - 142px);
   display: grid;
   align-content: start;
   gap: var(--space-12);
-  color: var(--food-text);
+  color: var(--color-food-text);
 }
 
 .hero-card,
 .manager-card,
 .recent-row {
-  border: 1px solid var(--food-card-border);
+  border: 1px solid var(--color-food-border);
 }
 
 .hero-card {
@@ -25,8 +17,8 @@
   gap: 14px;
   padding: 18px;
   border-radius: 24px;
-  background: linear-gradient(135deg, var(--food-hero-grad-start) 0%, var(--food-hero-grad-end) 100%);
-  border-color: var(--food-hero-border);
+  background: linear-gradient(135deg, var(--color-food-hero-grad-start) 0%, var(--color-food-hero-grad-end) 100%);
+  border-color: var(--color-food-hero-border);
 }
 
 .hero-title-wrap h2,
@@ -95,7 +87,7 @@
   gap: var(--space-8);
   padding: 14px;
   border-radius: var(--radius-18);
-  background: var(--food-card-bg);
+  background: var(--color-food-surface);
   text-align: left;
 }
 
@@ -106,7 +98,7 @@
 
 .manager-card span,
 .recent-row span {
-  color: var(--food-text-muted);
+  color: var(--color-food-text-muted);
   font-size: var(--font-size-12);
   line-height: 1.4;
 }
@@ -119,7 +111,7 @@
   min-height: 56px;
   padding: 10px 12px;
   border-radius: var(--radius-18);
-  background: var(--food-card-bg);
+  background: var(--color-food-surface);
   text-align: left;
 }
 
@@ -138,7 +130,7 @@
   margin: 0;
   padding: 24px 16px;
   border-radius: var(--radius-18);
-  background: var(--food-card-bg);
-  color: var(--food-text-muted);
+  background: var(--color-food-surface);
+  color: var(--color-food-text-muted);
   text-align: center;
 }

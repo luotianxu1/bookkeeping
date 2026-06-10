@@ -22,8 +22,8 @@
   flex: 0 0 28px;
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+  background: var(--color-us-market-refresh-bg);
+  box-shadow: var(--color-us-market-refresh-shadow);
 }
 
 .us-market-refresh:disabled {
@@ -48,7 +48,7 @@
   padding: var(--space-12);
   border: 1px solid var(--color-bg-soft-2);
   border-radius: var(--radius-12);
-  background: var(--color-white);
+  background: var(--color-bg-card);
 }
 
 .card-head {
@@ -95,8 +95,8 @@
   gap: var(--space-10);
   padding: var(--space-12);
   border-radius: var(--radius-12);
-  background: linear-gradient(135deg, rgba(244, 248, 255, 0.96), rgba(229, 238, 255, 0.92));
-  border: 1px solid rgba(59, 130, 246, 0.12);
+  background: linear-gradient(135deg, var(--color-us-market-item-bg-start), var(--color-us-market-item-bg-end));
+  border: 1px solid var(--color-us-market-item-border);
 }
 
 .market-list-left {
@@ -132,15 +132,15 @@
   align-items: center;
   padding: 0 var(--space-8);
   border-radius: var(--radius-pill);
-  color: #1d4ed8;
+  color: var(--color-us-market-pill-text);
   font-size: var(--font-size-12);
   font-weight: 700;
-  background: rgba(219, 234, 254, 0.88);
+  background: var(--color-us-market-pill-bg);
 }
 
 .market-pill.stale {
-  color: #92400e;
-  background: rgba(254, 243, 199, 0.96);
+  color: var(--color-us-market-pill-stale-text);
+  background: var(--color-us-market-pill-stale-bg);
 }
 
 .market-list-change {

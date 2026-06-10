@@ -33,6 +33,7 @@ import {
   type InvestmentTransaction,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { useTheme } from '@/utils/theme'
 
 type FundTrendRange = '1m' | '3m' | '6m' | '1y' | '3y'
 type TradeFundFeeMode = 'auto' | `manual-${number}`
@@ -44,6 +45,7 @@ type FundTrendValueEntry = {
 
 const route = useRoute()
 const router = useRouter()
+const { isDark } = useTheme()
 const isLoading = ref(false)
 const pageError = ref('')
 const detail = ref<InvestmentAssetDetail | null>(null)
@@ -365,7 +367,7 @@ onBeforeUnmount(() => {
   disposeChart()
 })
 
-watch([detail, transactions], async () => {
+watch([detail, transactions, isDark], async () => {
   await nextTick()
   requestAnimationFrame(() => {
     renderChart()
@@ -555,6 +557,15 @@ async function loadStockMarketData(baseDetail: InvestmentAssetDetail, stockCode:
 }
 
 function renderLineChart(points: InvestmentChartPoint[]) {
+  const rootStyle = getComputedStyle(document.documentElement)
+  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
+  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
+  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
+  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
+  const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const brandColor = rootStyle.getPropertyValue('--color-brand').trim()
+  const brandStrongColor = rootStyle.getPropertyValue('--color-brand-strong').trim()
   const isFundTrendChart = detail.value?.productType === 'fund'
   const baselineValue = resolveLineChartBaseline(points, isFundTrendChart)
   const costPrice = chartCostBaseline.value
@@ -588,10 +599,13 @@ function renderLineChart(points: InvestmentChartPoint[]) {
   series.push(...tradeMarkerSeries)
 
   chart?.setOption({
-    color: ['#1D4ED8', '#F59E0B', '#2563EB', '#DC2626'],
+    color: [brandColor, '#F59E0B', brandStrongColor, '#DC2626'],
     tooltip: {
       trigger: 'axis',
       confine: true,
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText },
       formatter: (params: any) => {
         const items = Array.isArray(params) ? params : [params]
         if (items.length === 0) {
@@ -619,7 +633,7 @@ function renderLineChart(points: InvestmentChartPoint[]) {
       itemWidth: 10,
       itemHeight: 10,
       textStyle: {
-        color: '#64748B',
+        color: axisText,
         fontSize: 11,
       },
       data: series.map((entry) => entry.name),
@@ -628,18 +642,18 @@ function renderLineChart(points: InvestmentChartPoint[]) {
     xAxis: {
       type: 'category',
       data: points.map((point) => point.label),
-      axisLabel: { color: '#64748B', fontSize: 10 },
-      axisLine: { lineStyle: { color: '#D9E5FF' } },
+      axisLabel: { color: axisText, fontSize: 10 },
+      axisLine: { lineStyle: { color: axisLine } },
     },
     yAxis: {
       type: 'value',
       scale: true,
       axisLabel: {
-        color: '#64748B',
+        color: axisText,
         fontSize: 10,
         formatter: (value: number) => formatAxisChangeLabel(value, baselineValue),
       },
-      splitLine: { lineStyle: { color: '#EDF2FB' } },
+      splitLine: { lineStyle: { color: splitLine } },
     },
     dataZoom: [{ type: 'inside', start: 0, end: 100 }],
     series,
@@ -647,6 +661,13 @@ function renderLineChart(points: InvestmentChartPoint[]) {
 }
 
 function renderStockChart(points: InvestmentChartPoint[]) {
+  const rootStyle = getComputedStyle(document.documentElement)
+  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
+  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
+  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
+  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const brandSoftColor = rootStyle.getPropertyValue('--color-brand-soft').trim()
   const dates = points.map((point) => point.label)
   const candleData = points.map((point) => [point.open, point.close, point.low, point.high])
   const volumeData = points.map((point) => point.volume ?? 0)
@@ -658,6 +679,9 @@ function renderStockChart(points: InvestmentChartPoint[]) {
       trigger: 'axis',
       axisPointer: { type: 'cross' },
       confine: true,
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText },
       formatter: (params: any) => {
         const items = Array.isArray(params) ? params : [params]
         if (items.length === 0) {
@@ -687,7 +711,7 @@ function renderStockChart(points: InvestmentChartPoint[]) {
       itemWidth: 10,
       itemHeight: 10,
       textStyle: {
-        color: '#64748B',
+        color: axisText,
         fontSize: 11,
       },
       data: ['K线', '买入点', '卖出点'],
@@ -697,20 +721,20 @@ function renderStockChart(points: InvestmentChartPoint[]) {
       { left: 42, right: 14, top: '76%', height: '14%' },
     ],
     xAxis: [
-      { type: 'category', data: dates, boundaryGap: false, axisLabel: { color: '#64748B', fontSize: 10 } },
+      { type: 'category', data: dates, boundaryGap: false, axisLabel: { color: axisText, fontSize: 10 } },
       { type: 'category', gridIndex: 1, data: dates, boundaryGap: false, axisLabel: { show: false }, axisTick: { show: false } },
     ],
     yAxis: [
       {
         scale: true,
         axisLabel: {
-          color: '#64748B',
+          color: axisText,
           fontSize: 10,
           formatter: (value: number) => formatAxisChangeLabel(value),
         },
-        splitLine: { lineStyle: { color: '#EDF2FB' } },
+        splitLine: { lineStyle: { color: splitLine } },
       },
-      { scale: true, gridIndex: 1, splitNumber: 2, axisLabel: { color: '#64748B', fontSize: 10 }, splitLine: { show: false } },
+      { scale: true, gridIndex: 1, splitNumber: 2, axisLabel: { color: axisText, fontSize: 10 }, splitLine: { show: false } },
     ],
     dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 }],
     series: [
@@ -731,7 +755,7 @@ function renderStockChart(points: InvestmentChartPoint[]) {
         xAxisIndex: 1,
         yAxisIndex: 1,
         data: volumeData,
-        itemStyle: { color: '#93C5FD' },
+        itemStyle: { color: brandSoftColor },
       },
       ...tradeMarkerSeries,
     ],

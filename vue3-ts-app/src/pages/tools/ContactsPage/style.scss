@@ -6,11 +6,11 @@
 }
 
 .contacts-page :deep(.page-header-back) {
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .contacts-page :deep(.page-header h1) {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 18px;
   line-height: 1.2;
   font-weight: 700;
@@ -20,10 +20,10 @@
   min-width: 44px;
   height: 28px;
   padding: 0 10px;
-  border: 1px solid #dbe4f2;
+  border: 1px solid var(--color-border-soft);
   border-radius: 999px;
-  background: #ffffff;
-  color: #1d4ed8;
+  background: var(--color-bg-card);
+  color: var(--color-brand);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -32,12 +32,12 @@
 .contacts-message {
   margin: 0;
   padding: 10px 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 13px;
 }
 
 .contacts-message-error {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .contacts-list {
@@ -46,65 +46,65 @@
 }
 
 .contact-card {
-  --contact-avatar-bg: #dbeafe;
-  --contact-avatar-fg: #1d4ed8;
-  --contact-phone-fg: #0f172a;
-  --contact-badge-bg: #eff6ff;
-  --contact-badge-fg: #1d4ed8;
+  --contact-avatar-bg: var(--color-bg-brand-tint);
+  --contact-avatar-fg: var(--color-brand);
+  --contact-phone-fg: var(--color-text-primary);
+  --contact-badge-bg: var(--color-bg-brand-soft);
+  --contact-badge-fg: var(--color-brand);
   display: grid;
   gap: 10px;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: #ffffff;
+  background: var(--color-bg-card);
 }
 
 .contact-card.variant-wanglin {
-  --contact-avatar-bg: #dbeafe;
-  --contact-avatar-fg: #1d4ed8;
-  --contact-phone-fg: #0f172a;
-  --contact-badge-bg: #eff6ff;
-  --contact-badge-fg: #1d4ed8;
+  --contact-avatar-bg: var(--color-bg-brand-tint);
+  --contact-avatar-fg: var(--color-brand);
+  --contact-phone-fg: var(--color-text-primary);
+  --contact-badge-bg: var(--color-bg-brand-soft);
+  --contact-badge-fg: var(--color-brand);
 }
 
 .contact-card.variant-chenxu {
-  --contact-avatar-bg: #dcfce7;
-  --contact-avatar-fg: #15803d;
-  --contact-phone-fg: #0f172a;
-  --contact-badge-bg: #dcfce7;
-  --contact-badge-fg: #15803d;
+  --contact-avatar-bg: var(--color-bg-green-grad-1);
+  --contact-avatar-fg: var(--color-success-strong);
+  --contact-phone-fg: var(--color-text-primary);
+  --contact-badge-bg: var(--color-bg-success-soft);
+  --contact-badge-fg: var(--color-success-strong);
 }
 
 .contact-card.variant-liayi {
-  --contact-avatar-bg: #fce7f3;
-  --contact-avatar-fg: #be185d;
-  --contact-phone-fg: #dc2626;
-  --contact-badge-bg: #fef3c7;
-  --contact-badge-fg: #b45309;
+  --contact-avatar-bg: var(--color-bg-purple-soft);
+  --contact-avatar-fg: var(--color-purple);
+  --contact-phone-fg: var(--color-danger);
+  --contact-badge-bg: var(--color-bg-orange-grad-1);
+  --contact-badge-fg: var(--color-orange);
 }
 
 .contact-card.variant-family {
-  --contact-avatar-bg: #dbeafe;
-  --contact-avatar-fg: #1d4ed8;
-  --contact-phone-fg: #0f172a;
-  --contact-badge-bg: #eff6ff;
-  --contact-badge-fg: #1d4ed8;
+  --contact-avatar-bg: var(--color-bg-brand-tint);
+  --contact-avatar-fg: var(--color-brand);
+  --contact-phone-fg: var(--color-text-primary);
+  --contact-badge-bg: var(--color-bg-brand-soft);
+  --contact-badge-fg: var(--color-brand);
 }
 
 .contact-card.variant-friend {
-  --contact-avatar-bg: #dcfce7;
-  --contact-avatar-fg: #15803d;
-  --contact-phone-fg: #0f172a;
-  --contact-badge-bg: #dcfce7;
-  --contact-badge-fg: #15803d;
+  --contact-avatar-bg: var(--color-bg-green-grad-1);
+  --contact-avatar-fg: var(--color-success-strong);
+  --contact-phone-fg: var(--color-text-primary);
+  --contact-badge-bg: var(--color-bg-success-soft);
+  --contact-badge-fg: var(--color-success-strong);
 }
 
 .contact-card.variant-merchant {
-  --contact-avatar-bg: #fce7f3;
-  --contact-avatar-fg: #be185d;
-  --contact-phone-fg: #dc2626;
-  --contact-badge-bg: #fef3c7;
-  --contact-badge-fg: #b45309;
+  --contact-avatar-bg: var(--color-bg-purple-soft);
+  --contact-avatar-fg: var(--color-purple);
+  --contact-phone-fg: var(--color-danger);
+  --contact-badge-bg: var(--color-bg-orange-grad-1);
+  --contact-badge-fg: var(--color-orange);
 }
 
 .contact-card-top {
@@ -145,14 +145,14 @@
 }
 
 .contact-card-name-row strong {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 14px;
   font-weight: 700;
 }
 
 .contact-card-name-row p {
   margin: 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 500;
 }
@@ -190,7 +190,7 @@
 }
 
 .contact-card-note {
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 500;
 }
@@ -209,14 +209,14 @@
 }
 
 .contact-action-edit {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
 }
 
 .contact-action-delete {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
   font-weight: 700;
 }
 
@@ -231,7 +231,7 @@
 }
 
 .contact-modal-field span {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 12px;
   font-weight: 600;
 }
@@ -240,10 +240,10 @@
   width: 100%;
   min-height: 66px;
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--color-bg-card-soft);
+  color: var(--color-text-primary);
   font-size: 13px;
   font-weight: 600;
   outline: none;
@@ -251,18 +251,18 @@
 }
 
 .contact-modal-field textarea::placeholder {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
   font-weight: 500;
 }
 
 .contact-modal-field textarea:focus {
-  border-color: #1d4ed8;
-  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-ring-focus);
 }
 
 .contact-form-error {
   margin: 0;
-  color: #dc2626;
+  color: var(--color-danger);
   font-size: 12px;
   font-weight: 600;
 }
@@ -281,24 +281,24 @@
 }
 
 .contact-modal-cancel {
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
 }
 
 .contact-modal-save {
-  background: #1d4ed8;
-  color: #ffffff;
+  background: var(--color-brand);
+  color: var(--color-text-inverse);
 }
 
 .contact-modal-delete {
-  background: #dc2626;
-  color: #ffffff;
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
 }
 
 .contact-delete-message {
   margin: 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 13px;
   font-weight: 500;
   line-height: 1.5;
@@ -307,8 +307,8 @@
 :deep(.common-modal-panel) {
   width: min(100%, 349px);
   border-radius: 18px;
-  background: #ffffff;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  background: var(--color-bg-card);
+  box-shadow: var(--color-shadow-panel);
 }
 
 :deep(.common-modal-panel-compact) {
@@ -324,7 +324,7 @@
 }
 
 :deep(.common-modal-close) {
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 :deep(.common-modal-body) {
@@ -340,7 +340,7 @@
 }
 
 :deep(.common-field span) {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 12px;
   font-weight: 600;
 }
@@ -348,14 +348,14 @@
 :deep(.common-field-control) {
   height: 42px;
   padding: 0 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: #f8fafc;
-  color: #0f172a;
+  background: var(--color-bg-card-soft);
+  color: var(--color-text-primary);
   font-size: 13px;
   font-weight: 500;
 }
 
 :deep(.common-field-control::placeholder) {
-  color: #94a3b8;
+  color: var(--color-text-subtle);
 }

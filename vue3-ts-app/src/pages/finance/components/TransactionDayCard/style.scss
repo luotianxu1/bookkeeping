@@ -1,8 +1,8 @@
 .day-card {
   overflow: hidden;
-  border: 1px solid var(--color-bg-soft-2);
+  border: 1px solid var(--color-finance-day-card-border);
   border-radius: var(--radius-16);
-  background: var(--color-white);
+  background: var(--color-finance-day-card-bg);
 }
 
 .day-header {
@@ -35,13 +35,13 @@
 }
 
 .day-title strong {
-  color: var(--color-text-secondary);
+  color: var(--color-finance-day-title);
   font-size: var(--font-size-14);
   font-weight: 700;
 }
 
 .day-title span {
-  color: var(--color-bg-soft-2);
+  color: var(--color-finance-day-title-muted);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
@@ -65,7 +65,7 @@
 }
 
 .day-summary span {
-  color: var(--color-text-subtle);
+  color: var(--color-finance-day-meta);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -98,7 +98,7 @@
   position: relative;
   overflow: hidden;
   min-height: 52px;
-  border-top: 1px solid var(--color-bg-soft-2);
+  border-top: 1px solid var(--color-finance-day-card-border);
 }
 
 .transaction-row-swipeable {
@@ -113,7 +113,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
-  background: var(--color-white);
+  background: var(--color-finance-day-card-bg);
   transition: transform 180ms ease;
 }
 
@@ -124,12 +124,12 @@
 }
 
 .transaction-copy strong {
-  color: var(--color-text-secondary);
+  color: var(--color-finance-transaction-title);
   font-size: var(--font-size-12);
 }
 
 .day-card-stacked .transaction-copy strong {
-  color: var(--color-text-primary);
+  color: var(--color-finance-transaction-title-strong);
   font-size: var(--font-size-14);
   font-weight: 600;
 }
@@ -141,7 +141,7 @@
 }
 
 .transaction-copy span {
-  color: var(--color-text-subtle);
+  color: var(--color-finance-transaction-meta);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
