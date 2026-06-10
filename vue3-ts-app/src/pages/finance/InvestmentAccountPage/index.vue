@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 投资账户详情页：展示单个投资账户的汇总、持仓列表和新增持仓。
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import CommonButton from '@/components/common/CommonButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -17,8 +18,10 @@ import {
   getInvestmentProducts,
   getInvestmentSummary,
   getInvestmentTransactions,
+  runInvestmentFundSyncTask,
   type Account,
   type InvestmentAutoInvestPlan,
+  type InvestmentFundSyncSummary,
   type InvestmentPosition,
   type InvestmentProduct,
   type InvestmentProductType,
@@ -40,6 +43,7 @@ const formError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
+const currentTime = ref(new Date())
 const investmentAccounts = ref<Account[]>([])
 const fundingAccounts = ref<Account[]>([])
 const summary = ref<InvestmentSummary>({
@@ -56,6 +60,7 @@ const summary = ref<InvestmentSummary>({
 const positions = ref<InvestmentPosition[]>([])
 const transactions = ref<InvestmentTransaction[]>([])
 const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
+const isRefreshingFunds = ref(false)
 
 const addAssetKeyword = ref('')
 const addAssetName = ref('')
@@ -69,6 +74,7 @@ const addAssetSubscriptionTimeSlot = ref<'before_1500' | 'after_1500'>('before_1
 const isLookingUpProduct = ref(false)
 const productLookupMessage = ref('')
 let isFillingProduct = false
+let refreshVisibilityTimer: number | null = null
 
 const fundingAccountOptions = computed(() =>
   fundingAccounts.value.map((account) => ({
@@ -113,6 +119,8 @@ const autoInvestPositionIds = computed(() => new Set(
     .filter((plan) => plan.status !== 'cancelled')
     .map((plan) => plan.positionId),
 ))
+const hasFundHoldings = computed(() => positions.value.some((item) => item.productType === 'fund'))
+const shouldShowFundRefreshButton = computed(() => hasFundHoldings.value && isAfterFundRefreshTime(currentTime.value))
 
 const totalSummaryProfit = computed(() => Number(summary.value.cumulativeProfit ?? 0) + Number(summary.value.holdingProfit ?? 0))
 const totalSummaryProfitRate = computed(() => {
@@ -138,6 +146,16 @@ const summaryMetrics = computed(() => [
 
 onMounted(() => {
   void loadInvestmentData()
+  currentTime.value = new Date()
+  refreshVisibilityTimer = window.setInterval(() => {
+    currentTime.value = new Date()
+  }, 30 * 1000)
+})
+
+onBeforeUnmount(() => {
+  if (refreshVisibilityTimer !== null) {
+    window.clearInterval(refreshVisibilityTimer)
+  }
 })
 
 watch(() => route.params.accountId, () => {
@@ -231,6 +249,23 @@ async function loadInvestmentData() {
     pageError.value = error instanceof Error ? error.message : '投资账户加载失败'
   } finally {
     isLoading.value = false
+  }
+}
+
+async function refreshFundData() {
+  if (!shouldShowFundRefreshButton.value || isRefreshingFunds.value) {
+    return
+  }
+
+  isRefreshingFunds.value = true
+  try {
+    const summary: InvestmentFundSyncSummary = await runInvestmentFundSyncTask()
+    await loadInvestmentData()
+    showFeedback(buildFundRefreshSuccessMessage(summary), 'success')
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : '基金数据刷新失败', 'error')
+  } finally {
+    isRefreshingFunds.value = false
   }
 }
 
@@ -665,6 +700,16 @@ function showFeedback(message: string, type: 'success' | 'error') {
   feedbackType.value = type
   showFeedbackModal.value = true
 }
+
+function isAfterFundRefreshTime(date: Date) {
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  return hours > 21 || (hours === 21 && minutes >= 30)
+}
+
+function buildFundRefreshSuccessMessage(summary: InvestmentFundSyncSummary) {
+  return `基金数据已刷新：更新 ${summary.syncedPositions} 条持仓，写入 ${summary.syncedDividendPlans} 条分红计划，结算 ${summary.settledCount} 条交易`
+}
 </script>
 
 <template>
@@ -675,7 +720,19 @@ function showFeedback(message: string, type: 'success' | 'error') {
       :type="feedbackType"
     />
 
-    <PageHeader title="投资详情" back-to="/finance/accounts/investment" back-label="返回投资账户" />
+    <PageHeader title="投资详情" back-to="/finance/accounts/investment" back-label="返回投资账户">
+      <CommonButton
+        v-if="shouldShowFundRefreshButton"
+        class="investment-account-header-refresh"
+        variant="secondary"
+        size="sm"
+        :disabled="isRefreshingFunds"
+        :aria-label="isRefreshingFunds ? '基金数据刷新中' : '刷新所有基金数据'"
+        @click="refreshFundData"
+      >
+        {{ isRefreshingFunds ? '刷新中...' : '刷新基金' }}
+      </CommonButton>
+    </PageHeader>
 
     <p v-if="pageError" class="investment-message investment-message-error">{{ pageError }}</p>
     <CommonLoading v-else-if="isLoading" />

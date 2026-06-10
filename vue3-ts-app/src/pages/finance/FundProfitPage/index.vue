@@ -826,9 +826,11 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
             <div class="detail-main">
               <div class="fund-name-row">
                 <strong>{{ item.productName }}</strong>
+              </div>
+              <div class="fund-detail-meta">
+                <span>{{ formatHoldingQuantity(item.holdingQuantity) }} · 市值 {{ formatCurrency(item.holdingAmount) }}</span>
                 <span v-if="item.productSymbol" class="fund-code-chip">{{ item.productSymbol }}</span>
               </div>
-              <span>{{ formatHoldingQuantity(item.holdingQuantity) }} · 市值 {{ formatCurrency(item.holdingAmount) }}</span>
             </div>
             <div class="detail-side">
               <AmountText

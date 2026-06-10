@@ -149,8 +149,12 @@ function formatPlainPercent(value: number) {
   return `${value < 0 ? '-' : ''}${formatAmount(value)}%`
 }
 
-function formatHoldingAmountText(value: number, quantity: number, unitName?: string | null) {
-  return `${formatMonthlyIncome(value)} · ${formatAmount(quantity)} ${unitName || '份'}`
+function formatHoldingQuantityText(quantity: number, unitName?: string | null) {
+  return `${formatAmount(quantity)} ${unitName || '份'}`
+}
+
+function formatHoldingMetaText(value: number, quantity: number, unitName?: string | null) {
+  return `${formatMonthlyIncome(value)} · ${formatHoldingQuantityText(quantity, unitName)}`
 }
 
 function formatMonthlyIncome(value: number) {
@@ -408,32 +412,37 @@ function getCoverageBackgroundStyle(item: ExpenseCoverageItem) {
         :class="['holding-row', { clickable: !!item.positionId }]"
         @click="openHoldingDetail(item)"
       >
-        <div class="holding-left">
-          <p>{{ item.productName }}</p>
-          <small>{{ formatHoldingAmountText(item.marketValue, item.holdingQuantity, item.unitName) }}</small>
-        </div>
+        <div class="holding-main">
+          <div class="holding-top">
+            <p class="holding-name">{{ item.productName }}</p>
 
-        <div class="holding-right">
-          <div class="value-column">
-            <AmountText
-              tag="strong"
-              :value="formatPlainPercent(item.estimatedDividendRate)"
-              :tone="amountTone(item.estimatedDividendRate)"
-            />
+            <div class="holding-right">
+              <div class="value-column">
+                <AmountText
+                  tag="strong"
+                  :value="formatPlainPercent(item.estimatedDividendRate)"
+                  :tone="amountTone(item.estimatedDividendRate)"
+                />
+              </div>
+              <div class="value-column">
+                <AmountText
+                  tag="strong"
+                  :value="formatPlainCurrency(item.estimatedDividendAmount)"
+                  :tone="amountTone(item.estimatedDividendAmount)"
+                />
+              </div>
+              <div class="value-column">
+                <AmountText
+                  tag="strong"
+                  :value="formatMonthlyIncome(item.estimatedDividendAmount / 12)"
+                  :tone="amountTone(item.estimatedDividendAmount)"
+                />
+              </div>
+            </div>
           </div>
-          <div class="value-column">
-            <AmountText
-              tag="strong"
-              :value="formatPlainCurrency(item.estimatedDividendAmount)"
-              :tone="amountTone(item.estimatedDividendAmount)"
-            />
-          </div>
-          <div class="value-column">
-            <AmountText
-              tag="strong"
-              :value="formatMonthlyIncome(item.estimatedDividendAmount / 12)"
-              :tone="amountTone(item.estimatedDividendAmount)"
-            />
+
+          <div class="holding-left">
+            <small>{{ formatHoldingMetaText(item.marketValue, item.holdingQuantity, item.unitName) }}</small>
           </div>
         </div>
       </article>

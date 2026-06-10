@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @Validated
 @RestController
@@ -101,6 +102,12 @@ public class InvestmentController {
         @RequestParam(name = "selected", required = false) String selected
     ) {
         return Result.ok(investmentService.fundProfitPage(userId, accountId, view, anchor, selected));
+    }
+
+    @PostMapping("/tasks/fund-sync")
+    @Operation(summary = "手动执行基金夜间同步任务")
+    public Result<Map<String, Object>> runFundSyncTask() {
+        return Result.ok(investmentService.runFundSyncCycle("manual-api"));
     }
 
     @GetMapping("/positions")

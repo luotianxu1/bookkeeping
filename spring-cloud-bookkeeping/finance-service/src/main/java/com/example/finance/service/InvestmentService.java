@@ -861,6 +861,19 @@ public class InvestmentService {
         LocalDate targetDate,
         NavigableMap<LocalDate, BigDecimal> priceHistory
     ) {
+        if (position != null
+            && targetDate != null
+            && position.getLastSyncedAt() != null
+            && targetDate.equals(position.getLastSyncedAt().toLocalDate())) {
+            LocalDate latestHistoryDate = priceHistory == null || priceHistory.isEmpty() ? null : priceHistory.lastKey();
+            if (latestHistoryDate == null || latestHistoryDate.isBefore(targetDate)) {
+                BigDecimal currentPrice = defaultZero(position.getCurrentPrice()).setScale(6, RoundingMode.HALF_UP);
+                if (currentPrice.compareTo(BigDecimal.ZERO) > 0) {
+                    return currentPrice;
+                }
+            }
+        }
+
         if (priceHistory != null && !priceHistory.isEmpty()) {
             Map.Entry<LocalDate, BigDecimal> floorEntry = priceHistory.floorEntry(targetDate);
             if (floorEntry != null && floorEntry.getValue() != null && floorEntry.getValue().compareTo(BigDecimal.ZERO) > 0) {
@@ -1308,6 +1321,21 @@ public class InvestmentService {
         if (base.compareTo(BigDecimal.ZERO) <= 0) {
             base = endValue;
         }
+
+        if (shouldUseStoredTodayProfit(position, startDate, endDate)) {
+            return new PositionPeriodProfit(
+                startValue,
+                endValue,
+                cashIn,
+                cashOut,
+                defaultZero(position.getDayProfit()).setScale(2, RoundingMode.HALF_UP),
+                defaultZero(position.getDayProfitRate()).setScale(4, RoundingMode.HALF_UP),
+                endValue,
+                endQuantity,
+                endPrice
+            );
+        }
+
         return new PositionPeriodProfit(
             startValue,
             endValue,
@@ -1319,6 +1347,19 @@ public class InvestmentService {
             endQuantity,
             endPrice
         );
+    }
+
+    private boolean shouldUseStoredTodayProfit(
+        InvestmentPositionEntity position,
+        LocalDate startDate,
+        LocalDate endDate
+    ) {
+        return position != null
+            && startDate != null
+            && endDate != null
+            && startDate.equals(endDate)
+            && LocalDate.now().equals(endDate)
+            && hasTodayDayProfit(position);
     }
 
     private FundProfitAggregate aggregateFundProfit(Iterable<PositionPeriodProfit> profits) {
@@ -1814,6 +1855,24 @@ public class InvestmentService {
 
         log.info("基金分红计划同步完成：{} 个基金产品，{} 条计划已写入", syncedProducts, syncedPlans);
         return syncedPlans;
+    }
+
+    public Map<String, Object> runFundSyncCycle(String trigger) {
+        LocalDateTime startedAt = LocalDateTime.now();
+        int syncedPositions = syncDailyFundProfits();
+        int syncedDividendPlans = syncFundDividendPlans();
+        int settledCount = settlePendingFundTrades();
+        LocalDateTime finishedAt = LocalDateTime.now();
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("trigger", StringUtils.hasText(trigger) ? trigger : "unknown");
+        summary.put("startedAt", startedAt);
+        summary.put("finishedAt", finishedAt);
+        summary.put("durationMs", Duration.between(startedAt, finishedAt).toMillis());
+        summary.put("syncedPositions", syncedPositions);
+        summary.put("syncedDividendPlans", syncedDividendPlans);
+        summary.put("settledCount", settledCount);
+        return summary;
     }
 
     public int settlePendingFundTrades() {

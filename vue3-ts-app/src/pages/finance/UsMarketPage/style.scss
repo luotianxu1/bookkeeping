@@ -1,0 +1,211 @@
+.us-market-page {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.us-market-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.us-market-header :deep(.page-header) {
+  flex: 1;
+}
+
+.us-market-refresh {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 28px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+}
+
+.us-market-refresh:disabled {
+  opacity: 0.72;
+}
+
+.us-market-refresh-icon {
+  color: var(--color-brand-strong);
+  font-size: var(--font-size-16);
+  line-height: 1;
+}
+
+.us-market-refresh-icon.spinning {
+  animation: us-market-refresh-spin 720ms linear infinite;
+}
+
+.overview-card,
+.chart-card,
+.tips-card {
+  display: grid;
+  gap: var(--space-6);
+  padding: var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.card-head p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.card-head span {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.market-message {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.market-message-error {
+  color: var(--color-danger);
+}
+
+.market-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.market-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-10);
+  padding: var(--space-12);
+  border-radius: var(--radius-12);
+  background: linear-gradient(135deg, rgba(244, 248, 255, 0.96), rgba(229, 238, 255, 0.92));
+  border: 1px solid rgba(59, 130, 246, 0.12);
+}
+
+.market-list-left {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.market-list-left strong {
+  color: var(--color-finance-title);
+  font-size: var(--font-size-16);
+  line-height: 1.2;
+}
+
+.market-list-left p {
+  margin: 0;
+  color: var(--color-finance-subtitle);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.market-list-right {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-6);
+}
+
+.market-pill {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-8);
+  border-radius: var(--radius-pill);
+  color: #1d4ed8;
+  font-size: var(--font-size-12);
+  font-weight: 700;
+  background: rgba(219, 234, 254, 0.88);
+}
+
+.market-pill.stale {
+  color: #92400e;
+  background: rgba(254, 243, 199, 0.96);
+}
+
+.market-list-change {
+  font-size: var(--font-size-18);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.market-list-change:deep(.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.market-list-change:deep(.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.market-list-change:deep(.amount-text--neutral) {
+  color: var(--color-text-subtle);
+}
+.market-foot,
+.tips-card p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  line-height: 1.5;
+}
+
+.chart-section {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.chart-image {
+  width: 100%;
+  min-height: 140px;
+  object-fit: contain;
+  border-radius: var(--radius-10);
+  background: var(--color-bg-page);
+}
+
+.chart-actions {
+  display: flex;
+  gap: var(--space-10);
+  flex-wrap: wrap;
+}
+
+.chart-actions a {
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (min-width: 768px) {
+  .chart-section {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@keyframes us-market-refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

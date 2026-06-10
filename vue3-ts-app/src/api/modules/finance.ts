@@ -212,6 +212,32 @@ export interface ExchangeRate {
   source: string
 }
 
+export interface UsMarketIndexQuote {
+  code: string
+  name: string
+  alias: string
+  price: number
+  change: number
+  changePercent: number
+  previousClose?: number | null
+  openPrice?: number | null
+  highPrice?: number | null
+  lowPrice?: number | null
+  marketTimeLabel?: string | null
+  trendImageUrl: string
+  klineImageUrl: string
+  updatedAt: string
+  source: string
+  stale: boolean
+}
+
+export interface UsMarketOverview {
+  indices: UsMarketIndexQuote[]
+  updatedAt: string
+  autoRefreshIntervalSeconds: number
+  source: string
+}
+
 export type MarketNewsCategory = 'all' | 'focus' | 'china' | 'stock' | 'commodity' | 'fund' | 'macro'
 
 export interface MarketNewsItem {
@@ -887,6 +913,16 @@ export interface InvestmentAssetDetail {
   description?: string | null
 }
 
+export interface InvestmentFundSyncSummary {
+  trigger: string
+  startedAt: string
+  finishedAt: string
+  durationMs: number
+  syncedPositions: number
+  syncedDividendPlans: number
+  settledCount: number
+}
+
 export interface InvestmentFundRedeemFeeOption {
   label: string
   feeRate: number
@@ -1248,6 +1284,10 @@ export function getExchangeRate(from: string, to: string) {
   })
 }
 
+export function getUsMarketOverview() {
+  return requestGet<UsMarketOverview>(financeRequest, '/api/finance/us-market-indices')
+}
+
 export function getMarketNews(params: { category?: MarketNewsCategory; limit?: number } = {}) {
   return requestGet<MarketNews>(financeRequest, '/api/finance/market-news', { params })
 }
@@ -1394,6 +1434,14 @@ export function getInvestmentPosition(id: number) {
 
 export function getInvestmentPositionDetail(id: number) {
   return requestGet<InvestmentAssetDetail>(financeRequest, `/api/finance/investments/positions/${id}/detail`)
+}
+
+export function runInvestmentFundSyncTask() {
+  return requestPost<InvestmentFundSyncSummary, undefined>(
+    financeRequest,
+    '/api/finance/investments/tasks/fund-sync',
+    undefined,
+  )
 }
 
 export function createInvestmentPosition(params: SaveInvestmentPositionParams) {
