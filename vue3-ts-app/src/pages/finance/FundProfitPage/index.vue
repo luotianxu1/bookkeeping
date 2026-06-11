@@ -169,15 +169,6 @@ const calendarHeadLabel = computed(() => {
   return '日视图'
 })
 const detailTitle = computed(() => `${selectionLabel.value}收益明细`)
-const detailPeriodLabel = computed(() => {
-  if (selectedView.value === 'month') {
-    return '本月'
-  }
-  if (selectedView.value === 'year') {
-    return selectionLabel.value
-  }
-  return selectionLabel.value
-})
 
 const dayCalendarCells = computed<Array<FundProfitCalendarCell | null>>(() => {
   if (!isDayView.value) {
@@ -640,15 +631,6 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
         <p class="summary-hint">{{ summaryHint }}</p>
       </section>
 
-      <section class="fund-profit-card fund-profit-insight-banner" aria-label="收益洞察">
-        <span class="insight-icon-wrap">
-          <span class="insight-dot"></span>
-        </span>
-        <div class="insight-text-wrap">
-          <p>{{ pageData.insight }}</p>
-        </div>
-      </section>
-
       <section class="fund-profit-card" aria-label="近7日收益波动">
         <header class="fund-profit-card-head trend-card-head">
           <strong>近7日收益波动</strong>
@@ -836,7 +818,7 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
               <AmountText
                 tag="strong"
                 class="detail-profit-text"
-                :value="`${detailPeriodLabel} ${formatSignedCurrency(item.periodProfit)}`"
+                :value="formatSignedCurrency(item.periodProfit)"
                 :tone="getTone(item.periodProfit)"
               />
               <AmountText
