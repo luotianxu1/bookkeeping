@@ -1,5 +1,11 @@
 <script setup lang="ts">
 // 公共按钮组件：统一主次按钮风格与交互尺寸。
+import { useAttrs } from 'vue'
+
+defineOptions({
+  inheritAttrs: false,
+})
+
 withDefaults(defineProps<{
   type?: 'button' | 'submit' | 'reset'
   variant?: 'primary' | 'secondary'
@@ -11,10 +17,13 @@ withDefaults(defineProps<{
   size: 'md',
   disabled: false,
 })
+
+const attrs = useAttrs()
 </script>
 
 <template>
   <button
+    v-bind="attrs"
     :type="type"
     :class="['common-button', `common-button-${variant}`, `common-button-${size}`]"
     :disabled="disabled"

@@ -14,6 +14,7 @@ import GoldAccountPositionPage from '@/pages/finance/GoldAccountPositionPage/ind
 import GoldLiquidationPage from '@/pages/finance/GoldLiquidationPage/index.vue'
 import ProfitForecastPage from '@/pages/finance/ProfitForecastPage/index.vue'
 import FundProfitPage from '@/pages/finance/FundProfitPage/index.vue'
+import BreakEvenForecastPage from '@/pages/finance/BreakEvenForecastPage/index.vue'
 import DividendIncomePage from '@/pages/finance/DividendIncomePage/index.vue'
 import DividendForecastPage from '@/pages/finance/DividendForecastPage/index.vue'
 import BudgetManagementPage from '@/pages/finance/BudgetManagementPage/index.vue'
@@ -122,6 +123,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '基金收益',
+    },
+  },
+  {
+    path: '/finance/break-even-forecast',
+    name: 'finance-break-even-forecast',
+    component: BreakEvenForecastPage,
+    meta: {
+      section: 'finance',
+      title: '回本预测',
     },
   },
   {

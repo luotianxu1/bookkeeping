@@ -1,7 +1,15 @@
 .common-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  border: 1px solid transparent;
   border-radius: var(--radius-10);
+  outline: 0;
   font-weight: 600;
   line-height: 1.4;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .common-button-md {
@@ -24,6 +32,10 @@
 .common-button-primary {
   background: var(--color-brand);
   color: var(--color-text-inverse);
+}
+
+.common-button:not(:disabled):active {
+  transform: translateY(1px);
 }
 
 .common-button:disabled {
