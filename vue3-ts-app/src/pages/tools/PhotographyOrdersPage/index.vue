@@ -130,6 +130,9 @@ const summary = computed(() => {
     }
     return sum + Number(order.finalAmount ?? 0)
   }, 0)
+  const totalAmount = selectedMonthOrders.value.reduce((sum, order) => {
+    return sum + Number(order.depositAmount ?? 0) + Number(order.finalAmount ?? 0)
+  }, 0)
   const typeCounts = typeOptions
     .map((item) => {
       const count = selectedMonthOrders.value.filter((order) => order.orderType === item.value).length
@@ -154,6 +157,7 @@ const summary = computed(() => {
     totalOrders,
     receivedAmount,
     finalPending,
+    totalAmount,
     typeCounts,
   }
 })
@@ -536,7 +540,7 @@ function buildCurrentMonth() {
           {{ Number(selectedMonth.split('-')[1] || '0') }}月订单
         </button>
       </div>
-      <p>已收款 {{ formatCurrency(summary.receivedAmount) }} · 待收尾款 {{ formatCurrency(summary.finalPending) }}</p>
+      <p>已收款 {{ formatCurrency(summary.receivedAmount) }} · 待收尾款 {{ formatCurrency(summary.finalPending) }} · 总金额 {{ formatCurrency(summary.totalAmount) }}</p>
       <div class="orders-summary-types">
         <article
           v-for="item in summary.typeCounts"

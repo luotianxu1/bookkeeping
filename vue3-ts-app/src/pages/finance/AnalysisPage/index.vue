@@ -65,6 +65,10 @@ const currencyFormatter = new Intl.NumberFormat('zh-CN', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 })
+const integerCurrencyFormatter = new Intl.NumberFormat('zh-CN', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
 const toneColorMap: Record<'income' | 'expense' | 'surplus', string> = {
   income: '#F43F5E',
   expense: '#10B981',
@@ -191,16 +195,22 @@ const detailAmountLabel = computed(() => {
 const detailAmountValue = computed(() => {
   const currentSummary = currentDetailSummary.value
   if (!currentSummary) {
-    return '0.00'
+    return analysisPeriod.value === 'month' ? '0' : '0.00'
   }
 
   if (summaryTab.value === '收入') {
-    return formatAmount(currentSummary.income)
+    return analysisPeriod.value === 'month'
+      ? formatIntegerAmount(currentSummary.income)
+      : formatAmount(currentSummary.income)
   }
   if (summaryTab.value === '支出') {
-    return formatAmount(currentSummary.expense)
+    return analysisPeriod.value === 'month'
+      ? formatIntegerAmount(currentSummary.expense)
+      : formatAmount(currentSummary.expense)
   }
-  return formatSignedAmount(currentSummary.surplus)
+  return analysisPeriod.value === 'month'
+    ? formatSignedIntegerAmount(currentSummary.surplus)
+    : formatSignedAmount(currentSummary.surplus)
 })
 const detailAmountTone = computed<'positive' | 'negative' | 'neutral' | 'auto'>(() => {
   if (summaryTab.value === '收入') return 'positive'
@@ -512,13 +522,16 @@ function selectYearMonth(key: string) {
 }
 
 function buildMetricAmount(summaryItem: TransactionAnalysisPeriodSummary) {
+  const amountFormatter = analysisPeriod.value === 'month' ? formatIntegerAmount : formatAmount
+  const signedAmountFormatter = analysisPeriod.value === 'month' ? formatSignedIntegerAmount : formatSignedAmount
+
   if (summaryTab.value === '收入') {
-    return summaryItem.income > 0 ? `+${formatAmount(summaryItem.income)}` : formatAmount(0)
+    return summaryItem.income > 0 ? `+${amountFormatter(summaryItem.income)}` : amountFormatter(0)
   }
   if (summaryTab.value === '支出') {
-    return summaryItem.expense > 0 ? `-${formatAmount(summaryItem.expense)}` : formatAmount(0)
+    return summaryItem.expense > 0 ? `-${amountFormatter(summaryItem.expense)}` : amountFormatter(0)
   }
-  return formatSignedAmount(summaryItem.surplus)
+  return signedAmountFormatter(summaryItem.surplus)
 }
 
 function buildMetricTrend(summaryItem: TransactionAnalysisPeriodSummary): TrendTone {
@@ -719,11 +732,22 @@ function formatAmount(value: number) {
   return currencyFormatter.format(Number(value ?? 0))
 }
 
+function formatIntegerAmount(value: number) {
+  return integerCurrencyFormatter.format(Number(value ?? 0))
+}
+
 function formatSignedAmount(value: number) {
   const numericValue = Number(value ?? 0)
   if (numericValue > 0) return `+${formatAmount(numericValue)}`
   if (numericValue < 0) return `-${formatAmount(Math.abs(numericValue))}`
   return formatAmount(0)
+}
+
+function formatSignedIntegerAmount(value: number) {
+  const numericValue = Number(value ?? 0)
+  if (numericValue > 0) return `+${formatIntegerAmount(numericValue)}`
+  if (numericValue < 0) return `-${formatIntegerAmount(Math.abs(numericValue))}`
+  return formatIntegerAmount(0)
 }
 
 function amountValue(value: string) {

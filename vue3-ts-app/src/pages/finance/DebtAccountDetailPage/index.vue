@@ -80,7 +80,7 @@ const detailSubtitle = computed(() => {
   if (relatedContact.value?.phone?.trim()) {
     return `手机号 ${relatedContact.value.phone.trim()}`
   }
-  return '未填写联系人手机号'
+  return ''
 })
 const detailNote = computed(() => account.value?.remark?.trim() || relatedContact.value?.remark?.trim() || '')
 const summaryAmountText = computed(() => formatSignedCurrency(Number(account.value?.currentBalance ?? 0)))
@@ -428,7 +428,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
         <div class="debt-detail-summary-top">
           <div class="debt-detail-summary-title">
             <strong>{{ detailName }}</strong>
-            <span>{{ detailSubtitle }}</span>
+            <span v-if="detailSubtitle">{{ detailSubtitle }}</span>
           </div>
           <span class="debt-detail-summary-badge">{{ summary.recordCount }} 条记录</span>
         </div>
@@ -457,7 +457,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
         <div class="debt-record-history-head">
           <div class="debt-record-history-title">
             <strong>往来记录</strong>
-            <span>查看当前联系人债务往来</span>
           </div>
           <span class="debt-record-history-badge">{{ records.length }} 条</span>
         </div>
@@ -481,7 +480,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 <span class="debt-record-date">{{ formatDate(record.occurredAt) }}</span>
               </div>
               <p class="debt-record-funding-account">现金账户：{{ formatFundingAccountName(record) }}</p>
-              <p class="debt-record-remark">{{ record.remark || '未填写债务说明' }}</p>
+              <p v-if="record.remark?.trim()" class="debt-record-remark">{{ record.remark.trim() }}</p>
             </div>
 
             <div class="debt-record-card-side">
