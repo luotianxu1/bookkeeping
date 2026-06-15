@@ -271,6 +271,176 @@ export interface PhotographyOrderOverviewQuery {
   selectedDate?: string | null
 }
 
+export type TravelPlanStatus = 'active' | 'completed' | 'cancelled'
+export type TravelItineraryType = 'transport' | 'scenic' | 'dining' | 'accommodation'
+export type TravelExpenseType = TravelItineraryType | 'other'
+
+export interface TravelPlan {
+  id: number
+  userId: number
+  name: string
+  destination?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  remark?: string | null
+  status: TravelPlanStatus | string
+  sortOrder: number
+  companionCount: number
+  travelerCount: number
+  dayCount: number
+  expenseCount: number
+  totalExpenseAmount: number
+  perPersonExpenseAmount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TravelPlanCompanion {
+  id: number
+  travelPlanId: number
+  contactId: number
+  contactName?: string | null
+  contactPhone?: string | null
+  contactRemark?: string | null
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TravelPlanItinerary {
+  id: number
+  travelPlanDayId: number
+  type: TravelItineraryType | string
+  title: string
+  poiName?: string | null
+  poiId?: string | null
+  address?: string | null
+  longitude?: number | null
+  latitude?: number | null
+  startTime?: string | null
+  transportMode?: 'driving' | 'walking' | 'riding' | null
+  distanceMeters?: number | null
+  durationSeconds?: number | null
+  remark?: string | null
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TravelPlanExpense {
+  id: number
+  travelPlanId: number
+  travelPlanDayId: number
+  type: TravelExpenseType | string
+  title: string
+  amount: number
+  payerContactId?: number | null
+  payerContactName?: string | null
+  remark?: string | null
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TravelPlanDay {
+  id: number
+  travelPlanId: number
+  dayIndex: number
+  title?: string | null
+  travelDate?: string | null
+  sortOrder: number
+  itineraries: TravelPlanItinerary[]
+  expenses: TravelPlanExpense[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TravelPlanOverview {
+  companionCount: number
+  travelerCount: number
+  dayCount: number
+  itineraryCount: number
+  expenseCount: number
+  totalExpenseAmount: number
+  perPersonExpenseAmount: number
+}
+
+export interface TravelPlanDetail {
+  id: number
+  userId: number
+  name: string
+  destination?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  remark?: string | null
+  status: TravelPlanStatus | string
+  sortOrder: number
+  overview: TravelPlanOverview
+  companions: TravelPlanCompanion[]
+  days: TravelPlanDay[]
+  expenses: TravelPlanExpense[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TravelPlanQuery {
+  userId?: number
+  status?: TravelPlanStatus | 'all'
+  keyword?: string
+}
+
+export interface SaveTravelPlanParams {
+  userId: number
+  name: string
+  destination?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  remark?: string | null
+  status?: TravelPlanStatus | string
+  sortOrder?: number
+}
+
+export interface SaveTravelPlanCompanionParams {
+  userId: number
+  contactId: number
+  sortOrder?: number
+}
+
+export interface SaveTravelPlanDayParams {
+  userId: number
+  dayIndex: number
+  title?: string | null
+  travelDate?: string | null
+  sortOrder?: number
+}
+
+export interface SaveTravelPlanItineraryParams {
+  userId: number
+  type: TravelItineraryType
+  title: string
+  poiName?: string | null
+  poiId?: string | null
+  address?: string | null
+  longitude?: number | null
+  latitude?: number | null
+  startTime?: string | null
+  transportMode?: 'driving' | 'walking' | 'riding' | null
+  distanceMeters?: number | null
+  durationSeconds?: number | null
+  remark?: string | null
+  sortOrder?: number
+}
+
+export interface SaveTravelPlanExpenseParams {
+  userId: number
+  type: TravelExpenseType
+  title: string
+  amount: number
+  payerContactId?: number | null
+  remark?: string | null
+  sortOrder?: number
+}
+
 export function getTodoItems(params: TodoItemQuery) {
   return requestGet<TodoItem[]>(toolRequest, '/api/tools/todo-items', { params })
 }
@@ -369,6 +539,112 @@ export function collectPhotographyOrderFinal(id: number, params: CollectPhotogra
 
 export function deletePhotographyOrder(id: number, userId: number) {
   return requestDelete<void>(toolRequest, `/api/tools/photography-orders/${id}`, {
+    params: { userId },
+  })
+}
+
+export function getTravelPlans(params: TravelPlanQuery) {
+  return requestGet<TravelPlan[]>(toolRequest, '/api/tools/travel-plans', { params })
+}
+
+export function getTravelPlan(id: number) {
+  return requestGet<TravelPlanDetail>(toolRequest, `/api/tools/travel-plans/${id}`)
+}
+
+export function getTravelPlanOverview(id: number) {
+  return requestGet<TravelPlanOverview>(toolRequest, `/api/tools/travel-plans/${id}/overview`)
+}
+
+export function createTravelPlan(params: SaveTravelPlanParams) {
+  return requestPost<TravelPlan, SaveTravelPlanParams>(toolRequest, '/api/tools/travel-plans', params)
+}
+
+export function updateTravelPlan(id: number, params: SaveTravelPlanParams) {
+  return requestPut<TravelPlan, SaveTravelPlanParams>(toolRequest, `/api/tools/travel-plans/${id}`, params)
+}
+
+export function deleteTravelPlan(id: number, userId: number) {
+  return requestDelete<void>(toolRequest, `/api/tools/travel-plans/${id}`, {
+    params: { userId },
+  })
+}
+
+export function createTravelPlanCompanion(id: number, params: SaveTravelPlanCompanionParams) {
+  return requestPost<TravelPlanCompanion, SaveTravelPlanCompanionParams>(
+    toolRequest,
+    `/api/tools/travel-plans/${id}/companions`,
+    params,
+  )
+}
+
+export function updateTravelPlanCompanion(companionId: number, params: SaveTravelPlanCompanionParams) {
+  return requestPut<TravelPlanCompanion, SaveTravelPlanCompanionParams>(
+    toolRequest,
+    `/api/tools/travel-plans/companions/${companionId}`,
+    params,
+  )
+}
+
+export function deleteTravelPlanCompanion(companionId: number, userId: number) {
+  return requestDelete<void>(toolRequest, `/api/tools/travel-plans/companions/${companionId}`, {
+    params: { userId },
+  })
+}
+
+export function createTravelPlanDay(id: number, params: SaveTravelPlanDayParams) {
+  return requestPost<TravelPlanDay, SaveTravelPlanDayParams>(toolRequest, `/api/tools/travel-plans/${id}/days`, params)
+}
+
+export function updateTravelPlanDay(dayId: number, params: SaveTravelPlanDayParams) {
+  return requestPut<TravelPlanDay, SaveTravelPlanDayParams>(toolRequest, `/api/tools/travel-plans/days/${dayId}`, params)
+}
+
+export function deleteTravelPlanDay(dayId: number, userId: number) {
+  return requestDelete<void>(toolRequest, `/api/tools/travel-plans/days/${dayId}`, {
+    params: { userId },
+  })
+}
+
+export function createTravelPlanItinerary(dayId: number, params: SaveTravelPlanItineraryParams) {
+  return requestPost<TravelPlanItinerary, SaveTravelPlanItineraryParams>(
+    toolRequest,
+    `/api/tools/travel-plans/days/${dayId}/itineraries`,
+    params,
+  )
+}
+
+export function updateTravelPlanItinerary(itineraryId: number, params: SaveTravelPlanItineraryParams) {
+  return requestPut<TravelPlanItinerary, SaveTravelPlanItineraryParams>(
+    toolRequest,
+    `/api/tools/travel-plans/itineraries/${itineraryId}`,
+    params,
+  )
+}
+
+export function deleteTravelPlanItinerary(itineraryId: number, userId: number) {
+  return requestDelete<void>(toolRequest, `/api/tools/travel-plans/itineraries/${itineraryId}`, {
+    params: { userId },
+  })
+}
+
+export function createTravelPlanExpense(dayId: number, params: SaveTravelPlanExpenseParams) {
+  return requestPost<TravelPlanExpense, SaveTravelPlanExpenseParams>(
+    toolRequest,
+    `/api/tools/travel-plans/days/${dayId}/expenses`,
+    params,
+  )
+}
+
+export function updateTravelPlanExpense(expenseId: number, params: SaveTravelPlanExpenseParams) {
+  return requestPut<TravelPlanExpense, SaveTravelPlanExpenseParams>(
+    toolRequest,
+    `/api/tools/travel-plans/expenses/${expenseId}`,
+    params,
+  )
+}
+
+export function deleteTravelPlanExpense(expenseId: number, userId: number) {
+  return requestDelete<void>(toolRequest, `/api/tools/travel-plans/expenses/${expenseId}`, {
     params: { userId },
   })
 }

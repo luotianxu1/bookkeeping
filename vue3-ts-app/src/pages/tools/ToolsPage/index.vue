@@ -17,6 +17,7 @@ const toolItems: ToolItem[] = [
   { key: 'checkin', title: '打卡', short: '打', tone: 'green' },
   { key: 'photography-orders', title: '摄影订单', short: '摄', tone: 'blue', featured: true, to: '/tools/photography-orders' },
   { key: 'contacts', title: '联系人', short: '联', tone: 'orange', featured: true, to: '/tools/contacts' },
+  { key: 'travel-plans', title: '旅行管理', short: '旅', tone: 'green', featured: true, to: '/tools/travel-plans' },
 ]
 </script>
 

@@ -19,6 +19,9 @@ import ContactsPage from '@/pages/tools/ContactsPage/index.vue'
 import PhotographyOrderOverviewPage from '@/pages/tools/PhotographyOrderOverviewPage/index.vue'
 import PhotographyOrdersPage from '@/pages/tools/PhotographyOrdersPage/index.vue'
 import TodoPage from '@/pages/tools/TodoPage/index.vue'
+import TravelPlanCreatePage from '@/pages/tools/TravelPlanCreatePage/index.vue'
+import TravelPlanDetailPage from '@/pages/tools/TravelPlanDetailPage/index.vue'
+import TravelPlansPage from '@/pages/tools/TravelPlansPage/index.vue'
 import ToolsPage from '@/pages/tools/ToolsPage/index.vue'
 
 export const mainRoutes: RouteRecordRaw[] = [
@@ -200,6 +203,42 @@ export const mainRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'tools',
       title: '联系人管理',
+    },
+  },
+  {
+    path: '/tools/travel-plans',
+    name: 'tools-travel-plans',
+    component: TravelPlansPage,
+    meta: {
+      section: 'tools',
+      title: '旅行管理',
+    },
+  },
+  {
+    path: '/tools/travel-plans/new',
+    name: 'tools-travel-plans-new',
+    component: TravelPlanCreatePage,
+    meta: {
+      section: 'tools',
+      title: '新增旅行',
+    },
+  },
+  {
+    path: '/tools/travel-plans/:planId/edit',
+    name: 'tools-travel-plans-edit',
+    component: TravelPlanCreatePage,
+    meta: {
+      section: 'tools',
+      title: '修改旅行',
+    },
+  },
+  {
+    path: '/tools/travel-plans/:planId',
+    name: 'tools-travel-plans-detail',
+    component: TravelPlanDetailPage,
+    meta: {
+      section: 'tools',
+      title: '旅行详情',
     },
   },
   {

@@ -1,0 +1,169 @@
+.travel-plans-page {
+  min-height: 100%;
+}
+
+.travel-list-header {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.travel-list-header h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.header-edit-button {
+  min-width: 56px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.travel-filter-tabs {
+  margin-top: 12px;
+  padding: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  border: 1px solid #dde3ee;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.filter-tab {
+  height: 34px;
+  border: 0;
+  border-radius: 12px;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.filter-tab.active {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.trip-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.trip-card {
+  padding: 14px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  text-align: left;
+}
+
+.trip-card-clickable {
+  cursor: pointer;
+}
+
+.trip-card-title {
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.trip-card-date {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.trip-card-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+}
+
+.trip-action-button {
+  min-width: 64px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.trip-action-danger {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.travel-loading {
+  margin-top: 16px;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
+.travel-empty {
+  margin-top: 16px;
+  padding: 18px 14px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  background: #fff;
+  text-align: center;
+}
+
+.travel-empty strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.travel-empty span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.travel-delete-content {
+  display: grid;
+  gap: 8px;
+}
+
+.travel-delete-content p {
+  margin: 0;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.travel-delete-content span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.travel-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
