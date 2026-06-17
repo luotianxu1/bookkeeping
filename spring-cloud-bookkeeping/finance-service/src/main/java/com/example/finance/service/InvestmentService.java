@@ -66,6 +66,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
@@ -221,6 +223,8 @@ public class InvestmentService {
     private static final int MIN_STABLE_DIVIDEND_YEARS = 2;
     private static final int RECENT_DIVIDEND_PLAN_WINDOW_DAYS = 30;
     private static final LocalTime FUND_SUBSCRIPTION_CUTOFF_TIME = LocalTime.of(15, 0);
+    private static final LocalTime FUND_CONFIRM_READY_TIME = LocalTime.of(9, 5);
+    private static final LocalTime FUND_PROFIT_SYNC_READY_TIME = LocalTime.of(21, 30);
     private static final Set<String> POSITION_ACCOUNT_TYPE_CODES = Set.of("investment", "gold");
     private static final DateTimeFormatter NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
     private static final DateTimeFormatter FUND_ESTIMATE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -240,6 +244,7 @@ public class InvestmentService {
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final HttpClient httpClient;
+    private final TransactionTemplate transactionTemplate;
     private final Set<LocalDate> marketClosedDates;
 
     public InvestmentService(
@@ -254,6 +259,7 @@ public class InvestmentService {
         AccountTypeMapper accountTypeMapper,
         InvestmentPriceQuoteMapper priceQuoteMapper,
         ObjectMapper objectMapper,
+        PlatformTransactionManager transactionManager,
         @Value("${finance.investment.market-closed-dates:}") String marketClosedDatesConfig
     ) {
         this.productMapper = productMapper;
@@ -267,6 +273,7 @@ public class InvestmentService {
         this.accountTypeMapper = accountTypeMapper;
         this.priceQuoteMapper = priceQuoteMapper;
         this.objectMapper = objectMapper;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.restClient = RestClient.builder().build();
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(5))
@@ -1207,7 +1214,9 @@ public class InvestmentService {
         Map<Long, NavigableMap<LocalDate, BigDecimal>> priceHistoryByProductId = positions.isEmpty()
             ? Collections.emptyMap()
             : loadPriceHistoryByProduct(products.keySet());
-        LocalDate latestDate = resolveFundProfitLatestDate(positions, priceHistoryByProductId);
+        LocalDate latestDate = resolveFundProfitDisplayLatestDate(
+            resolveFundProfitLatestDate(positions, priceHistoryByProductId)
+        );
         LocalDate earliestDate = resolveFundProfitEarliestDate(positions, transactionsByPositionId, priceHistoryByProductId, latestDate);
         LocalDateTime lastSyncedAt = positions.stream()
             .map(InvestmentPositionEntity::getLastSyncedAt)
@@ -1247,6 +1256,16 @@ public class InvestmentService {
             }
         }
         return latestDate == null ? LocalDate.now() : latestDate;
+    }
+
+    private LocalDate resolveFundProfitDisplayLatestDate(LocalDate latestDate) {
+        LocalDate normalizedLatestDate = latestDate == null ? LocalDate.now() : latestDate;
+        if (!normalizedLatestDate.equals(LocalDate.now())) {
+            return normalizedLatestDate;
+        }
+        return LocalTime.now().isBefore(FUND_PROFIT_SYNC_READY_TIME)
+            ? normalizedLatestDate.minusDays(1)
+            : normalizedLatestDate;
     }
 
     private LocalDate resolveFundProfitEarliestDate(
@@ -1628,12 +1647,16 @@ public class InvestmentService {
                 date,
                 date.minusDays(1)
             );
-            FundProfitAggregate aggregate = aggregateFundProfit(buildPositionPeriodProfitMap(context, period).values());
             FundProfitTrendPointResponse point = new FundProfitTrendPointResponse();
             point.setKey(date.toString());
             point.setDate(date);
             point.setLabel(date.getMonthValue() + "/" + date.getDayOfMonth());
-            point.setProfit(aggregate.profit());
+            if (isNonTradingDay(date)) {
+                point.setProfit(null);
+            } else {
+                FundProfitAggregate aggregate = aggregateFundProfit(buildPositionPeriodProfitMap(context, period).values());
+                point.setProfit(aggregate.profit());
+            }
             items.add(point);
         }
         return items;
@@ -1715,7 +1738,7 @@ public class InvestmentService {
             LocalDate date = month.atDay(day);
             BigDecimal profit = null;
             BigDecimal profitRate = null;
-            if (!date.isAfter(context.latestDate())) {
+            if (!date.isAfter(context.latestDate()) && !isNonTradingDay(date)) {
                 FundProfitAggregate aggregate = aggregateFundProfit(buildPositionPeriodProfitMap(
                     context,
                     new FundProfitPeriodMeta("day", date.toString(), date.toString(), date, date, date.minusDays(1))
@@ -1970,12 +1993,16 @@ public class InvestmentService {
     }
 
     public int settlePendingFundTrades() {
-        int settledPositions = settlePendingFundPositions();
-        int settledTransactions = settlePendingFundTransactions();
+        return settlePendingFundTradesAt(LocalDateTime.now());
+    }
+
+    public int settlePendingFundTradesAt(LocalDateTime settlementDateTime) {
+        int settledPositions = settlePendingFundPositions(settlementDateTime);
+        int settledTransactions = settlePendingFundTransactions(settlementDateTime);
         return settledPositions + settledTransactions;
     }
 
-    private int settlePendingFundPositions() {
+    private int settlePendingFundPositions(LocalDateTime settlementDateTime) {
         List<InvestmentPositionEntity> positions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
             .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)
             .eq(InvestmentPositionEntity::getSubscriptionStatus, SUBSCRIPTION_STATUS_PENDING));
@@ -1991,7 +2018,6 @@ public class InvestmentService {
         }
 
         Map<Long, Long> accountUsers = new HashMap<>();
-        LocalDate settlementDate = LocalDate.now();
         int settledProducts = 0;
         int settledPositions = 0;
         for (Map.Entry<Long, List<InvestmentPositionEntity>> entry : groupPositionsByProduct(positions, products).entrySet()) {
@@ -2000,7 +2026,7 @@ public class InvestmentService {
                 continue;
             }
             try {
-                int updatedCount = settlePendingFundTradesForProduct(product, entry.getValue(), accountUsers, settlementDate);
+                int updatedCount = settlePendingFundTradesForProduct(product, entry.getValue(), accountUsers, settlementDateTime);
                 if (updatedCount > 0) {
                     settledProducts++;
                     settledPositions += updatedCount;
@@ -2016,7 +2042,7 @@ public class InvestmentService {
         return settledPositions;
     }
 
-    private int settlePendingFundTransactions() {
+    private int settlePendingFundTransactions(LocalDateTime settlementDateTime) {
         List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
             .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
             .eq(InvestmentTransactionEntity::getSettlementStatus, SETTLEMENT_STATUS_PENDING));
@@ -2037,7 +2063,6 @@ public class InvestmentService {
             return 0;
         }
 
-        LocalDate settlementDate = LocalDate.now();
         Map<Long, List<InvestmentTransactionEntity>> transactionsByProduct = transactions.stream()
             .filter(transaction -> products.containsKey(transaction.getProductId()))
             .collect(Collectors.groupingBy(InvestmentTransactionEntity::getProductId));
@@ -2050,7 +2075,7 @@ public class InvestmentService {
                 continue;
             }
             try {
-                int updatedCount = settlePendingFundTransactionsForProduct(product, entry.getValue(), accountUsers, settlementDate);
+                int updatedCount = settlePendingFundTransactionsForProduct(product, entry.getValue(), accountUsers, settlementDateTime);
                 if (updatedCount > 0) {
                     settledProducts++;
                     settledTransactions += updatedCount;
@@ -2216,9 +2241,7 @@ public class InvestmentService {
         int executedCount = 0;
         for (InvestmentAutoInvestPlanEntity plan : plans) {
             try {
-                if (executeAutoInvestPlan(plan.getId(), today)) {
-                    executedCount++;
-                }
+                executedCount += executeAutoInvestPlan(plan.getId(), today);
             } catch (Exception ex) {
                 log.warn("基金定投执行失败，planId={}, positionId={}, reason={}",
                     plan.getId(), plan.getPositionId(), ex.getMessage());
@@ -2583,20 +2606,30 @@ public class InvestmentService {
         entity.setRemark(request.getRemark());
     }
 
-    @Transactional
-    private boolean executeAutoInvestPlan(Long planId, LocalDate today) {
+    private int executeAutoInvestPlan(Long planId, LocalDate today) {
+        int executedCount = 0;
+        while (true) {
+            Integer executed = transactionTemplate.execute(status -> executeSingleAutoInvestPlan(planId, today));
+            if (executed == null || executed <= 0) {
+                return executedCount;
+            }
+            executedCount += executed;
+        }
+    }
+
+    private int executeSingleAutoInvestPlan(Long planId, LocalDate today) {
         InvestmentAutoInvestPlanEntity plan = autoInvestPlanMapper.selectById(planId);
         if (plan == null) {
             log.info("基金定投执行跳过：计划不存在，planId={}", planId);
-            return false;
+            return 0;
         }
         if (!AUTO_INVEST_STATUS_ACTIVE.equals(plan.getStatus())) {
             log.info("基金定投执行跳过：计划不是启用状态，planId={}, status={}", planId, plan.getStatus());
-            return false;
+            return 0;
         }
         if (plan.getNextExecuteDate() == null || plan.getNextExecuteDate().isAfter(today)) {
             log.info("基金定投执行跳过：计划未到执行日，planId={}, nextExecuteDate={}", planId, plan.getNextExecuteDate());
-            return false;
+            return 0;
         }
 
         LocalDate currentExecuteDate = plan.getNextExecuteDate();
@@ -2604,19 +2637,7 @@ public class InvestmentService {
         if (effectiveExecuteDate.isAfter(today)) {
             log.info("基金定投执行跳过：计划顺延至下一个交易日，planId={}, nextExecuteDate={}, effectiveExecuteDate={}",
                 planId, currentExecuteDate, effectiveExecuteDate);
-            return false;
-        }
-        LocalDateTime executedAt = LocalDateTime.now();
-        LocalDate nextExecuteDate = resolveNextAutoInvestExecuteDate(plan.getFrequency(), currentExecuteDate, today);
-        int claimedRows = autoInvestPlanMapper.update(null, new LambdaUpdateWrapper<InvestmentAutoInvestPlanEntity>()
-            .set(InvestmentAutoInvestPlanEntity::getLastExecutedAt, executedAt)
-            .set(InvestmentAutoInvestPlanEntity::getNextExecuteDate, nextExecuteDate)
-            .eq(InvestmentAutoInvestPlanEntity::getId, planId)
-            .eq(InvestmentAutoInvestPlanEntity::getStatus, AUTO_INVEST_STATUS_ACTIVE)
-            .eq(InvestmentAutoInvestPlanEntity::getNextExecuteDate, currentExecuteDate));
-        if (claimedRows == 0) {
-            log.info("基金定投执行跳过：计划已被其他任务处理，planId={}", planId);
-            return false;
+            return 0;
         }
 
         AccountEntity investmentAccount = requireInvestmentAccount(plan.getUserId(), plan.getAccountId());
@@ -2626,6 +2647,7 @@ public class InvestmentService {
             throw new IllegalArgumentException("当前仅支持基金定投");
         }
 
+        LocalDateTime executedAt = LocalDateTime.now();
         InvestmentTransactionRequest request = new InvestmentTransactionRequest();
         request.setUserId(plan.getUserId());
         request.setAccountId(plan.getAccountId());
@@ -2643,7 +2665,19 @@ public class InvestmentService {
         request.setSubscriptionTimeSlot(SUBSCRIPTION_TIME_SLOT_BEFORE_1500);
         request.setRemark(buildAutoInvestExecutionRemark(plan));
         createPendingFundTransaction(request, investmentAccount, position, product);
-        return true;
+        LocalDate nextExecuteDate = resolveNextAutoInvestExecuteDate(plan.getFrequency(), currentExecuteDate, effectiveExecuteDate);
+        int updatedRows = autoInvestPlanMapper.update(null, new LambdaUpdateWrapper<InvestmentAutoInvestPlanEntity>()
+            .set(InvestmentAutoInvestPlanEntity::getLastExecutedAt, executedAt)
+            .set(InvestmentAutoInvestPlanEntity::getNextExecuteDate, nextExecuteDate)
+            .eq(InvestmentAutoInvestPlanEntity::getId, planId)
+            .eq(InvestmentAutoInvestPlanEntity::getStatus, AUTO_INVEST_STATUS_ACTIVE)
+            .eq(InvestmentAutoInvestPlanEntity::getNextExecuteDate, currentExecuteDate));
+        if (updatedRows == 0) {
+            throw new IllegalStateException("基金定投计划状态已变化，请稍后重试");
+        }
+        log.info("基金定投执行成功：planId={}, executeDate={}, effectiveExecuteDate={}, nextExecuteDate={}",
+            planId, currentExecuteDate, effectiveExecuteDate, nextExecuteDate);
+        return 1;
     }
 
     private void validateAutoInvestPlanUniqueness(Long userId, Long positionId, Long currentPlanId) {
@@ -2662,7 +2696,7 @@ public class InvestmentService {
         return StringUtils.hasText(plan.getRemark()) ? base + "：" + plan.getRemark().trim() : base;
     }
 
-    private LocalDate resolveNextAutoInvestExecuteDate(String frequency, LocalDate currentDate, LocalDate today) {
+    private LocalDate resolveNextAutoInvestExecuteDate(String frequency, LocalDate currentDate, LocalDate effectiveExecuteDate) {
         LocalDate rawNext = currentDate;
         LocalDate next;
         do {
@@ -2674,7 +2708,7 @@ public class InvestmentService {
                 rawNext = rawNext.plusDays(1);
             }
             next = nextTradingDay(rawNext);
-        } while (!next.isAfter(today));
+        } while (!next.isAfter(effectiveExecuteDate));
         return next;
     }
 
@@ -2804,7 +2838,13 @@ public class InvestmentService {
             deductFundingAccount(fundingAccount, costAmount);
         }
         positionMapper.insert(entity);
-        InvestmentPriceQuoteEntity immediateQuote = resolveImmediateSettlementQuote(product, baseInfo, appliedDate, LocalDateTime.now());
+        InvestmentPriceQuoteEntity immediateQuote = resolveImmediateSettlementQuote(
+            product,
+            baseInfo,
+            appliedDate,
+            expectedConfirmDate,
+            LocalDateTime.now()
+        );
         if (immediateQuote != null) {
             LocalDateTime confirmedAt = immediateQuote.getQuoteTime() == null ? tradeAt : immediateQuote.getQuoteTime();
             confirmPendingFundSubscription(entity, immediateQuote, confirmedAt);
@@ -2835,7 +2875,13 @@ public class InvestmentService {
             AccountEntity fundingAccount = requireCashFundingAccount(request.getUserId(), request.getFundingAccountId());
             deductFundingAccount(fundingAccount, amount.add(feeAmount).add(taxAmount));
 
-            InvestmentPriceQuoteEntity immediateQuote = resolveImmediateSettlementQuote(product, baseInfo, appliedDate, LocalDateTime.now());
+            InvestmentPriceQuoteEntity immediateQuote = resolveImmediateSettlementQuote(
+                product,
+                baseInfo,
+                appliedDate,
+                expectedSettlementDate,
+                LocalDateTime.now()
+            );
             if (immediateQuote != null) {
                 BigDecimal confirmedPrice = resolveConfirmedFundPrice(immediateQuote);
                 if (confirmedPrice.compareTo(BigDecimal.ZERO) <= 0) {
@@ -2987,9 +3033,7 @@ public class InvestmentService {
     }
 
     private LocalDate resolveFundExpectedConfirmDate(LocalDate appliedDate, JsonNode baseInfo, InvestmentProductEntity product) {
-        return isQdiiFund(baseInfo, product)
-            ? addTradingDays(appliedDate, resolveFundConfirmDelayDays(baseInfo, product))
-            : appliedDate;
+        return addTradingDays(appliedDate, resolveFundConfirmDelayDays(baseInfo, product));
     }
 
     private int resolveFundConfirmDelayDays(JsonNode baseInfo, InvestmentProductEntity product) {
@@ -3053,9 +3097,14 @@ public class InvestmentService {
         InvestmentProductEntity product,
         JsonNode baseInfo,
         LocalDate appliedDate,
+        LocalDate expectedConfirmDate,
         LocalDateTime syncedAt
     ) {
         upsertFundQuoteFromBaseInfo(product, baseInfo, syncedAt);
+        LocalDate effectiveExpectedConfirmDate = expectedConfirmDate == null ? appliedDate : expectedConfirmDate;
+        if (!isFundConfirmationReady(effectiveExpectedConfirmDate, syncedAt)) {
+            return null;
+        }
         return findSettlementQuoteByProductAndDate(product.getId(), appliedDate);
     }
 
@@ -3695,7 +3744,7 @@ public class InvestmentService {
         InvestmentProductEntity product,
         List<InvestmentPositionEntity> positions,
         Map<Long, Long> accountUsers,
-        LocalDate settlementDate
+        LocalDateTime settlementDateTime
     ) {
         FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product);
         if (snapshot == null) {
@@ -3705,7 +3754,7 @@ public class InvestmentService {
         int updatedCount = 0;
         for (InvestmentPositionEntity position : positions) {
             InvestmentPriceQuoteEntity appliedQuote = findSettlementQuoteByProductAndDate(product.getId(), position.getSubscriptionAppliedDate());
-            if (shouldConfirmFundSubscription(position, settlementDate) && appliedQuote != null) {
+            if (shouldConfirmFundSubscription(position, settlementDateTime) && appliedQuote != null) {
                 confirmPendingFundSubscription(position, appliedQuote, snapshot.syncedAt());
                 applyFundQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
                 positionMapper.updateById(position);
@@ -3720,7 +3769,7 @@ public class InvestmentService {
         InvestmentProductEntity product,
         List<InvestmentTransactionEntity> transactions,
         Map<Long, Long> accountUsers,
-        LocalDate settlementDate
+        LocalDateTime settlementDateTime
     ) {
         FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product);
         if (snapshot == null) {
@@ -3730,7 +3779,7 @@ public class InvestmentService {
         int updatedCount = 0;
         for (InvestmentTransactionEntity transaction : transactions) {
             InvestmentPriceQuoteEntity appliedQuote = findSettlementQuoteByProductAndDate(product.getId(), transaction.getSettlementAppliedDate());
-            if (!shouldSettlePendingFundTransaction(transaction, settlementDate) || appliedQuote == null) {
+            if (!shouldSettlePendingFundTransaction(transaction, settlementDateTime) || appliedQuote == null) {
                 continue;
             }
             InvestmentPositionEntity position = positionMapper.selectById(transaction.getPositionId());
@@ -3884,21 +3933,32 @@ public class InvestmentService {
         position.setLastSyncedAt(syncedAt);
     }
 
-    private boolean shouldConfirmFundSubscription(InvestmentPositionEntity position, LocalDate settlementDate) {
-        if (!isPendingFundSubscription(position) || position.getSubscriptionAppliedDate() == null) {
+    private boolean shouldConfirmFundSubscription(InvestmentPositionEntity position, LocalDateTime settlementDateTime) {
+        if (!isPendingFundSubscription(position)) {
             return false;
         }
-        return !settlementDate.isBefore(position.getSubscriptionAppliedDate());
+        LocalDate expectedConfirmDate = position.getSubscriptionExpectedConfirmDate() == null
+            ? position.getSubscriptionAppliedDate()
+            : position.getSubscriptionExpectedConfirmDate();
+        return isFundConfirmationReady(expectedConfirmDate, settlementDateTime);
     }
 
-    private boolean shouldSettlePendingFundTransaction(InvestmentTransactionEntity transaction, LocalDate settlementDate) {
+    private boolean shouldSettlePendingFundTransaction(InvestmentTransactionEntity transaction, LocalDateTime settlementDateTime) {
         if (transaction == null || !SETTLEMENT_STATUS_PENDING.equals(transaction.getSettlementStatus())) {
             return false;
         }
-        if (transaction.getSettlementAppliedDate() == null) {
+        LocalDate expectedSettlementDate = transaction.getSettlementExpectedDate() == null
+            ? transaction.getSettlementAppliedDate()
+            : transaction.getSettlementExpectedDate();
+        return isFundConfirmationReady(expectedSettlementDate, settlementDateTime);
+    }
+
+    private boolean isFundConfirmationReady(LocalDate expectedConfirmDate, LocalDateTime settlementDateTime) {
+        if (expectedConfirmDate == null) {
             return false;
         }
-        return !settlementDate.isBefore(transaction.getSettlementAppliedDate());
+        LocalDateTime effectiveSettlementDateTime = settlementDateTime == null ? LocalDateTime.now() : settlementDateTime;
+        return !effectiveSettlementDateTime.isBefore(expectedConfirmDate.atTime(FUND_CONFIRM_READY_TIME));
     }
 
     private InvestmentPriceQuoteEntity findSettlementQuoteByProductAndDate(Long productId, LocalDate quoteDate) {
@@ -5266,7 +5326,8 @@ public class InvestmentService {
     private boolean hasTodayDayProfit(InvestmentPositionEntity position) {
         return position != null
             && position.getLastSyncedAt() != null
-            && LocalDate.now().equals(position.getLastSyncedAt().toLocalDate());
+            && LocalDate.now().equals(position.getLastSyncedAt().toLocalDate())
+            && !position.getLastSyncedAt().toLocalTime().isBefore(FUND_PROFIT_SYNC_READY_TIME);
     }
 
     private boolean hasTodayFundProfitData(List<InvestmentPositionEntity> positions, LocalDate latestDate) {

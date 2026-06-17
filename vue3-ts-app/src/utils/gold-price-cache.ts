@@ -1,26 +1,25 @@
 import { computed, reactive, readonly } from 'vue'
-import { getGoldPrices, type GoldPrice, type GoldPriceRange } from '@/api/modules/finance'
+import { getRealtimeGoldPrice, type GoldRealtimePrice } from '@/api/modules/finance'
 
-const DEFAULT_RANGE: GoldPriceRange = '1d'
 const AUTO_REFRESH_INTERVAL_MS = 3 * 60 * 1000
 
-type GoldPriceCacheState = {
+type GoldRealtimePriceCacheState = {
   hasStarted: boolean
   isBootstrapping: boolean
   isRefreshingPrimary: boolean
   lastError: string
-  prices: Partial<Record<GoldPriceRange, GoldPrice>>
+  price: GoldRealtimePrice | null
 }
 
-const state = reactive<GoldPriceCacheState>({
+const state = reactive<GoldRealtimePriceCacheState>({
   hasStarted: false,
   isBootstrapping: false,
   isRefreshingPrimary: false,
   lastError: '',
-  prices: {},
+  price: null,
 })
 
-const pendingRequests = new Map<GoldPriceRange, Promise<GoldPrice>>()
+let pendingRequest: Promise<GoldRealtimePrice> | null = null
 let refreshTimer: number | null = null
 
 function normalizeError(error: unknown, fallback = '金价加载失败') {
@@ -28,7 +27,6 @@ function normalizeError(error: unknown, fallback = '金价加载失败') {
 }
 
 async function requestGoldPrice(
-  range: GoldPriceRange,
   options: {
     markLoading?: boolean
     force?: boolean
@@ -36,51 +34,43 @@ async function requestGoldPrice(
 ) {
   const { markLoading = false, force = false } = options
 
-  if (!force && pendingRequests.has(range)) {
-    return pendingRequests.get(range)!
+  if (!force && pendingRequest) {
+    return pendingRequest
   }
 
-  if (range === DEFAULT_RANGE) {
-    if (!state.prices[DEFAULT_RANGE]) {
-      state.isBootstrapping = true
-    }
-    if (markLoading) {
-      state.isRefreshingPrimary = true
-    }
+  if (!state.price) {
+    state.isBootstrapping = true
+  }
+  if (markLoading) {
+    state.isRefreshingPrimary = true
   }
 
   const task = (async () => {
     try {
-      const data = await getGoldPrices(range)
-      state.prices[range] = data
-      if (range === DEFAULT_RANGE) {
-        state.lastError = ''
-      }
+      const data = await getRealtimeGoldPrice()
+      state.price = data
+      state.lastError = ''
       return data
     } catch (error) {
       const normalizedError = normalizeError(error)
-      if (range === DEFAULT_RANGE) {
-        state.lastError = normalizedError.message
-      }
+      state.lastError = normalizedError.message
       throw normalizedError
     } finally {
-      pendingRequests.delete(range)
-      if (range === DEFAULT_RANGE) {
-        state.isBootstrapping = false
-        if (markLoading) {
-          state.isRefreshingPrimary = false
-        }
+      pendingRequest = null
+      state.isBootstrapping = false
+      if (markLoading) {
+        state.isRefreshingPrimary = false
       }
     }
   })()
 
-  pendingRequests.set(range, task)
+  pendingRequest = task
   return task
 }
 
 function refreshVisiblePrimaryPrice() {
   if (document.visibilityState === 'visible') {
-    void requestGoldPrice(DEFAULT_RANGE, { force: true }).catch(() => undefined)
+    void requestGoldPrice({ force: true }).catch(() => undefined)
   }
 }
 
@@ -90,29 +80,24 @@ export function startGoldPriceAutoRefresh() {
   }
 
   state.hasStarted = true
-  void requestGoldPrice(DEFAULT_RANGE, { force: true }).catch(() => undefined)
+  void requestGoldPrice({ force: true }).catch(() => undefined)
   refreshTimer = window.setInterval(refreshVisiblePrimaryPrice, AUTO_REFRESH_INTERVAL_MS)
   document.addEventListener('visibilitychange', refreshVisiblePrimaryPrice)
 }
 
-export async function ensureGoldPriceCache(range: GoldPriceRange = DEFAULT_RANGE) {
-  const cached = state.prices[range]
-  if (cached) {
-    return cached
+export async function ensureGoldPriceCache() {
+  if (state.price) {
+    return state.price
   }
-  return requestGoldPrice(range)
+  return requestGoldPrice()
 }
 
-export async function refreshGoldPriceCache(range: GoldPriceRange = DEFAULT_RANGE) {
-  return requestGoldPrice(range, { force: true, markLoading: range === DEFAULT_RANGE })
+export async function refreshGoldPriceCache() {
+  return requestGoldPrice({ force: true, markLoading: true })
 }
 
-export function getCachedGoldPrice(range: GoldPriceRange = DEFAULT_RANGE) {
-  return state.prices[range] ?? null
-}
-
-export function useGoldPriceCache(range: GoldPriceRange = DEFAULT_RANGE) {
-  return computed(() => state.prices[range] ?? null)
+export function useGoldPriceCache() {
+  return computed(() => state.price)
 }
 
 export const goldPriceCacheState = readonly(state)

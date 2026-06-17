@@ -2045,7 +2045,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
   }
 
   if (entry.settlementStatus === 'confirmed') {
-    return '基金加仓已按最新净值确认，份额已更新'
+    return '基金加仓已按确认日净值确认，份额已更新'
   }
   const appliedDate = entry.settlementAppliedDate || '--'
   const expectedDate = entry.settlementExpectedDate || appliedDate

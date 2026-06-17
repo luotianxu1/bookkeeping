@@ -63,14 +63,14 @@ const liquidation = ref<GoldLiquidation>({
 const goldAccountType = ref<AccountType | null>(null)
 const goldAccounts = ref<Account[]>([])
 const holdings = ref<GoldAccountHolding[]>([])
-const goldPrice = useGoldPriceCache('1d')
+const goldPrice = useGoldPriceCache()
 const formName = ref('')
 const formRemark = ref('')
 const includeInNetWorth = ref(true)
 let requestVersion = 0
 
 const accountModalTitle = computed(() => (editingAccountId.value ? '修改黄金账户' : '新增黄金账户'))
-const realtimeGoldPrice = computed(() => Number(goldPrice.value?.spotGold?.price ?? 0))
+const realtimeGoldPrice = computed(() => Number(goldPrice.value?.price ?? 0))
 const realtimeGoldUpdatedAt = computed(() => formatGoldUpdatedAt(goldPrice.value?.updatedAt))
 const holdingsByAccountId = computed(() =>
   displayHoldings.value.reduce<Record<number, GoldAccountHolding>>((result, item) => {
@@ -245,7 +245,7 @@ async function refreshGoldData() {
   isRefreshingGold.value = true
 
   try {
-    await refreshGoldPriceCache('1d')
+    await refreshGoldPriceCache()
     showFeedback('黄金信息已刷新', 'success')
   } catch (error) {
     const message = error instanceof Error ? error.message : '黄金信息刷新失败'

@@ -341,6 +341,7 @@
 }
 
 .trend-profit-text.is-neutral,
+.trend-profit-text.is-muted,
 .trend-axis-label {
   color: var(--color-text-subtle);
 }
@@ -370,6 +371,10 @@
 
 .trend-bar-fill.is-neutral {
   background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+}
+
+.trend-bar-fill.is-muted {
+  background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
 }
 
 .trend-stats {

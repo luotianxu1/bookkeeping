@@ -32,6 +32,10 @@ type TravelMapPoint = {
   latitude: number
 }
 
+type FocusMapTarget = TravelMapPoint & {
+  key: string
+}
+
 type TravelSearchResult = {
   id: string
   title: string
@@ -53,6 +57,13 @@ type RouteDisplayDay = {
 }
 
 type TransportMode = 'driving' | 'walking' | 'riding'
+type NavigationPoint = {
+  title: string
+  longitude: number
+  latitude: number
+  poiId?: string | null
+  poiName?: string | null
+}
 
 type AMapInstance = {
   clearMap: () => void
@@ -105,6 +116,7 @@ const currentPlanId = computed(() => {
 
 const activeTab = ref<DetailTab>('overview')
 const activeDayIndex = ref(1)
+const activeOverviewDayIndex = ref(0)
 const isEditingCurrentPage = ref(false)
 const showAddModal = ref(false)
 const showEditModal = ref(false)
@@ -209,8 +221,6 @@ const orderedDays = computed(() =>
 )
 
 const displayedHeaderTitle = computed(() => detail.value?.name || '旅行详情')
-
-const summaryHeading = computed(() => detail.value?.name || '旅行详情')
 
 const resolvedDayCount = computed(() => {
   if (!detail.value) {
@@ -317,12 +327,32 @@ const currentRouteMapPoints = computed<TravelMapPoint[]>(() =>
     })),
 )
 
+const currentRouteMapFocusTargets = computed<FocusMapTarget[]>(() =>
+  displayedCurrentDayItineraries.value
+    .filter(
+      (item): item is TravelPlanDetail['days'][number]['itineraries'][number] & { longitude: number; latitude: number } =>
+        typeof item.longitude === 'number' && Number.isFinite(item.longitude)
+        && typeof item.latitude === 'number' && Number.isFinite(item.latitude),
+    )
+    .map((item, index) => ({
+      key: item.id > 0 ? String(item.id) : `route-${index}-${item.title}`,
+      index: index + 1,
+      title: item.title,
+      longitude: item.longitude,
+      latitude: item.latitude,
+    })),
+)
+
 const overviewMapPoints = computed<TravelMapPoint[]>(() => {
   let pointIndex = 0
   const seen = new Set<string>()
 
-  return orderedDays.value.flatMap((day) =>
-    (day.itineraries ?? [])
+  const days = activeOverviewDayIndex.value === 0
+    ? orderedDays.value
+    : orderedDays.value.filter((day) => day.dayIndex === activeOverviewDayIndex.value)
+
+  return days.flatMap((day) =>
+    prependPreviousAccommodation(day.itineraries ?? [], day.dayIndex)
       .filter(
         (item): item is TravelPlanDetail['days'][number]['itineraries'][number] & { longitude: number; latitude: number } =>
           typeof item.longitude === 'number' && Number.isFinite(item.longitude)
@@ -349,6 +379,43 @@ const overviewMapPoints = computed<TravelMapPoint[]>(() => {
   )
 })
 
+const overviewMapFocusTargets = computed<FocusMapTarget[]>(() => {
+  let pointIndex = 0
+  const seen = new Set<string>()
+
+  const days = activeOverviewDayIndex.value === 0
+    ? orderedDays.value
+    : orderedDays.value.filter((day) => day.dayIndex === activeOverviewDayIndex.value)
+
+  return days.flatMap((day) =>
+    prependPreviousAccommodation(day.itineraries ?? [], day.dayIndex)
+      .filter(
+        (item): item is TravelPlanDetail['days'][number]['itineraries'][number] & { longitude: number; latitude: number } =>
+          typeof item.longitude === 'number' && Number.isFinite(item.longitude)
+          && typeof item.latitude === 'number' && Number.isFinite(item.latitude)
+          && (() => {
+            const pointKey = item.poiId?.trim()
+              || `${item.title.trim()}-${item.longitude}-${item.latitude}`
+            if (seen.has(pointKey)) {
+              return false
+            }
+            seen.add(pointKey)
+            return true
+          })(),
+      )
+      .map((item) => {
+        pointIndex += 1
+        return {
+          key: item.id > 0 ? String(item.id) : `${item.title}-${item.longitude}-${item.latitude}`,
+          index: pointIndex,
+          title: item.title,
+          longitude: item.longitude,
+          latitude: item.latitude,
+        }
+      }),
+  )
+})
+
 const summaryMeta = computed(() => {
   if (!detail.value) {
     return '暂无旅行信息'
@@ -360,12 +427,65 @@ const summaryMeta = computed(() => {
   return `${datePart} · ${resolvedDayCount.value} 天 · ${travelerCount} 人同行`
 })
 
+function prependPreviousAccommodation(
+  currentItems: TravelPlanDetail['days'][number]['itineraries'],
+  dayIndex: number,
+) {
+  const previousDay = orderedDays.value.find((item) => item.dayIndex === dayIndex - 1)
+  const previousLastItem = previousDay?.itineraries?.[previousDay.itineraries.length - 1]
+
+  if (!previousLastItem || previousLastItem.type !== 'accommodation') {
+    return currentItems
+  }
+
+  const alreadyStartsWithSameAccommodation = currentItems.some((item, index) => {
+    if (index !== 0) {
+      return false
+    }
+    return item.id === previousLastItem.id
+      || (
+        item.type === 'accommodation'
+        && item.title === previousLastItem.title
+        && item.poiId === previousLastItem.poiId
+      )
+  })
+
+  if (alreadyStartsWithSameAccommodation) {
+    return currentItems
+  }
+
+  return [
+    {
+      ...previousLastItem,
+      id: -previousLastItem.id,
+      remark: previousLastItem.remark || previousLastItem.address || previousLastItem.poiName || '延续前一晚住宿',
+    },
+    ...currentItems,
+  ]
+}
+
 const currentDayOverviewEntries = computed(() =>
   orderedDays.value.map((day) => ({
     ...day,
-    entries: buildOverviewEntries(day.itineraries ?? []),
+    entries: buildOverviewEntries(prependPreviousAccommodation(day.itineraries ?? [], day.dayIndex)),
   })),
 )
+
+const overviewDateItems = computed(() => [
+  { key: 0, dayIndex: 0, label: '全部' },
+  ...routeDateItems.value.map((item) => ({
+    key: item.key,
+    dayIndex: item.dayIndex,
+    label: item.label,
+  })),
+])
+
+const filteredOverviewEntries = computed(() => {
+  if (activeOverviewDayIndex.value === 0) {
+    return currentDayOverviewEntries.value
+  }
+  return currentDayOverviewEntries.value.filter((day) => day.dayIndex === activeOverviewDayIndex.value)
+})
 
 const overviewExpenses = computed(() => detail.value?.expenses ?? [])
 
@@ -425,6 +545,115 @@ function setTab(tab: DetailTab) {
 
 function setDay(dayIndex: number) {
   activeDayIndex.value = dayIndex
+  void refreshMapForActiveTab()
+}
+
+function setOverviewDay(dayIndex: number) {
+  activeOverviewDayIndex.value = dayIndex
+  void refreshMapForActiveTab()
+}
+
+async function refreshMapForActiveTab() {
+  await nextTick()
+
+  if (activeTab.value === 'overview') {
+    await renderOverviewMap()
+  }
+
+  if (activeTab.value === 'route') {
+    await renderRouteMap()
+  }
+}
+
+function focusMapPoint(target: FocusMapTarget | null) {
+  if (!target) {
+    return
+  }
+
+  const mapInstance = activeTab.value === 'overview' ? overviewMapInstance : routeMapInstance
+  if (!mapInstance) {
+    return
+  }
+
+  mapInstance.setZoomAndCenter(14, [target.longitude, target.latitude])
+}
+
+function focusOverviewEntry(title: string) {
+  const normalizedTitle = title.trim()
+  if (!normalizedTitle) {
+    return
+  }
+  const target = overviewMapFocusTargets.value.find((item) => item.title.trim() === normalizedTitle) ?? null
+  focusMapPoint(target)
+}
+
+function focusRouteEntry(item: TravelPlanDetail['days'][number]['itineraries'][number]) {
+  const target = currentRouteMapFocusTargets.value.find((candidate) => candidate.key === String(item.id))
+    ?? currentRouteMapFocusTargets.value.find((candidate) =>
+      candidate.title === item.title
+      && candidate.longitude === item.longitude
+      && candidate.latitude === item.latitude,
+    )
+    ?? null
+  focusMapPoint(target)
+}
+
+function openSystemNavigation(origin: NavigationPoint, destination: NavigationPoint, mode: TransportMode = 'driving') {
+  const travelMode = mode === 'walking'
+    ? 'walking'
+    : mode === 'riding'
+      ? 'transit'
+      : 'driving'
+  const isIOS = /iPhone|iPad|iPod/i.test(window.navigator.userAgent)
+  const destinationName = destination.poiName?.trim() || destination.title.trim()
+
+  if (isIOS) {
+    const params = new URLSearchParams({
+      sourceApplication: 'vue3-ts-app',
+      poiname: destinationName,
+      lat: String(destination.latitude),
+      lon: String(destination.longitude),
+      dev: '1',
+    })
+    window.location.href = `iosamap://navi?${params.toString()}`
+    return
+  }
+
+  if (destinationName) {
+    const keywordParams = new URLSearchParams({
+      sourceApplication: 'vue3-ts-app',
+      keyword: destinationName,
+      style: travelMode === 'walking' ? '2' : '0',
+    })
+    window.location.href = `androidamap://keywordNavi?${keywordParams.toString()}`
+    return
+  }
+
+  const params = new URLSearchParams({
+    sourceApplication: 'vue3-ts-app',
+    poiname: destinationName || '目的地',
+    poiid: destination.poiId?.trim() || '',
+    lat: String(destination.latitude),
+    lon: String(destination.longitude),
+    dev: '1',
+    style: travelMode === 'walking' ? '2' : '0',
+  })
+
+  void origin
+  window.location.href = `androidamap://navi?${params.toString()}`
+}
+
+function openOverviewNavigation(entry: {
+  navigation?: {
+    origin: NavigationPoint
+    destination: NavigationPoint
+    mode: TransportMode
+  } | null
+}) {
+  if (!entry.navigation) {
+    return
+  }
+  openSystemNavigation(entry.navigation.origin, entry.navigation.destination, entry.navigation.mode)
 }
 
 function toggleCurrentPageEditor() {
@@ -536,7 +765,7 @@ async function loadDetail(silent = false) {
 }
 
 watch(
-  () => [activeTab.value, detail.value?.id, overviewMapPoints.value.length] as const,
+  () => [activeTab.value, detail.value?.id, overviewMapPoints.value.length, activeOverviewDayIndex.value] as const,
   async ([tab]) => {
     if (tab !== 'overview') {
       return
@@ -1024,10 +1253,10 @@ async function calculateTransportRoute() {
   }
 
   const path = selectedTransportMode.value === 'driving'
-    ? 'https://restapi.amap.com/v5/direction/driving'
+    ? 'https://restapi.amap.com/v3/direction/driving'
     : selectedTransportMode.value === 'walking'
-      ? 'https://restapi.amap.com/v5/direction/walking'
-      : 'https://restapi.amap.com/v5/direction/bicycling'
+      ? 'https://restapi.amap.com/v3/direction/walking'
+      : 'https://restapi.amap.com/v4/direction/bicycling'
 
   const params = new URLSearchParams({
     key: amapWebServiceKey,
@@ -1040,18 +1269,23 @@ async function calculateTransportRoute() {
     const response = await fetch(`${path}?${params.toString()}`)
     const payload = await response.json() as {
       status?: string
+      errcode?: number | string
       route?: {
         paths?: Array<{
-          distance?: string
-          duration?: string
+          distance?: string | number
+          duration?: string | number
         }>
       }
       data?: {
         paths?: Array<{
-          distance?: string
-          duration?: string
+          distance?: string | number
+          duration?: string | number
         }>
       }
+    }
+
+    if (payload.status === '0' || payload.errcode) {
+      throw new Error('路线计算失败')
     }
 
     const pathItem = payload.route?.paths?.[0] ?? payload.data?.paths?.[0]
@@ -1348,7 +1582,15 @@ function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['iti
     const tone = typeTone(item.type)
     const entries: Array<
       | { kind: 'item'; tone: TravelTone; title: string; description: string }
-      | { kind: 'transfer'; text: string }
+      | {
+          kind: 'transfer'
+          text: string
+          navigation?: {
+            origin: NavigationPoint
+            destination: NavigationPoint
+            mode: TransportMode
+          } | null
+        }
     > = [
       {
         kind: 'item',
@@ -1359,9 +1601,30 @@ function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['iti
     ]
 
     if (nextItem) {
+      const hasOrigin = typeof item.longitude === 'number' && Number.isFinite(item.longitude)
+        && typeof item.latitude === 'number' && Number.isFinite(item.latitude)
+      const hasDestination = typeof nextItem.longitude === 'number' && Number.isFinite(nextItem.longitude)
+        && typeof nextItem.latitude === 'number' && Number.isFinite(nextItem.latitude)
       entries.push({
         kind: 'transfer',
         text: routeTransferSummary(nextItem),
+        navigation: hasOrigin && hasDestination ? {
+          origin: {
+            title: item.title,
+            longitude: item.longitude as number,
+            latitude: item.latitude as number,
+            poiId: item.poiId,
+            poiName: item.poiName,
+          },
+          destination: {
+            title: nextItem.title,
+            longitude: nextItem.longitude as number,
+            latitude: nextItem.latitude as number,
+            poiId: nextItem.poiId,
+            poiName: nextItem.poiName,
+          },
+          mode: (item.transportMode as TransportMode | null) || 'driving',
+        } : null,
       })
     }
 
@@ -1373,9 +1636,11 @@ function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['iti
 <template>
   <section class="travel-detail-page">
     <PageHeader :title="displayedHeaderTitle" back-to="/tools/travel-plans" back-label="返回旅行列表">
-      <button class="header-action-button" type="button" @click="goToEditPage">
-        {{ activeTab === 'overview' ? '修改旅行' : isEditingCurrentPage ? '完成' : '编辑' }}
-      </button>
+      <div class="header-action-group">
+        <button class="header-action-button" type="button" @click="goToEditPage">
+          {{ activeTab === 'overview' ? '修改旅行' : isEditingCurrentPage ? '完成' : '编辑' }}
+        </button>
+      </div>
     </PageHeader>
 
     <div class="detail-segment" role="tablist" aria-label="旅行详情分页">
@@ -1398,9 +1663,8 @@ function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['iti
     </div>
 
     <section v-else-if="activeTab === 'overview'" class="overview-panel">
-      <div class="summary-card">
-        <h2>{{ summaryHeading }}</h2>
-        <p>{{ summaryMeta }}</p>
+      <div class="overview-summary-bar">
+        <span>{{ summaryMeta }}</span>
       </div>
 
       <div class="route-map-card overview-map-card">
@@ -1418,8 +1682,22 @@ function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['iti
         <span class="route-map-spot route-map-spot-right">{{ overviewMapLastSpot() }}</span>
       </div>
 
+      <div class="day-editor-bar">
+        <div class="day-tab-row">
+          <button
+            v-for="item in overviewDateItems"
+            :key="item.key"
+            :class="['day-tab', { active: activeOverviewDayIndex === item.dayIndex }]"
+            type="button"
+            @click="setOverviewDay(item.dayIndex)"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+      </div>
+
       <div class="overview-day-list">
-        <article v-for="day in currentDayOverviewEntries" :key="day.id" class="overview-day">
+        <article v-for="day in filteredOverviewEntries" :key="day.id" class="overview-day">
           <h3>Day {{ day.dayIndex }}</h3>
 
           <div v-if="day.entries.length > 0" class="overview-timeline">
@@ -1431,7 +1709,14 @@ function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['iti
                   <span :class="['rail-bottom', { hidden: index === day.entries.length - 1 }]"></span>
                 </div>
 
-                <div :class="['timeline-card', `tone-${entry.tone}`]">
+                <div
+                  :class="['timeline-card', `tone-${entry.tone}`]"
+                  role="button"
+                  tabindex="0"
+                  @click="focusOverviewEntry(entry.title)"
+                  @keydown.enter.prevent="focusOverviewEntry(entry.title)"
+                  @keydown.space.prevent="focusOverviewEntry(entry.title)"
+                >
                   <h4>{{ entry.title }}</h4>
                   <p>{{ entry.description }}</p>
                 </div>
@@ -1441,7 +1726,17 @@ function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['iti
                 <div class="timeline-rail transfer-only">
                   <span class="rail-transfer"></span>
                 </div>
-                <div class="timeline-transfer-text">{{ entry.text }}</div>
+                <div class="timeline-transfer-text">
+                  <span>{{ entry.text }}</span>
+                  <button
+                    v-if="entry.navigation"
+                    type="button"
+                    class="timeline-transfer-action"
+                    @click="openOverviewNavigation(entry)"
+                  >
+                    导航
+                  </button>
+                </div>
               </div>
             </template>
           </div>
@@ -1546,7 +1841,9 @@ function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['iti
             <article class="route-editor-card">
               <span :class="['order-badge', `tone-${typeTone(item.type)}`]">{{ index + 1 }}</span>
               <div class="route-editor-content">
-                <strong>{{ item.title }}</strong>
+                <button type="button" class="route-editor-title-button" @click="focusRouteEntry(item)">
+                  {{ item.title }}
+                </button>
                 <p>{{ formatStartTime(item.startTime) }} · {{ itineraryDescription(item) }}</p>
               </div>
               <div v-if="isEditingCurrentPage && item.id > 0" class="route-editor-actions">

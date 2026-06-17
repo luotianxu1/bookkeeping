@@ -1,6 +1,7 @@
 package com.example.finance.service;
 
 import com.example.finance.dto.GoldPriceResponse;
+import com.example.finance.dto.GoldRealtimePriceResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -65,6 +66,15 @@ public class GoldPriceService {
             return response;
         } catch (Exception ex) {
             throw new IllegalStateException("金价数据获取失败", ex);
+        }
+    }
+
+    public synchronized GoldRealtimePriceResponse getRealtimePrice() {
+        long now = System.currentTimeMillis();
+        try {
+            return toRealtimePrice(getCurrentPrice(now));
+        } catch (Exception ex) {
+            throw new IllegalStateException("实时金价获取失败", ex);
         }
     }
 
@@ -292,9 +302,11 @@ public class GoldPriceService {
     }
 
     private List<GoldPriceResponse.GoldChartPoint> fetchChartPoints(String range) {
-        List<GoldPriceResponse.GoldChartPoint> cngoldPoints = fetchCngoldChartPoints(range);
-        if (!cngoldPoints.isEmpty()) {
-            return compactChartPoints(cngoldPoints, range);
+        if ("1d".equals(range)) {
+            List<GoldPriceResponse.GoldChartPoint> cngoldPoints = fetchCngoldChartPoints(range);
+            if (!cngoldPoints.isEmpty()) {
+                return compactChartPoints(cngoldPoints, range);
+            }
         }
 
         try {
@@ -325,10 +337,19 @@ public class GoldPriceService {
                 point.setPrice(usdOzToCnyGram(closeNode.decimalValue(), usdCny));
                 points.add(point);
             }
-            return compactChartPoints(points, range);
+            if (!points.isEmpty()) {
+                return compactChartPoints(points, range);
+            }
         } catch (Exception ex) {
-            return List.of();
+            // Fall through to alternate providers when Yahoo chart data is blocked or unavailable.
         }
+
+        List<GoldPriceResponse.GoldChartPoint> cngoldPoints = fetchCngoldChartPoints(range);
+        if (!cngoldPoints.isEmpty()) {
+            return compactChartPoints(cngoldPoints, range);
+        }
+
+        return List.of();
     }
 
     private List<GoldPriceResponse.GoldChartPoint> fetchCngoldChartPoints(String range) {
@@ -401,9 +422,9 @@ public class GoldPriceService {
             default -> "1d";
         };
         String interval = switch (range) {
-            case "7d" -> "1h";
-            case "30d" -> "1d";
-            case "1y" -> "1mo";
+            case "7d" -> "30m";
+            case "30d" -> "1h";
+            case "1y" -> "1d";
             default -> "15m";
         };
         return goldChartApiUrl + "?range=" + yahooRange + "&interval=" + interval;
@@ -422,10 +443,10 @@ public class GoldPriceService {
         String range
     ) {
         int maxCount = switch (range) {
-            case "1d" -> 12;
-            case "7d" -> 14;
-            case "30d" -> 15;
-            default -> 12;
+            case "1d" -> 24;
+            case "7d" -> 42;
+            case "30d" -> 48;
+            default -> 52;
         };
         if (points.size() <= maxCount) {
             return points;
@@ -494,6 +515,23 @@ public class GoldPriceService {
         target.setJewelryPrices(source.getJewelryPrices());
         target.setChartPoints(List.of());
         target.setUpdatedAt(source.getUpdatedAt());
+        target.setSource(source.getSource());
+        return target;
+    }
+
+    private GoldRealtimePriceResponse toRealtimePrice(GoldPriceResponse source) {
+        GoldRealtimePriceResponse target = new GoldRealtimePriceResponse();
+        GoldPriceResponse.GoldMarketQuote spotGold = source.getSpotGold();
+        if (spotGold != null) {
+            target.setName(spotGold.getName());
+            target.setUnit(spotGold.getUnit());
+            target.setPrice(spotGold.getPrice());
+            target.setChange(spotGold.getChange());
+            target.setChangePercent(spotGold.getChangePercent());
+            target.setUpdatedAt(spotGold.getUpdatedAt());
+        } else {
+            target.setUpdatedAt(source.getUpdatedAt());
+        }
         target.setSource(source.getSource());
         return target;
     }

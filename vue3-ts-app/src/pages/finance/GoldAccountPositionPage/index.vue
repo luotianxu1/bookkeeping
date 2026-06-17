@@ -67,7 +67,7 @@ const liquidation = ref<GoldLiquidation>({
 const holdings = ref<GoldAccountHolding[]>([])
 const goldAccounts = ref<Account[]>([])
 const fundingAccounts = ref<Account[]>([])
-const goldPrice = useGoldPriceCache('1d')
+const goldPrice = useGoldPriceCache()
 const editingPosition = ref<InvestmentPosition | null>(null)
 const selectedHolding = ref<GoldAccountHolding | null>(null)
 const deletingHolding = ref<GoldAccountHolding | null>(null)
@@ -94,7 +94,7 @@ const isScopedToAccount = computed(() => selectedAccountId.value !== null)
 const scopedAccount = computed(() =>
   goldAccounts.value.find((account) => account.id === selectedAccountId.value) ?? null,
 )
-const realtimeGoldPrice = computed(() => Number(goldPrice.value?.spotGold?.price ?? 0))
+const realtimeGoldPrice = computed(() => Number(goldPrice.value?.price ?? 0))
 const realtimeGoldUpdatedAt = computed(() => formatGoldUpdatedAt(goldPrice.value?.updatedAt))
 const isCurrentAccountFixed = computed(() => isScopedToAccount.value && scopedAccount.value !== null)
 const displayHoldings = computed(() => holdings.value.map((item) => decorateHolding(item, realtimeGoldPrice.value)))
@@ -225,7 +225,7 @@ async function refreshGoldData() {
   isRefreshingGold.value = true
 
   try {
-    await refreshGoldPriceCache('1d')
+    await refreshGoldPriceCache()
     showFeedback('黄金信息已刷新', 'success')
   } catch (error) {
     const message = error instanceof Error ? error.message : '黄金信息刷新失败'

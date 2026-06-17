@@ -31,24 +31,25 @@ public class FundQuoteSyncTask {
 
     @Scheduled(cron = "${finance.investment.auto-invest.cron:0 5 9 * * *}", zone = "Asia/Shanghai")
     public void executeAutoInvestPlans() {
-        log.info("基金定投执行任务开始：trigger=scheduled-09:05");
+        log.info("基金定投与确认任务开始：trigger=scheduled-09:05");
         try {
             int executedCount = investmentService.executeDueAutoInvestPlans();
-            log.info("基金定投执行任务完成：trigger=scheduled-09:05, executedCount={}", executedCount);
+            int settledCount = investmentService.settlePendingFundTrades();
+            log.info("基金定投与确认任务完成：trigger=scheduled-09:05, executedCount={}, settledCount={}", executedCount, settledCount);
         } catch (Exception ex) {
-            log.error("基金定投执行任务失败：trigger=scheduled-09:05", ex);
+            log.error("基金定投与确认任务失败：trigger=scheduled-09:05", ex);
             throw ex;
         }
     }
 
-    @Scheduled(cron = "${finance.investment.trade-settlement.cron:0 0 0 * * *}", zone = "Asia/Shanghai")
+    @Scheduled(cron = "${finance.investment.trade-settlement.cron:0 6 9 * * *}", zone = "Asia/Shanghai")
     public void settleFundTrades() {
-        log.info("基金交易补结算任务开始：trigger=scheduled-00:00");
+        log.info("基金交易补结算任务开始：trigger=scheduled-09:06");
         try {
             int settledCount = investmentService.settlePendingFundTrades();
-            log.info("基金交易补结算任务完成：trigger=scheduled-00:00, settledCount={}", settledCount);
+            log.info("基金交易补结算任务完成：trigger=scheduled-09:06, settledCount={}", settledCount);
         } catch (Exception ex) {
-            log.error("基金交易补结算任务失败：trigger=scheduled-00:00", ex);
+            log.error("基金交易补结算任务失败：trigger=scheduled-09:06", ex);
             throw ex;
         }
     }

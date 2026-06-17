@@ -2,9 +2,9 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import './styles/base.css'
 import { router } from './router'
-import { initTheme } from './utils/theme'
 import { startGoldPriceAutoRefresh } from './utils/gold-price-cache'
 import { setupRem } from './utils/rem'
+import { initTheme } from './utils/theme'
 
 initTheme()
 

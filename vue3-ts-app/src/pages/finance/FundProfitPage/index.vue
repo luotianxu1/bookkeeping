@@ -109,15 +109,20 @@ const summaryHint = computed(() => {
 
 const trendPoints = computed(() => pageData.value?.trendPoints ?? [])
 const trendMaxAbsProfit = computed(() => {
-  const max = trendPoints.value.reduce((current, item) => Math.max(current, Math.abs(Number(item.profit ?? 0))), 0)
+  const max = trendPoints.value.reduce((current, item) => {
+    if (item.profit === null || item.profit === undefined) {
+      return current
+    }
+    return Math.max(current, Math.abs(Number(item.profit)))
+  }, 0)
   return max > 0 ? max : 1
 })
 
 const trendStats = computed(() => {
-  const items = trendPoints.value
-  const positiveDays = items.filter((item) => Number(item.profit ?? 0) > 0).length
-  const negativeDays = items.filter((item) => Number(item.profit ?? 0) < 0).length
-  const sorted = [...items].sort((left, right) => Number(right.profit ?? 0) - Number(left.profit ?? 0))
+  const items = trendPoints.value.filter((item) => item.profit !== null && item.profit !== undefined)
+  const positiveDays = items.filter((item) => Number(item.profit) > 0).length
+  const negativeDays = items.filter((item) => Number(item.profit) < 0).length
+  const sorted = [...items].sort((left, right) => Number(right.profit) - Number(left.profit))
   return {
     positiveDays,
     negativeDays,
@@ -127,17 +132,19 @@ const trendStats = computed(() => {
 })
 
 const trendPositiveRate = computed(() => {
-  if (!trendPoints.value.length) {
+  const availableCount = trendPoints.value.filter((item) => item.profit !== null && item.profit !== undefined).length
+  if (!availableCount) {
     return '--'
   }
-  return `${Math.round((trendStats.value.positiveDays / trendPoints.value.length) * 100)}%`
+  return `${Math.round((trendStats.value.positiveDays / availableCount) * 100)}%`
 })
 
 const trendNegativeRate = computed(() => {
-  if (!trendPoints.value.length) {
+  const availableCount = trendPoints.value.filter((item) => item.profit !== null && item.profit !== undefined).length
+  if (!availableCount) {
     return '--'
   }
-  return `${Math.round((trendStats.value.negativeDays / trendPoints.value.length) * 100)}%`
+  return `${Math.round((trendStats.value.negativeDays / availableCount) * 100)}%`
 })
 
 const trendFootnote = computed(() => {
@@ -567,9 +574,19 @@ function getTone(value: number) {
 }
 
 function getTrendBarStyle(point: FundProfitTrendPoint) {
+  if (point.profit === null || point.profit === undefined) {
+    return { height: '18px' }
+  }
   const value = Math.abs(Number(point.profit ?? 0))
   const height = value === 0 ? 18 : Math.max(18, (value / trendMaxAbsProfit.value) * 132)
   return { height: `${height}px` }
+}
+
+function getTrendTone(point: FundProfitTrendPoint) {
+  if (point.profit === null || point.profit === undefined) {
+    return 'muted'
+  }
+  return getTone(Number(point.profit))
 }
 
 function getPeriodCardTone(item: FundProfitCalendarCell) {
@@ -648,13 +665,13 @@ function getDetailAccumulatedProfit(item: FundProfitDetail) {
 
         <div class="trend-chart">
           <div v-for="point in trendPoints" :key="point.key" class="trend-column">
-            <span class="trend-profit-text" :class="`is-${getTone(Number(point.profit ?? 0))}`">
-              {{ formatSignedCurrency(Number(point.profit ?? 0), 0) }}
+            <span class="trend-profit-text" :class="`is-${getTrendTone(point)}`">
+              {{ point.profit === null || point.profit === undefined ? '--' : formatSignedCurrency(Number(point.profit), 0) }}
             </span>
             <span class="trend-bar-track">
               <span
                 class="trend-bar-fill"
-                :class="`is-${getTone(Number(point.profit ?? 0))}`"
+                :class="`is-${getTrendTone(point)}`"
                 :style="getTrendBarStyle(point)"
               ></span>
             </span>

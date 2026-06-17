@@ -2,6 +2,7 @@ package com.example.finance.controller;
 
 import com.example.common.result.Result;
 import com.example.finance.dto.GoldPriceResponse;
+import com.example.finance.dto.GoldRealtimePriceResponse;
 import com.example.finance.service.GoldPriceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,6 +20,12 @@ public class GoldPriceController {
 
     public GoldPriceController(GoldPriceService goldPriceService) {
         this.goldPriceService = goldPriceService;
+    }
+
+    @GetMapping("/realtime")
+    @Operation(summary = "查询实时金价")
+    public Result<GoldRealtimePriceResponse> realtime() {
+        return Result.ok(goldPriceService.getRealtimePrice());
     }
 
     @GetMapping

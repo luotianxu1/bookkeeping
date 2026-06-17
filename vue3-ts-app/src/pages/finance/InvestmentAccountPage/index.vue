@@ -650,18 +650,44 @@ function getHoldingQuantityTag(position: InvestmentPosition) {
 }
 
 function getHoldingSyncText(position: InvestmentPosition) {
-  if (!position.lastSyncedAt) {
+  const syncSource = resolveHoldingSyncTime(position)
+  if (!syncSource) {
     return ''
   }
-  const date = new Date(position.lastSyncedAt)
+  const date = new Date(syncSource.value)
   if (Number.isNaN(date.getTime())) {
-    return `更新 ${position.lastSyncedAt}`
+    return `${syncSource.label} ${syncSource.value}`
   }
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   const hour = String(date.getHours()).padStart(2, '0')
   const minute = String(date.getMinutes()).padStart(2, '0')
-  return `更新 ${month}-${day} ${hour}:${minute}`
+  return `${syncSource.label} ${month}-${day} ${hour}:${minute}`
+}
+
+function resolveHoldingSyncTime(position: InvestmentPosition) {
+  if (position.productType === 'fund' && position.lastSyncedAt) {
+    return {
+      label: '净值更新',
+      value: position.lastSyncedAt,
+    }
+  }
+
+  if (position.productType === 'fund' && position.subscriptionConfirmedAt) {
+    return {
+      label: '净值确认',
+      value: position.subscriptionConfirmedAt,
+    }
+  }
+
+  if (position.lastSyncedAt) {
+    return {
+      label: '更新',
+      value: position.lastSyncedAt,
+    }
+  }
+
+  return null
 }
 
 function getHoldingMarketValueLabel(position: InvestmentPosition) {

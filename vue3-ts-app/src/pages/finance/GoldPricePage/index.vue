@@ -5,7 +5,8 @@ import type { ECharts, EChartsCoreOption } from 'echarts'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import type { GoldPriceRange } from '@/api/modules/finance'
-import { ensureGoldPriceCache, getCachedGoldPrice, goldPriceCacheState, refreshGoldPriceCache } from '@/utils/gold-price-cache'
+import { refreshGoldPriceCache as refreshRealtimeGoldPriceCache } from '@/utils/gold-price-cache'
+import { ensureGoldPriceCache, getCachedGoldPrice, goldPriceCacheState, refreshGoldPriceCache } from '@/utils/gold-price-detail-cache'
 import { useTheme } from '@/utils/theme'
 
 type TrendKey = '1日' | '7日' | '30日' | '1年'
@@ -189,14 +190,9 @@ async function refreshCurrentGoldPrice() {
   goldPriceError.value = ''
 
   try {
-    if (activeRange.value === '1d') {
-      await refreshGoldPriceCache('1d')
-      return
-    }
-
     await Promise.all([
       refreshGoldPriceCache(activeRange.value),
-      refreshGoldPriceCache('1d'),
+      refreshRealtimeGoldPriceCache(),
     ])
   } catch (error) {
     goldPriceError.value = error instanceof Error ? error.message : '金价刷新失败'

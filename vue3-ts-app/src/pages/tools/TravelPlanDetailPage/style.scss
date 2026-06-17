@@ -23,6 +23,17 @@
   cursor: pointer;
 }
 
+.header-action-button:disabled {
+  color: #94a3b8;
+  cursor: default;
+}
+
+.header-action-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .detail-segment {
   margin-top: 12px;
   padding: 4px;
@@ -63,7 +74,6 @@
   font-size: 12px;
 }
 
-.summary-card,
 .expense-summary-wrap {
   padding: 16px;
   border: 1px solid #bfdbfe;
@@ -71,25 +81,16 @@
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
 }
 
-.summary-card {
-  display: grid;
-  gap: 10px;
-}
-
 .expense-summary-wrap {
   display: grid;
   gap: 12px;
 }
 
-.summary-card h2 {
-  margin: 0;
-  color: #0f172a;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.summary-card p {
-  margin: 0;
+.overview-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 2px;
   color: #475569;
   font-size: 12px;
   font-weight: 500;
@@ -222,6 +223,24 @@
   line-height: 1.5;
 }
 
+.timeline-transfer-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.timeline-transfer-action {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .overview-expense-section {
   display: grid;
   gap: 12px;
@@ -229,7 +248,6 @@
 
 .overview-expense-head,
 .expense-list-head,
-.day-bar-head,
 .route-editor-head {
   display: flex;
   align-items: center;
@@ -244,7 +262,6 @@
 }
 
 .expense-list-head span,
-.day-bar-head span,
 .route-editor-head h3 {
   color: #0f172a;
   font-size: 16px;
@@ -526,15 +543,15 @@
 }
 
 .day-tab {
-  min-width: 96px;
-  height: 44px;
-  padding: 0 14px;
+  min-width: 58px;
+  height: 30px;
+  padding: 0 10px;
   flex: 0 0 auto;
   border: 1px solid #dde3ee;
-  border-radius: 14px;
+  border-radius: 999px;
   background: #fff;
   color: #64748b;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -548,9 +565,9 @@
 }
 
 .day-tab.small {
-  min-width: 90px;
-  height: 34px;
-  border-radius: 12px;
+  min-width: 58px;
+  height: 30px;
+  border-radius: 999px;
   background: #f8fafc;
 }
 
@@ -641,6 +658,22 @@
   color: #0f172a;
   font-size: 14px;
   font-weight: 700;
+}
+
+.route-editor-title-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.route-editor-title-button:focus-visible {
+  outline: none;
+  color: #1d4ed8;
 }
 
 .route-editor-content p {
@@ -970,6 +1003,24 @@
   color: #475569;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.transport-route-action {
+  width: fit-content;
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.transport-route-action:disabled {
+  color: #94a3b8;
+  cursor: default;
 }
 
 :deep(.common-modal-root) {

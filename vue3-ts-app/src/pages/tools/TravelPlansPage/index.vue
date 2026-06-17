@@ -5,13 +5,14 @@ import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
+import PageHeader from '@/components/common/PageHeader/index.vue'
 import { deleteTravelPlan, getTravelPlans, type TravelPlan } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
-type FilterTab = 'all' | 'active' | 'planned'
+type FilterTab = 'traveling' | 'completed'
 
 const router = useRouter()
-const activeTab = ref<FilterTab>('all')
+const activeTab = ref<FilterTab>('traveling')
 const plans = ref<TravelPlan[]>([])
 const isLoading = ref(false)
 const isEditing = ref(false)
@@ -24,12 +25,8 @@ const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 
 const visiblePlans = computed(() => {
-  if (activeTab.value === 'all') {
-    return plans.value
-  }
-
-  if (activeTab.value === 'active') {
-    return plans.value.filter((item) => item.status === 'active')
+  if (activeTab.value === 'completed') {
+    return plans.value.filter((item) => item.status === 'completed')
   }
 
   return plans.value.filter((item) => item.status !== 'completed')
@@ -148,22 +145,18 @@ function formatDateRange(plan: TravelPlan) {
 
 <template>
   <section class="travel-plans-page">
-    <header class="travel-list-header">
-      <h1>旅行管理</h1>
+    <PageHeader title="旅行管理" back-to="/tools" back-label="返回工具页">
       <button class="header-edit-button" type="button" @click="toggleEditing">
         {{ isEditing ? '完成' : '编辑' }}
       </button>
-    </header>
+    </PageHeader>
 
     <div class="travel-filter-tabs" role="tablist" aria-label="旅行状态筛选">
-      <button :class="['filter-tab', { active: activeTab === 'all' }]" type="button" @click="activeTab = 'all'">
-        全部
+      <button :class="['filter-tab', { active: activeTab === 'traveling' }]" type="button" @click="activeTab = 'traveling'">
+        未出行
       </button>
-      <button :class="['filter-tab', { active: activeTab === 'active' }]" type="button" @click="activeTab = 'active'">
-        进行中
-      </button>
-      <button :class="['filter-tab', { active: activeTab === 'planned' }]" type="button" @click="activeTab = 'planned'">
-        计划中
+      <button :class="['filter-tab', { active: activeTab === 'completed' }]" type="button" @click="activeTab = 'completed'">
+        已出行
       </button>
     </div>
 

@@ -164,6 +164,16 @@ export interface CategoryQuery {
 
 export type GoldPriceRange = '1d' | '7d' | '30d' | '1y'
 
+export interface GoldRealtimePrice {
+  name: string
+  unit: string
+  price: number
+  change: number
+  changePercent: number
+  updatedAt: string
+  source: string
+}
+
 export interface GoldMarketQuote {
   name: string
   unit: string
@@ -787,7 +797,7 @@ export interface FundProfitTrendPoint {
   key: string
   label: string
   date: string
-  profit: number
+  profit?: number | null
 }
 
 export interface FundProfitCalendarCell {
@@ -1331,6 +1341,10 @@ export function getGoldPrices(range: GoldPriceRange = '1d') {
   return requestGet<GoldPrice>(financeRequest, '/api/finance/gold-prices', {
     params: { range },
   })
+}
+
+export function getRealtimeGoldPrice() {
+  return requestGet<GoldRealtimePrice>(financeRequest, '/api/finance/gold-prices/realtime')
 }
 
 export function getExchangeRate(from: string, to: string) {
