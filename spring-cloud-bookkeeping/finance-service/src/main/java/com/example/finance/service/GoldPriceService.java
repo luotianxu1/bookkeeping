@@ -302,49 +302,7 @@ public class GoldPriceService {
     }
 
     private List<GoldPriceResponse.GoldChartPoint> fetchChartPoints(String range) {
-        if ("1d".equals(range)) {
-            List<GoldPriceResponse.GoldChartPoint> cngoldPoints = fetchCngoldChartPoints(range);
-            if (!cngoldPoints.isEmpty()) {
-                return compactChartPoints(cngoldPoints, range);
-            }
-        }
-
-        try {
-            JsonNode result = fetchJson(goldChartUrl(range))
-                .path("chart")
-                .path("result")
-                .path(0);
-            JsonNode timestamps = result.path("timestamp");
-            JsonNode closes = result.path("indicators").path("quote").path(0).path("close");
-            if (!timestamps.isArray() || !closes.isArray()) {
-                return List.of();
-            }
-
-            BigDecimal usdCny = fetchUsdCny();
-            List<GoldPriceResponse.GoldChartPoint> points = new ArrayList<>();
-            for (int index = 0; index < timestamps.size() && index < closes.size(); index++) {
-                JsonNode closeNode = closes.get(index);
-                if (closeNode == null || closeNode.isNull() || !closeNode.isNumber()) {
-                    continue;
-                }
-
-                GoldPriceResponse.GoldChartPoint point = new GoldPriceResponse.GoldChartPoint();
-                LocalDateTime time = LocalDateTime.ofInstant(
-                    Instant.ofEpochSecond(timestamps.get(index).asLong()),
-                    DEFAULT_ZONE
-                );
-                point.setLabel(formatChartLabel(time, range));
-                point.setPrice(usdOzToCnyGram(closeNode.decimalValue(), usdCny));
-                points.add(point);
-            }
-            if (!points.isEmpty()) {
-                return compactChartPoints(points, range);
-            }
-        } catch (Exception ex) {
-            // Fall through to alternate providers when Yahoo chart data is blocked or unavailable.
-        }
-
-        List<GoldPriceResponse.GoldChartPoint> cngoldPoints = fetchCngoldChartPoints(range);
+        List<GoldPriceResponse.GoldChartPoint> cngoldPoints = fetchUnifiedCngoldPoints(range);
         if (!cngoldPoints.isEmpty()) {
             return compactChartPoints(cngoldPoints, range);
         }
@@ -352,87 +310,59 @@ public class GoldPriceService {
         return List.of();
     }
 
-    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldChartPoints(String range) {
+    private List<GoldPriceResponse.GoldChartPoint> fetchUnifiedCngoldPoints(String range) {
         try {
-            return "1d".equals(range) ? fetchCngoldTodayMinPoints() : fetchCngoldKlinePoints(range);
+            return switch (range) {
+                case "1d" -> fetchCngoldHistoryPoints(6, range);
+                case "7d" -> fetchCngoldHistoryPoints(2, range);
+                case "30d" -> fetchCngoldHistoryPoints(3, range);
+                case "1y" -> fetchCngoldHistoryPoints(3, range, 400);
+                default -> fetchCngoldHistoryPoints(6, range);
+            };
         } catch (Exception ex) {
             return List.of();
         }
     }
 
-    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldTodayMinPoints() throws Exception {
-        String body = fetchCngoldText(cngoldChartUrl("todayMin.htm") + "?code=JO_92233");
-        JsonNode root = extractJavascriptObject(body, "hq_str_ml");
-        JsonNode data = root.path("data");
-        if (!data.isArray()) {
-            return List.of();
-        }
-
-        BigDecimal usdCny = fetchUsdCny();
-        List<GoldPriceResponse.GoldChartPoint> points = new ArrayList<>();
-        for (JsonNode item : data) {
-            BigDecimal price = decimalAt(item, "price");
-            Long timestamp = firstLong(item, "date");
-            if (price == null || price.compareTo(BigDecimal.ZERO) <= 0 || timestamp == null) {
-                continue;
-            }
-
-            LocalDateTime time = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), DEFAULT_ZONE);
-            GoldPriceResponse.GoldChartPoint point = new GoldPriceResponse.GoldChartPoint();
-            point.setLabel(formatChartLabel(time, "1d"));
-            point.setPrice(usdOzToCnyGram(price, usdCny));
-            points.add(point);
-        }
-        return points;
+    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldHistoryPoints(int style, String range) {
+        return fetchCngoldHistoryPoints(style, range, 200);
     }
 
-    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldKlinePoints(String range) throws Exception {
-        String body = fetchCngoldText(cngoldChartUrl("kDataList.htm") + "?code=JO_92233&pageSize=400");
-        JsonNode root = extractJavascriptObject(body, "KLC_KL");
-        JsonNode seriesGroup = root.path("data");
-        JsonNode data = seriesGroup.isArray() && !seriesGroup.isEmpty() ? seriesGroup.get(0) : null;
-        if (data == null || !data.isArray()) {
-            return List.of();
-        }
-
-        BigDecimal usdCny = fetchUsdCny();
-        long minTimestamp = minimumTimestampForRange(range);
-        List<GoldPriceResponse.GoldChartPoint> points = new ArrayList<>();
-        for (JsonNode item : data) {
-            BigDecimal close = decimalAt(item, "close");
-            Long timestamp = firstLong(item, "date", "time");
-            if (close == null || close.compareTo(BigDecimal.ZERO) <= 0 || timestamp == null || timestamp < minTimestamp) {
-                continue;
+    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldHistoryPoints(int style, String range, int pageSize) {
+        try {
+            String body = fetchCngoldText(cngoldChartUrl("history.htm") + "?code=JO_92233&style=" + style + "&pageSize=" + pageSize);
+            JsonNode root = extractJavascriptObject(body, "KLC_KL");
+            JsonNode data = root.path("data");
+            if (!data.isArray()) {
+                return List.of();
             }
 
-            LocalDateTime time = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), DEFAULT_ZONE);
-            GoldPriceResponse.GoldChartPoint point = new GoldPriceResponse.GoldChartPoint();
-            point.setLabel(formatChartLabel(time, range));
-            point.setPrice(usdOzToCnyGram(close, usdCny));
-            points.add(point);
-        }
-        return points;
-    }
+            BigDecimal usdCny = fetchUsdCny();
+            long minTimestamp = minimumTimestampForRange(range);
+            List<GoldPriceResponse.GoldChartPoint> points = new ArrayList<>();
+            for (JsonNode item : data) {
+                BigDecimal close = decimalAt(item, "close");
+                Long timestamp = firstLong(item, "date", "time");
+                if (close == null || close.compareTo(BigDecimal.ZERO) <= 0 || timestamp == null || timestamp < minTimestamp) {
+                    continue;
+                }
 
-    private String goldChartUrl(String range) {
-        String yahooRange = switch (range) {
-            case "7d" -> "7d";
-            case "30d" -> "1mo";
-            case "1y" -> "1y";
-            default -> "1d";
-        };
-        String interval = switch (range) {
-            case "7d" -> "30m";
-            case "30d" -> "1h";
-            case "1y" -> "1d";
-            default -> "15m";
-        };
-        return goldChartApiUrl + "?range=" + yahooRange + "&interval=" + interval;
+                LocalDateTime time = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), DEFAULT_ZONE);
+                GoldPriceResponse.GoldChartPoint point = new GoldPriceResponse.GoldChartPoint();
+                point.setLabel(formatChartLabel(time, range));
+                point.setPrice(usdOzToCnyGram(close, usdCny));
+                points.add(point);
+            }
+            return points;
+        } catch (Exception ex) {
+            return List.of();
+        }
     }
 
     private String formatChartLabel(LocalDateTime time, String range) {
         return switch (range) {
             case "1d" -> String.format("%02d:%02d", time.getHour(), time.getMinute());
+            case "7d" -> String.format("%d/%d %02d:%02d", time.getMonthValue(), time.getDayOfMonth(), time.getHour(), time.getMinute());
             case "1y" -> time.getMonthValue() + "月";
             default -> time.getMonthValue() + "/" + time.getDayOfMonth();
         };
@@ -442,9 +372,11 @@ public class GoldPriceService {
         List<GoldPriceResponse.GoldChartPoint> points,
         String range
     ) {
+        if ("1d".equals(range) || "7d".equals(range)) {
+            return points;
+        }
+
         int maxCount = switch (range) {
-            case "1d" -> 24;
-            case "7d" -> 42;
             case "30d" -> 48;
             default -> 52;
         };

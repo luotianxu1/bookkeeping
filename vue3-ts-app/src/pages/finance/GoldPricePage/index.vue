@@ -104,7 +104,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
     series: [
       {
         type: 'line',
-        smooth: true,
+        smooth: activeRange.value !== '1d',
         showSymbol: false,
         data: trendData.value.y,
         lineStyle: { width: 3, color: lineColor },
@@ -173,7 +173,7 @@ async function loadTrendData() {
   goldPriceError.value = ''
 
   try {
-    await ensureGoldPriceCache(activeRange.value)
+    await refreshGoldPriceCache(activeRange.value)
   } catch (error) {
     goldPriceError.value = error instanceof Error ? error.message : '走势加载失败'
   } finally {

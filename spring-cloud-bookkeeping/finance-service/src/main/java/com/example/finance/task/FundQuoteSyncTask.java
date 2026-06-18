@@ -19,12 +19,12 @@ public class FundQuoteSyncTask {
 
     @Scheduled(cron = "${finance.investment.profit-sync.cron:0 30 21 * * *}", zone = "Asia/Shanghai")
     public void syncDailyFundProfits() {
-        log.info("基金夜间同步任务开始：trigger=scheduled-21:30");
+        log.info("投资夜间同步任务开始：trigger=scheduled-21:30");
         try {
-            log.info("基金夜间同步任务完成：trigger=scheduled-21:30, summary={}",
-                investmentService.runFundSyncCycle("scheduled-21:30"));
+            log.info("投资夜间同步任务完成：trigger=scheduled-21:30, summary={}",
+                investmentService.runInvestmentSyncCycle("scheduled-21:30"));
         } catch (Exception ex) {
-            log.error("基金夜间同步任务失败：trigger=scheduled-21:30", ex);
+            log.error("投资夜间同步任务失败：trigger=scheduled-21:30", ex);
             throw ex;
         }
     }

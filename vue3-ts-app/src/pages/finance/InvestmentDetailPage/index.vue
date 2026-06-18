@@ -1394,14 +1394,14 @@ async function submitEdit() {
   const holdingQuantity = Number(editHoldingQuantity.value)
   const costPrice = Number(editCostPrice.value)
   const frozenQuantity = Number(currentPosition.value.frozenQuantity ?? 0)
-  const isEditingFundPosition = isFundPosition.value && !isPendingSubscription.value
+  const isEditingDirectPosition = !isPendingSubscription.value
   if (!isPendingSubscription.value && (!Number.isFinite(price) || price <= 0)) {
     editError.value = '请输入有效的当前价格'
     return
   }
-  if (isEditingFundPosition) {
+  if (isEditingDirectPosition) {
     if (!Number.isFinite(holdingQuantity) || holdingQuantity <= 0) {
-      editError.value = '请输入有效的当前份额'
+      editError.value = `请输入有效的当前${currentUnitName.value}`
       return
     }
     if (!Number.isFinite(costPrice) || costPrice < 0) {
@@ -1418,18 +1418,18 @@ async function submitEdit() {
   editError.value = ''
 
   try {
-    const nextHoldingQuantity = isEditingFundPosition ? holdingQuantity : Number(currentPosition.value.holdingQuantity)
-    const nextCostAmount = isEditingFundPosition
+    const nextHoldingQuantity = isEditingDirectPosition ? holdingQuantity : Number(currentPosition.value.holdingQuantity)
+    const nextCostAmount = isEditingDirectPosition
       ? Number((holdingQuantity * costPrice).toFixed(2))
       : Number(currentPosition.value.costAmount)
-    const nextAvailableQuantity = isEditingFundPosition
-      ? Number((holdingQuantity - frozenQuantity).toFixed(2))
+    const nextAvailableQuantity = isEditingDirectPosition
+      ? Number((holdingQuantity - frozenQuantity).toFixed(6))
       : Number(currentPosition.value.availableQuantity)
     await updateInvestmentPosition(currentPosition.value.id, {
       userId: currentUser.id,
       accountId: currentPosition.value.accountId,
       productId: currentPosition.value.productId,
-      holdingQuantity: isEditingFundPosition ? Number(nextHoldingQuantity.toFixed(2)) : nextHoldingQuantity,
+      holdingQuantity: isEditingDirectPosition ? Number(nextHoldingQuantity.toFixed(6)) : nextHoldingQuantity,
       availableQuantity: nextAvailableQuantity,
       frozenQuantity,
       costAmount: nextCostAmount,
@@ -2543,9 +2543,9 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           />
         </label>
 
-        <div v-if="isFundPosition && !isPendingSubscription" class="investment-detail-modal-row">
+        <div v-if="!isPendingSubscription" class="investment-detail-modal-row">
           <label class="investment-detail-modal-field">
-            <span>当前份额</span>
+            <span>当前{{ currentUnitName }}</span>
             <input
               v-model="editHoldingQuantity"
               class="investment-detail-field-control investment-detail-number-control"
@@ -2572,8 +2572,8 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           场外基金待确认时不支持手动修改价格；若目标申购日净值已同步，系统会直接确认份额和成本价，否则会在净值同步后自动完成。
         </p>
 
-        <p v-if="isFundPosition && !isPendingSubscription" class="investment-detail-description">
-          总持仓成本将按 当前份额 × 持仓成本价 自动计算，当前约为 {{ editFundCostAmountPreview }}，保存后立即生效。
+        <p v-if="!isPendingSubscription" class="investment-detail-description">
+          总持仓成本将按 当前{{ currentUnitName }} × 持仓成本价 自动计算，当前约为 {{ editFundCostAmountPreview }}，保存后立即生效。
         </p>
 
         <label class="investment-detail-switch-field">

@@ -64,6 +64,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -99,6 +100,14 @@ import java.util.stream.Collectors;
 public class InvestmentService {
 
     private record FundQuoteSnapshot(
+        LocalDate quoteDate,
+        BigDecimal latestPrice,
+        BigDecimal preClosePrice,
+        LocalDateTime syncedAt
+    ) {
+    }
+
+    private record StockQuoteSnapshot(
         LocalDate quoteDate,
         BigDecimal latestPrice,
         BigDecimal preClosePrice,
@@ -202,7 +211,9 @@ public class InvestmentService {
     private static final String VOIDED_STATUS = "voided";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String FUND_PRODUCT_TYPE = "fund";
+    private static final String STOCK_PRODUCT_TYPE = "stock";
     private static final String FUND_QUOTE_SOURCE = "EASTMONEY_FUND_DAILY";
+    private static final String STOCK_QUOTE_SOURCE = "TENCENT_STOCK_LATEST";
     private static final String FUND_DIVIDEND_PLAN_SOURCE = "EASTMONEY_FUND_FHSP";
     private static final String STOCK_DIVIDEND_HISTORY_SOURCE = "EASTMONEY_STOCK_BONUS";
     private static final String SUBSCRIPTION_STATUS_CONFIRMED = "confirmed";
@@ -1905,15 +1916,25 @@ public class InvestmentService {
     }
 
     public int syncDailyFundProfits() {
-        List<InvestmentPositionEntity> positions = listActiveFundPositions();
+        return syncDailyFundProfits(null, null);
+    }
+
+    public int syncDailyFundProfits(Long userId, Long accountId) {
+        List<InvestmentPositionEntity> positions = loadActiveInvestmentPositions(userId, accountId).stream()
+            .filter(position -> !isPendingFundSubscription(position) || position.getProductId() != null)
+            .toList();
+        return syncDailyFundProfits(positions, userId, accountId);
+    }
+
+    private int syncDailyFundProfits(List<InvestmentPositionEntity> positions, Long userId, Long accountId) {
         if (positions.isEmpty()) {
-            log.info("基金收益同步跳过：当前没有基金持仓");
+            log.info("基金收益同步跳过：当前没有基金持仓，userId={}, accountId={}", userId, accountId);
             return 0;
         }
 
         Map<Long, InvestmentProductEntity> products = loadFundProducts(positions);
         if (products.isEmpty()) {
-            log.info("基金收益同步跳过：当前没有可同步的基金产品");
+            log.info("基金收益同步跳过：当前没有可同步的基金产品，userId={}, accountId={}", userId, accountId);
             return 0;
         }
 
@@ -1937,8 +1958,9 @@ public class InvestmentService {
             }
         }
 
-        accountUsers.forEach((accountId, userId) -> syncInvestmentAccountBalance(userId, accountId));
-        log.info("基金收益同步完成：{} 个基金产品，{} 条持仓已更新", syncedProducts, syncedPositions);
+        accountUsers.forEach((targetAccountId, targetUserId) -> syncInvestmentAccountBalance(targetUserId, targetAccountId));
+        log.info("基金收益同步完成：{} 个基金产品，{} 条持仓已更新，userId={}, accountId={}",
+            syncedProducts, syncedPositions, userId, accountId);
         return syncedPositions;
     }
 
@@ -1992,8 +2014,92 @@ public class InvestmentService {
         return summary;
     }
 
+    public Map<String, Object> runInvestmentSyncCycle(String trigger) {
+        return runInvestmentSyncCycle(trigger, null, null);
+    }
+
+    public Map<String, Object> runInvestmentSyncCycle(String trigger, Long userId, Long accountId) {
+        LocalDateTime startedAt = LocalDateTime.now();
+        int syncedFundPositions = syncDailyFundProfits(userId, accountId);
+        int syncedStockPositions = syncDailyStockQuotes(userId, accountId);
+        int syncedDividendPlans = (userId == null && accountId == null) ? syncFundDividendPlans() : 0;
+        int settledCount = (userId == null && accountId == null) ? settlePendingFundTrades() : 0;
+        LocalDateTime finishedAt = LocalDateTime.now();
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("trigger", StringUtils.hasText(trigger) ? trigger : "unknown");
+        summary.put("userId", userId);
+        summary.put("accountId", accountId);
+        summary.put("startedAt", startedAt);
+        summary.put("finishedAt", finishedAt);
+        summary.put("durationMs", Duration.between(startedAt, finishedAt).toMillis());
+        summary.put("syncedPositions", syncedFundPositions + syncedStockPositions);
+        summary.put("syncedFundPositions", syncedFundPositions);
+        summary.put("syncedStockPositions", syncedStockPositions);
+        summary.put("syncedDividendPlans", syncedDividendPlans);
+        summary.put("settledCount", settledCount);
+        return summary;
+    }
+
+    @Async
+    public void runInvestmentSyncCycleAsync(String trigger, Long userId, Long accountId) {
+        try {
+            Map<String, Object> summary = runInvestmentSyncCycle(trigger, userId, accountId);
+            log.info("投资行情异步同步完成：summary={}", summary);
+        } catch (Exception ex) {
+            log.error("投资行情异步同步失败：trigger={}, userId={}, accountId={}", trigger, userId, accountId, ex);
+        }
+    }
+
     public int settlePendingFundTrades() {
         return settlePendingFundTradesAt(LocalDateTime.now());
+    }
+
+    public int syncDailyStockQuotes() {
+        return syncDailyStockQuotes(null, null);
+    }
+
+    public int syncDailyStockQuotes(Long userId, Long accountId) {
+        List<InvestmentPositionEntity> positions = loadActiveInvestmentPositions(userId, accountId);
+        return syncDailyStockQuotes(positions, userId, accountId);
+    }
+
+    private int syncDailyStockQuotes(List<InvestmentPositionEntity> positions, Long userId, Long accountId) {
+        if (positions.isEmpty()) {
+            log.info("股票行情同步跳过：当前没有股票持仓，userId={}, accountId={}", userId, accountId);
+            return 0;
+        }
+
+        Map<Long, InvestmentProductEntity> products = loadStockProducts(positions);
+        if (products.isEmpty()) {
+            log.info("股票行情同步跳过：当前没有可同步的股票产品，userId={}, accountId={}", userId, accountId);
+            return 0;
+        }
+
+        Map<Long, Long> accountUsers = new HashMap<>();
+        int syncedProducts = 0;
+        int syncedPositions = 0;
+        for (Map.Entry<Long, List<InvestmentPositionEntity>> entry : groupPositionsByProduct(positions, products).entrySet()) {
+            InvestmentProductEntity product = products.get(entry.getKey());
+            if (product == null) {
+                continue;
+            }
+            try {
+                int updatedCount = syncStockQuoteForProduct(product, entry.getValue(), accountUsers);
+                if (updatedCount > 0) {
+                    syncedProducts++;
+                    syncedPositions += updatedCount;
+                }
+            } catch (Exception ex) {
+                log.warn("股票行情同步失败，productId={}, symbol={}, reason={}",
+                    product.getId(), product.getSymbol(), ex.getMessage());
+            }
+        }
+
+        accountUsers.forEach((targetAccountId, targetUserId) -> syncInvestmentAccountBalance(targetUserId, targetAccountId));
+        log.info("股票行情同步完成：{} 个股票产品，{} 条持仓已更新，userId={}, accountId={}",
+            syncedProducts, syncedPositions, userId, accountId);
+        return syncedPositions;
     }
 
     public int settlePendingFundTradesAt(LocalDateTime settlementDateTime) {
@@ -3668,12 +3774,27 @@ public class InvestmentService {
             .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS));
     }
 
+    private List<InvestmentPositionEntity> listActiveStockPositions() {
+        return positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS));
+    }
+
     private Map<Long, InvestmentProductEntity> loadFundProducts(List<InvestmentPositionEntity> positions) {
         return productMapper.selectByIds(
                 positions.stream().map(InvestmentPositionEntity::getProductId).collect(Collectors.toSet())
             ).stream()
             .filter(product -> product != null
                 && FUND_PRODUCT_TYPE.equals(product.getProductType())
+                && StringUtils.hasText(product.getSymbol()))
+            .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
+    }
+
+    private Map<Long, InvestmentProductEntity> loadStockProducts(List<InvestmentPositionEntity> positions) {
+        return productMapper.selectByIds(
+                positions.stream().map(InvestmentPositionEntity::getProductId).collect(Collectors.toSet())
+            ).stream()
+            .filter(product -> product != null
+                && STOCK_PRODUCT_TYPE.equals(product.getProductType())
                 && StringUtils.hasText(product.getSymbol()))
             .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
     }
@@ -3738,6 +3859,26 @@ public class InvestmentService {
             productMapper.updateById(product);
         }
         return changedCount;
+    }
+
+    private int syncStockQuoteForProduct(
+        InvestmentProductEntity product,
+        List<InvestmentPositionEntity> positions,
+        Map<Long, Long> accountUsers
+    ) {
+        StockQuoteSnapshot snapshot = fetchAndSaveLatestStockQuote(product);
+        if (snapshot == null) {
+            return 0;
+        }
+
+        int updatedCount = 0;
+        for (InvestmentPositionEntity position : positions) {
+            applyStockQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
+            positionMapper.updateById(position);
+            accountUsers.put(position.getAccountId(), position.getUserId());
+            updatedCount++;
+        }
+        return updatedCount;
     }
 
     private int settlePendingFundTradesForProduct(
@@ -3894,6 +4035,109 @@ public class InvestmentService {
     }
 
     private void applyFundQuoteToPosition(
+        InvestmentPositionEntity position,
+        BigDecimal latestPrice,
+        BigDecimal preClosePrice,
+        LocalDateTime syncedAt
+    ) {
+        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal marketValue = holdingQuantity.multiply(latestPrice).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal previousMarketValue = preClosePrice == null
+            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+            : holdingQuantity.multiply(preClosePrice).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal dayProfit = preClosePrice == null
+            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+            : marketValue.subtract(previousMarketValue).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
+
+        position.setCurrentPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
+        position.setMarketValue(marketValue);
+        position.setDayProfit(dayProfit);
+        position.setDayProfitRate(rate(dayProfit, previousMarketValue));
+        position.setHoldingProfit(holdingProfit);
+        position.setHoldingProfitRate(rate(holdingProfit, costAmount));
+        position.setLastSyncedAt(syncedAt);
+    }
+
+    private StockQuoteSnapshot fetchAndSaveLatestStockQuote(InvestmentProductEntity product) {
+        String symbol = toTencentSymbol(product.getSymbol(), product.getExchangeCode());
+        JsonNode quote = fetchTencentQuoteFields(symbol);
+        BigDecimal latestPrice = safeDecimal(quote.path("price").asText(null));
+        BigDecimal preClosePrice = safeDecimal(quote.path("prevClose").asText(null));
+        if (latestPrice == null || latestPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            log.warn("股票行情同步跳过：symbol={} 未返回有效最新价", product.getSymbol());
+            return null;
+        }
+
+        LocalDate quoteDate = resolveStockQuoteDate(quote.path("timeRaw").asText(null));
+        if (quoteDate == null) {
+            quoteDate = LocalDate.now();
+        }
+        LocalDateTime syncedAt = LocalDateTime.now();
+        BigDecimal normalizedPreClosePrice = preClosePrice != null && preClosePrice.compareTo(BigDecimal.ZERO) > 0
+            ? preClosePrice.setScale(6, RoundingMode.HALF_UP)
+            : null;
+        BigDecimal changeAmount = normalizedPreClosePrice == null
+            ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
+            : latestPrice.subtract(normalizedPreClosePrice).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal changeRate = rate(changeAmount, normalizedPreClosePrice);
+
+        InvestmentPriceQuoteEntity existingQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
+            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
+            .eq(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
+            .last("LIMIT 1"));
+
+        saveStockQuote(
+            product.getId(),
+            existingQuote,
+            quoteDate,
+            syncedAt,
+            safeDecimal(quote.path("open").asText(null)),
+            safeDecimal(quote.path("high").asText(null)),
+            safeDecimal(quote.path("low").asText(null)),
+            latestPrice,
+            normalizedPreClosePrice,
+            changeAmount,
+            changeRate
+        );
+        return new StockQuoteSnapshot(quoteDate, latestPrice, normalizedPreClosePrice, syncedAt);
+    }
+
+    private void saveStockQuote(
+        Long productId,
+        InvestmentPriceQuoteEntity existingQuote,
+        LocalDate quoteDate,
+        LocalDateTime syncedAt,
+        BigDecimal openPrice,
+        BigDecimal highPrice,
+        BigDecimal lowPrice,
+        BigDecimal latestPrice,
+        BigDecimal preClosePrice,
+        BigDecimal changeAmount,
+        BigDecimal changeRate
+    ) {
+        InvestmentPriceQuoteEntity quote = existingQuote == null ? new InvestmentPriceQuoteEntity() : existingQuote;
+        quote.setProductId(productId);
+        quote.setQuoteDate(quoteDate);
+        quote.setQuoteTime(syncedAt);
+        quote.setOpenPrice(scaleStockQuoteValue(openPrice));
+        quote.setHighPrice(scaleStockQuoteValue(highPrice));
+        quote.setLowPrice(scaleStockQuoteValue(lowPrice));
+        quote.setClosePrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
+        quote.setLatestPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
+        quote.setPreClosePrice(preClosePrice == null ? null : preClosePrice.setScale(6, RoundingMode.HALF_UP));
+        quote.setChangeAmount(changeAmount.setScale(6, RoundingMode.HALF_UP));
+        quote.setChangeRate(changeRate.setScale(4, RoundingMode.HALF_UP));
+        quote.setSource(STOCK_QUOTE_SOURCE);
+        if (existingQuote == null) {
+            priceQuoteMapper.insert(quote);
+        } else {
+            priceQuoteMapper.updateById(quote);
+        }
+    }
+
+    private void applyStockQuoteToPosition(
         InvestmentPositionEntity position,
         BigDecimal latestPrice,
         BigDecimal preClosePrice,
@@ -5317,6 +5561,18 @@ public class InvestmentService {
         }
         return raw.substring(0, 4) + "-" + raw.substring(4, 6) + "-" + raw.substring(6, 8)
             + " " + raw.substring(8, 10) + ":" + raw.substring(10, 12) + ":" + raw.substring(12, 14);
+    }
+
+    private LocalDate resolveStockQuoteDate(String raw) {
+        if (!StringUtils.hasText(raw) || raw.length() < 8) {
+            return null;
+        }
+        String normalized = raw.substring(0, 4) + "-" + raw.substring(4, 6) + "-" + raw.substring(6, 8);
+        return safeDate(normalized);
+    }
+
+    private BigDecimal scaleStockQuoteValue(BigDecimal value) {
+        return value == null ? null : value.setScale(6, RoundingMode.HALF_UP);
     }
 
     private String formatPositionSyncTime(LocalDateTime value) {

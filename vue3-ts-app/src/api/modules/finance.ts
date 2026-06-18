@@ -946,12 +946,16 @@ export interface InvestmentAssetDetail {
   description?: string | null
 }
 
-export interface InvestmentFundSyncSummary {
+export interface InvestmentQuoteSyncSummary {
   trigger: string
+  userId?: number | null
+  accountId?: number | null
   startedAt: string
   finishedAt: string
   durationMs: number
   syncedPositions: number
+  syncedFundPositions?: number
+  syncedStockPositions?: number
   syncedDividendPlans: number
   settledCount: number
 }
@@ -1509,11 +1513,12 @@ export function getInvestmentPositionDetail(id: number) {
   return requestGet<InvestmentAssetDetail>(financeRequest, `/api/finance/investments/positions/${id}/detail`)
 }
 
-export function runInvestmentFundSyncTask() {
-  return requestPost<InvestmentFundSyncSummary, undefined>(
+export function runInvestmentQuoteSyncTask(params?: { userId?: number; accountId?: number }) {
+  return requestPost<InvestmentQuoteSyncSummary, undefined>(
     financeRequest,
-    '/api/finance/investments/tasks/fund-sync',
+    '/api/finance/investments/tasks/quote-sync',
     undefined,
+    { params },
   )
 }
 

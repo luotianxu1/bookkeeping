@@ -106,10 +106,20 @@ public class InvestmentController {
         return Result.ok(investmentService.fundProfitPage(userId, accountId, view, anchor, selected));
     }
 
-    @PostMapping("/tasks/fund-sync")
-    @Operation(summary = "手动执行基金夜间同步任务")
-    public Result<Map<String, Object>> runFundSyncTask() {
-        return Result.ok(investmentService.runFundSyncCycle("manual-api"));
+    @PostMapping("/tasks/quote-sync")
+    @Operation(summary = "手动执行投资行情同步任务")
+    public Result<Map<String, Object>> runInvestmentSyncTask(
+        @RequestParam(name = "userId", required = false) Long userId,
+        @RequestParam(name = "accountId", required = false) Long accountId
+    ) {
+        investmentService.runInvestmentSyncCycleAsync("manual-api", userId, accountId);
+        return Result.ok(Map.of(
+            "status", "accepted",
+            "message", "投资行情同步任务已提交，请稍后刷新页面",
+            "userId", userId,
+            "accountId", accountId,
+            "submittedAt", java.time.LocalDateTime.now()
+        ));
     }
 
     @GetMapping("/positions")

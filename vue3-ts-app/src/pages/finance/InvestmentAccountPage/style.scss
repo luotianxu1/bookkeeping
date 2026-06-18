@@ -578,10 +578,12 @@
 }
 
 .holding-panel-field {
+  flex: 1;
   gap: 2px;
 }
 
 .holding-panel-field.is-end {
+  flex: 0 0 auto;
   justify-items: end;
   text-align: right;
 }
@@ -603,6 +605,31 @@
   width: 100%;
   height: var(--space-1);
   background: var(--color-border-soft);
+}
+
+.holding-summary-row {
+  display: grid;
+  gap: 8px;
+}
+
+.holding-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.holding-summary-item,
+.holding-summary-allocation {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.holding-summary-item > span {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .holding-pending-amount {
@@ -679,40 +706,51 @@
 }
 
 .holding-panel-field :deep(.holding-pnl-value.amount-text--positive),
-.holding-panel-field :deep(.holding-pnl-rate.amount-text--positive) {
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--positive),
+.holding-summary-item :deep(.holding-pnl-value.amount-text--positive),
+.holding-summary-item :deep(.holding-pnl-rate.amount-text--positive) {
   color: var(--color-danger);
 }
 
-.holding-panel-field :deep(.holding-pnl-rate.amount-text--positive) {
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--positive),
+.holding-summary-item :deep(.holding-pnl-rate.amount-text--positive) {
   background: rgba(220, 38, 38, 0.12);
 }
 
 .holding-panel-field :deep(.holding-pnl-value.amount-text--negative),
-.holding-panel-field :deep(.holding-pnl-rate.amount-text--negative) {
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--negative),
+.holding-summary-item :deep(.holding-pnl-value.amount-text--negative),
+.holding-summary-item :deep(.holding-pnl-rate.amount-text--negative) {
   color: var(--color-success);
 }
 
-.holding-panel-field :deep(.holding-pnl-rate.amount-text--negative) {
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--negative),
+.holding-summary-item :deep(.holding-pnl-rate.amount-text--negative) {
   background: var(--color-bg-success-soft);
 }
 
 .holding-panel-field :deep(.holding-pnl-value.amount-text--neutral),
-.holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral) {
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral),
+.holding-summary-item :deep(.holding-pnl-value.amount-text--neutral),
+.holding-summary-item :deep(.holding-pnl-rate.amount-text--neutral) {
   color: var(--color-text-primary);
 }
 
-.holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral) {
+.holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral),
+.holding-summary-item :deep(.holding-pnl-rate.amount-text--neutral) {
   background: var(--color-bg-neutral-soft);
 }
 
 .holding-allocation {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-6);
 }
 
 .holding-allocation-track {
-  width: 52px;
+  flex: 1;
+  min-width: 0;
   height: 6px;
   border-radius: var(--radius-pill);
   background: var(--color-bg-soft-2);
@@ -810,11 +848,13 @@
   color: #f8fbff;
 }
 
-:global(:root[data-theme='dark']) .holding-panel-field :deep(.holding-pnl-rate.amount-text--positive) {
+:global(:root[data-theme='dark']) .holding-panel-field :deep(.holding-pnl-rate.amount-text--positive),
+:global(:root[data-theme='dark']) .holding-summary-item :deep(.holding-pnl-rate.amount-text--positive) {
   background: rgba(220, 38, 38, 0.18);
 }
 
-:global(:root[data-theme='dark']) .holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral) {
+:global(:root[data-theme='dark']) .holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral),
+:global(:root[data-theme='dark']) .holding-summary-item :deep(.holding-pnl-rate.amount-text--neutral) {
   background: #182233;
   color: #cbd5e1;
 }

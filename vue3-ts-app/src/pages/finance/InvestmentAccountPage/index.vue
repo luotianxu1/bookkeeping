@@ -18,7 +18,7 @@ import {
   getInvestmentProducts,
   getInvestmentSummary,
   getInvestmentTransactions,
-  runInvestmentFundSyncTask,
+  runInvestmentQuoteSyncTask,
   type Account,
   type InvestmentAutoInvestPlan,
   type InvestmentPosition,
@@ -59,7 +59,7 @@ const summary = ref<InvestmentSummary>({
 const positions = ref<InvestmentPosition[]>([])
 const transactions = ref<InvestmentTransaction[]>([])
 const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
-const isRefreshingFunds = ref(false)
+const isRefreshingQuotes = ref(false)
 
 const addAssetKeyword = ref('')
 const addAssetName = ref('')
@@ -77,7 +77,6 @@ const selectedAddAssetResultId = ref('')
 const productLookupMessage = ref('')
 let isFillingProduct = false
 let refreshVisibilityTimer: number | null = null
-
 const fundingAccountOptions = computed(() =>
   fundingAccounts.value.map((account) => ({
     label: `${account.name}（余额 ${formatAmount(account.currentBalance)}）`,
@@ -122,8 +121,10 @@ const autoInvestPositionIds = computed(() => new Set(
     .filter((plan) => plan.status !== 'cancelled')
     .map((plan) => plan.positionId),
 ))
-const hasFundHoldings = computed(() => positions.value.some((item) => item.productType === 'fund'))
-const shouldShowFundRefreshButton = computed(() => hasFundHoldings.value && isAfterFundRefreshTime(currentTime.value))
+const hasRefreshableHoldings = computed(() =>
+  positions.value.some((item) => item.productType === 'fund' || item.productType === 'stock'),
+)
+const shouldShowQuoteRefreshButton = computed(() => hasRefreshableHoldings.value && isAfterQuoteRefreshTime(currentTime.value))
 
 const totalSummaryProfit = computed(() => Number(summary.value.cumulativeProfit ?? 0) + Number(summary.value.holdingProfit ?? 0))
 const totalSummaryProfitRate = computed(() => {
@@ -257,18 +258,28 @@ async function loadInvestmentData() {
   }
 }
 
-async function refreshFundData() {
-  if (!shouldShowFundRefreshButton.value || isRefreshingFunds.value) {
+async function refreshQuoteData() {
+  if (!shouldShowQuoteRefreshButton.value || isRefreshingQuotes.value) {
+    return
+  }
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser || !selectedAccountId.value) {
+    showFeedback('当前投资账户不存在', 'error')
     return
   }
 
-  isRefreshingFunds.value = true
+  isRefreshingQuotes.value = true
   try {
-    await runInvestmentFundSyncTask()
-  } catch {
-    // Intentionally ignore the task result to keep the frontend unchanged.
+    await runInvestmentQuoteSyncTask({
+      userId: currentUser.id,
+      accountId: selectedAccountId.value,
+    })
+    showFeedback('已提交刷新任务，请稍后刷新页面', 'success')
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '投资持仓刷新失败'
+    showFeedback(message, 'error')
   } finally {
-    isRefreshingFunds.value = false
+    isRefreshingQuotes.value = false
   }
 }
 
@@ -412,10 +423,15 @@ async function lookupProductByKeyword(keyword = addAssetKeyword.value) {
   formError.value = ''
 
   try {
-    const products = await getInvestmentProducts({
+    let products = await getInvestmentProducts({
       keyword: searchKeyword,
       productType: addAssetCategory.value,
     })
+    if (products.length === 0) {
+      products = await getInvestmentProducts({
+        keyword: searchKeyword,
+      })
+    }
     const normalizedKeyword = searchKeyword.toUpperCase()
     const matchedProducts = products.slice().sort((left, right) => {
       const leftScore = getProductMatchScore(left, searchKeyword, normalizedKeyword)
@@ -544,7 +560,7 @@ function resetAddForm() {
   addAssetName.value = ''
   addAssetSymbol.value = ''
   addAssetMarket.value = ''
-  addAssetCategory.value = 'fund'
+  addAssetCategory.value = activeTab.value === 'A股' ? 'stock' : 'fund'
   addAssetFundingAccount.value = ''
   addAssetQuantity.value = ''
   addAssetAmount.value = ''
@@ -567,6 +583,12 @@ function formatCurrency(value: number, digits = 2) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   }).format(Math.abs(numeric))}`
+}
+
+function isAfterQuoteRefreshTime(date: Date) {
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  return hours > 21 || (hours === 21 && minutes >= 30)
 }
 
 function formatQuantity(value: number, unitName?: string | null) {
@@ -656,33 +678,30 @@ function getHoldingSyncText(position: InvestmentPosition) {
   }
   const date = new Date(syncSource.value)
   if (Number.isNaN(date.getTime())) {
-    return `${syncSource.label} ${syncSource.value}`
+    return syncSource.value
   }
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   const hour = String(date.getHours()).padStart(2, '0')
   const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${syncSource.label} ${month}-${day} ${hour}:${minute}`
+  return `${month}-${day} ${hour}:${minute}`
 }
 
 function resolveHoldingSyncTime(position: InvestmentPosition) {
   if (position.productType === 'fund' && position.lastSyncedAt) {
     return {
-      label: '净值更新',
       value: position.lastSyncedAt,
     }
   }
 
   if (position.productType === 'fund' && position.subscriptionConfirmedAt) {
     return {
-      label: '净值确认',
       value: position.subscriptionConfirmedAt,
     }
   }
 
   if (position.lastSyncedAt) {
     return {
-      label: '更新',
       value: position.lastSyncedAt,
     }
   }
@@ -781,6 +800,24 @@ function getHoldingBottomRate(position: InvestmentPosition) {
   return isPendingSubscription(position) ? '待确认' : `${formatAmount(getHoldingTotalProfitRate(position))}%`
 }
 
+function getHoldingProfitLabel(position: InvestmentPosition) {
+  return isPendingSubscription(position) ? '持仓收益' : '持仓收益'
+}
+
+function getHoldingProfitValue(position: InvestmentPosition) {
+  if (isPendingSubscription(position)) {
+    return '--'
+  }
+  return formatCurrency(position.holdingProfit)
+}
+
+function getHoldingProfitRate(position: InvestmentPosition) {
+  if (isPendingSubscription(position)) {
+    return '待确认'
+  }
+  return `${formatAmount(position.holdingProfitRate)}%`
+}
+
 function getHoldingPendingAmount(position: InvestmentPosition) {
   return pendingAmountsByPositionId.value.get(position.id) ?? 0
 }
@@ -851,12 +888,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
-function isAfterFundRefreshTime(date: Date) {
-  const hours = date.getHours()
-  const minutes = date.getMinutes()
-  return hours > 21 || (hours === 21 && minutes >= 30)
-}
-
 </script>
 
 <template>
@@ -869,14 +900,14 @@ function isAfterFundRefreshTime(date: Date) {
 
     <PageHeader title="投资详情" back-to="/finance/accounts/investment" back-label="返回投资账户">
       <CommonButton
-        v-if="shouldShowFundRefreshButton"
+        v-if="shouldShowQuoteRefreshButton"
         class="investment-account-header-refresh"
         variant="secondary"
         size="sm"
-        aria-label="刷新所有基金数据"
-        @click="refreshFundData"
+        aria-label="刷新投资持仓数据"
+        @click="refreshQuoteData"
     >
-        刷新基金
+        刷新持仓
       </CommonButton>
     </PageHeader>
 
@@ -994,16 +1025,26 @@ function isAfterFundRefreshTime(date: Date) {
 
             <div class="holding-divider"></div>
 
-            <div class="holding-panel-row">
-              <div class="holding-panel-field">
-                <span>{{ getHoldingBottomLabel(holding) }}</span>
-                <div class="holding-pnl-line">
-                  <AmountText tag="strong" class="holding-pnl-value" :value="getHoldingBottomValue(holding)" />
-                  <AmountText tag="span" class="holding-pnl-rate" :value="getHoldingBottomRate(holding)" />
+            <div class="holding-summary-row">
+              <div class="holding-summary-metrics">
+                <div class="holding-summary-item">
+                  <span>{{ getHoldingBottomLabel(holding) }}</span>
+                  <div class="holding-pnl-line">
+                    <AmountText tag="strong" class="holding-pnl-value" :value="getHoldingBottomValue(holding)" />
+                    <AmountText tag="span" class="holding-pnl-rate" :value="getHoldingBottomRate(holding)" />
+                  </div>
+                </div>
+
+                <div class="holding-summary-item">
+                  <span>{{ getHoldingProfitLabel(holding) }}</span>
+                  <div class="holding-pnl-line">
+                    <AmountText tag="strong" class="holding-pnl-value" :value="getHoldingProfitValue(holding)" />
+                    <AmountText tag="span" class="holding-pnl-rate" :value="getHoldingProfitRate(holding)" />
+                  </div>
                 </div>
               </div>
-              <div class="holding-panel-field is-end">
-                <span>仓位占比</span>
+
+              <div class="holding-summary-allocation">
                 <div class="holding-allocation">
                   <div class="holding-allocation-track">
                     <span :style="{ width: `${getAllocationPercent(holding)}%` }"></span>
