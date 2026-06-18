@@ -4,7 +4,9 @@ import type { AppSection } from '@/types/navigation'
 import { getStoredToken } from '@/utils/auth-token'
 import { showAuthPrompt } from '@/utils/auth-prompt'
 import { financeRoutes } from './modules/finance'
+import { foodRoutes } from './modules/food'
 import { mainRoutes } from './modules/main'
+import { toolsRoutes } from './modules/tools'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -21,6 +23,8 @@ export const router = createRouter({
       redirect: () => (getStoredToken() ? '/finance' : '/login'),
     },
     ...financeRoutes,
+    ...foodRoutes,
+    ...toolsRoutes,
     ...mainRoutes,
   ],
 })
