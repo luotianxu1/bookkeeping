@@ -32,8 +32,7 @@ public class GoldPriceService {
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final String exchangeRateApiUrl;
-    private final String cngoldRealtimeApiUrl;
-    private final String goldChartApiUrl;
+    private final String jijinhaoApiBaseUrl;
 
     private CachedGoldPrice cachedCurrentPrice;
     private final Map<String, CachedChartPoints> cachedChartPoints = new HashMap<>();
@@ -41,8 +40,7 @@ public class GoldPriceService {
     public GoldPriceService(
         ObjectMapper objectMapper,
         @Value("${finance.gold-price.exchange-rate-api-url:https://open.er-api.com/v6/latest/USD}") String exchangeRateApiUrl,
-        @Value("${finance.gold-price.cngold-realtime-api-url:https://api.jijinhao.com/quoteCenter/realTime.htm}") String cngoldRealtimeApiUrl,
-        @Value("${finance.gold-price.gold-chart-api-url:https://query1.finance.yahoo.com/v8/finance/chart/GC=F}") String goldChartApiUrl
+        @Value("${finance.gold-price.cngold-api-url:https://api.jijinhao.com}") String cngoldApiUrl
     ) {
         this.objectMapper = objectMapper;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
@@ -52,8 +50,8 @@ public class GoldPriceService {
             .requestFactory(requestFactory)
             .build();
         this.exchangeRateApiUrl = exchangeRateApiUrl;
-        this.cngoldRealtimeApiUrl = cngoldRealtimeApiUrl;
-        this.goldChartApiUrl = goldChartApiUrl;
+        // Keep the existing config key for backward compatibility.
+        this.jijinhaoApiBaseUrl = cngoldApiUrl;
     }
 
     public synchronized GoldPriceResponse getGoldPrice(String range) {
@@ -94,7 +92,7 @@ public class GoldPriceService {
             return copyResponseWithoutChart(cachedCurrentPrice.response());
         }
 
-        JsonNode quotes = fetchCngoldQuotes(cngoldCodes());
+        JsonNode quotes = fetchJijinhaoQuotes(jijinhaoQuoteCodes());
         GoldPriceResponse response = buildCurrentResponse(
             fetchUsdCny(),
             quotes
@@ -172,7 +170,7 @@ public class GoldPriceService {
         response.setJewelryPrices(fetchJewelryPrices(quotes));
         response.setChartPoints(List.of());
         response.setUpdatedAt(updatedAt);
-        response.setSource("金投网实时行情 + open.er-api 汇率换算");
+        response.setSource("金投网行情 + open.er-api 汇率换算");
         return response;
     }
 
@@ -184,9 +182,9 @@ public class GoldPriceService {
         return objectMapper.readTree(body);
     }
 
-    private JsonNode fetchCngoldQuotes(String codes) throws Exception {
+    private JsonNode fetchJijinhaoQuotes(String codes) throws Exception {
         String body = restClient.get()
-            .uri(cngoldRealtimeApiUrl + "?codes=" + codes)
+            .uri(jijinhaoApiBaseUrl + "/quoteCenter/realTime.htm?codes=" + codes)
             .header("Referer", "https://quote.cngold.org/gjs/gjhj_xhhj.html?key=au")
             .header("User-Agent", "Mozilla/5.0")
             .retrieve()
@@ -206,7 +204,7 @@ public class GoldPriceService {
         throw new IllegalStateException("金投网行情缺少黄金报价数据");
     }
 
-    private String cngoldCodes() {
+    private String jijinhaoQuoteCodes() {
         return "JO_92233,JO_42657,JO_42660,JO_42625,JO_42634,JO_42653,JO_42646,JO_52678,JO_42638";
     }
 
@@ -256,19 +254,19 @@ public class GoldPriceService {
     }
 
     private List<GoldPriceResponse.JewelryGoldPrice> fetchJewelryPrices(JsonNode quotes) {
-        List<CngoldJewelryCode> codes = List.of(
-            new CngoldJewelryCode("老凤祥", "JO_42657"),
-            new CngoldJewelryCode("周大福", "JO_42660"),
-            new CngoldJewelryCode("周生生", "JO_42625"),
-            new CngoldJewelryCode("老庙黄金", "JO_42634"),
-            new CngoldJewelryCode("周六福", "JO_42653"),
-            new CngoldJewelryCode("六福珠宝", "JO_42646"),
-            new CngoldJewelryCode("周大生", "JO_52678"),
-            new CngoldJewelryCode("菜百", "JO_42638")
+        List<JewelryQuoteCode> codes = List.of(
+            new JewelryQuoteCode("老凤祥", "JO_42657"),
+            new JewelryQuoteCode("周大福", "JO_42660"),
+            new JewelryQuoteCode("周生生", "JO_42625"),
+            new JewelryQuoteCode("老庙黄金", "JO_42634"),
+            new JewelryQuoteCode("周六福", "JO_42653"),
+            new JewelryQuoteCode("六福珠宝", "JO_42646"),
+            new JewelryQuoteCode("周大生", "JO_52678"),
+            new JewelryQuoteCode("菜百", "JO_42638")
         );
 
         List<GoldPriceResponse.JewelryGoldPrice> prices = new ArrayList<>();
-        for (CngoldJewelryCode code : codes) {
+        for (JewelryQuoteCode code : codes) {
             JsonNode quote = quotes.path(code.code());
             BigDecimal price = firstDecimal(quote, "q63", "q1");
             if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
@@ -302,35 +300,35 @@ public class GoldPriceService {
     }
 
     private List<GoldPriceResponse.GoldChartPoint> fetchChartPoints(String range) {
-        List<GoldPriceResponse.GoldChartPoint> cngoldPoints = fetchUnifiedCngoldPoints(range);
-        if (!cngoldPoints.isEmpty()) {
-            return compactChartPoints(cngoldPoints, range);
+        List<GoldPriceResponse.GoldChartPoint> providerPoints = fetchUnifiedJijinhaoPoints(range);
+        if (!providerPoints.isEmpty()) {
+            return compactChartPoints(providerPoints, range);
         }
 
         return List.of();
     }
 
-    private List<GoldPriceResponse.GoldChartPoint> fetchUnifiedCngoldPoints(String range) {
+    private List<GoldPriceResponse.GoldChartPoint> fetchUnifiedJijinhaoPoints(String range) {
         try {
             return switch (range) {
-                case "1d" -> fetchCngoldHistoryPoints(6, range);
-                case "7d" -> fetchCngoldHistoryPoints(2, range);
-                case "30d" -> fetchCngoldHistoryPoints(3, range);
-                case "1y" -> fetchCngoldHistoryPoints(3, range, 400);
-                default -> fetchCngoldHistoryPoints(6, range);
+                case "1d" -> fetchJijinhaoHistoryPoints(6, range);
+                case "7d" -> fetchJijinhaoHistoryPoints(2, range);
+                case "30d" -> fetchJijinhaoHistoryPoints(3, range);
+                case "1y" -> fetchJijinhaoHistoryPoints(3, range, 400);
+                default -> fetchJijinhaoHistoryPoints(6, range);
             };
         } catch (Exception ex) {
             return List.of();
         }
     }
 
-    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldHistoryPoints(int style, String range) {
-        return fetchCngoldHistoryPoints(style, range, 200);
+    private List<GoldPriceResponse.GoldChartPoint> fetchJijinhaoHistoryPoints(int style, String range) {
+        return fetchJijinhaoHistoryPoints(style, range, 200);
     }
 
-    private List<GoldPriceResponse.GoldChartPoint> fetchCngoldHistoryPoints(int style, String range, int pageSize) {
+    private List<GoldPriceResponse.GoldChartPoint> fetchJijinhaoHistoryPoints(int style, String range, int pageSize) {
         try {
-            String body = fetchCngoldText(cngoldChartUrl("history.htm") + "?code=JO_92233&style=" + style + "&pageSize=" + pageSize);
+            String body = fetchJijinhaoText(jijinhaoChartUrl("history.htm") + "?code=JO_92233&style=" + style + "&pageSize=" + pageSize);
             JsonNode root = extractJavascriptObject(body, "KLC_KL");
             JsonNode data = root.path("data");
             if (!data.isArray()) {
@@ -392,21 +390,11 @@ public class GoldPriceService {
         return result;
     }
 
-    private String cngoldChartUrl(String endpoint) {
-        int quoteCenterIndex = cngoldRealtimeApiUrl.indexOf("/quoteCenter/");
-        if (quoteCenterIndex >= 0) {
-            return cngoldRealtimeApiUrl.substring(0, quoteCenterIndex) + "/sQuoteCenter/" + endpoint;
-        }
-
-        int sQuoteCenterIndex = cngoldRealtimeApiUrl.indexOf("/sQuoteCenter/");
-        if (sQuoteCenterIndex >= 0) {
-            return cngoldRealtimeApiUrl.substring(0, sQuoteCenterIndex) + "/sQuoteCenter/" + endpoint;
-        }
-
-        return "https://api.jijinhao.com/sQuoteCenter/" + endpoint;
+    private String jijinhaoChartUrl(String endpoint) {
+        return jijinhaoApiBaseUrl + "/sQuoteCenter/" + endpoint;
     }
 
-    private String fetchCngoldText(String url) {
+    private String fetchJijinhaoText(String url) {
         return restClient.get()
             .uri(url)
             .header("Referer", "https://quote.cngold.org/gjs/gjhj_xhhj.html?key=au")
@@ -553,7 +541,7 @@ public class GoldPriceService {
         return "1d";
     }
 
-    private record CngoldJewelryCode(String brandName, String code) {
+    private record JewelryQuoteCode(String brandName, String code) {
     }
 
     private record CachedGoldPrice(GoldPriceResponse response, long cachedAt) {
