@@ -23,13 +23,18 @@ import {
   type DebtAccountSummary,
   type DebtDirection,
   type DebtRecord,
+  type DebtRecordType,
 } from '@/api/modules/finance'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
-const DIRECTION_OPTIONS = [
-  { label: '借入', value: 'payable' },
-  { label: '借出', value: 'receivable' },
+type DebtRecordKind = 'payable-borrow' | 'receivable-borrow' | 'payable-repayment' | 'receivable-repayment'
+
+const RECORD_KIND_OPTIONS = [
+  { label: '借入', value: 'payable-borrow' },
+  { label: '借出', value: 'receivable-borrow' },
+  { label: '还款', value: 'payable-repayment' },
+  { label: '收款', value: 'receivable-repayment' },
 ]
 
 const route = useRoute()
@@ -62,8 +67,9 @@ const deleteError = ref('')
 const accountDeleteError = ref('')
 const editingRecord = ref<DebtRecord | null>(null)
 const deletingRecord = ref<DebtRecord | null>(null)
+const offsetSourceRecord = ref<DebtRecord | null>(null)
 const recordFundingAccountId = ref('')
-const recordDirection = ref<DebtDirection>('payable')
+const recordKind = ref<DebtRecordKind>('payable-borrow')
 const recordAmount = ref('')
 const recordOccurredAt = ref('')
 const recordRemark = ref('')
@@ -85,10 +91,41 @@ const detailSubtitle = computed(() => {
 const detailNote = computed(() => account.value?.remark?.trim() || relatedContact.value?.remark?.trim() || '')
 const summaryAmountText = computed(() => formatSignedCurrency(Number(account.value?.currentBalance ?? 0)))
 const summarySubText = computed(() => `待还 ${formatCurrency(summary.value.payableTotal)} · 待收 ${formatCurrency(summary.value.receivableTotal)}`)
-const payableCount = computed(() => records.value.filter((record) => record.direction === 'payable').length)
-const receivableCount = computed(() => records.value.filter((record) => record.direction === 'receivable').length)
+const borrowInCount = computed(() => records.value.filter((record) => getDebtRecordActionKey(record) === 'borrow-in').length)
+const borrowOutCount = computed(() => records.value.filter((record) => getDebtRecordActionKey(record) === 'borrow-out').length)
 const latestRecordText = computed(() => records.value[0] ? formatDate(records.value[0].occurredAt) : '暂无更新')
-const recordModalTitle = computed(() => editingRecord.value ? '修改债务记录' : '新增债务记录')
+const recordModalTitle = computed(() => {
+  if (editingRecord.value) {
+    return '修改债务记录'
+  }
+  if (offsetSourceRecord.value) {
+    return formatOffsetActionLabel(offsetSourceRecord.value)
+  }
+  return '新增债务记录'
+})
+const recordSubmitLabel = computed(() => {
+  if (editingRecord.value) {
+    return '保存修改'
+  }
+  if (offsetSourceRecord.value) {
+    return offsetSourceRecord.value.direction === 'receivable' ? '确认收款' : '确认还款'
+  }
+  return '保存记录'
+})
+const recordFormHint = computed(() => {
+  if (!offsetSourceRecord.value) {
+    return ''
+  }
+  const actionLabel = offsetSourceRecord.value.direction === 'receivable' ? '收款' : '还款'
+  const amountText = formatCurrency(Number(offsetSourceRecord.value.amount ?? 0))
+  return `正在登记“${formatRecordDirectionLabel(offsetSourceRecord.value.direction)} ${amountText}”的${actionLabel}记录，可修改金额以支持部分结清。`
+})
+const offsetRecordKindLabel = computed(() => {
+  if (!offsetSourceRecord.value) {
+    return ''
+  }
+  return formatOffsetActionLabel(offsetSourceRecord.value)
+})
 const fundingAccountOptions = computed(() => [
   {
     label: '不关联现金账户',
@@ -167,17 +204,35 @@ function openAddRecordModal() {
     return
   }
   editingRecord.value = null
+  offsetSourceRecord.value = null
   resetRecordForm()
   showRecordModal.value = true
 }
 
 function openEditRecordModal(record: DebtRecord) {
   editingRecord.value = record
+  offsetSourceRecord.value = null
   recordFundingAccountId.value = record.fundingAccountId ? String(record.fundingAccountId) : ''
-  recordDirection.value = record.direction
+  recordKind.value = getDebtRecordKind(record.direction, record.recordType)
   recordAmount.value = String(Number(record.amount ?? 0))
   recordOccurredAt.value = toDateTimeLocalValue(record.occurredAt)
   recordRemark.value = record.remark ?? ''
+  recordFormError.value = ''
+  showRecordModal.value = true
+}
+
+function openOffsetRecordModal(record: DebtRecord) {
+  if (!account.value) {
+    showFeedback('当前债务账户不存在', 'error')
+    return
+  }
+  editingRecord.value = null
+  offsetSourceRecord.value = record
+  recordFundingAccountId.value = record.fundingAccountId ? String(record.fundingAccountId) : ''
+  recordKind.value = record.direction === 'receivable' ? 'receivable-repayment' : 'payable-repayment'
+  recordAmount.value = String(Number(record.amount ?? 0))
+  recordOccurredAt.value = toDateTimeLocalValue(new Date().toISOString())
+  recordRemark.value = buildOffsetRecordRemark(record)
   recordFormError.value = ''
   showRecordModal.value = true
 }
@@ -188,12 +243,13 @@ function closeRecordModal(force = false) {
   }
   showRecordModal.value = false
   editingRecord.value = null
+  offsetSourceRecord.value = null
   resetRecordForm()
 }
 
 function resetRecordForm() {
   recordFundingAccountId.value = ''
-  recordDirection.value = 'payable'
+  recordKind.value = 'payable-borrow'
   recordAmount.value = ''
   recordOccurredAt.value = toDateTimeLocalValue(new Date().toISOString())
   recordRemark.value = ''
@@ -245,11 +301,6 @@ async function saveRecord() {
     return
   }
 
-  if (!recordDirection.value) {
-    recordFormError.value = '请选择借入或借出'
-    return
-  }
-
   if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
     recordFormError.value = '请输入有效的债务金额'
     return
@@ -263,7 +314,8 @@ async function saveRecord() {
       userId: currentUser.id,
       accountId: account.value.id,
       fundingAccountId: normalizedFundingAccountId,
-      direction: recordDirection.value,
+      direction: getDebtRecordDirection(recordKind.value),
+      recordType: getDebtRecordType(recordKind.value),
       amount: normalizedAmount,
       currencyCode: account.value.currencyCode || 'CNY',
       remark: recordRemark.value.trim() || null,
@@ -365,12 +417,68 @@ function formatRecordDirectionLabel(direction: DebtDirection) {
 }
 
 function formatRecordAmount(record: DebtRecord) {
-  const amountText = formatCurrency(Number(record.amount ?? 0))
-  return `${record.direction === 'receivable' ? '+' : '-'}${amountText}`
+  const delta = getDebtRecordBalanceDelta(record)
+  const amountText = formatCurrency(Math.abs(delta))
+  const sign = delta > 0 ? '+' : delta < 0 ? '-' : ''
+  return `${sign}${amountText}`
+}
+
+function formatOffsetActionLabel(record: DebtRecord) {
+  return record.direction === 'receivable' ? '收款' : '还款'
 }
 
 function formatFundingAccountName(record: DebtRecord) {
   return record.fundingAccountName?.trim() || '未关联现金账户'
+}
+
+function buildOffsetRecordRemark(record: DebtRecord) {
+  const actionLabel = record.direction === 'receivable' ? '收款' : '还款'
+  const baseRemark = record.remark?.trim()
+  return baseRemark ? `${actionLabel}（对应：${baseRemark}）` : actionLabel
+}
+
+function getDebtRecordDirection(kind: DebtRecordKind): DebtDirection {
+  return kind.startsWith('receivable') ? 'receivable' : 'payable'
+}
+
+function getDebtRecordType(kind: DebtRecordKind): DebtRecordType {
+  return kind.endsWith('repayment') ? 'repayment' : 'borrow'
+}
+
+function getDebtRecordKind(direction: DebtDirection, recordType: DebtRecordType = 'borrow'): DebtRecordKind {
+  if (direction === 'receivable') {
+    return recordType === 'repayment' ? 'receivable-repayment' : 'receivable-borrow'
+  }
+  return recordType === 'repayment' ? 'payable-repayment' : 'payable-borrow'
+}
+
+function getDebtRecordActionKey(record: Pick<DebtRecord, 'direction' | 'recordType'>) {
+  if (record.direction === 'receivable') {
+    return record.recordType === 'repayment' ? 'collect' : 'borrow-out'
+  }
+  return record.recordType === 'repayment' ? 'repay' : 'borrow-in'
+}
+
+function formatDebtRecordActionLabel(record: Pick<DebtRecord, 'direction' | 'recordType'>) {
+  const actionKey = getDebtRecordActionKey(record)
+  if (actionKey === 'collect') {
+    return '收款'
+  }
+  if (actionKey === 'repay') {
+    return '还款'
+  }
+  return actionKey === 'borrow-out' ? '借出' : '借入'
+}
+
+function getDebtRecordBalanceDelta(record: Pick<DebtRecord, 'direction' | 'recordType' | 'amount'>) {
+  const amount = Number(record.amount ?? 0)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0
+  }
+  if (record.direction === 'receivable') {
+    return record.recordType === 'repayment' ? -amount : amount
+  }
+  return record.recordType === 'repayment' ? amount : -amount
 }
 
 function toDateTimeLocalValue(value: string) {
@@ -439,12 +547,12 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
         <div class="debt-detail-metrics">
           <div class="debt-detail-metric">
-            <span>待还记录</span>
-            <strong>{{ payableCount }} 笔</strong>
+            <span>借入记录</span>
+            <strong>{{ borrowInCount }} 笔</strong>
           </div>
           <div class="debt-detail-metric">
-            <span>待收记录</span>
-            <strong>{{ receivableCount }} 笔</strong>
+            <span>借出记录</span>
+            <strong>{{ borrowOutCount }} 笔</strong>
           </div>
           <div class="debt-detail-metric">
             <span>最近更新</span>
@@ -474,8 +582,14 @@ function showFeedback(message: string, type: 'success' | 'error') {
           >
             <div class="debt-record-card-main">
               <div class="debt-record-card-top">
-                <span class="debt-record-chip" :class="{ 'is-payable': record.direction === 'payable' }">
-                  {{ formatRecordDirectionLabel(record.direction) }}
+                <span
+                  class="debt-record-chip"
+                  :class="{
+                    'is-payable': record.direction === 'payable' && record.recordType !== 'repayment',
+                    'is-repayment': record.recordType === 'repayment',
+                  }"
+                >
+                  {{ formatDebtRecordActionLabel(record) }}
                 </span>
                 <span class="debt-record-date">{{ formatDate(record.occurredAt) }}</span>
               </div>
@@ -488,6 +602,14 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 {{ formatRecordAmount(record) }}
               </strong>
               <div class="debt-record-actions">
+                <button
+                  v-if="record.recordType !== 'repayment'"
+                  type="button"
+                  class="debt-record-action"
+                  @click="openOffsetRecordModal(record)"
+                >
+                  {{ formatOffsetActionLabel(record) }}
+                </button>
                 <button type="button" class="debt-record-action" @click="openEditRecordModal(record)">
                   修改
                 </button>
@@ -512,7 +634,16 @@ function showFeedback(message: string, type: 'success' | 'error') {
       :title="recordModalTitle"
     >
       <div class="debt-record-form">
-        <CommonSelect v-model="recordDirection" label="往来方向" :options="DIRECTION_OPTIONS" />
+        <p v-if="recordFormHint" class="debt-record-form-hint">
+          {{ recordFormHint }}
+        </p>
+        <CommonSelect v-if="!offsetSourceRecord" v-model="recordKind" label="记录类型" :options="RECORD_KIND_OPTIONS" />
+        <CommonInput
+          v-else
+          :model-value="offsetRecordKindLabel"
+          label="记录类型"
+          readonly
+        />
         <CommonSelect v-model="recordFundingAccountId" label="现金账户" :options="fundingAccountOptions" />
         <CommonInput
           v-model="recordAmount"
@@ -538,7 +669,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
             取消
           </CommonButton>
           <CommonButton variant="primary" :disabled="isSavingRecord" @click="saveRecord">
-            {{ editingRecord ? '保存修改' : '保存记录' }}
+            {{ recordSubmitLabel }}
           </CommonButton>
         </div>
       </template>

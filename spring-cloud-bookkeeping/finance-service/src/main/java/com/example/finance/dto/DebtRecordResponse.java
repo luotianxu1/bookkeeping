@@ -16,6 +16,7 @@ public class DebtRecordResponse {
     private Long fundingAccountId;
     private String fundingAccountName;
     private String direction;
+    private String recordType;
     private BigDecimal amount;
     private String currencyCode;
     private String remark;

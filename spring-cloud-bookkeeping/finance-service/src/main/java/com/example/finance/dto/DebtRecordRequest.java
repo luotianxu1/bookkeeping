@@ -23,6 +23,8 @@ public class DebtRecordRequest {
     @NotBlank(message = "债务方向不能为空")
     private String direction;
 
+    private String recordType;
+
     @NotNull(message = "债务金额不能为空")
     @DecimalMin(value = "0.01", message = "债务金额必须大于0")
     private BigDecimal amount;

@@ -46,6 +46,7 @@ export interface LiabilityAccountSummary {
 }
 
 export type DebtDirection = 'payable' | 'receivable'
+export type DebtRecordType = 'borrow' | 'repayment'
 export type HumanRelationDirection = 'outgoing' | 'incoming'
 export type LiabilityRepaymentStatus = 'pending' | 'paid'
 
@@ -66,6 +67,7 @@ export interface DebtRecord {
   fundingAccountId?: number | null
   fundingAccountName?: string | null
   direction: DebtDirection
+  recordType: DebtRecordType
   amount: number
   currencyCode: string
   remark?: string | null
@@ -483,6 +485,7 @@ export interface SaveDebtRecordParams {
   accountId: number
   fundingAccountId?: number | null
   direction: DebtDirection
+  recordType?: DebtRecordType
   amount: number
   currencyCode?: string
   remark?: string | null

@@ -64,6 +64,7 @@ const tradeFundingAccountId = ref('')
 const tradeAmount = ref('')
 const tradeQuantity = ref('')
 const tradePrice = ref('')
+const tradeDate = ref('')
 const tradeRemark = ref('')
 const tradeError = ref('')
 const tradeTimeSlot = ref<'before_1500' | 'after_1500'>('before_1500')
@@ -245,6 +246,11 @@ const tradePrimaryPlaceholder = computed(() => {
   return '请输入金额'
 })
 const tradeModeOptions = ['按金额', '按份额和净值']
+const tradeQuantityQuickFillPresets = [
+  { label: '全部', ratio: 1 },
+  { label: '2/1', ratio: 0.5 },
+  { label: '4/1', ratio: 0.25 },
+] as const
 const autoInvestFrequencyOptions = [
   { label: '每日', value: 'daily' },
   { label: '每周', value: 'weekly' },
@@ -270,6 +276,28 @@ const tradeModeValue = computed({
 const showTradePriceField = computed(() => !isFundPosition.value)
 const showTradeQuantityPreview = computed(() => !isFundPosition.value)
 const showTradeAmountPreview = computed(() => !isFundPosition.value && currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity')
+const showTradeQuantityQuickTabs = computed(() => isFundPosition.value && currentTradeAction.value === 'sell')
+const tradeQuantityQuickFillTabs = computed(() => {
+  const availableQuantity = Number(currentPosition.value?.availableQuantity ?? 0)
+  if (!Number.isFinite(availableQuantity) || availableQuantity <= 0) {
+    return []
+  }
+  return tradeQuantityQuickFillPresets.map((preset) => ({
+    label: preset.label,
+    value: formatTradeQuantityInput(availableQuantity * preset.ratio),
+  })).filter((item) => item.value)
+})
+const activeTradeQuantityQuickTab = computed(() => {
+  const currentQuantity = Number(tradeQuantity.value)
+  if (!Number.isFinite(currentQuantity) || currentQuantity <= 0) {
+    return ''
+  }
+  const matchedTab = tradeQuantityQuickFillTabs.value.find((item) => {
+    const tabQuantity = Number(item.value)
+    return Number.isFinite(tabQuantity) && Math.abs(tabQuantity - currentQuantity) < 0.000001
+  })
+  return matchedTab?.label ?? ''
+})
 const tradeQuantityPreview = computed(() => {
   const amount = getTradeAmountValue()
   const quantity = getTradeQuantityValue()
@@ -1026,6 +1054,7 @@ function openTradeModal(action: 'buy' | 'sell') {
   tradeAmount.value = ''
   tradeQuantity.value = ''
   tradePrice.value = isFundPosition.value ? '' : String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
+  tradeDate.value = formatDateInput(new Date())
   tradeRemark.value = ''
   tradeFundFeeMode.value = 'auto'
   tradeError.value = ''
@@ -1062,6 +1091,11 @@ function closeEditModal(force = false) {
   }
   showEditModal.value = false
   editError.value = ''
+}
+
+function applyTradeQuantityQuickFill(value: string) {
+  tradeQuantity.value = value
+  tradeError.value = ''
 }
 
 function resetAutoInvestForm() {
@@ -1275,9 +1309,14 @@ async function submitTrade() {
   const amount = getTradeAmountValue()
   const price = Number(tradePrice.value)
   const quantity = getTradeQuantityValue()
+  const resolvedTradeAt = resolveTradeAtPayload(tradeDate.value, isFundPosition.value ? tradeTimeSlot.value : undefined)
 
   if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
     tradeError.value = '请选择资金账户'
+    return
+  }
+  if (!resolvedTradeAt) {
+    tradeError.value = '请选择有效的交易日期'
     return
   }
   if (isFundPosition.value) {
@@ -1313,7 +1352,7 @@ async function submitTrade() {
         feeAmount: currentTradeAction.value === 'sell' ? getTradeFundSellFeeAmountPayload() : 0,
         taxAmount: 0,
         currencyCode: currentPosition.value.currencyCode || 'CNY',
-        tradeAt: toApiDateTime(new Date()),
+        tradeAt: resolvedTradeAt,
         fundingAccountId,
         subscriptionTimeSlot: tradeTimeSlot.value,
         remark: tradeRemark.value.trim() || null,
@@ -1365,7 +1404,7 @@ async function submitTrade() {
       feeAmount: 0,
       taxAmount: 0,
       currencyCode: currentPosition.value.currencyCode || 'CNY',
-      tradeAt: toApiDateTime(new Date()),
+      tradeAt: resolvedTradeAt,
       fundingAccountId,
       remark: tradeRemark.value.trim() || null,
     })
@@ -1967,19 +2006,34 @@ function formatEditableFundQuantity(value?: number | null) {
   return numeric.toFixed(2)
 }
 
+function formatTradeQuantityInput(value?: number | null) {
+  const numeric = Number(value ?? 0)
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return ''
+  }
+  return numeric.toFixed(6).replace(/(?:\.0+|(\.\d*?)0+)$/, '$1')
+}
+
 function formatTencentTime(raw?: string) {
   if (!raw || raw.length !== 14) return ''
   return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)} ${raw.slice(8, 10)}:${raw.slice(10, 12)}:${raw.slice(12, 14)}`
 }
 
-function toApiDateTime(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  const second = String(date.getSeconds()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}`
+function resolveTradeAtPayload(
+  value: string,
+  timeSlot?: 'before_1500' | 'after_1500',
+) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return ''
+  }
+
+  const time = timeSlot === 'after_1500'
+    ? '15:01:00'
+    : timeSlot === 'before_1500'
+      ? '14:59:00'
+      : '12:00:00'
+
+  return `${value}T${time}`
 }
 
 function formatNumber(value: number, digits = 2) {
@@ -2311,6 +2365,17 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
               inputmode="decimal"
               :placeholder="tradePrimaryPlaceholder"
             />
+            <div v-if="showTradeQuantityQuickTabs" class="investment-detail-quick-tabs" aria-label="赎回份额快捷填充">
+              <button
+                v-for="item in tradeQuantityQuickFillTabs"
+                :key="item.label"
+                :class="['investment-detail-quick-tab', { active: activeTradeQuantityQuickTab === item.label }]"
+                type="button"
+                @click="applyTradeQuantityQuickFill(item.value)"
+              >
+                {{ item.label }}
+              </button>
+            </div>
           </label>
 
           <label v-if="showTradePriceField" class="investment-detail-modal-field">
@@ -2333,6 +2398,15 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
               {{ account.name }}（余额 {{ formatCurrency(Number(account.currentBalance)) }}）
             </option>
           </select>
+        </label>
+
+        <label class="investment-detail-modal-field">
+          <span>交易日期</span>
+          <input
+            v-model="tradeDate"
+            class="investment-detail-field-control"
+            type="date"
+          />
         </label>
 
         <label v-if="showTradeQuantityPreview" class="investment-detail-modal-field">

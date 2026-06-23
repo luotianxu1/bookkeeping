@@ -53,6 +53,7 @@ public class TransactionService {
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
     private static final String DEBT_DIRECTION_RECEIVABLE = "receivable";
+    private static final String DEBT_RECORD_TYPE_REPAYMENT = "repayment";
     private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
     private static final String HUMAN_RELATION_DIRECTION_INCOMING = "incoming";
     private static final String DEBT_RECORD_ACTIVE_STATUS = "active";
@@ -602,13 +603,14 @@ public class TransactionService {
         response.setSourceType(SOURCE_DEBT_RECORD);
         response.setTransactionNo("DEBT-" + entity.getId());
         response.setUserId(entity.getUserId());
-        response.setType(DEBT_DIRECTION_RECEIVABLE.equals(entity.getDirection()) ? TYPE_INCOME : TYPE_EXPENSE);
+        boolean isRepayment = DEBT_RECORD_TYPE_REPAYMENT.equalsIgnoreCase(entity.getRecordType());
+        response.setType(resolveDebtTransactionType(entity.getDirection(), isRepayment));
         response.setAmount(entity.getAmount());
         response.setCurrencyCode(entity.getCurrencyCode());
         response.setAccountId(fundingAccount == null ? entity.getAccountId() : fundingAccount.getId());
         response.setAccountName(fundingAccount == null ? (debtAccount == null ? null : debtAccount.getName()) : fundingAccount.getName());
         response.setCategoryId(null);
-        response.setCategoryName(DEBT_DIRECTION_RECEIVABLE.equals(entity.getDirection()) ? "债务借出" : "债务借入");
+        response.setCategoryName(buildDebtCategoryName(entity.getDirection(), isRepayment));
         response.setCategoryIcon("债");
         response.setCategoryColor(CATEGORY_COLOR_DEBT);
         response.setTitle(buildDebtRecordTitle(debtAccount, entity));
@@ -622,8 +624,30 @@ public class TransactionService {
 
     private String buildDebtRecordTitle(AccountEntity account, DebtRecordEntity entity) {
         String accountName = account == null ? "债务账户" : account.getName();
-        String directionLabel = DEBT_DIRECTION_RECEIVABLE.equals(entity.getDirection()) ? "借出" : "借入";
+        boolean isRepayment = DEBT_RECORD_TYPE_REPAYMENT.equalsIgnoreCase(entity.getRecordType());
+        String directionLabel = buildDebtActionLabel(entity.getDirection(), isRepayment);
         return accountName + " · " + directionLabel;
+    }
+
+    private String resolveDebtTransactionType(String direction, boolean isRepayment) {
+        if (DEBT_DIRECTION_RECEIVABLE.equals(direction)) {
+            return isRepayment ? TYPE_INCOME : TYPE_EXPENSE;
+        }
+        return isRepayment ? TYPE_EXPENSE : TYPE_INCOME;
+    }
+
+    private String buildDebtCategoryName(String direction, boolean isRepayment) {
+        if (DEBT_DIRECTION_RECEIVABLE.equals(direction)) {
+            return isRepayment ? "债务收款" : "债务借出";
+        }
+        return isRepayment ? "债务还款" : "债务借入";
+    }
+
+    private String buildDebtActionLabel(String direction, boolean isRepayment) {
+        if (DEBT_DIRECTION_RECEIVABLE.equals(direction)) {
+            return isRepayment ? "收款" : "借出";
+        }
+        return isRepayment ? "还款" : "借入";
     }
 
     private TransactionResponse toHumanRelationRecordResponse(

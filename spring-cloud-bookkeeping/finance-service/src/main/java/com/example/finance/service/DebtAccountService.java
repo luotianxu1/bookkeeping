@@ -34,8 +34,11 @@ public class DebtAccountService {
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String DIRECTION_PAYABLE = "payable";
     private static final String DIRECTION_RECEIVABLE = "receivable";
+    private static final String RECORD_TYPE_BORROW = "borrow";
+    private static final String RECORD_TYPE_REPAYMENT = "repayment";
     private static final Set<String> DEBT_ACCOUNT_CODES = Set.of("debt");
     private static final Set<String> DEBT_DIRECTIONS = Set.of(DIRECTION_PAYABLE, DIRECTION_RECEIVABLE);
+    private static final Set<String> DEBT_RECORD_TYPES = Set.of(RECORD_TYPE_BORROW, RECORD_TYPE_REPAYMENT);
 
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
@@ -106,6 +109,7 @@ public class DebtAccountService {
     @Transactional
     public DebtRecordResponse createRecord(DebtRecordRequest request) {
         String direction = requireDirection(request.getDirection());
+        String recordType = requireRecordType(request.getRecordType());
         AccountEntity account = requireDebtAccount(request.getUserId(), request.getAccountId());
         AccountEntity fundingAccount = findCashFundingAccount(request.getUserId(), request.getFundingAccountId());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
@@ -115,13 +119,14 @@ public class DebtAccountService {
         entity.setAccountId(account.getId());
         entity.setFundingAccountId(fundingAccount == null ? null : fundingAccount.getId());
         entity.setDirection(direction);
+        entity.setRecordType(recordType);
         entity.setAmount(amount);
         entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
         entity.setRemark(request.getRemark());
         entity.setOccurredAt(request.getOccurredAt() != null ? request.getOccurredAt() : LocalDateTime.now());
         entity.setStatus(ACTIVE_STATUS);
 
-        applyFundingAccountChange(fundingAccount, direction, amount);
+        applyFundingAccountChange(fundingAccount, direction, recordType, amount);
         debtRecordMapper.insert(entity);
 
         return toResponse(debtRecordMapper.selectById(entity.getId()), account, fundingAccount);
@@ -135,6 +140,7 @@ public class DebtAccountService {
         }
 
         String direction = requireDirection(request.getDirection());
+        String recordType = requireRecordType(request.getRecordType());
         AccountEntity account = requireDebtAccount(request.getUserId(), request.getAccountId());
         AccountEntity fundingAccount = findCashFundingAccount(request.getUserId(), request.getFundingAccountId());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
@@ -144,12 +150,13 @@ public class DebtAccountService {
         entity.setAccountId(account.getId());
         entity.setFundingAccountId(fundingAccount == null ? null : fundingAccount.getId());
         entity.setDirection(direction);
+        entity.setRecordType(recordType);
         entity.setAmount(amount);
         entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
         entity.setRemark(request.getRemark());
         entity.setOccurredAt(request.getOccurredAt() != null ? request.getOccurredAt() : entity.getOccurredAt());
 
-        applyFundingAccountChange(fundingAccount, direction, amount);
+        applyFundingAccountChange(fundingAccount, direction, recordType, amount);
         debtRecordMapper.updateById(entity);
 
         return Optional.of(toResponse(debtRecordMapper.selectById(id), account, fundingAccount));
@@ -249,6 +256,17 @@ public class DebtAccountService {
         return normalizedDirection;
     }
 
+    private String requireRecordType(String recordType) {
+        if (!StringUtils.hasText(recordType)) {
+            return RECORD_TYPE_BORROW;
+        }
+        String normalizedRecordType = recordType.trim().toLowerCase();
+        if (!DEBT_RECORD_TYPES.contains(normalizedRecordType)) {
+            throw new IllegalArgumentException("债务记录类型无效");
+        }
+        return normalizedRecordType;
+    }
+
     private BigDecimal sumByDirection(List<DebtRecordEntity> records, String direction) {
         return records.stream()
             .filter(record -> direction.equals(record.getDirection()))
@@ -258,11 +276,11 @@ public class DebtAccountService {
             .setScale(2, RoundingMode.HALF_UP);
     }
 
-    private void applyFundingAccountChange(AccountEntity fundingAccount, String direction, BigDecimal amount) {
+    private void applyFundingAccountChange(AccountEntity fundingAccount, String direction, String recordType, BigDecimal amount) {
         if (fundingAccount == null) {
             return;
         }
-        if (DIRECTION_RECEIVABLE.equals(direction)) {
+        if (isFundingOutflow(direction, recordType)) {
             deductFundingAccount(fundingAccount, amount);
             return;
         }
@@ -275,11 +293,22 @@ public class DebtAccountService {
         }
         AccountEntity fundingAccount = requireCashFundingAccount(entity.getUserId(), entity.getFundingAccountId());
         BigDecimal amount = entity.getAmount().setScale(2, RoundingMode.HALF_UP);
-        if (DIRECTION_RECEIVABLE.equals(entity.getDirection())) {
+        if (isFundingOutflow(entity.getDirection(), normalizeRecordType(entity.getRecordType()))) {
             creditFundingAccount(fundingAccount, amount);
             return;
         }
         deductFundingAccount(fundingAccount, amount);
+    }
+
+    private boolean isFundingOutflow(String direction, String recordType) {
+        if (RECORD_TYPE_REPAYMENT.equals(recordType)) {
+            return DIRECTION_PAYABLE.equals(direction);
+        }
+        return DIRECTION_RECEIVABLE.equals(direction);
+    }
+
+    private String normalizeRecordType(String recordType) {
+        return StringUtils.hasText(recordType) ? recordType.trim().toLowerCase() : RECORD_TYPE_BORROW;
     }
 
     private void deductFundingAccount(AccountEntity account, BigDecimal amount) {
@@ -308,6 +337,7 @@ public class DebtAccountService {
         response.setFundingAccountId(entity.getFundingAccountId());
         response.setFundingAccountName(fundingAccount == null ? null : fundingAccount.getName());
         response.setDirection(entity.getDirection());
+        response.setRecordType(normalizeRecordType(entity.getRecordType()));
         response.setAmount(entity.getAmount());
         response.setCurrencyCode(entity.getCurrencyCode());
         response.setRemark(entity.getRemark());

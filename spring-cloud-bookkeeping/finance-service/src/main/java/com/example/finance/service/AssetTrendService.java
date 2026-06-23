@@ -104,6 +104,7 @@ public class AssetTrendService {
     private static final String TRANSACTION_TYPE_EXPENSE = "expense";
     private static final String TRANSACTION_TYPE_TRANSFER = "transfer";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
+    private static final String DEBT_RECORD_TYPE_REPAYMENT = "repayment";
     private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
     private static final String LIABILITY_REPAYMENT_STATUS_PENDING = "pending";
     private static final String LIABILITY_REPAYMENT_STATUS_PAID = "paid";
@@ -660,10 +661,11 @@ public class AssetTrendService {
             if (occurredDate == null || occurredDate.isAfter(targetDate)) {
                 continue;
             }
-            if (DEBT_DIRECTION_PAYABLE.equals(record.getDirection())) {
-                payable = payable.add(defaultZero(record.getAmount())).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal delta = resolveDebtBalanceDelta(record);
+            if (delta.compareTo(BigDecimal.ZERO) < 0) {
+                payable = payable.add(delta.abs()).setScale(2, RoundingMode.HALF_UP);
             } else {
-                receivable = receivable.add(defaultZero(record.getAmount())).setScale(2, RoundingMode.HALF_UP);
+                receivable = receivable.add(delta).setScale(2, RoundingMode.HALF_UP);
             }
         }
         return receivable.subtract(payable).setScale(2, RoundingMode.HALF_UP);
@@ -980,7 +982,20 @@ public class AssetTrendService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         BigDecimal amount = defaultZero(record.getAmount()).setScale(2, RoundingMode.HALF_UP);
-        return DEBT_DIRECTION_PAYABLE.equals(record.getDirection()) ? amount : amount.negate().setScale(2, RoundingMode.HALF_UP);
+        boolean isRepayment = DEBT_RECORD_TYPE_REPAYMENT.equalsIgnoreCase(record.getRecordType());
+        if (DEBT_DIRECTION_PAYABLE.equals(record.getDirection())) {
+            return isRepayment ? amount.negate().setScale(2, RoundingMode.HALF_UP) : amount;
+        }
+        return isRepayment ? amount : amount.negate().setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveDebtBalanceDelta(DebtRecordEntity record) {
+        BigDecimal amount = defaultZero(record.getAmount()).setScale(2, RoundingMode.HALF_UP);
+        boolean isRepayment = DEBT_RECORD_TYPE_REPAYMENT.equalsIgnoreCase(record.getRecordType());
+        if (DEBT_DIRECTION_PAYABLE.equals(record.getDirection())) {
+            return isRepayment ? amount : amount.negate().setScale(2, RoundingMode.HALF_UP);
+        }
+        return isRepayment ? amount.negate().setScale(2, RoundingMode.HALF_UP) : amount;
     }
 
     private BigDecimal resolveHumanRelationFundingDelta(HumanRelationRecordEntity record, Long accountId) {

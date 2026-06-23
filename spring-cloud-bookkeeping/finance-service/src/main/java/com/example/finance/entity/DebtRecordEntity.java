@@ -26,6 +26,10 @@ public class DebtRecordEntity {
     private Long fundingAccountId;
 
     private String direction;
+
+    @TableField("record_type")
+    private String recordType;
+
     private BigDecimal amount;
 
     @TableField("currency_code")

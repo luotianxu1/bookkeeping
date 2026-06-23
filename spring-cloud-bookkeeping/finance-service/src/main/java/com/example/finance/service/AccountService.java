@@ -56,6 +56,7 @@ public class AccountService {
     private static final String LIABILITY_ACCOUNT_TYPE_CODE = "liability";
     private static final String LIABILITY_REPAYMENT_STATUS_PENDING = "pending";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
+    private static final String DEBT_RECORD_TYPE_REPAYMENT = "repayment";
     private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
     private static final Set<String> DEBT_ACCOUNT_TYPE_CODES = Set.of("debt");
     private static final Set<String> CONTACT_LINKED_ACCOUNT_TYPE_CODES = Set.of("debt", "human_relation");
@@ -504,14 +505,13 @@ public class AccountService {
             .eq(DebtRecordEntity::getAccountId, accountId)
             .eq(DebtRecordEntity::getStatus, DEBT_RECORD_STATUS_ACTIVE));
         BigDecimal payableTotal = records.stream()
-            .filter(record -> DEBT_DIRECTION_PAYABLE.equals(record.getDirection()))
-            .map(DebtRecordEntity::getAmount)
-            .filter(value -> value != null)
+            .map(this::resolveDebtBalanceDelta)
+            .filter(value -> value.compareTo(BigDecimal.ZERO) < 0)
+            .map(BigDecimal::abs)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal receivableTotal = records.stream()
-            .filter(record -> !DEBT_DIRECTION_PAYABLE.equals(record.getDirection()))
-            .map(DebtRecordEntity::getAmount)
-            .filter(value -> value != null)
+            .map(this::resolveDebtBalanceDelta)
+            .filter(value -> value.compareTo(BigDecimal.ZERO) > 0)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         return receivableTotal.subtract(payableTotal).setScale(2, RoundingMode.HALF_UP);
     }
@@ -694,9 +694,15 @@ public class AccountService {
                 .in(DebtRecordEntity::getAccountId, debtAccountIds)
                 .eq(DebtRecordEntity::getStatus, DEBT_RECORD_STATUS_ACTIVE));
             Map<Long, BigDecimal> payableTotals = sumByAccount(records, DebtRecordEntity::getAccountId,
-                record -> DEBT_DIRECTION_PAYABLE.equals(record.getDirection()) ? record.getAmount() : BigDecimal.ZERO);
+                record -> {
+                    BigDecimal delta = resolveDebtBalanceDelta(record);
+                    return delta.compareTo(BigDecimal.ZERO) < 0 ? delta.abs() : BigDecimal.ZERO;
+                });
             Map<Long, BigDecimal> receivableTotals = sumByAccount(records, DebtRecordEntity::getAccountId,
-                record -> DEBT_DIRECTION_PAYABLE.equals(record.getDirection()) ? BigDecimal.ZERO : record.getAmount());
+                record -> {
+                    BigDecimal delta = resolveDebtBalanceDelta(record);
+                    return delta.compareTo(BigDecimal.ZERO) > 0 ? delta : BigDecimal.ZERO;
+                });
             for (Long accountId : debtAccountIds) {
                 BigDecimal payable = payableTotals.getOrDefault(accountId, BigDecimal.ZERO);
                 BigDecimal receivable = receivableTotals.getOrDefault(accountId, BigDecimal.ZERO);
@@ -817,6 +823,15 @@ public class AccountService {
             totals.merge(accountId, amount, BigDecimal::add);
         }
         return totals;
+    }
+
+    private BigDecimal resolveDebtBalanceDelta(DebtRecordEntity record) {
+        BigDecimal amount = record.getAmount() == null ? BigDecimal.ZERO : record.getAmount().setScale(2, RoundingMode.HALF_UP);
+        boolean isRepayment = DEBT_RECORD_TYPE_REPAYMENT.equalsIgnoreCase(record.getRecordType());
+        if (DEBT_DIRECTION_PAYABLE.equals(record.getDirection())) {
+            return isRepayment ? amount : amount.negate().setScale(2, RoundingMode.HALF_UP);
+        }
+        return isRepayment ? amount.negate().setScale(2, RoundingMode.HALF_UP) : amount;
     }
 
     private record BalanceContext(Map<Long, BigDecimal> accountBalances) {

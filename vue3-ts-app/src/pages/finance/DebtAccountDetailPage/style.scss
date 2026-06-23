@@ -229,6 +229,8 @@
   align-items: center;
   padding: 0 10px;
   border-radius: 999px;
+  background: var(--color-bg-blue-soft);
+  color: var(--color-brand);
   font-size: var(--font-size-12);
   font-weight: 700;
 }
@@ -236,6 +238,11 @@
 .debt-record-chip.is-payable {
   background: var(--color-warning-soft);
   color: var(--color-warning-strong);
+}
+
+.debt-record-chip.is-repayment {
+  background: #ecfeff;
+  color: #0f766e;
 }
 
 .debt-record-remark {
@@ -269,6 +276,7 @@
 
 .debt-record-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }

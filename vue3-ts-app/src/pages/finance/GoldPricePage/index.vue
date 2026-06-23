@@ -75,6 +75,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
   const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
   const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
   const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
+  const xLabels = trendData.value.x
 
   return {
     animation: false,
@@ -88,10 +89,14 @@ const chartOption = computed<EChartsCoreOption>(() => {
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: trendData.value.x,
+      data: xLabels,
       axisLine: { lineStyle: { color: axisLine } },
       axisTick: { show: false },
-      axisLabel: { color: axisText, fontSize: 11 },
+      axisLabel: {
+        color: axisText,
+        fontSize: 11,
+        formatter: (value: string, index: number) => formatAxisLabel(value, index, xLabels),
+      },
     },
     yAxis: {
       type: 'value',
@@ -125,6 +130,19 @@ const chartOption = computed<EChartsCoreOption>(() => {
     ],
   }
 })
+
+function formatAxisLabel(value: string, index: number, labels: string[]) {
+  if (activeRange.value !== '7d') {
+    return value
+  }
+
+  const dayLabel = value.split(' ')[0] ?? value
+  const previousDayLabel = index > 0
+    ? (labels[index - 1]?.split(' ')[0] ?? labels[index - 1] ?? '')
+    : ''
+
+  return dayLabel === previousDayLabel ? '' : dayLabel
+}
 
 const marketFootText = computed(() => {
   if (!currentGoldPrice.value) {

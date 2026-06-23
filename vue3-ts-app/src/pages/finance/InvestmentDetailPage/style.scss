@@ -593,6 +593,31 @@
   gap: var(--space-8);
 }
 
+.investment-detail-quick-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.investment-detail-quick-tab {
+  min-width: 52px;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: var(--font-size-12);
+  font-weight: 700;
+  transition: all 160ms ease;
+}
+
+.investment-detail-quick-tab.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
 .investment-detail-modal-field > span,
 .investment-detail-switch-field > span {
   color: var(--color-text-secondary);
