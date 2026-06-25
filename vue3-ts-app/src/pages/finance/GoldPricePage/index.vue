@@ -6,7 +6,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import type { GoldPriceRange } from '@/api/modules/finance'
 import { refreshGoldPriceCache as refreshRealtimeGoldPriceCache } from '@/utils/gold-price-cache'
-import { ensureGoldPriceCache, getCachedGoldPrice, goldPriceCacheState, refreshGoldPriceCache } from '@/utils/gold-price-detail-cache'
+import { getCachedGoldPrice, goldPriceCacheState, refreshGoldPriceCache } from '@/utils/gold-price-detail-cache'
 import { useTheme } from '@/utils/theme'
 
 type TrendKey = '1日' | '7日' | '30日' | '1年'
@@ -33,6 +33,14 @@ const activeRange = computed(() => trendRangeMap[activeTrend.value])
 const currentGoldPrice = computed(() => (
   getCachedGoldPrice(activeRange.value) ?? getCachedGoldPrice('1d')
 ))
+const hasSpotGold = computed(() => (
+  Number.isFinite(Number(currentGoldPrice.value?.spotGold?.price))
+  && Number(currentGoldPrice.value?.spotGold?.price) > 0
+))
+const hasLondonGold = computed(() => (
+  Number.isFinite(Number(currentGoldPrice.value?.londonGold?.price))
+  && Number(currentGoldPrice.value?.londonGold?.price) > 0
+))
 const chartPoints = computed(() => (
   getCachedGoldPrice(activeRange.value)?.chartPoints ?? []
 ))
@@ -46,7 +54,7 @@ const trendData = computed(() => ({
 }))
 
 const quoteRows = computed(() => {
-  if (!currentGoldPrice.value) return []
+  if (!currentGoldPrice.value?.stats) return []
 
   return [
     { label: '今日开盘', value: formatMoney(currentGoldPrice.value.stats.openPrice) },
@@ -54,14 +62,68 @@ const quoteRows = computed(() => {
     { label: '最低', value: formatMoney(currentGoldPrice.value.stats.lowPrice) },
     { label: '买入参考', value: formatMoney(currentGoldPrice.value.stats.buyPrice) },
     { label: '卖出参考', value: formatMoney(currentGoldPrice.value.stats.sellPrice) },
-  ]
+  ].filter((item) => item.value !== '--')
 })
+
+const showPriceFallback = computed(() => (
+  !isLoadingGoldPrice.value && !hasSpotGold.value && !hasLondonGold.value
+))
+
+const spotDeltaText = computed(() => (
+  hasSpotGold.value
+    ? formatDelta(currentGoldPrice.value?.spotGold?.change, currentGoldPrice.value?.spotGold?.changePercent)
+    : '--'
+))
+
+const londonDeltaText = computed(() => (
+  hasLondonGold.value
+    ? formatDelta(currentGoldPrice.value?.londonGold?.change, currentGoldPrice.value?.londonGold?.changePercent)
+    : '--'
+))
+
+const marketFootText = computed(() => {
+  if (!currentGoldPrice.value || (!hasSpotGold.value && !hasLondonGold.value)) {
+    return '暂无可靠行情数据'
+  }
+
+  return `更新时间 ${formatTime(currentGoldPrice.value.updatedAt)}`
+})
+
+function formatMoney(value?: number | null, fractionDigits = 2) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return '--'
+  }
+
+  return numeric.toLocaleString('zh-CN', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
+}
+
+function formatDelta(change?: number | null, changePercent?: number | null) {
+  const normalizedChange = Number(change)
+  const normalizedPercent = Number(changePercent)
+  if (!Number.isFinite(normalizedChange) || !Number.isFinite(normalizedPercent)) {
+    return '--'
+  }
+
+  const sign = normalizedChange >= 0 ? '+' : ''
+  return `${sign}${formatSignedMoney(normalizedChange)} (${sign}${formatSignedMoney(normalizedPercent, 2)}%)`
+}
+
+function formatSignedMoney(value: number, fractionDigits = 2) {
+  return value.toLocaleString('zh-CN', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
+}
 
 const jewelryRows = computed(() => (
   currentGoldPrice.value?.jewelryPrices.map((item) => ({
     brand: item.brandName,
     price: `${formatMoney(item.price, 0)}/g`,
-  })) ?? []
+  })).filter((item) => item.price !== '--/g') ?? []
 ))
 
 const chartOption = computed<EChartsCoreOption>(() => {
@@ -144,14 +206,6 @@ function formatAxisLabel(value: string, index: number, labels: string[]) {
   return dayLabel === previousDayLabel ? '' : dayLabel
 }
 
-const marketFootText = computed(() => {
-  if (!currentGoldPrice.value) {
-    return '等待行情更新'
-  }
-
-  return `更新时间 ${formatTime(currentGoldPrice.value.updatedAt)}`
-})
-
 async function ensureEcharts() {
   if (!echartsLib) {
     echartsLib = await import('echarts')
@@ -175,7 +229,10 @@ async function loadGoldPrice() {
   goldPriceError.value = ''
 
   try {
-    await ensureGoldPriceCache('1d')
+    await Promise.all([
+      refreshGoldPriceCache('1d'),
+      refreshRealtimeGoldPriceCache(),
+    ])
   } catch (error) {
     goldPriceError.value = error instanceof Error ? error.message : '金价加载失败'
   }
@@ -217,19 +274,6 @@ async function refreshCurrentGoldPrice() {
   } finally {
     isRefreshingPrice.value = false
   }
-}
-
-function formatMoney(value?: number, fractionDigits = 2) {
-  return Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  })
-}
-
-function formatDelta(change?: number, changePercent?: number) {
-  const normalizedChange = Number(change ?? 0)
-  const sign = normalizedChange >= 0 ? '+' : ''
-  return `${sign}${formatMoney(normalizedChange)} (${sign}${formatMoney(changePercent, 2)}%)`
 }
 
 function formatTime(value?: string) {
@@ -300,22 +344,19 @@ onBeforeUnmount(() => {
       <p v-if="goldPriceError" class="gold-price-message gold-price-message-error">
         {{ goldPriceError }}
       </p>
+      <p v-if="showPriceFallback" class="gold-price-message">
+        暂无可靠实时行情
+      </p>
       <div class="market-grid">
         <article class="market-item">
           <p class="market-label">现货金 (CNY/g)</p>
-          <AmountText tag="strong" :value="formatMoney(currentGoldPrice?.spotGold.price)" />
-          <AmountText
-            tag="em"
-            :value="formatDelta(currentGoldPrice?.spotGold.change, currentGoldPrice?.spotGold.changePercent)"
-          />
+          <AmountText tag="strong" :value="formatMoney(currentGoldPrice?.spotGold?.price)" />
+          <AmountText tag="em" :value="spotDeltaText" />
         </article>
         <article class="market-item">
           <p class="market-label">伦敦金 (USD/oz)</p>
-          <AmountText tag="strong" :value="formatMoney(currentGoldPrice?.londonGold.price)" />
-          <AmountText
-            tag="em"
-            :value="formatDelta(currentGoldPrice?.londonGold.change, currentGoldPrice?.londonGold.changePercent)"
-          />
+          <AmountText tag="strong" :value="formatMoney(currentGoldPrice?.londonGold?.price)" />
+          <AmountText tag="em" :value="londonDeltaText" />
         </article>
       </div>
       <p class="market-foot">{{ marketFootText }}</p>

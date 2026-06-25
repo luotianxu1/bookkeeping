@@ -23,7 +23,6 @@ import java.util.Map;
 public class GoldPriceService {
 
     private static final BigDecimal TROY_OUNCE_GRAMS = new BigDecimal("31.1034768");
-    private static final BigDecimal DEFAULT_USD_CNY = new BigDecimal("7.20");
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Shanghai");
     private static final long CACHE_MILLIS = 60_000L;
     private static final int CONNECT_TIMEOUT_MILLIS = 1500;
@@ -63,7 +62,7 @@ public class GoldPriceService {
             response.setChartPoints(getChartPoints(normalizedRange, now));
             return response;
         } catch (Exception ex) {
-            throw new IllegalStateException("金价数据获取失败", ex);
+            return emptyGoldPriceResponse();
         }
     }
 
@@ -72,12 +71,12 @@ public class GoldPriceService {
         try {
             return toRealtimePrice(getCurrentPrice(now));
         } catch (Exception ex) {
-            throw new IllegalStateException("实时金价获取失败", ex);
+            return emptyRealtimePriceResponse();
         }
     }
 
     public synchronized BigDecimal getCachedSpotPrice() {
-        if (cachedCurrentPrice == null) {
+        if (cachedCurrentPrice == null || System.currentTimeMillis() - cachedCurrentPrice.cachedAt() >= CACHE_MILLIS) {
             return null;
         }
         GoldPriceResponse.GoldMarketQuote spotGold = cachedCurrentPrice.response().getSpotGold();
@@ -105,6 +104,10 @@ public class GoldPriceService {
         BigDecimal usdCny,
         JsonNode quotes
     ) {
+        if (usdCny == null || usdCny.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("汇率数据缺失");
+        }
+
         JsonNode goldNode = quotes.path("JO_92233");
         BigDecimal londonPrice = firstDecimal(goldNode, "price", "last", "last_price", "close", "ask");
         if (londonPrice == null) {
@@ -212,9 +215,9 @@ public class GoldPriceService {
         try {
             JsonNode exchangeNode = fetchJson(exchangeRateApiUrl);
             BigDecimal rate = decimalAt(exchangeNode, "rates", "CNY");
-            return rate != null && rate.compareTo(BigDecimal.ZERO) > 0 ? rate : DEFAULT_USD_CNY;
+            return rate != null && rate.compareTo(BigDecimal.ZERO) > 0 ? rate : null;
         } catch (Exception ex) {
-            return DEFAULT_USD_CNY;
+            return null;
         }
     }
 
@@ -454,6 +457,17 @@ public class GoldPriceService {
         }
         target.setSource(source.getSource());
         return target;
+    }
+
+    private GoldPriceResponse emptyGoldPriceResponse() {
+        GoldPriceResponse response = new GoldPriceResponse();
+        response.setJewelryPrices(List.of());
+        response.setChartPoints(List.of());
+        return response;
+    }
+
+    private GoldRealtimePriceResponse emptyRealtimePriceResponse() {
+        return new GoldRealtimePriceResponse();
     }
 
     private LocalDateTime extractUpdatedAt(JsonNode node) {

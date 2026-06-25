@@ -586,6 +586,11 @@ public class AssetTrendService {
         if (account.createdDate() != null && account.createdDate().isAfter(targetDate)) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
+        // Gold accounts use realtime pricing in the account list. Align today's trend point
+        // with that same balance source so the latest chart point matches the summary total.
+        if ("gold".equals(account.accountTypeCode()) && LocalDate.now().equals(targetDate)) {
+            return normalizeAccountBalance(account.accountTypeCode(), account.balanceDirection(), account.currentBalance());
+        }
         if (POSITION_ACCOUNT_TYPE_CODES.contains(account.accountTypeCode())) {
             return normalizeAccountBalance(account.accountTypeCode(), account.balanceDirection(), resolvePositionAccountBalanceAtDate(account.id(), context, targetDate));
         }
