@@ -83,9 +83,13 @@ const investmentAccountType = computed(() =>
 const accountModalTitle = computed(() => (editingAccount.value ? '修改投资账户' : '新增投资账户'))
 const accountSubmitLabel = computed(() => (editingAccount.value ? '保存账户' : '新增账户'))
 
+const visiblePositions = computed(() =>
+  positions.value.filter((position) => shouldDisplayHolding(position)),
+)
+
 const positionGroups = computed(() => {
   const grouped = new Map<number, InvestmentPosition[]>()
-  for (const position of positions.value) {
+  for (const position of visiblePositions.value) {
     const list = grouped.get(position.accountId) ?? []
     list.push(position)
     grouped.set(position.accountId, list)
@@ -98,6 +102,7 @@ const investmentAccountCards = computed<InvestmentAccountCard[]>(() =>
     const accountPositions = positionGroups.value.get(account.id) ?? []
     const stockCount = accountPositions.filter((position) => position.productType === 'stock').length
     const fundCount = accountPositions.filter((position) => position.productType === 'fund').length
+    const dayProfitPositions = accountPositions.filter((position) => position.dayProfit !== null && position.dayProfit !== undefined)
 
     return {
       account,
@@ -106,8 +111,8 @@ const investmentAccountCards = computed<InvestmentAccountCard[]>(() =>
       marketValue: Number(account.currentBalance ?? 0),
       stockCount,
       fundCount,
-      dayProfit: accountPositions.length > 0 && accountPositions.every((position) => position.dayProfit !== null && position.dayProfit !== undefined)
-        ? accountPositions.reduce((total, position) => total + Number(position.dayProfit), 0)
+      dayProfit: dayProfitPositions.length > 0
+        ? dayProfitPositions.reduce((total, position) => total + Number(position.dayProfit), 0)
         : null,
       totalProfit: accountPositions.reduce(
         (total, position) => total + Number(position.cumulativeProfit ?? 0) + Number(position.holdingProfit ?? 0),
@@ -164,6 +169,22 @@ function openInvestmentAccountDetail(accountId: number) {
     return
   }
   router.push(`/finance/accounts/investment/${accountId}`)
+}
+
+function isPendingSubscription(position: InvestmentPosition) {
+  return position.subscriptionStatus === 'pending'
+}
+
+function hasConfirmedHoldingQuantity(position: InvestmentPosition) {
+  const quantity = Number(position.holdingQuantity ?? 0)
+  return Number.isFinite(quantity) && quantity > 0
+}
+
+function shouldDisplayHolding(position: InvestmentPosition) {
+  if (position.productType !== 'fund') {
+    return true
+  }
+  return hasConfirmedHoldingQuantity(position) || isPendingSubscription(position)
 }
 
 function toggleManageMode() {

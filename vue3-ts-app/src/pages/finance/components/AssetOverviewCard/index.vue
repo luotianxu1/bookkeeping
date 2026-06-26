@@ -13,7 +13,7 @@ defineProps<{
     <div class="asset-main">
       <div class="asset-main-left">
         <p class="asset-label">资产总数</p>
-        <AmountText tag="h1" :value="overview.totalAssets" />
+        <AmountText tag="h1" :value="overview.totalAssets || '--'" />
       </div>
 
       <div class="budget-ring-wrap" :aria-label="`预算使用 ${overview.budgetUsageLabel}`">

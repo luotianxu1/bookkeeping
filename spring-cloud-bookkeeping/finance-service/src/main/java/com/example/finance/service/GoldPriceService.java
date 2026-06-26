@@ -86,8 +86,25 @@ public class GoldPriceService {
         return spotGold.getPrice().setScale(2, RoundingMode.HALF_UP);
     }
 
+    public synchronized BigDecimal getStrictRealtimeSpotPrice() {
+        try {
+            GoldPriceResponse response = getCurrentPrice(System.currentTimeMillis(), true);
+            GoldPriceResponse.GoldMarketQuote spotGold = response.getSpotGold();
+            if (spotGold == null || spotGold.getPrice() == null || spotGold.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                return null;
+            }
+            return spotGold.getPrice().setScale(2, RoundingMode.HALF_UP);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
     private GoldPriceResponse getCurrentPrice(long now) throws Exception {
-        if (cachedCurrentPrice != null && now - cachedCurrentPrice.cachedAt() < CACHE_MILLIS) {
+        return getCurrentPrice(now, false);
+    }
+
+    private GoldPriceResponse getCurrentPrice(long now, boolean forceRefresh) throws Exception {
+        if (!forceRefresh && cachedCurrentPrice != null && now - cachedCurrentPrice.cachedAt() < CACHE_MILLIS) {
             return copyResponseWithoutChart(cachedCurrentPrice.response());
         }
 

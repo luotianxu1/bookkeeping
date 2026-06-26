@@ -28,7 +28,7 @@ export interface AccountQuery {
 }
 
 export interface FinanceOverviewSummary {
-  totalAssets: number
+  totalAssets: number | null
 }
 
 export interface DebtAccountSummary {

@@ -89,17 +89,21 @@ const subscriptionTimeSlotOptions = [
   { label: '15点后', value: 'after_1500' },
 ]
 
+const visiblePositions = computed(() =>
+  positions.value.filter((item) => shouldDisplayHolding(item)),
+)
+
 const holdings = computed(() => {
   const targetType = activeTab.value === 'A股' ? 'stock' : 'fund'
 
-  return positions.value
+  return visiblePositions.value
     .filter((item) => item.productType === targetType)
     .slice()
     .sort(compareHoldingsByProfitRate)
 })
 const showInvestmentTabSwitch = computed(() => {
-  const hasStocks = positions.value.some((item) => item.productType === 'stock')
-  const hasFunds = positions.value.some((item) => item.productType === 'fund')
+  const hasStocks = visiblePositions.value.some((item) => item.productType === 'stock')
+  const hasFunds = visiblePositions.value.some((item) => item.productType === 'fund')
   return hasStocks && hasFunds
 })
 
@@ -122,7 +126,7 @@ const autoInvestPositionIds = computed(() => new Set(
     .map((plan) => plan.positionId),
 ))
 const hasRefreshableHoldings = computed(() =>
-  positions.value.some((item) => item.productType === 'fund' || item.productType === 'stock'),
+  visiblePositions.value.some((item) => item.productType === 'fund' || item.productType === 'stock'),
 )
 const shouldShowQuoteRefreshButton = computed(() => hasRefreshableHoldings.value && isAfterQuoteRefreshTime(currentTime.value))
 
@@ -284,8 +288,8 @@ async function refreshQuoteData() {
 }
 
 function syncActiveInvestmentTab() {
-  const hasStocks = positions.value.some((item) => item.productType === 'stock')
-  const hasFunds = positions.value.some((item) => item.productType === 'fund')
+  const hasStocks = visiblePositions.value.some((item) => item.productType === 'stock')
+  const hasFunds = visiblePositions.value.some((item) => item.productType === 'fund')
 
   if (!investmentTabs.includes(activeTab.value)) {
     activeTab.value = 'A股'
@@ -656,6 +660,13 @@ function isPendingSubscription(position: InvestmentPosition) {
 function hasConfirmedHoldingQuantity(position: InvestmentPosition) {
   const quantity = Number(position.holdingQuantity ?? 0)
   return Number.isFinite(quantity) && quantity > 0
+}
+
+function shouldDisplayHolding(position: InvestmentPosition) {
+  if (position.productType !== 'fund') {
+    return true
+  }
+  return hasConfirmedHoldingQuantity(position) || isPendingSubscription(position)
 }
 
 function getHoldingStatusText(position: InvestmentPosition) {

@@ -55,6 +55,7 @@ public class AccountService {
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String LIABILITY_ACCOUNT_TYPE_CODE = "liability";
     private static final String LIABILITY_REPAYMENT_STATUS_PENDING = "pending";
+    private static final String SUBSCRIPTION_STATUS_PENDING = "pending";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
     private static final String DEBT_RECORD_TYPE_REPAYMENT = "repayment";
     private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
@@ -147,8 +148,23 @@ public class AccountService {
                     .collect(Collectors.toSet()))
                 .stream()
                 .collect(Collectors.toMap(AccountTypeEntity::getId, Function.identity()));
+        boolean hasGoldAccount = accountEntities.stream()
+            .anyMatch(account -> {
+                AccountTypeEntity accountType = accountTypes.get(account.getAccountTypeId());
+                return accountType != null && GOLD_ACCOUNT_TYPE_CODE.equals(accountType.getCode());
+            });
+        BigDecimal strictRealtimeGoldPrice = hasGoldAccount ? goldPriceService.getStrictRealtimeSpotPrice() : null;
+        if (hasGoldAccount && (strictRealtimeGoldPrice == null || strictRealtimeGoldPrice.compareTo(BigDecimal.ZERO) <= 0)) {
+            FinanceOverviewResponse response = new FinanceOverviewResponse();
+            response.setTotalAssets(null);
+            return response;
+        }
         BigDecimal totalAssets = accounts.stream()
-            .map(account -> resolveOverviewBalance(account, accountTypes.get(account.getAccountTypeId())))
+            .map(account -> resolveOverviewBalance(
+                account,
+                accountTypes.get(account.getAccountTypeId()),
+                strictRealtimeGoldPrice
+            ))
             .filter(balance -> balance != null)
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
@@ -159,9 +175,18 @@ public class AccountService {
     }
 
     private BigDecimal resolveOverviewBalance(AccountResponse account, AccountTypeEntity accountType) {
+        return resolveOverviewBalance(account, accountType, null);
+    }
+
+    private BigDecimal resolveOverviewBalance(AccountResponse account, AccountTypeEntity accountType, BigDecimal strictRealtimeGoldPrice) {
         BigDecimal currentBalance = account == null || account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
         if (accountType == null) {
             return currentBalance;
+        }
+        if (GOLD_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
+            return strictRealtimeGoldPrice == null
+                ? null
+                : resolveGoldOverviewBalance(account.getId(), strictRealtimeGoldPrice);
         }
         if (CONTACT_LINKED_ACCOUNT_TYPE_CODES.contains(accountType.getCode())) {
             return currentBalance;
@@ -170,6 +195,14 @@ public class AccountService {
             return currentBalance.negate().setScale(2, RoundingMode.HALF_UP);
         }
         return currentBalance.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    BigDecimal resolveSignedNetWorthBalance(AccountResponse account) {
+        if (account == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        AccountTypeEntity accountType = loadAccountType(account.getAccountTypeId());
+        return resolveOverviewBalance(account, accountType).setScale(2, RoundingMode.HALF_UP);
     }
 
     public AccountResponse create(AccountRequest request) {
@@ -481,17 +514,24 @@ public class AccountService {
 
         if (GOLD_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
             BigDecimal realtimePrice = resolveRealtimeGoldPrice(positions);
-            BigDecimal marketValue = positions.stream()
-                .map(InvestmentPositionEntity::getHoldingQuantity)
+            if (realtimePrice.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal marketValue = positions.stream()
+                    .map(InvestmentPositionEntity::getHoldingQuantity)
+                    .filter(value -> value != null)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .multiply(realtimePrice);
+                return marketValue.setScale(2, RoundingMode.HALF_UP);
+            }
+            return positions.stream()
+                .map(InvestmentPositionEntity::getMarketValue)
                 .filter(value -> value != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .multiply(realtimePrice);
-            return marketValue.setScale(2, RoundingMode.HALF_UP);
+                .setScale(2, RoundingMode.HALF_UP);
         }
 
         if (INVESTMENT_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
             BigDecimal marketValue = positions.stream()
-                .map(InvestmentPositionEntity::getMarketValue)
+                .map(this::resolveInvestmentPositionBalance)
                 .filter(value -> value != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             return marketValue.setScale(2, RoundingMode.HALF_UP);
@@ -568,6 +608,39 @@ public class AccountService {
             .findFirst()
             .map(value -> value.setScale(2, RoundingMode.HALF_UP))
             .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+    }
+
+    private BigDecimal resolveInvestmentPositionBalance(InvestmentPositionEntity position) {
+        if (position == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        if (SUBSCRIPTION_STATUS_PENDING.equals(position.getSubscriptionStatus())
+            && position.getSubscriptionConfirmedAt() == null) {
+            return position.getCostAmount() == null
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : position.getCostAmount().setScale(2, RoundingMode.HALF_UP);
+        }
+        return position.getMarketValue() == null
+            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+            : position.getMarketValue().setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolveGoldOverviewBalance(Long accountId, BigDecimal strictRealtimeGoldPrice) {
+        if (accountId == null || strictRealtimeGoldPrice == null || strictRealtimeGoldPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            return null;
+        }
+        List<InvestmentPositionEntity> positions = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .select(
+                InvestmentPositionEntity::getHoldingQuantity,
+                InvestmentPositionEntity::getStatus
+            )
+            .eq(InvestmentPositionEntity::getAccountId, accountId)
+            .eq(InvestmentPositionEntity::getStatus, ACTIVE_POSITION_STATUS));
+        BigDecimal totalWeight = positions.stream()
+            .map(InvestmentPositionEntity::getHoldingQuantity)
+            .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return totalWeight.multiply(strictRealtimeGoldPrice).setScale(2, RoundingMode.HALF_UP);
     }
 
     private LiabilityPlan normalizeLiabilityPlan(AccountTypeEntity accountType, AccountRequest request) {
@@ -664,12 +737,7 @@ public class AccountService {
         if (cachedSpotPrice != null && cachedSpotPrice.compareTo(BigDecimal.ZERO) > 0) {
             return cachedSpotPrice;
         }
-        return positions.stream()
-            .map(InvestmentPositionEntity::getCurrentPrice)
-            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
-            .findFirst()
-            .map(value -> value.setScale(2, RoundingMode.HALF_UP))
-            .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     }
 
     private BalanceContext buildBalanceContext(List<AccountEntity> accounts, Map<Long, AccountTypeEntity> accountTypes) {
@@ -785,16 +853,25 @@ public class AccountService {
                 List<InvestmentPositionEntity> accountPositions = positionsByAccount.getOrDefault(accountId, List.of());
                 String accountTypeCode = accountTypeCodes.get(accountId);
                 if (GOLD_ACCOUNT_TYPE_CODE.equals(accountTypeCode)) {
-                    BigDecimal totalWeight = accountPositions.stream()
-                        .map(InvestmentPositionEntity::getHoldingQuantity)
-                        .filter(value -> value != null)
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
-                    accountBalances.put(accountId, totalWeight.multiply(realtimeGoldPrice).setScale(2, RoundingMode.HALF_UP));
+                    if (realtimeGoldPrice.compareTo(BigDecimal.ZERO) > 0) {
+                        BigDecimal totalWeight = accountPositions.stream()
+                            .map(InvestmentPositionEntity::getHoldingQuantity)
+                            .filter(value -> value != null)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        accountBalances.put(accountId, totalWeight.multiply(realtimeGoldPrice).setScale(2, RoundingMode.HALF_UP));
+                    } else {
+                        BigDecimal storedMarketValue = accountPositions.stream()
+                            .map(InvestmentPositionEntity::getMarketValue)
+                            .filter(value -> value != null)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add)
+                            .setScale(2, RoundingMode.HALF_UP);
+                        accountBalances.put(accountId, storedMarketValue);
+                    }
                     continue;
                 }
                 if (INVESTMENT_ACCOUNT_TYPE_CODE.equals(accountTypeCode)) {
                     BigDecimal marketValue = accountPositions.stream()
-                        .map(InvestmentPositionEntity::getMarketValue)
+                        .map(this::resolveInvestmentPositionBalance)
                         .filter(value -> value != null)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
                     accountBalances.put(accountId, marketValue.setScale(2, RoundingMode.HALF_UP));

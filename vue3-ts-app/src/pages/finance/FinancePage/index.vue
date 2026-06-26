@@ -82,8 +82,8 @@ async function loadCashTransactions() {
   try {
     const currentMonth = getCurrentMonthKey()
     const currentMonthDate = `${currentMonth}-01`
-    const accountTypes = await getAccountTypes({ status: 'active' })
-    const cashType = accountTypes.find((type) => type.code === 'cash')
+    const typeList = await getAccountTypes({ status: 'active' })
+    const cashType = typeList.find((type) => type.code === 'cash')
     if (!cashType) {
       transactions.value = []
       updateOverview(0, 0, 0)
@@ -119,7 +119,9 @@ async function loadCashTransactions() {
     updateOverview(monthlyIncome, monthlyExpense, budgetAmount)
     overview.value = {
       ...overview.value,
-      totalAssets: formatAmount(toNumber(financeOverviewSummary.totalAssets)),
+      totalAssets: financeOverviewSummary.totalAssets == null
+        ? ''
+        : formatAmount(toNumber(financeOverviewSummary.totalAssets)),
     }
   } catch (error) {
     transactions.value = []

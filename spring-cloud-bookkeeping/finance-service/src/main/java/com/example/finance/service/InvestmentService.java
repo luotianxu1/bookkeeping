@@ -3472,12 +3472,19 @@ public class InvestmentService {
                 .eq(InvestmentPositionEntity::getAccountId, accountId)
                 .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS))
             .stream()
-            .map(InvestmentPositionEntity::getMarketValue)
+            .map(this::resolvePositionBalanceForAccount)
             .filter(value -> value != null)
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
         account.setCurrentBalance(marketValue);
         accountMapper.updateById(account);
+    }
+
+    private BigDecimal resolvePositionBalanceForAccount(InvestmentPositionEntity position) {
+        if (isPendingFundSubscription(position)) {
+            return defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
+        }
+        return defaultZero(position.getMarketValue()).setScale(2, RoundingMode.HALF_UP);
     }
 
     private InvestmentProductEntity requireProduct(Long productId) {

@@ -46,7 +46,7 @@ const reverseRangeMap: Record<AssetTrendRange, TrendRangeLabel> = {
   all: '全部',
 }
 
-const activeRange = ref<TrendRangeLabel>('年内')
+const activeRange = ref<TrendRangeLabel>('近7日')
 const trend = ref<AssetTrend | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
@@ -717,7 +717,6 @@ function getTrendYAxisBounds(values: number[]) {
         <header class="investment-trend-card-head">
           <div>
             <strong>资产分布</strong>
-            <p>按资产类型</p>
           </div>
         </header>
 

@@ -7,11 +7,13 @@ import com.example.finance.dto.AssetTrendContributorResponse;
 import com.example.finance.dto.AssetTrendPointResponse;
 import com.example.finance.dto.AssetTrendResponse;
 import com.example.finance.entity.AccountEntity;
+import com.example.finance.entity.AssetDailySnapshotEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.DebtRecordEntity;
 import com.example.finance.entity.HumanRelationRecordEntity;
 import com.example.finance.entity.InvestmentPositionEntity;
 import com.example.finance.entity.InvestmentPriceQuoteEntity;
+import com.example.finance.entity.InvestmentProductEntity;
 import com.example.finance.entity.InvestmentTransactionEntity;
 import com.example.finance.entity.LiabilityRecordEntity;
 import com.example.finance.entity.TransactionEntity;
@@ -21,6 +23,7 @@ import com.example.finance.mapper.DebtRecordMapper;
 import com.example.finance.mapper.HumanRelationRecordMapper;
 import com.example.finance.mapper.InvestmentPositionMapper;
 import com.example.finance.mapper.InvestmentPriceQuoteMapper;
+import com.example.finance.mapper.InvestmentProductMapper;
 import com.example.finance.mapper.InvestmentTransactionMapper;
 import com.example.finance.mapper.LiabilityRecordMapper;
 import com.example.finance.mapper.TransactionMapper;
@@ -31,6 +34,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.MonthDay;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -120,10 +125,13 @@ public class AssetTrendService {
     private final InvestmentPositionMapper investmentPositionMapper;
     private final InvestmentTransactionMapper investmentTransactionMapper;
     private final InvestmentPriceQuoteMapper investmentPriceQuoteMapper;
+    private final InvestmentProductMapper investmentProductMapper;
     private final DebtRecordMapper debtRecordMapper;
     private final LiabilityRecordMapper liabilityRecordMapper;
     private final HumanRelationRecordMapper humanRelationRecordMapper;
     private final AccountService accountService;
+    private final GoldPriceService goldPriceService;
+    private final AssetSnapshotService assetSnapshotService;
 
     public AssetTrendService(
         AccountMapper accountMapper,
@@ -132,10 +140,13 @@ public class AssetTrendService {
         InvestmentPositionMapper investmentPositionMapper,
         InvestmentTransactionMapper investmentTransactionMapper,
         InvestmentPriceQuoteMapper investmentPriceQuoteMapper,
+        InvestmentProductMapper investmentProductMapper,
         DebtRecordMapper debtRecordMapper,
         LiabilityRecordMapper liabilityRecordMapper,
         HumanRelationRecordMapper humanRelationRecordMapper,
-        AccountService accountService
+        AccountService accountService,
+        GoldPriceService goldPriceService,
+        AssetSnapshotService assetSnapshotService
     ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
@@ -143,10 +154,13 @@ public class AssetTrendService {
         this.investmentPositionMapper = investmentPositionMapper;
         this.investmentTransactionMapper = investmentTransactionMapper;
         this.investmentPriceQuoteMapper = investmentPriceQuoteMapper;
+        this.investmentProductMapper = investmentProductMapper;
         this.debtRecordMapper = debtRecordMapper;
         this.liabilityRecordMapper = liabilityRecordMapper;
         this.humanRelationRecordMapper = humanRelationRecordMapper;
         this.accountService = accountService;
+        this.goldPriceService = goldPriceService;
+        this.assetSnapshotService = assetSnapshotService;
     }
 
     public AssetTrendResponse trend(Long userId, Long accountId, String range) {
@@ -154,7 +168,7 @@ public class AssetTrendService {
         TrendContext context = buildTrendContext(userId, accounts);
         TrendRangeMeta rangeMeta = resolveTrendRange(range, accounts, context);
         List<LocalDate> bucketDates = buildTrendBucketDates(rangeMeta);
-        List<AssetTrendPointResponse> trendPoints = buildTrendPoints(accounts, context, rangeMeta, bucketDates);
+        List<AssetTrendPointResponse> trendPoints = buildTrendPoints(userId, accountId, accounts, context, rangeMeta, bucketDates);
         TrendRangeMeta allRangeMeta = resolveTrendRange("all", accounts, context);
         ProfitSummary cumulativeSummary = buildCumulativeSummary(
             accounts,
@@ -495,27 +509,55 @@ public class AssetTrendService {
     }
 
     private List<AssetTrendPointResponse> buildTrendPoints(
+        Long userId,
+        Long accountId,
         List<TrendAccount> accounts,
         TrendContext context,
         TrendRangeMeta rangeMeta,
         List<LocalDate> bucketDates
     ) {
+        Map<LocalDate, BigDecimal> snapshotTotals = assetSnapshotService.getTotalAssetSnapshots(
+            userId,
+            accountId,
+            rangeMeta.startDate(),
+            rangeMeta.endDate()
+        );
         List<AssetTrendPointResponse> points = new ArrayList<>();
         for (LocalDate bucketDate : bucketDates) {
             AssetTrendPointResponse point = new AssetTrendPointResponse();
             point.setKey(bucketDate.toString());
             point.setLabel(buildTrendPointLabel(bucketDate, rangeMeta));
-            point.setValue(sumAssetsAtDate(accounts, context, bucketDate));
+            point.setValue(resolveTrendPointValue(userId, accountId, accounts, context, snapshotTotals, bucketDate));
             points.add(point);
         }
         if (points.isEmpty()) {
             AssetTrendPointResponse point = new AssetTrendPointResponse();
             point.setKey(rangeMeta.endDate().toString());
             point.setLabel(buildTrendPointLabel(rangeMeta.endDate(), rangeMeta));
-            point.setValue(sumAssetsAtDate(accounts, context, rangeMeta.endDate()));
+            point.setValue(resolveTrendPointValue(userId, accountId, accounts, context, snapshotTotals, rangeMeta.endDate()));
             points.add(point);
         }
         return points;
+    }
+
+    private BigDecimal resolveTrendPointValue(
+        Long userId,
+        Long accountId,
+        List<TrendAccount> accounts,
+        TrendContext context,
+        Map<LocalDate, BigDecimal> snapshotTotals,
+        LocalDate bucketDate
+    ) {
+        if (bucketDate != null && bucketDate.isBefore(LocalDate.now())) {
+            BigDecimal snapshotValue = snapshotTotals.get(bucketDate);
+            if (snapshotValue != null) {
+                return snapshotValue.setScale(2, RoundingMode.HALF_UP);
+            }
+            BigDecimal fallbackValue = sumAssetsAtDate(accounts, context, bucketDate);
+            assetSnapshotService.saveSnapshot(userId, accountId, bucketDate, fallbackValue);
+            return fallbackValue;
+        }
+        return sumAssetsAtDate(accounts, context, bucketDate);
     }
 
     private ProfitSummary buildCumulativeSummary(
@@ -910,6 +952,8 @@ public class AssetTrendService {
             return Collections.emptyMap();
         }
         Map<Long, NavigableMap<LocalDate, BigDecimal>> history = new HashMap<>();
+        Map<Long, InvestmentProductEntity> products = investmentProductMapper.selectByIds(productIds).stream()
+            .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
         for (InvestmentPriceQuoteEntity quote : investmentPriceQuoteMapper.selectList(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
             .in(InvestmentPriceQuoteEntity::getProductId, productIds)
             .orderByAsc(InvestmentPriceQuoteEntity::getProductId)
@@ -923,6 +967,36 @@ public class AssetTrendService {
             }
             history.computeIfAbsent(quote.getProductId(), key -> new TreeMap<>())
                 .put(quoteDate, price.setScale(6, RoundingMode.HALF_UP));
+        }
+        for (Long productId : productIds) {
+            InvestmentProductEntity product = products.get(productId);
+            if (product == null || !"gold".equals(product.getProductType())) {
+                continue;
+            }
+            history.computeIfAbsent(productId, key -> loadGoldPriceHistory());
+        }
+        return history;
+    }
+
+    private NavigableMap<LocalDate, BigDecimal> loadGoldPriceHistory() {
+        NavigableMap<LocalDate, BigDecimal> history = new TreeMap<>();
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("M/d");
+            goldPriceService.getGoldPrice("7d").getChartPoints().forEach((point) -> {
+                if (point == null || point.getPrice() == null || point.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                    return;
+                }
+                String label = point.getLabel();
+                if (!StringUtils.hasText(label)) {
+                    return;
+                }
+                String monthDayText = label.split(" ")[0].trim();
+                MonthDay monthDay = MonthDay.parse(monthDayText, formatter.withLocale(Locale.CHINA));
+                LocalDate date = monthDay.atYear(LocalDate.now().getYear());
+                history.put(date, point.getPrice().setScale(6, RoundingMode.HALF_UP));
+            });
+        } catch (Exception ignored) {
+            return history;
         }
         return history;
     }
