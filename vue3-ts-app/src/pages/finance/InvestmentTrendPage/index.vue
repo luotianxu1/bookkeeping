@@ -10,6 +10,7 @@ import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { useTheme } from '@/utils/theme'
 import {
   getAssetTrend,
+  type AssetTrendAccountChange,
   type AssetTrend,
   type AssetTrendAllocation,
   type AssetTrendContributor,
@@ -153,6 +154,8 @@ const syncText = computed(() => {
   return `更新于 ${formatDateTime(trend.value.lastSyncedAt)}`
 })
 const allocations = computed(() => trend.value?.allocations ?? [])
+const showAccountChangeList = computed(() => trendRangeKey.value === '7d' && !accountId.value)
+const accountChanges = computed(() => trend.value?.accountChanges ?? [])
 const trendRangeKey = computed<AssetTrendRange>(() => {
   const range = trend.value?.range
   return range === '7d' || range === '30d' || range === 'ytd' || range === 'all'
@@ -398,6 +401,7 @@ function mergeAssetTrendResults(results: AssetTrend[]) {
   const allocationOrder: string[] = []
   const allocationMap = new Map<string, AssetTrendAllocation>()
   const contributorMap = new Map<string, AssetTrendContributor>()
+  const accountChangeMap = new Map<string, AssetTrendAccountChange>()
 
   let totalAssets = 0
   let cumulativeProfit = 0
@@ -455,6 +459,26 @@ function mergeAssetTrendResults(results: AssetTrend[]) {
       current.contributionAmount += Number(item.contributionAmount ?? 0)
       contributorMap.set(key, current)
     })
+
+    result.accountChanges.forEach((item) => {
+      const key = `${item.accountId}`
+      const current = accountChangeMap.get(key) ?? {
+        accountId: item.accountId,
+        accountName: item.accountName,
+        accountTypeCode: item.accountTypeCode,
+        accountTypeLabel: item.accountTypeLabel,
+        snapshotDate: item.snapshotDate,
+        currentAssets: 0,
+        previousAssets: 0,
+        changeAmount: 0,
+        changeRate: null,
+      }
+      current.currentAssets += Number(item.currentAssets ?? 0)
+      current.previousAssets += Number(item.previousAssets ?? 0)
+      current.changeAmount += Number(item.changeAmount ?? 0)
+      current.snapshotDate = current.snapshotDate || item.snapshotDate
+      accountChangeMap.set(key, current)
+    })
   })
 
   const mergedTrendPoints = pointOrder
@@ -475,6 +499,15 @@ function mergeAssetTrendResults(results: AssetTrend[]) {
       contributionRate: totalAssets > 0 ? (Number(item.contributionAmount ?? 0) / totalAssets) * 100 : 0,
     }))
     .sort((left, right) => Number(right.contributionAmount ?? 0) - Number(left.contributionAmount ?? 0))
+
+  const mergedAccountChanges = Array.from(accountChangeMap.values())
+    .map((item) => ({
+      ...item,
+      changeRate: Number(item.previousAssets ?? 0) > 0
+        ? (Number(item.changeAmount ?? 0) / Number(item.previousAssets ?? 0)) * 100
+        : null,
+    }))
+    .sort((left, right) => Math.abs(Number(right.changeAmount ?? 0)) - Math.abs(Number(left.changeAmount ?? 0)))
 
   const previousTotal = mergedTrendPoints.length > 1
     ? Number(mergedTrendPoints[mergedTrendPoints.length - 2]?.value ?? 0)
@@ -502,6 +535,7 @@ function mergeAssetTrendResults(results: AssetTrend[]) {
     trendPoints: mergedTrendPoints,
     allocations: mergedAllocations,
     contributors: mergedContributors,
+    accountChanges: mergedAccountChanges,
   } satisfies AssetTrend
 }
 
@@ -570,6 +604,16 @@ function getAccountTypeColors(value?: string | null) {
     return { fill: '#EA580C', track: isDark.value ? 'rgba(124, 45, 18, 0.24)' : '#FFF7ED' }
   }
   return { fill: '#64748B', track: isDark.value ? '#182233' : '#F1F5F9' }
+}
+
+function formatChangeRate(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) {
+    return '--'
+  }
+  return `${value.toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}%`
 }
 
 function formatCurrency(value?: number | null) {
@@ -711,6 +755,50 @@ function getTrendYAxisBounds(values: number[]) {
         </header>
         <div v-if="hasTrendPoints" ref="chartRef" class="investment-trend-chart"></div>
         <p v-else class="investment-trend-empty">当前区间暂无可展示的资产走势</p>
+      </section>
+
+      <section v-if="showAccountChangeList" class="investment-trend-card" aria-label="账户较昨日变化">
+        <header class="investment-trend-card-head">
+          <div>
+            <strong>较昨日变化</strong>
+            <p>基于 {{ accountChanges[0]?.snapshotDate ?? '--' }} 的账户快照</p>
+          </div>
+        </header>
+
+        <div v-if="accountChanges.length > 0" class="account-change-list">
+          <article
+            v-for="item in accountChanges"
+            :key="item.accountId"
+            class="account-change-item"
+          >
+            <div class="account-change-main">
+              <div class="account-change-title">
+                <strong>{{ item.accountName }}</strong>
+                <span>{{ item.accountTypeLabel }}</span>
+              </div>
+              <div class="account-change-meta">
+                <span>昨日 {{ formatCurrency(item.previousAssets) }}</span>
+                <span>当前 {{ formatCurrency(item.currentAssets) }}</span>
+              </div>
+            </div>
+            <div class="account-change-side">
+              <AmountText
+                tag="strong"
+                class="account-change-amount"
+                :value="formatCurrency(item.changeAmount)"
+                show-sign
+                show-unit
+              />
+              <AmountText
+                tag="span"
+                class="account-change-rate"
+                :value="formatChangeRate(item.changeRate)"
+                show-sign
+              />
+            </div>
+          </article>
+        </div>
+        <p v-else class="investment-trend-empty">昨天的账户快照还没有生成</p>
       </section>
 
       <section class="investment-trend-card" aria-label="资产分布">

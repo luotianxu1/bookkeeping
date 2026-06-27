@@ -4,9 +4,11 @@ import com.example.common.result.Result;
 import com.example.finance.dto.AccountRequest;
 import com.example.finance.dto.AccountResponse;
 import com.example.finance.dto.AccountSortOrderRequest;
+import com.example.finance.dto.AssetSnapshotBackfillRequest;
 import com.example.finance.dto.AssetTrendResponse;
 import com.example.finance.dto.FinanceOverviewResponse;
 import com.example.finance.service.AccountService;
+import com.example.finance.service.AssetSnapshotService;
 import com.example.finance.service.AssetTrendService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,10 +35,12 @@ public class AccountController {
 
     private final AccountService accountService;
     private final AssetTrendService assetTrendService;
+    private final AssetSnapshotService assetSnapshotService;
 
-    public AccountController(AccountService accountService, AssetTrendService assetTrendService) {
+    public AccountController(AccountService accountService, AssetTrendService assetTrendService, AssetSnapshotService assetSnapshotService) {
         this.accountService = accountService;
         this.assetTrendService = assetTrendService;
+        this.assetSnapshotService = assetSnapshotService;
     }
 
     @GetMapping
@@ -97,6 +101,12 @@ public class AccountController {
     public Result<Void> updateSortOrders(@Valid @RequestBody AccountSortOrderRequest request) {
         accountService.updateSortOrders(request);
         return Result.ok();
+    }
+
+    @PostMapping("/actions/snapshot-backfill")
+    @Operation(summary = "补跑资产快照")
+    public Result<Integer> backfillSnapshot(@Valid @RequestBody AssetSnapshotBackfillRequest request) {
+        return Result.ok(assetSnapshotService.captureDailySnapshots(request.getSnapshotDate()));
     }
 
     @DeleteMapping("/{id:\\d+}")

@@ -164,6 +164,11 @@ export interface CategoryQuery {
   status?: string
 }
 
+export interface AssetSnapshotBackfillRequest {
+  userId: number
+  snapshotDate?: string | null
+}
+
 export type GoldPriceRange = '1d' | '7d' | '30d' | '1y'
 
 export interface GoldRealtimePrice {
@@ -704,6 +709,18 @@ export interface AssetTrendContributor {
   contributionRate: number
 }
 
+export interface AssetTrendAccountChange {
+  accountId: number
+  accountName: string
+  accountTypeCode?: string | null
+  accountTypeLabel: string
+  snapshotDate: string
+  currentAssets: number
+  previousAssets: number
+  changeAmount: number
+  changeRate?: number | null
+}
+
 export interface AssetTrend {
   userId: number
   accountId?: number | null
@@ -720,6 +737,7 @@ export interface AssetTrend {
   trendPoints: AssetTrendPoint[]
   allocations: AssetTrendAllocation[]
   contributors: AssetTrendContributor[]
+  accountChanges: AssetTrendAccountChange[]
 }
 
 export interface FundProfitForecastAccount {
@@ -1213,6 +1231,10 @@ export function updateAccountSortOrders(params: SaveAccountSortOrdersParams) {
 
 export function deleteAccount(id: number) {
   return requestDelete<void>(financeRequest, `/api/finance/accounts/${id}`)
+}
+
+export function backfillAssetSnapshot(params: AssetSnapshotBackfillRequest) {
+  return requestPost<number, AssetSnapshotBackfillRequest>(financeRequest, '/api/finance/accounts/actions/snapshot-backfill', params)
 }
 
 export function getDebtAccountSummary(userId: number, accountId?: number) {

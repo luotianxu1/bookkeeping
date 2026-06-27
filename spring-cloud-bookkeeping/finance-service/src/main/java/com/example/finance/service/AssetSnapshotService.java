@@ -55,6 +55,14 @@ public class AssetSnapshotService {
             List<AccountResponse> activeAccounts = accountService.list(userId, null, ACTIVE_STATUS).stream()
                 .filter(item -> Boolean.TRUE.equals(item.getIncludeInNetWorth()))
                 .toList();
+            if (activeAccounts.isEmpty()) {
+                continue;
+            }
+            boolean hasGoldAccount = activeAccounts.stream()
+                .anyMatch(account -> "gold".equals(account.getAccountTypeCode()));
+            if (hasGoldAccount && !accountService.canResolveStrictRealtimeGoldPrice()) {
+                continue;
+            }
             BigDecimal totalAssets = activeAccounts.stream()
                 .map(accountService::resolveSignedNetWorthBalance)
                 .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
@@ -88,6 +96,18 @@ public class AssetSnapshotService {
                 .orderByAsc(AssetDailySnapshotEntity::getId))
             .forEach(item -> result.put(item.getSnapshotDate(), defaultZero(item.getTotalAssets())));
         return result;
+    }
+
+    public List<AssetDailySnapshotEntity> getAccountSnapshots(Long userId, Set<Long> accountIds, LocalDate snapshotDate) {
+        if (userId == null || snapshotDate == null || accountIds == null || accountIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return assetDailySnapshotMapper.selectList(new LambdaQueryWrapper<AssetDailySnapshotEntity>()
+            .eq(AssetDailySnapshotEntity::getUserId, userId)
+            .in(AssetDailySnapshotEntity::getAccountId, accountIds)
+            .eq(AssetDailySnapshotEntity::getSnapshotDate, snapshotDate)
+            .orderByAsc(AssetDailySnapshotEntity::getAccountId)
+            .orderByAsc(AssetDailySnapshotEntity::getId));
     }
 
     public void saveSnapshot(Long userId, Long accountId, LocalDate snapshotDate, BigDecimal totalAssets) {

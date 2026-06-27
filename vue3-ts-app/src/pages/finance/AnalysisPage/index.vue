@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
+import CommonButton from '@/components/common/CommonButton/index.vue'
 import MonthPicker from '@/components/common/MonthPicker/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
@@ -10,7 +11,10 @@ import YearPicker from '@/components/common/YearPicker/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { useTheme } from '@/utils/theme'
 import {
+  backfillAssetSnapshot,
+  getCategories,
   getTransactionAnalysis,
+  type Category,
   type Transaction,
   type TransactionAnalysis,
   type TransactionAnalysisCategoryBreakdownItem,
@@ -22,6 +26,7 @@ import {
 type PeriodLabel = '月' | '年'
 type SummaryTab = '收入' | '支出' | '结余'
 type TrendTone = 'income' | 'expense' | 'neutral'
+type ExpenseBreakdownLevel = '一级分类' | '二级分类'
 
 type CalendarCell = {
   key: string
@@ -34,17 +39,22 @@ type CalendarCell = {
 const period = ref<PeriodLabel>('月')
 const periodOptions: PeriodLabel[] = ['月', '年']
 const summaryTab = ref<SummaryTab>('支出')
+const expenseBreakdownLevel = ref<ExpenseBreakdownLevel>('一级分类')
 const activeMonth = ref(buildMonthKey(new Date()))
 const activeYear = ref(new Date().getFullYear())
 const selectedDayKey = ref('')
 const selectedYearMonthKey = ref('')
 const analysis = ref<TransactionAnalysis | null>(null)
+const expenseCategories = ref<Category[]>([])
 const isLoading = ref(false)
+const isBackfillingSnapshot = ref(false)
+const snapshotMessage = ref('')
 const pageError = ref('')
 const requestSerial = ref(0)
 const { isDark } = useTheme()
 
 const {
+  currentUser,
   familyView,
   familyViewOptions,
   selectedFamilyView,
@@ -74,6 +84,7 @@ const toneColorMap: Record<'income' | 'expense' | 'surplus', string> = {
   expense: '#10B981',
   surplus: '#2563EB',
 }
+const expenseBreakdownLevelOptions: ExpenseBreakdownLevel[] = ['一级分类', '二级分类']
 const emptySummary = {
   income: 0,
   expense: 0,
@@ -101,7 +112,11 @@ const summaryCards = computed(() => [
 const breakdownItems = computed<TransactionAnalysisCategoryBreakdownItem[]>(() => {
   if (!analysis.value) return []
   if (summaryTab.value === '收入') return analysis.value.incomeBreakdown
-  if (summaryTab.value === '支出') return analysis.value.expenseBreakdown
+  if (summaryTab.value === '支出') {
+    return expenseBreakdownLevel.value === '一级分类'
+      ? buildExpenseParentBreakdown(analysis.value.expenseBreakdown)
+      : analysis.value.expenseBreakdown
+  }
   return []
 })
 const periodSummaries = computed(() => analysis.value?.periodSummaries ?? [])
@@ -114,6 +129,7 @@ const familyViewHint = computed(() => {
     ? '当前为家庭总计视角，可查看全家收支分析。'
     : `当前查看 ${selectedFamilyView.value.label} 的收支分析。`
 })
+const canBackfillSnapshot = computed(() => Boolean(currentUser.value) && !isReadOnlyFamilyView.value)
 const calendarRows = computed<CalendarCell[][]>(() => {
   if (analysisPeriod.value !== 'month' || !analysis.value?.month) {
     return []
@@ -269,8 +285,47 @@ onBeforeUnmount(() => {
 
 async function initializePage() {
   await loadFamilyMembers()
+  await loadExpenseCategories()
   await loadAnalysis()
   void syncCharts()
+}
+
+async function runSnapshotBackfill() {
+  const user = currentUser.value
+  if (!user) {
+    snapshotMessage.value = '请先登录'
+    return
+  }
+
+  isBackfillingSnapshot.value = true
+  snapshotMessage.value = ''
+
+  try {
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const snapshotDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
+    const savedCount = await backfillAssetSnapshot({
+      userId: user.id,
+      snapshotDate,
+    })
+    snapshotMessage.value = `已补跑昨天快照，生成 ${savedCount} 条记录`
+    await loadAnalysis()
+  } catch (error) {
+    snapshotMessage.value = error instanceof Error ? error.message : '补跑失败'
+  } finally {
+    isBackfillingSnapshot.value = false
+  }
+}
+
+async function loadExpenseCategories() {
+  try {
+    expenseCategories.value = await getCategories({
+      type: 'expense',
+      status: 'active',
+    })
+  } catch {
+    expenseCategories.value = []
+  }
 }
 
 async function loadAnalysis() {
@@ -450,6 +505,53 @@ function mergeBreakdownItems(
     current.transactionCount += Number(item.transactionCount ?? 0)
     target.set(key, current)
   })
+}
+
+function buildExpenseParentBreakdown(source: TransactionAnalysisCategoryBreakdownItem[]) {
+  if (source.length === 0) {
+    return []
+  }
+
+  const categoriesById = new Map<number, Category>()
+  expenseCategories.value.forEach((item) => {
+    categoriesById.set(item.id, item)
+  })
+
+  const totals = new Map<string, TransactionAnalysisCategoryBreakdownItem>()
+  const totalAmount = source.reduce((sum, item) => sum + Number(item.amount ?? 0), 0)
+
+  source.forEach((item) => {
+    const currentCategory = item.categoryId != null ? categoriesById.get(item.categoryId) : null
+    const parentCategory = currentCategory?.parentId != null
+      ? categoriesById.get(currentCategory.parentId)
+      : currentCategory
+
+    const categoryId = parentCategory?.id ?? item.categoryId ?? null
+    const categoryName = parentCategory?.name ?? item.categoryName
+    const categoryIcon = parentCategory?.icon ?? item.categoryIcon
+    const categoryColor = parentCategory?.color ?? item.categoryColor
+    const key = categoryId != null ? `category:${categoryId}` : `name:${categoryName}`
+
+    const current = totals.get(key) ?? {
+      categoryId,
+      categoryName,
+      categoryIcon,
+      categoryColor,
+      amount: 0,
+      percent: 0,
+      transactionCount: 0,
+    }
+    current.amount += Number(item.amount ?? 0)
+    current.transactionCount += Number(item.transactionCount ?? 0)
+    totals.set(key, current)
+  })
+
+  return Array.from(totals.values())
+    .map((item) => ({
+      ...item,
+      percent: totalAmount > 0 ? (Number(item.amount ?? 0) / totalAmount) * 100 : 0,
+    }))
+    .sort((left, right) => Number(right.amount ?? 0) - Number(left.amount ?? 0))
 }
 
 function finalizeBreakdownItems(
@@ -829,11 +931,21 @@ function formatTime(value: string) {
           </option>
         </select>
       </label>
+      <CommonButton
+        v-if="canBackfillSnapshot"
+        variant="secondary"
+        size="sm"
+        :disabled="isBackfillingSnapshot"
+        @click="runSnapshotBackfill"
+      >
+        {{ isBackfillingSnapshot ? '补跑中' : '补跑昨天快照' }}
+      </CommonButton>
     </PageHeader>
 
     <p v-if="familyViewHint" class="analysis-view-hint">
       {{ familyViewHint }}
     </p>
+    <p v-if="snapshotMessage" class="analysis-status">{{ snapshotMessage }}</p>
 
     <SegmentedControl v-model="period" :options="periodOptions" label="月年切换" />
 
@@ -858,8 +970,16 @@ function formatTime(value: string) {
       </section>
 
       <section v-if="summaryTab !== '结余'" class="card">
-        <header class="card-head">
+        <header class="card-head split">
           <strong>{{ breakdownSectionTitle }}</strong>
+          <SegmentedControl
+            v-if="summaryTab === '支出'"
+            v-model="expenseBreakdownLevel"
+            :options="expenseBreakdownLevelOptions"
+            label="支出分类层级切换"
+            variant="surface"
+            size="small"
+          />
         </header>
         <div ref="pieRef" class="pie-chart"></div>
         <div class="breakdown-list">

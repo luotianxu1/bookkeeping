@@ -56,6 +56,10 @@
   line-height: 1.5;
 }
 
+.analysis-status {
+  margin: 0;
+}
+
 .analysis-status,
 .card-empty {
   color: var(--color-text-subtle);
@@ -110,21 +114,53 @@
   background: var(--color-bg-card);
 }
 
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
 .card-head strong {
   color: var(--color-text-primary);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
 
+.card-head p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
 .card-head.split {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
 }
 
 .card-head.split span {
   color: var(--color-text-muted);
   font-size: var(--font-size-12);
+}
+
+.card-head :deep(.segmented-control) {
+  flex-shrink: 0;
+  padding: 2px;
+  border-radius: var(--radius-12);
+}
+
+.card-head :deep(.segmented-control-item) {
+  min-height: 30px;
+  padding-left: var(--space-8);
+  padding-right: var(--space-8);
+  font-size: 11px;
+}
+
+.card-head :deep(.segmented-control-indicator) {
+  top: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--count));
+  height: calc(100% - 4px);
 }
 
 .pie-chart {
