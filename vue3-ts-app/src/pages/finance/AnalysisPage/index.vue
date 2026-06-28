@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
-import CommonButton from '@/components/common/CommonButton/index.vue'
 import MonthPicker from '@/components/common/MonthPicker/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
@@ -11,7 +10,6 @@ import YearPicker from '@/components/common/YearPicker/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { useTheme } from '@/utils/theme'
 import {
-  backfillAssetSnapshot,
   getCategories,
   getTransactionAnalysis,
   type Category,
@@ -47,14 +45,11 @@ const selectedYearMonthKey = ref('')
 const analysis = ref<TransactionAnalysis | null>(null)
 const expenseCategories = ref<Category[]>([])
 const isLoading = ref(false)
-const isBackfillingSnapshot = ref(false)
-const snapshotMessage = ref('')
 const pageError = ref('')
 const requestSerial = ref(0)
 const { isDark } = useTheme()
 
 const {
-  currentUser,
   familyView,
   familyViewOptions,
   selectedFamilyView,
@@ -129,7 +124,6 @@ const familyViewHint = computed(() => {
     ? '当前为家庭总计视角，可查看全家收支分析。'
     : `当前查看 ${selectedFamilyView.value.label} 的收支分析。`
 })
-const canBackfillSnapshot = computed(() => Boolean(currentUser.value) && !isReadOnlyFamilyView.value)
 const calendarRows = computed<CalendarCell[][]>(() => {
   if (analysisPeriod.value !== 'month' || !analysis.value?.month) {
     return []
@@ -288,33 +282,6 @@ async function initializePage() {
   await loadExpenseCategories()
   await loadAnalysis()
   void syncCharts()
-}
-
-async function runSnapshotBackfill() {
-  const user = currentUser.value
-  if (!user) {
-    snapshotMessage.value = '请先登录'
-    return
-  }
-
-  isBackfillingSnapshot.value = true
-  snapshotMessage.value = ''
-
-  try {
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    const snapshotDate = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
-    const savedCount = await backfillAssetSnapshot({
-      userId: user.id,
-      snapshotDate,
-    })
-    snapshotMessage.value = `已补跑昨天快照，生成 ${savedCount} 条记录`
-    await loadAnalysis()
-  } catch (error) {
-    snapshotMessage.value = error instanceof Error ? error.message : '补跑失败'
-  } finally {
-    isBackfillingSnapshot.value = false
-  }
 }
 
 async function loadExpenseCategories() {
@@ -931,21 +898,11 @@ function formatTime(value: string) {
           </option>
         </select>
       </label>
-      <CommonButton
-        v-if="canBackfillSnapshot"
-        variant="secondary"
-        size="sm"
-        :disabled="isBackfillingSnapshot"
-        @click="runSnapshotBackfill"
-      >
-        {{ isBackfillingSnapshot ? '补跑中' : '补跑昨天快照' }}
-      </CommonButton>
     </PageHeader>
 
     <p v-if="familyViewHint" class="analysis-view-hint">
       {{ familyViewHint }}
     </p>
-    <p v-if="snapshotMessage" class="analysis-status">{{ snapshotMessage }}</p>
 
     <SegmentedControl v-model="period" :options="periodOptions" label="月年切换" />
 

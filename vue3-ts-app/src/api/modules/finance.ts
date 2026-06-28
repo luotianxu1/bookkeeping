@@ -164,11 +164,6 @@ export interface CategoryQuery {
   status?: string
 }
 
-export interface AssetSnapshotBackfillRequest {
-  userId: number
-  snapshotDate?: string | null
-}
-
 export type GoldPriceRange = '1d' | '7d' | '30d' | '1y'
 
 export interface GoldRealtimePrice {
@@ -1231,10 +1226,6 @@ export function updateAccountSortOrders(params: SaveAccountSortOrdersParams) {
 
 export function deleteAccount(id: number) {
   return requestDelete<void>(financeRequest, `/api/finance/accounts/${id}`)
-}
-
-export function backfillAssetSnapshot(params: AssetSnapshotBackfillRequest) {
-  return requestPost<number, AssetSnapshotBackfillRequest>(financeRequest, '/api/finance/accounts/actions/snapshot-backfill', params)
 }
 
 export function getDebtAccountSummary(userId: number, accountId?: number) {
