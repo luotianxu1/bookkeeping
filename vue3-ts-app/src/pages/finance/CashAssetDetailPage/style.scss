@@ -2,6 +2,18 @@
   display: grid;
   gap: var(--space-6);
   padding-bottom: var(--space-72);
+  --page-header-bg: var(--color-bg-page);
+}
+
+.cash-asset-detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  background: var(--color-bg-page);
 }
 
 .cash-asset-message {

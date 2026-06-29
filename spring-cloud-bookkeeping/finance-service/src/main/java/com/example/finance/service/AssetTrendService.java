@@ -3,7 +3,6 @@ package com.example.finance.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.finance.dto.AccountResponse;
 import com.example.finance.dto.AssetTrendAllocationResponse;
-import com.example.finance.dto.AssetTrendAccountChangeResponse;
 import com.example.finance.dto.AssetTrendContributorResponse;
 import com.example.finance.dto.AssetTrendPointResponse;
 import com.example.finance.dto.AssetTrendResponse;
@@ -47,7 +46,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
@@ -205,7 +203,6 @@ public class AssetTrendService {
         response.setTrendPoints(trendPoints);
         response.setAllocations(buildAllocations(accounts));
         response.setContributors(buildContributors(accounts, context, rangeMeta));
-        response.setAccountChanges(buildAccountChanges(userId, accountId, accounts, rangeMeta));
         return response;
     }
 
@@ -556,9 +553,7 @@ public class AssetTrendService {
             if (snapshotValue != null) {
                 return snapshotValue.setScale(2, RoundingMode.HALF_UP);
             }
-            BigDecimal fallbackValue = sumAssetsAtDate(accounts, context, bucketDate);
-            assetSnapshotService.saveSnapshot(userId, accountId, bucketDate, fallbackValue);
-            return fallbackValue;
+            return sumAssetsAtDate(accounts, context, bucketDate);
         }
         return sumAssetsAtDate(accounts, context, bucketDate);
     }
@@ -840,62 +835,6 @@ public class AssetTrendService {
                 (AssetTrendContributorResponse item) -> defaultZero(item.getContributionAmount()).abs()
             ).reversed())
             .limit(3)
-            .toList();
-    }
-
-    private List<AssetTrendAccountChangeResponse> buildAccountChanges(
-        Long userId,
-        Long accountId,
-        List<TrendAccount> accounts,
-        TrendRangeMeta rangeMeta
-    ) {
-        if (userId == null || accountId != null || accounts.isEmpty() || rangeMeta == null || !"7d".equals(rangeMeta.rangeKey())) {
-            return Collections.emptyList();
-        }
-
-        LocalDate snapshotDate = LocalDate.now().minusDays(1);
-        Set<Long> accountIds = accounts.stream()
-            .map(TrendAccount::id)
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
-        if (accountIds.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        Map<Long, BigDecimal> previousAssetsByAccountId = assetSnapshotService.getAccountSnapshots(userId, accountIds, snapshotDate).stream()
-            .collect(Collectors.toMap(
-                AssetDailySnapshotEntity::getAccountId,
-                item -> defaultZero(item.getTotalAssets()).setScale(2, RoundingMode.HALF_UP),
-                (left, right) -> right
-            ));
-        if (previousAssetsByAccountId.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return accounts.stream()
-            .map(account -> {
-                BigDecimal previousAssets = previousAssetsByAccountId.get(account.id());
-                if (previousAssets == null) {
-                    return null;
-                }
-                BigDecimal currentAssets = defaultZero(account.currentBalance()).setScale(2, RoundingMode.HALF_UP);
-                BigDecimal changeAmount = currentAssets.subtract(previousAssets).setScale(2, RoundingMode.HALF_UP);
-                AssetTrendAccountChangeResponse item = new AssetTrendAccountChangeResponse();
-                item.setAccountId(account.id());
-                item.setAccountName(account.name());
-                item.setAccountTypeCode(account.accountTypeCode());
-                item.setAccountTypeLabel(StringUtils.hasText(account.accountTypeName()) ? account.accountTypeName() : "其他");
-                item.setSnapshotDate(snapshotDate);
-                item.setCurrentAssets(currentAssets);
-                item.setPreviousAssets(previousAssets);
-                item.setChangeAmount(changeAmount);
-                item.setChangeRate(rate(changeAmount, previousAssets));
-                return item;
-            })
-            .filter(Objects::nonNull)
-            .sorted(Comparator.comparing(
-                (AssetTrendAccountChangeResponse item) -> defaultZero(item.getChangeAmount()).abs()
-            ).reversed())
             .toList();
     }
 

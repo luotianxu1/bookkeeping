@@ -1,13 +1,18 @@
 .gold-price-page {
   display: grid;
   gap: var(--space-6);
+  --page-header-bg: var(--color-bg-page);
 }
 
 .gold-price-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
+  background: var(--color-bg-page);
 }
 
 .gold-price-header :deep(.page-header) {

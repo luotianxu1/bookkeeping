@@ -14,9 +14,9 @@
   overflow-y: auto;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 10px 16px calc(var(--space-96) + env(safe-area-inset-bottom, 0px));
+  padding: 0 16px calc(var(--space-96) + env(safe-area-inset-bottom, 0px));
 }
 
 .page-content.without-nav {
-  padding: 10px 16px calc(var(--space-16) + env(safe-area-inset-bottom, 0px));
+  padding: 0 16px calc(var(--space-16) + env(safe-area-inset-bottom, 0px));
 }

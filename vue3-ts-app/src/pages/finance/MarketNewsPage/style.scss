@@ -1,13 +1,18 @@
 .market-news-page {
   display: grid;
   gap: var(--space-6);
+  --page-header-bg: var(--color-bg-page);
 }
 
 .market-news-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
+  background: var(--color-bg-page);
 }
 
 .market-news-header :deep(.page-header) {

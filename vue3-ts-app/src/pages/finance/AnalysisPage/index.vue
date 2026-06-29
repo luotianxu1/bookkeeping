@@ -10,9 +10,7 @@ import YearPicker from '@/components/common/YearPicker/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { useTheme } from '@/utils/theme'
 import {
-  getCategories,
   getTransactionAnalysis,
-  type Category,
   type Transaction,
   type TransactionAnalysis,
   type TransactionAnalysisCategoryBreakdownItem,
@@ -24,7 +22,6 @@ import {
 type PeriodLabel = '月' | '年'
 type SummaryTab = '收入' | '支出' | '结余'
 type TrendTone = 'income' | 'expense' | 'neutral'
-type ExpenseBreakdownLevel = '一级分类' | '二级分类'
 
 type CalendarCell = {
   key: string
@@ -37,13 +34,11 @@ type CalendarCell = {
 const period = ref<PeriodLabel>('月')
 const periodOptions: PeriodLabel[] = ['月', '年']
 const summaryTab = ref<SummaryTab>('支出')
-const expenseBreakdownLevel = ref<ExpenseBreakdownLevel>('一级分类')
 const activeMonth = ref(buildMonthKey(new Date()))
 const activeYear = ref(new Date().getFullYear())
 const selectedDayKey = ref('')
 const selectedYearMonthKey = ref('')
 const analysis = ref<TransactionAnalysis | null>(null)
-const expenseCategories = ref<Category[]>([])
 const isLoading = ref(false)
 const pageError = ref('')
 const requestSerial = ref(0)
@@ -79,7 +74,6 @@ const toneColorMap: Record<'income' | 'expense' | 'surplus', string> = {
   expense: '#10B981',
   surplus: '#2563EB',
 }
-const expenseBreakdownLevelOptions: ExpenseBreakdownLevel[] = ['一级分类', '二级分类']
 const emptySummary = {
   income: 0,
   expense: 0,
@@ -107,11 +101,7 @@ const summaryCards = computed(() => [
 const breakdownItems = computed<TransactionAnalysisCategoryBreakdownItem[]>(() => {
   if (!analysis.value) return []
   if (summaryTab.value === '收入') return analysis.value.incomeBreakdown
-  if (summaryTab.value === '支出') {
-    return expenseBreakdownLevel.value === '一级分类'
-      ? buildExpenseParentBreakdown(analysis.value.expenseBreakdown)
-      : analysis.value.expenseBreakdown
-  }
+  if (summaryTab.value === '支出') return analysis.value.expenseBreakdown
   return []
 })
 const periodSummaries = computed(() => analysis.value?.periodSummaries ?? [])
@@ -279,20 +269,8 @@ onBeforeUnmount(() => {
 
 async function initializePage() {
   await loadFamilyMembers()
-  await loadExpenseCategories()
   await loadAnalysis()
   void syncCharts()
-}
-
-async function loadExpenseCategories() {
-  try {
-    expenseCategories.value = await getCategories({
-      type: 'expense',
-      status: 'active',
-    })
-  } catch {
-    expenseCategories.value = []
-  }
 }
 
 async function loadAnalysis() {
@@ -472,53 +450,6 @@ function mergeBreakdownItems(
     current.transactionCount += Number(item.transactionCount ?? 0)
     target.set(key, current)
   })
-}
-
-function buildExpenseParentBreakdown(source: TransactionAnalysisCategoryBreakdownItem[]) {
-  if (source.length === 0) {
-    return []
-  }
-
-  const categoriesById = new Map<number, Category>()
-  expenseCategories.value.forEach((item) => {
-    categoriesById.set(item.id, item)
-  })
-
-  const totals = new Map<string, TransactionAnalysisCategoryBreakdownItem>()
-  const totalAmount = source.reduce((sum, item) => sum + Number(item.amount ?? 0), 0)
-
-  source.forEach((item) => {
-    const currentCategory = item.categoryId != null ? categoriesById.get(item.categoryId) : null
-    const parentCategory = currentCategory?.parentId != null
-      ? categoriesById.get(currentCategory.parentId)
-      : currentCategory
-
-    const categoryId = parentCategory?.id ?? item.categoryId ?? null
-    const categoryName = parentCategory?.name ?? item.categoryName
-    const categoryIcon = parentCategory?.icon ?? item.categoryIcon
-    const categoryColor = parentCategory?.color ?? item.categoryColor
-    const key = categoryId != null ? `category:${categoryId}` : `name:${categoryName}`
-
-    const current = totals.get(key) ?? {
-      categoryId,
-      categoryName,
-      categoryIcon,
-      categoryColor,
-      amount: 0,
-      percent: 0,
-      transactionCount: 0,
-    }
-    current.amount += Number(item.amount ?? 0)
-    current.transactionCount += Number(item.transactionCount ?? 0)
-    totals.set(key, current)
-  })
-
-  return Array.from(totals.values())
-    .map((item) => ({
-      ...item,
-      percent: totalAmount > 0 ? (Number(item.amount ?? 0) / totalAmount) * 100 : 0,
-    }))
-    .sort((left, right) => Number(right.amount ?? 0) - Number(left.amount ?? 0))
 }
 
 function finalizeBreakdownItems(
@@ -927,16 +858,8 @@ function formatTime(value: string) {
       </section>
 
       <section v-if="summaryTab !== '结余'" class="card">
-        <header class="card-head split">
+        <header class="card-head">
           <strong>{{ breakdownSectionTitle }}</strong>
-          <SegmentedControl
-            v-if="summaryTab === '支出'"
-            v-model="expenseBreakdownLevel"
-            :options="expenseBreakdownLevelOptions"
-            label="支出分类层级切换"
-            variant="surface"
-            size="small"
-          />
         </header>
         <div ref="pieRef" class="pie-chart"></div>
         <div class="breakdown-list">

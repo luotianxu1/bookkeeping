@@ -704,18 +704,6 @@ export interface AssetTrendContributor {
   contributionRate: number
 }
 
-export interface AssetTrendAccountChange {
-  accountId: number
-  accountName: string
-  accountTypeCode?: string | null
-  accountTypeLabel: string
-  snapshotDate: string
-  currentAssets: number
-  previousAssets: number
-  changeAmount: number
-  changeRate?: number | null
-}
-
 export interface AssetTrend {
   userId: number
   accountId?: number | null
@@ -732,7 +720,6 @@ export interface AssetTrend {
   trendPoints: AssetTrendPoint[]
   allocations: AssetTrendAllocation[]
   contributors: AssetTrendContributor[]
-  accountChanges: AssetTrendAccountChange[]
 }
 
 export interface FundProfitForecastAccount {

@@ -202,17 +202,7 @@ public class AccountService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         AccountTypeEntity accountType = loadAccountType(account.getAccountTypeId());
-        BigDecimal currentBalance = account.getCurrentBalance() == null
-            ? BigDecimal.ZERO
-            : account.getCurrentBalance();
-        if (accountType != null && "credit".equals(accountType.getBalanceDirection())) {
-            return currentBalance.negate().setScale(2, RoundingMode.HALF_UP);
-        }
-        return currentBalance.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    boolean canResolveStrictRealtimeGoldPrice() {
-        return goldPriceService.getStrictRealtimeSpotPrice() != null;
+        return resolveOverviewBalance(account, accountType).setScale(2, RoundingMode.HALF_UP);
     }
 
     public AccountResponse create(AccountRequest request) {

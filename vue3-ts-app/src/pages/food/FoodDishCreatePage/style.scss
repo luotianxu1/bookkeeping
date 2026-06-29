@@ -4,6 +4,14 @@
   align-content: start;
   gap: var(--space-12);
   color: var(--color-food-text);
+  --page-header-bg: var(--color-food-surface);
+}
+
+.page-head {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--color-food-surface);
 }
 
 .page-head :deep(.page-header h1),

@@ -1,12 +1,17 @@
 .travel-plans-page {
   min-height: 100%;
+  --page-header-bg: var(--color-bg-page);
 }
 
 .travel-list-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--color-bg-page);
 }
 
 .travel-list-header h1 {

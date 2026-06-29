@@ -24,5 +24,4 @@ public class AssetTrendResponse {
     private List<AssetTrendPointResponse> trendPoints;
     private List<AssetTrendAllocationResponse> allocations;
     private List<AssetTrendContributorResponse> contributors;
-    private List<AssetTrendAccountChangeResponse> accountChanges;
 }
