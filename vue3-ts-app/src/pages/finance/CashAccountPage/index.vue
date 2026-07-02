@@ -288,10 +288,13 @@ function showFeedback(message: string, type: 'success' | 'error') {
     />
 
     <header class="cash-account-header">
-      <PageHeader title="现金账户" back-to="/finance/accounts" back-label="返回账户管理" />
-      <button class="cash-account-manage" type="button" @click="toggleManageMode">
-        管理
-      </button>
+      <PageHeader title="现金账户" back-to="/finance/accounts" back-label="返回账户管理">
+        <template #right>
+          <button class="cash-account-manage" type="button" @click="toggleManageMode">
+            管理
+          </button>
+        </template>
+      </PageHeader>
     </header>
 
     <section class="cash-overview-card" aria-label="现金账户总额">

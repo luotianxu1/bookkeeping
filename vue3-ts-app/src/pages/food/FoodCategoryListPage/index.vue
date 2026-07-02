@@ -242,17 +242,20 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
     <template v-if="!pageError">
       <header class="page-head">
-        <PageHeader title="菜品分类" :back-to="getFoodDishListPath(isDark)" />
-        <CommonButton
-          v-if="!showModal"
-          class="manage-link"
-          variant="secondary"
-          size="sm"
-          :class="{ active: isManageMode }"
-          @click="toggleManageMode"
-        >
-          {{ isManageMode ? '完成' : '修改' }}
-        </CommonButton>
+        <PageHeader title="菜品分类" :back-to="getFoodDishListPath(isDark)">
+          <template #right>
+            <CommonButton
+              v-if="!showModal"
+              class="manage-link"
+              variant="secondary"
+              size="sm"
+              :class="{ active: isManageMode }"
+              @click="toggleManageMode"
+            >
+              {{ isManageMode ? '完成' : '修改' }}
+            </CommonButton>
+          </template>
+        </PageHeader>
       </header>
 
       <div class="search-bar">

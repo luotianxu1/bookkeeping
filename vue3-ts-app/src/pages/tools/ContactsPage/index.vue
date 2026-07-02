@@ -288,9 +288,11 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
   <section class="contacts-page" aria-label="联系人管理">
     <PageHeader title="联系人管理" back-to="/tools" back-label="返回工具页" prefer-back-to>
-      <button type="button" class="contacts-manage-button" @click="toggleManageMode">
-        {{ isManageMode ? '完成' : '编辑' }}
-      </button>
+      <template #right>
+        <button type="button" class="contacts-manage-button" @click="toggleManageMode">
+          {{ isManageMode ? '完成' : '编辑' }}
+        </button>
+      </template>
     </PageHeader>
 
     <p v-if="pageError" class="contacts-message contacts-message-error">

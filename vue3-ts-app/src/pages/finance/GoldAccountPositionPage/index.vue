@@ -761,15 +761,17 @@ function toApiDateTime(date: Date) {
     />
 
     <PageHeader title="黄金账户持仓" back-to="/finance/accounts/gold" back-label="返回黄金账户">
-      <button
-        class="gold-position-refresh"
-        type="button"
-        :disabled="isRefreshingGold"
-        aria-label="刷新黄金信息"
-        @click="refreshGoldData"
-      >
-        <span :class="['gold-position-refresh-icon', { spinning: isRefreshingGold }]">↻</span>
-      </button>
+      <template #right>
+        <button
+          class="gold-position-refresh"
+          type="button"
+          :disabled="isRefreshingGold"
+          aria-label="刷新黄金信息"
+          @click="refreshGoldData"
+        >
+          <span :class="['gold-position-refresh-icon', { spinning: isRefreshingGold }]">↻</span>
+        </button>
+      </template>
     </PageHeader>
 
     <p v-if="pageError" class="gold-position-message gold-position-message-error">

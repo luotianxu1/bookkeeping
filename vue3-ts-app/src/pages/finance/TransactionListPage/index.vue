@@ -243,17 +243,19 @@ function showFeedback(message: string, type: 'success' | 'error') {
     />
 
     <PageHeader title="收支列表" back-to="/finance" back-label="返回财务首页">
-      <label v-if="canSwitchFamilyView" class="transaction-family-switch">
-        <select v-model="familyView" class="transaction-family-switch-select" aria-label="切换家庭成员收支视角">
-          <option
-            v-for="option in familyViewOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
+      <template #right>
+        <label v-if="canSwitchFamilyView" class="transaction-family-switch">
+          <select v-model="familyView" class="transaction-family-switch-select" aria-label="切换家庭成员收支视角">
+            <option
+              v-for="option in familyViewOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+      </template>
     </PageHeader>
 
     <p v-if="familyViewHint" class="transaction-view-hint">

@@ -1636,11 +1636,13 @@ function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['iti
 <template>
   <section class="travel-detail-page">
     <PageHeader :title="displayedHeaderTitle" back-to="/tools/travel-plans" back-label="返回旅行列表">
-      <div class="header-action-group">
-        <button class="header-action-button" type="button" @click="goToEditPage">
-          {{ activeTab === 'overview' ? '修改旅行' : isEditingCurrentPage ? '完成' : '编辑' }}
-        </button>
-      </div>
+      <template #right>
+        <div class="header-action-group">
+          <button class="header-action-button" type="button" @click="goToEditPage">
+            {{ activeTab === 'overview' ? '修改旅行' : isEditingCurrentPage ? '完成' : '编辑' }}
+          </button>
+        </div>
+      </template>
     </PageHeader>
 
     <div class="detail-segment" role="tablist" aria-label="旅行详情分页">

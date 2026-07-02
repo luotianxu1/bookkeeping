@@ -362,15 +362,18 @@ function showFeedback(message: string, type: 'success' | 'error') {
     />
 
     <header class="human-relation-account-header">
-      <PageHeader title="人情账户" back-to="/finance/accounts" back-label="返回账户管理" />
-      <button
-        type="button"
-        :class="['human-relation-manage-button', { active: isManageMode }]"
-        :aria-label="isManageMode ? '退出管理模式' : '进入管理模式'"
-        @click="toggleManageMode"
-      >
-        {{ isManageMode ? '完成' : '管理' }}
-      </button>
+      <PageHeader title="人情账户" back-to="/finance/accounts" back-label="返回账户管理">
+        <template #right>
+          <button
+            type="button"
+            :class="['human-relation-manage-button', { active: isManageMode }]"
+            :aria-label="isManageMode ? '退出管理模式' : '进入管理模式'"
+            @click="toggleManageMode"
+          >
+            {{ isManageMode ? '完成' : '管理' }}
+          </button>
+        </template>
+      </PageHeader>
     </header>
 
     <p v-if="pageError" class="human-relation-page-message human-relation-page-message-error">

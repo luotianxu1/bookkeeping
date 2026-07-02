@@ -175,9 +175,11 @@ function formatDateRange(plan: TravelPlan) {
 <template>
   <section class="travel-plans-page">
     <PageHeader title="旅行管理" back-to="/tools" back-label="返回工具页">
-      <button class="header-edit-button" type="button" @click="toggleEditing">
-        {{ isEditing ? '完成' : '编辑' }}
-      </button>
+      <template #right>
+        <button class="header-edit-button" type="button" @click="toggleEditing">
+          {{ isEditing ? '完成' : '编辑' }}
+        </button>
+      </template>
     </PageHeader>
 
     <div class="travel-filter-tabs" role="tablist" aria-label="旅行状态筛选">

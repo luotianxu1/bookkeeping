@@ -910,16 +910,18 @@ function showFeedback(message: string, type: 'success' | 'error') {
     />
 
     <PageHeader title="投资详情" back-to="/finance/accounts/investment" back-label="返回投资账户">
-      <CommonButton
-        v-if="shouldShowQuoteRefreshButton"
-        class="investment-account-header-refresh"
-        variant="secondary"
-        size="sm"
-        aria-label="刷新投资持仓数据"
-        @click="refreshQuoteData"
-    >
-        刷新持仓
-      </CommonButton>
+      <template #right>
+        <CommonButton
+          v-if="shouldShowQuoteRefreshButton"
+          class="investment-account-header-refresh"
+          variant="secondary"
+          size="sm"
+          aria-label="刷新投资持仓数据"
+          @click="refreshQuoteData"
+        >
+          刷新持仓
+        </CommonButton>
+      </template>
     </PageHeader>
 
     <p v-if="pageError" class="investment-message investment-message-error">{{ pageError }}</p>

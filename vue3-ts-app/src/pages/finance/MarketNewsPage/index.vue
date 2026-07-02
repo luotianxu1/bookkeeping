@@ -110,16 +110,19 @@ function formatPublishedAt(value: string | null) {
 <template>
   <section class="market-news-page" aria-label="市场快讯">
     <header class="market-news-header">
-      <PageHeader title="市场快讯" back-to="/finance/more-features" back-label="返回更多功能" />
-      <button
-        class="market-news-refresh"
-        type="button"
-        :disabled="isRefreshing"
-        aria-label="刷新市场快讯"
-        @click="loadMarketNews(true)"
-      >
-        <span :class="['market-news-refresh-icon', { spinning: isRefreshing }]">↻</span>
-      </button>
+      <PageHeader title="市场快讯" back-to="/finance/more-features" back-label="返回更多功能">
+        <template #right>
+          <button
+            class="market-news-refresh"
+            type="button"
+            :disabled="isRefreshing"
+            aria-label="刷新市场快讯"
+            @click="loadMarketNews(true)"
+          >
+            <span :class="['market-news-refresh-icon', { spinning: isRefreshing }]">↻</span>
+          </button>
+        </template>
+      </PageHeader>
     </header>
 
     <section class="market-news-summary-card" aria-label="市场快讯概览">

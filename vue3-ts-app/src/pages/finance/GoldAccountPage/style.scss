@@ -6,17 +6,7 @@
 }
 
 .gold-account-header {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   background: var(--color-bg-page);
-}
-
-.gold-account-header :deep(.page-header) {
-  flex: 1;
 }
 
 .gold-account-header-actions {

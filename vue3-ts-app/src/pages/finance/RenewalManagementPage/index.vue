@@ -534,7 +534,9 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
     <template v-else>
       <PageHeader title="续费管理" back-to="/finance/more-features" back-label="返回更多功能">
-        <button type="button" class="renewal-create-action" @click="openCreateModal">新增</button>
+        <template #right>
+          <button type="button" class="renewal-create-action" @click="openCreateModal">新增</button>
+        </template>
       </PageHeader>
 
       <section class="renewal-summary-card" aria-label="续费总览">

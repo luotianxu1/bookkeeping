@@ -509,26 +509,29 @@ function formatSignedAmount(value: number | null | undefined) {
     />
 
     <header class="gold-account-header">
-      <PageHeader title="黄金账户" back-label="返回账户管理" />
-      <div class="gold-account-header-actions">
-        <button
-          :class="['gold-account-manage', { active: isManageMode }]"
-          type="button"
-          :aria-label="isManageMode ? '退出管理模式' : '进入管理模式'"
-          @click="toggleManageMode"
-        >
-          <span class="gold-account-manage-icon">{{ isManageMode ? '✓' : '≡' }}</span>
-        </button>
-        <button
-          class="gold-account-refresh"
-          type="button"
-          :disabled="isRefreshingGold"
-          aria-label="刷新黄金信息"
-          @click="refreshGoldData"
-        >
-          <span :class="['gold-account-refresh-icon', { spinning: isRefreshingGold }]">↻</span>
-        </button>
-      </div>
+      <PageHeader title="黄金账户" back-label="返回账户管理">
+        <template #right>
+          <div class="gold-account-header-actions">
+            <button
+              :class="['gold-account-manage', { active: isManageMode }]"
+              type="button"
+              :aria-label="isManageMode ? '退出管理模式' : '进入管理模式'"
+              @click="toggleManageMode"
+            >
+              <span class="gold-account-manage-icon">{{ isManageMode ? '✓' : '≡' }}</span>
+            </button>
+            <button
+              class="gold-account-refresh"
+              type="button"
+              :disabled="isRefreshingGold"
+              aria-label="刷新黄金信息"
+              @click="refreshGoldData"
+            >
+              <span :class="['gold-account-refresh-icon', { spinning: isRefreshingGold }]">↻</span>
+            </button>
+          </div>
+        </template>
+      </PageHeader>
     </header>
 
     <p v-if="pageError" class="gold-account-message gold-account-message-error">

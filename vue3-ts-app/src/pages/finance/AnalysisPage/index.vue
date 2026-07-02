@@ -818,17 +818,19 @@ function formatTime(value: string) {
 <template>
   <section class="analysis-page" aria-label="收支分析">
     <PageHeader title="收支分析" back-to="/finance" back-label="返回财务首页">
-      <label v-if="canSwitchFamilyView" class="analysis-family-switch">
-        <select v-model="familyView" class="analysis-family-switch-select" aria-label="切换家庭成员收支分析视角">
-          <option
-            v-for="option in familyViewOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
+      <template #right>
+        <label v-if="canSwitchFamilyView" class="analysis-family-switch">
+          <select v-model="familyView" class="analysis-family-switch-select" aria-label="切换家庭成员收支分析视角">
+            <option
+              v-for="option in familyViewOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+      </template>
     </PageHeader>
 
     <p v-if="familyViewHint" class="analysis-view-hint">

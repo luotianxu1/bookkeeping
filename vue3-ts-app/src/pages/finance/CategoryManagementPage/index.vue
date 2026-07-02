@@ -320,15 +320,18 @@ function canDeleteCategory(category: Category) {
     />
 
     <header class="category-management-header">
-      <PageHeader title="分类管理" back-to="/finance/entry/expense" back-label="返回记一笔" />
-      <button
-        class="category-management-manage"
-        type="button"
-        :class="{ active: isManageMode }"
-        @click="toggleManageMode"
-      >
-        {{ isManageMode ? '完成' : '管理' }}
-      </button>
+      <PageHeader title="分类管理" back-to="/finance/entry/expense" back-label="返回记一笔">
+        <template #right>
+          <button
+            class="category-management-manage"
+            type="button"
+            :class="{ active: isManageMode }"
+            @click="toggleManageMode"
+          >
+            {{ isManageMode ? '完成' : '管理' }}
+          </button>
+        </template>
+      </PageHeader>
     </header>
 
     <SegmentedControl v-model="activeTab" :options="tabOptions" label="分类筛选" />

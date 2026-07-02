@@ -529,15 +529,18 @@ function buildScheduledDate(account: Account, period: number) {
     />
 
     <header class="debt-account-header">
-      <PageHeader title="负债账户" back-to="/finance/accounts" back-label="返回账户管理" />
-      <button
-        type="button"
-        :class="['debt-manage-button', { active: isManageMode }]"
-        :aria-label="isManageMode ? '退出管理模式' : '进入管理模式'"
-        @click="toggleManageMode"
-      >
-        {{ isManageMode ? '完成' : '管理' }}
-      </button>
+      <PageHeader title="负债账户" back-to="/finance/accounts" back-label="返回账户管理">
+        <template #right>
+          <button
+            type="button"
+            :class="['debt-manage-button', { active: isManageMode }]"
+            :aria-label="isManageMode ? '退出管理模式' : '进入管理模式'"
+            @click="toggleManageMode"
+          >
+            {{ isManageMode ? '完成' : '管理' }}
+          </button>
+        </template>
+      </PageHeader>
     </header>
 
     <p v-if="pageError" class="debt-page-message debt-page-message-error">

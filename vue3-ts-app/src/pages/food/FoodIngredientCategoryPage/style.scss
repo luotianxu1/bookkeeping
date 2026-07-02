@@ -7,18 +7,7 @@
 }
 
 .page-head {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-12);
   background: var(--color-food-surface);
-}
-
-.page-head :deep(.page-header) {
-  flex: 1;
 }
 
 .page-head :deep(.page-header h1),

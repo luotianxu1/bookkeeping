@@ -683,17 +683,19 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
     />
 
     <PageHeader title="账户管理" back-to="/finance" back-label="返回财务首页">
-      <label v-if="canSwitchFamilyView" class="account-family-switch">
-        <select v-model="familyView" class="account-family-switch-select" aria-label="切换家庭成员账户视角">
-          <option
-            v-for="option in familyViewOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
+      <template #right>
+        <label v-if="canSwitchFamilyView" class="account-family-switch">
+          <select v-model="familyView" class="account-family-switch-select" aria-label="切换家庭成员账户视角">
+            <option
+              v-for="option in familyViewOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+      </template>
     </PageHeader>
 
     <AccountOverviewCard :overview="accountOverview" />

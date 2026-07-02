@@ -671,17 +671,19 @@ function getTrendYAxisBounds(values: number[]) {
 <template>
   <section class="investment-trend-page" aria-label="资产趋势">
     <PageHeader title="资产趋势" :back-to="backTo" :back-label="backLabel">
-      <label v-if="showFamilySwitch" class="trend-family-switch">
-        <select v-model="familyView" class="trend-family-switch-select" aria-label="切换家庭成员资产趋势视角">
-          <option
-            v-for="option in familyViewOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
+      <template #right>
+        <label v-if="showFamilySwitch" class="trend-family-switch">
+          <select v-model="familyView" class="trend-family-switch-select" aria-label="切换家庭成员资产趋势视角">
+            <option
+              v-for="option in familyViewOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+      </template>
     </PageHeader>
 
     <p v-if="familyViewHint" class="trend-view-hint">

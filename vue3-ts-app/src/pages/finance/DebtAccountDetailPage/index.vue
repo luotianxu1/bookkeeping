@@ -515,15 +515,18 @@ function showFeedback(message: string, type: 'success' | 'error') {
     />
 
     <header class="debt-detail-header">
-      <PageHeader title="债务详情" back-to="/finance/accounts/debt" back-label="返回债务账户" />
-      <button
-        type="button"
-        class="debt-detail-delete-button"
-        :disabled="isDeletingAccount || !account"
-        @click="openAccountDeleteModal"
-      >
-        删除账户
-      </button>
+      <PageHeader title="债务详情" back-to="/finance/accounts/debt" back-label="返回债务账户">
+        <template #right>
+          <button
+            type="button"
+            class="debt-detail-delete-button"
+            :disabled="isDeletingAccount || !account"
+            @click="openAccountDeleteModal"
+          >
+            删除账户
+          </button>
+        </template>
+      </PageHeader>
     </header>
 
     <p v-if="pageError" class="debt-detail-message debt-detail-message-error">

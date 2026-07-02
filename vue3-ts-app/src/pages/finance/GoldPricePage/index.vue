@@ -341,16 +341,19 @@ onBeforeUnmount(() => {
 <template>
   <section class="gold-price-page" aria-label="金价">
     <header class="gold-price-header">
-      <PageHeader title="金价" back-label="返回更多功能" />
-      <button
-        class="gold-price-refresh"
-        type="button"
-        :disabled="isRefreshingPrice"
-        aria-label="刷新金价"
-        @click="refreshCurrentGoldPrice"
-      >
-        <span :class="['gold-price-refresh-icon', { spinning: isRefreshingPrice }]">↻</span>
-      </button>
+      <PageHeader title="金价" back-label="返回更多功能">
+        <template #right>
+          <button
+            class="gold-price-refresh"
+            type="button"
+            :disabled="isRefreshingPrice"
+            aria-label="刷新金价"
+            @click="refreshCurrentGoldPrice"
+          >
+            <span :class="['gold-price-refresh-icon', { spinning: isRefreshingPrice }]">↻</span>
+          </button>
+        </template>
+      </PageHeader>
     </header>
 
     <section class="spot-london-card" aria-label="现货与伦敦金价">
