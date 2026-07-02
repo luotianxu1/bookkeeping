@@ -24,12 +24,41 @@ const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 
-const visiblePlans = computed(() => {
-  if (activeTab.value === 'completed') {
-    return plans.value.filter((item) => item.status === 'completed')
+function hasDeparted(plan: TravelPlan) {
+  const today = getTodayStart()
+  const startDate = parseDateValue(plan.startDate)
+  if (startDate) {
+    return startDate.getTime() <= today.getTime()
   }
 
-  return plans.value.filter((item) => item.status !== 'completed')
+  const endDate = parseDateValue(plan.endDate)
+  if (endDate) {
+    return endDate.getTime() < today.getTime()
+  }
+
+  return plan.status === 'completed'
+}
+
+function parseDateValue(value?: string | null) {
+  if (!value) {
+    return null
+  }
+
+  const parsed = new Date(`${value}T00:00:00`)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function getTodayStart() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+}
+
+const visiblePlans = computed(() => {
+  if (activeTab.value === 'completed') {
+    return plans.value.filter((item) => hasDeparted(item))
+  }
+
+  return plans.value.filter((item) => !hasDeparted(item))
 })
 
 onMounted(() => {
