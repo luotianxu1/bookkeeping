@@ -222,6 +222,11 @@ public class GoldAccountService {
     }
 
     private BigDecimal getRealtimeGoldPrice(List<InvestmentPositionEntity> positions) {
+        BigDecimal cachedSpotPrice = goldPriceService.getCachedSpotPrice();
+        if (cachedSpotPrice != null && cachedSpotPrice.compareTo(BigDecimal.ZERO) > 0) {
+            return cachedSpotPrice.setScale(2, RoundingMode.HALF_UP);
+        }
+
         try {
             GoldPriceResponse goldPrice = goldPriceService.getGoldPrice("1d");
             BigDecimal price = goldPrice == null || goldPrice.getSpotGold() == null
@@ -231,14 +236,9 @@ public class GoldAccountService {
                 return price.setScale(2, RoundingMode.HALF_UP);
             }
         } catch (Exception ignored) {
-            // Prefer realtime price; fall back to stored price if the remote quote is unavailable.
+            // Return zero when neither the cache nor the remote quote is available.
         }
-        return positions.stream()
-            .map(InvestmentPositionEntity::getCurrentPrice)
-            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
-            .findFirst()
-            .map(value -> value.setScale(2, RoundingMode.HALF_UP))
-            .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     }
 
     private List<GoldLiquidationRecordResponse> buildLiquidationRecords(

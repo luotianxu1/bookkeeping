@@ -216,7 +216,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
 
   return {
     animation: false,
-    grid: { left: 18, right: 18, top: 16, bottom: 8, containLabel: true },
+    grid: { left: 16, right: 16, top: 14, bottom: 8, containLabel: true },
     tooltip: {
       trigger: 'axis',
       backgroundColor: tooltipBg,
@@ -256,12 +256,25 @@ const chartOption = computed<EChartsCoreOption>(() => {
       {
         type: 'line',
         smooth: !isSinglePoint,
-        showSymbol: true,
+        smoothMonotone: 'x',
+        showSymbol: points.length <= 8,
         symbol: 'circle',
-        symbolSize: isSinglePoint ? 10 : 6,
+        symbolSize: isSinglePoint ? 8 : 5,
         data: pointValues,
-        lineStyle: { width: 4, color: brandColor },
+        lineStyle: {
+          width: 2.5,
+          color: brandColor,
+          cap: 'round',
+          join: 'round',
+          shadowBlur: 10,
+          shadowColor: 'rgba(29, 78, 216, 0.22)',
+          shadowOffsetY: 4,
+        },
         itemStyle: { color: brandColor },
+        emphasis: {
+          focus: 'series',
+          scale: true,
+        },
         label: isSinglePoint
           ? {
               show: true,
@@ -273,6 +286,9 @@ const chartOption = computed<EChartsCoreOption>(() => {
             }
           : undefined,
         areaStyle: {
+          opacity: 0.16,
+          shadowBlur: 18,
+          shadowColor: 'rgba(29, 78, 216, 0.08)',
           color: {
             type: 'linear',
             x: 0,
