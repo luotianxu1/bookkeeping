@@ -224,36 +224,6 @@ export interface ExchangeRate {
   source: string
 }
 
-export interface UsMarketIndexQuote {
-  code: string
-  name: string
-  alias: string
-  price: number
-  change: number
-  changePercent: number
-  previousClose?: number | null
-  openPrice?: number | null
-  highPrice?: number | null
-  lowPrice?: number | null
-  marketTimeLabel?: string | null
-  chartPoints: UsMarketChartPoint[]
-  updatedAt: string
-  source: string
-  stale: boolean
-}
-
-export interface UsMarketChartPoint {
-  label: string
-  price: number
-}
-
-export interface UsMarketOverview {
-  indices: UsMarketIndexQuote[]
-  updatedAt: string
-  autoRefreshIntervalSeconds: number
-  source: string
-}
-
 export type MarketNewsCategory = 'all' | 'focus' | 'china' | 'stock' | 'commodity' | 'fund' | 'macro'
 
 export interface MarketNewsItem {
@@ -1358,10 +1328,6 @@ export function getExchangeRate(from: string, to: string) {
   return requestGet<ExchangeRate>(financeRequest, '/api/finance/exchange-rates', {
     params: { from, to },
   })
-}
-
-export function getUsMarketOverview() {
-  return requestGet<UsMarketOverview>(financeRequest, '/api/finance/us-market-indices')
 }
 
 export function getMarketNews(params: { category?: MarketNewsCategory; limit?: number } = {}) {
