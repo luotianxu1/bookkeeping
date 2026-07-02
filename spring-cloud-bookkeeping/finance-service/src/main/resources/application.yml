@@ -21,6 +21,8 @@ knife4j:
     language: zh_cn
 
 finance:
+  asset-snapshot:
+    cron: 0 0 0 * * *
   investment:
     auto-invest:
       cron: 0 5 9 * * *

@@ -19,12 +19,12 @@ public class AssetSnapshotTask {
 
     @Scheduled(cron = "${finance.asset-snapshot.cron:0 0 0 * * *}", zone = "Asia/Shanghai")
     public void captureDailyAssetSnapshot() {
-        log.info("资产日快照任务开始：trigger=scheduled-midnight");
+        log.info("资产日快照任务开始：trigger=scheduled-00:00");
         try {
             int savedCount = assetSnapshotService.captureDailySnapshots(null);
-            log.info("资产日快照任务完成：trigger=scheduled-midnight, savedCount={}", savedCount);
+            log.info("资产日快照任务完成：trigger=scheduled-00:00, savedCount={}", savedCount);
         } catch (Exception ex) {
-            log.error("资产日快照任务失败：trigger=scheduled-midnight", ex);
+            log.error("资产日快照任务失败：trigger=scheduled-00:00", ex);
         }
     }
 }

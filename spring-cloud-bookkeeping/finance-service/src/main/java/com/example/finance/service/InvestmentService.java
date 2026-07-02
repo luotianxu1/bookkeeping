@@ -3028,6 +3028,7 @@ public class InvestmentService {
                 expectedSettlementDate
             );
             transactionMapper.insert(entity);
+            syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
             return toTransactionResponse(entity, product, investmentAccount);
         }
 
@@ -3474,10 +3475,28 @@ public class InvestmentService {
             .stream()
             .map(this::resolvePositionBalanceForAccount)
             .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // 待确认的买入申购已从现金账户扣款，但份额尚未进入持仓市值，
+        // 需在确认前将这笔在途资金计入投资账户余额，否则总资产会短暂少算。
+        BigDecimal pendingBuyAmount = sumPendingBuyTransactionAmount(userId, accountId);
+        BigDecimal balance = marketValue.add(pendingBuyAmount).setScale(2, RoundingMode.HALF_UP);
+        account.setCurrentBalance(balance);
+        accountMapper.updateById(account);
+    }
+
+    private BigDecimal sumPendingBuyTransactionAmount(Long userId, Long accountId) {
+        return transactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+                .eq(InvestmentTransactionEntity::getUserId, userId)
+                .eq(InvestmentTransactionEntity::getAccountId, accountId)
+                .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
+                .eq(InvestmentTransactionEntity::getSettlementStatus, SETTLEMENT_STATUS_PENDING)
+                .eq(InvestmentTransactionEntity::getTradeType, "buy"))
+            .stream()
+            .map(transaction -> defaultZero(transaction.getAmount())
+                .add(defaultZero(transaction.getFeeAmount()))
+                .add(defaultZero(transaction.getTaxAmount())))
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
-        account.setCurrentBalance(marketValue);
-        accountMapper.updateById(account);
     }
 
     private BigDecimal resolvePositionBalanceForAccount(InvestmentPositionEntity position) {
