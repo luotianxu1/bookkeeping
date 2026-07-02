@@ -157,7 +157,11 @@ const chartOption = computed<EChartsCoreOption>(() => {
       axisLabel: {
         color: axisText,
         fontSize: 11,
-        formatter: (value: string, index: number) => formatAxisLabel(value, index, xLabels),
+        hideOverlap: true,
+        showMinLabel: true,
+        showMaxLabel: true,
+        interval: (index: number) => shouldShowAxisLabel(index, xLabels),
+        formatter: (value: string) => formatAxisLabel(value),
       },
     },
     yAxis: {
@@ -193,17 +197,33 @@ const chartOption = computed<EChartsCoreOption>(() => {
   }
 })
 
-function formatAxisLabel(value: string, index: number, labels: string[]) {
+function shouldShowAxisLabel(index: number, labels: string[]) {
+  if (activeRange.value !== '7d') {
+    return true
+  }
+
+  if (index <= 0 || index >= labels.length - 1) {
+    return true
+  }
+
+  const currentLabel = getAxisDayLabel(labels[index])
+  const previousLabel = getAxisDayLabel(labels[index - 1])
+  const nextLabel = getAxisDayLabel(labels[index + 1])
+
+  return currentLabel !== previousLabel || currentLabel !== nextLabel
+}
+
+function formatAxisLabel(value: string) {
   if (activeRange.value !== '7d') {
     return value
   }
 
-  const dayLabel = value.split(' ')[0] ?? value
-  const previousDayLabel = index > 0
-    ? (labels[index - 1]?.split(' ')[0] ?? labels[index - 1] ?? '')
-    : ''
+  const [dayLabel] = value.split(' ')
+  return dayLabel ?? value
+}
 
-  return dayLabel === previousDayLabel ? '' : dayLabel
+function getAxisDayLabel(value: string) {
+  return value.split(' ')[0] ?? value
 }
 
 async function ensureEcharts() {
