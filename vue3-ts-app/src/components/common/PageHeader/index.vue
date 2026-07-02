@@ -27,6 +27,11 @@ const parentRoutePath = computed(() => {
 })
 
 function goBack() {
+  if (props.preferBackTo && props.backTo) {
+    router.push(props.backTo)
+    return
+  }
+
   if (window.history.length > 1) {
     router.back()
     return

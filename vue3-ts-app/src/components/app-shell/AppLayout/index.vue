@@ -5,6 +5,7 @@ import BottomNavigation from '../BottomNavigation/index.vue'
 
 defineProps<{
   activeSection: AppSection
+  contentMode: 'module-home' | 'subpage' | 'auth'
   screenLabel: string
   navItems: NavItem[]
   showBottomNav: boolean
@@ -13,7 +14,13 @@ defineProps<{
 
 <template>
   <section class="app-layout" :aria-label="screenLabel">
-    <div :class="['page-content', { 'without-nav': !showBottomNav }]">
+    <div
+      :class="[
+        'page-content',
+        `page-content--${contentMode}`,
+        { 'page-content--without-nav': !showBottomNav },
+      ]"
+    >
       <slot />
     </div>
 

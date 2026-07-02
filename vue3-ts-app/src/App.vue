@@ -13,8 +13,21 @@ const route = useRoute()
 const router = useRouter()
 const activeSection = computed<AppSection>(() => route.meta.section ?? 'finance')
 const screenLabel = computed<string>(() => route.meta.title ?? '财务首页')
+const moduleHomePaths = new Set(['/finance', '/food', '/tools', '/profile'])
+const authPaths = new Set(['/login', '/register'])
 const bottomNavVisiblePaths = new Set(['/finance', '/food', '/tools', '/profile'])
 const showBottomNav = computed<boolean>(() => bottomNavVisiblePaths.has(route.path))
+const contentMode = computed<'module-home' | 'subpage' | 'auth'>(() => {
+  if (moduleHomePaths.has(route.path)) {
+    return 'module-home'
+  }
+
+  if (authPaths.has(route.path)) {
+    return 'auth'
+  }
+
+  return 'subpage'
+})
 
 async function goLogin() {
   const redirect = authPromptRedirect.value
@@ -34,6 +47,7 @@ async function goLogin() {
   <main class="stage">
     <AppLayout
       :active-section="activeSection"
+      :content-mode="contentMode"
       :nav-items="mainNavItems"
       :screen-label="screenLabel"
       :show-bottom-nav="showBottomNav"

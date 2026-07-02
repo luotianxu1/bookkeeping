@@ -2,8 +2,9 @@
     position: sticky;
     top: 0;
     z-index: 5;
-    padding-top: var(--space-8);
-    // padding-bottom: var(--space-8);
+    width: calc(100% + (var(--app-page-side-padding, 16px) * 2));
+    margin-inline: calc(var(--app-page-side-padding, 16px) * -1);
+    padding: calc(env(safe-area-inset-top, 0px) + var(--space-8)) var(--app-page-side-padding, 16px) var(--space-8);
     background-color: var(--page-header-bg, var(--color-bg-page));
     background-image: none;
     opacity: 1;
@@ -12,7 +13,8 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8);
-    min-height: var(--space-36);
+    min-height: calc(var(--space-36) + env(safe-area-inset-top, 0px));
+    box-sizing: border-box;
 }
 
 .page-header-main {
