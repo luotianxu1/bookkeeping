@@ -23,6 +23,9 @@ knife4j:
 finance:
   asset-snapshot:
     cron: 0 0 0 * * *
+  gold-price:
+    refresh-interval-millis: 300000
+    retry-delay-millis: 10000
   investment:
     auto-invest:
       cron: 0 5 9 * * *

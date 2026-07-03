@@ -15,16 +15,13 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class GoldPriceService {
 
     private static final BigDecimal TROY_OUNCE_GRAMS = new BigDecimal("31.1034768");
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Shanghai");
-    private static final long CACHE_MILLIS = 60_000L;
     private static final int CONNECT_TIMEOUT_MILLIS = 1500;
     private static final int READ_TIMEOUT_MILLIS = 2000;
 
@@ -34,7 +31,6 @@ public class GoldPriceService {
     private final String jijinhaoApiBaseUrl;
 
     private CachedGoldPrice cachedCurrentPrice;
-    private final Map<String, CachedChartPoints> cachedChartPoints = new HashMap<>();
 
     public GoldPriceService(
         ObjectMapper objectMapper,
@@ -54,29 +50,37 @@ public class GoldPriceService {
     }
 
     public synchronized GoldPriceResponse getGoldPrice(String range) {
-        String normalizedRange = normalizeRange(range);
-        long now = System.currentTimeMillis();
+        return getGoldPrice(range, false);
+    }
 
-        try {
-            GoldPriceResponse response = getCurrentPrice(now);
-            response.setChartPoints(getChartPoints(normalizedRange, now));
-            return response;
-        } catch (Exception ex) {
-            return emptyGoldPriceResponse();
+    public synchronized GoldPriceResponse getGoldPrice(String range, boolean forceRefreshCurrent) {
+        String normalizedRange = normalizeRange(range);
+        GoldPriceResponse response;
+        if (forceRefreshCurrent) {
+            try {
+                response = fetchCurrentPrice();
+            } catch (Exception ex) {
+                response = cachedCurrentPrice == null
+                    ? emptyGoldPriceResponse()
+                    : copyResponseWithoutChart(cachedCurrentPrice.response());
+            }
+        } else {
+            response = cachedCurrentPrice == null
+                ? emptyGoldPriceResponse()
+                : copyResponseWithoutChart(cachedCurrentPrice.response());
         }
+        response.setChartPoints(fetchChartPoints(normalizedRange));
+        return response;
     }
 
     public synchronized GoldRealtimePriceResponse getRealtimePrice() {
-        long now = System.currentTimeMillis();
-        try {
-            return toRealtimePrice(getCurrentPrice(now));
-        } catch (Exception ex) {
-            return emptyRealtimePriceResponse();
-        }
+        return cachedCurrentPrice == null
+            ? emptyRealtimePriceResponse()
+            : toRealtimePrice(copyResponseWithoutChart(cachedCurrentPrice.response()));
     }
 
     public synchronized BigDecimal getCachedSpotPrice() {
-        if (cachedCurrentPrice == null || System.currentTimeMillis() - cachedCurrentPrice.cachedAt() >= CACHE_MILLIS) {
+        if (cachedCurrentPrice == null) {
             return null;
         }
         GoldPriceResponse.GoldMarketQuote spotGold = cachedCurrentPrice.response().getSpotGold();
@@ -87,40 +91,26 @@ public class GoldPriceService {
     }
 
     public synchronized BigDecimal getStrictRealtimeSpotPrice() {
-        try {
-            GoldPriceResponse response = getCurrentPrice(System.currentTimeMillis(), true);
-            GoldPriceResponse.GoldMarketQuote spotGold = response.getSpotGold();
-            if (spotGold == null || spotGold.getPrice() == null || spotGold.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
-                return null;
-            }
-            return spotGold.getPrice().setScale(2, RoundingMode.HALF_UP);
-        } catch (Exception ex) {
-            return null;
-        }
+        return getCachedSpotPrice();
     }
 
-    private GoldPriceResponse getCurrentPrice(long now) throws Exception {
-        return getCurrentPrice(now, false);
+    public synchronized boolean hasWarmCache() {
+        return cachedCurrentPrice != null;
     }
 
-    private GoldPriceResponse getCurrentPrice(long now, boolean forceRefresh) throws Exception {
-        if (!forceRefresh && cachedCurrentPrice != null && now - cachedCurrentPrice.cachedAt() < CACHE_MILLIS) {
-            return copyResponseWithoutChart(cachedCurrentPrice.response());
-        }
+    public synchronized void refreshCache() throws Exception {
+        long now = System.currentTimeMillis();
+        GoldPriceResponse currentPrice = fetchCurrentPrice();
+        cachedCurrentPrice = new CachedGoldPrice(currentPrice, now);
+    }
 
+    private GoldPriceResponse fetchCurrentPrice() throws Exception {
         JsonNode quotes = fetchJijinhaoQuotes(jijinhaoQuoteCodes());
-        GoldPriceResponse response = buildCurrentResponse(
-            fetchUsdCny(),
-            quotes
-        );
-        cachedCurrentPrice = new CachedGoldPrice(response, now);
+        GoldPriceResponse response = buildCurrentResponse(fetchUsdCny(), quotes);
         return copyResponseWithoutChart(response);
     }
 
-    private GoldPriceResponse buildCurrentResponse(
-        BigDecimal usdCny,
-        JsonNode quotes
-    ) {
+    private GoldPriceResponse buildCurrentResponse(BigDecimal usdCny, JsonNode quotes) {
         if (usdCny == null || usdCny.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("汇率数据缺失");
         }
@@ -303,20 +293,6 @@ public class GoldPriceService {
         item.setUnit("CNY/g");
         item.setUpdatedAt(updatedAt);
         return item;
-    }
-
-    private List<GoldPriceResponse.GoldChartPoint> getChartPoints(
-        String range,
-        long now
-    ) {
-        CachedChartPoints cached = cachedChartPoints.get(range);
-        if (cached != null && now - cached.cachedAt() < CACHE_MILLIS) {
-            return cached.points();
-        }
-
-        List<GoldPriceResponse.GoldChartPoint> points = fetchChartPoints(range);
-        cachedChartPoints.put(range, new CachedChartPoints(points, now));
-        return points;
     }
 
     private List<GoldPriceResponse.GoldChartPoint> fetchChartPoints(String range) {
@@ -576,8 +552,5 @@ public class GoldPriceService {
     }
 
     private record CachedGoldPrice(GoldPriceResponse response, long cachedAt) {
-    }
-
-    private record CachedChartPoints(List<GoldPriceResponse.GoldChartPoint> points, long cachedAt) {
     }
 }

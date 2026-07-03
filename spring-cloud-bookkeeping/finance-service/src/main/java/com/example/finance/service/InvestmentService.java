@@ -3495,14 +3495,6 @@ public class InvestmentService {
         }
 
         BigDecimal realtimePrice = goldPriceService.getCachedSpotPrice();
-        if (realtimePrice == null || realtimePrice.compareTo(BigDecimal.ZERO) <= 0) {
-            try {
-                realtimePrice = goldPriceService.getGoldPrice("1d").getSpotGold().getPrice();
-            } catch (Exception ignored) {
-                realtimePrice = null;
-            }
-        }
-
         if (realtimePrice != null && realtimePrice.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal totalWeight = positions.stream()
                 .map(InvestmentPositionEntity::getHoldingQuantity)

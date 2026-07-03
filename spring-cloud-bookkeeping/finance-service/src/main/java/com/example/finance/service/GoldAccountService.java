@@ -226,18 +226,6 @@ public class GoldAccountService {
         if (cachedSpotPrice != null && cachedSpotPrice.compareTo(BigDecimal.ZERO) > 0) {
             return cachedSpotPrice.setScale(2, RoundingMode.HALF_UP);
         }
-
-        try {
-            GoldPriceResponse goldPrice = goldPriceService.getGoldPrice("1d");
-            BigDecimal price = goldPrice == null || goldPrice.getSpotGold() == null
-                ? null
-                : goldPrice.getSpotGold().getPrice();
-            if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
-                return price.setScale(2, RoundingMode.HALF_UP);
-            }
-        } catch (Exception ignored) {
-            // Return zero when neither the cache nor the remote quote is available.
-        }
         return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     }
 

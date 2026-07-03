@@ -594,15 +594,6 @@ public class AccountService {
         if (cachedSpotPrice != null && cachedSpotPrice.compareTo(BigDecimal.ZERO) > 0) {
             return cachedSpotPrice.setScale(2, RoundingMode.HALF_UP);
         }
-
-        try {
-            BigDecimal price = goldPriceService.getGoldPrice("1d").getSpotGold().getPrice();
-            if (price != null && price.compareTo(BigDecimal.ZERO) > 0) {
-                return price.setScale(2, RoundingMode.HALF_UP);
-            }
-        } catch (Exception ignored) {
-            // Return zero when neither the cache nor the remote quote is available.
-        }
         return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     }
 
