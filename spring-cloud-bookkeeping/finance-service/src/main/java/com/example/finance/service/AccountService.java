@@ -35,6 +35,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -132,34 +133,48 @@ public class AccountService {
     }
 
     public FinanceOverviewResponse overview(Long userId) {
-        LambdaQueryWrapper<AccountEntity> wrapper = new LambdaQueryWrapper<AccountEntity>()
-            .eq(AccountEntity::getUserId, userId)
-            .eq(AccountEntity::getStatus, DEFAULT_STATUS)
-            .eq(AccountEntity::getIncludeInNetWorth, true)
-            .orderByAsc(AccountEntity::getSortOrder)
-            .orderByAsc(AccountEntity::getId);
-
-        List<AccountEntity> accountEntities = accountMapper.selectList(wrapper);
-        List<AccountResponse> accounts = toResponses(accountEntities);
-        Map<Long, AccountTypeEntity> accountTypes = accountEntities.isEmpty()
-            ? Collections.emptyMap()
-            : accountTypeMapper.selectByIds(accountEntities.stream()
-                    .map(AccountEntity::getAccountTypeId)
-                    .collect(Collectors.toSet()))
-                .stream()
-                .collect(Collectors.toMap(AccountTypeEntity::getId, Function.identity()));
-        BigDecimal totalAssets = accounts.stream()
-            .map(account -> resolveOverviewBalance(
-                account,
-                accountTypes.get(account.getAccountTypeId())
-            ))
-            .filter(balance -> balance != null)
-            .reduce(BigDecimal.ZERO, BigDecimal::add)
-            .setScale(2, RoundingMode.HALF_UP);
-
         FinanceOverviewResponse response = new FinanceOverviewResponse();
-        response.setTotalAssets(totalAssets);
+        response.setTotalAssets(calculateTotalAssets(userId, DEFAULT_STATUS));
         return response;
+    }
+
+    public BigDecimal calculateTotalAssets(Long userId, String status) {
+        return calculateTotalAssets(listNetWorthAccounts(userId, status));
+    }
+
+    public BigDecimal calculateTotalAssets(List<AccountResponse> accounts) {
+        if (accounts == null || accounts.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        Set<Long> accountTypeIds = accounts.stream()
+            .map(AccountResponse::getAccountTypeId)
+            .filter(item -> item != null)
+            .collect(Collectors.toSet());
+        Map<Long, AccountTypeEntity> accountTypes = accountTypeIds.isEmpty()
+            ? Collections.emptyMap()
+            : accountTypeMapper.selectByIds(accountTypeIds).stream()
+                .collect(Collectors.toMap(AccountTypeEntity::getId, Function.identity()));
+        return calculateTotalAssetsFromSignedBalances(
+            accounts.stream()
+                .map(account -> resolveOverviewBalance(account, accountTypes.get(account.getAccountTypeId())))
+                .toList()
+        );
+    }
+
+    List<AccountResponse> listNetWorthAccounts(Long userId, String status) {
+        return list(userId, null, status).stream()
+            .filter(item -> Boolean.TRUE.equals(item.getIncludeInNetWorth()))
+            .toList();
+    }
+
+    BigDecimal calculateTotalAssetsFromSignedBalances(Collection<BigDecimal> signedBalances) {
+        if (signedBalances == null || signedBalances.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return signedBalances.stream()
+            .filter(balance -> balance != null)
+            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal resolveOverviewBalance(AccountResponse account, AccountTypeEntity accountType) {

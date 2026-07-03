@@ -14,6 +14,7 @@ import {
   createAccount,
   getAccounts,
   getAccountTypes,
+  getFinanceOverview,
   type Account,
   type AccountType,
 } from '@/api/modules/finance'
@@ -49,6 +50,7 @@ const liabilityLoanStartDate = ref('')
 const includeInNetWorth = ref(true)
 const accountTypes = ref<AccountType[]>([])
 const accounts = ref<Account[]>([])
+const overviewTotalAssets = ref<number | null>(null)
 const contacts = ref<Contact[]>([])
 const isLoadingAccounts = ref(false)
 const isLoadingAccountTypes = ref(false)
@@ -163,11 +165,7 @@ const accountOverview = computed<AccountOverview>(() => ({
     : selectedFamilyView.value.kind === 'member'
       ? `${selectedFamilyView.value.label}资产`
       : '总资产',
-  amount: formatAmount(
-    accounts.value
-      .filter((account) => account.includeInNetWorth && account.status === 'active')
-      .reduce((total, account) => total + getSignedBalance(account), 0),
-  ),
+  amount: overviewTotalAssets.value === null ? '--' : formatAmount(overviewTotalAssets.value),
 }))
 
 const accountGroups = computed<AccountGroup[]>(() => {
@@ -451,6 +449,7 @@ async function loadAccounts() {
   if (!me) {
     accountListError.value = '请先登录后查看账户'
     accounts.value = []
+    overviewTotalAssets.value = null
     return
   }
 
@@ -459,14 +458,17 @@ async function loadAccounts() {
 
   try {
     const targetUserIds = selectedViewerUserIds.value
-    const [accountList, typeList] = await Promise.all([
+    const [accountList, typeList, overviewList] = await Promise.all([
       Promise.all(targetUserIds.map((userId) => getAccounts({ userId, status: 'active' }))),
       getAccountTypes({ status: 'active' }),
+      Promise.all(targetUserIds.map((userId) => getFinanceOverview(userId))),
     ])
     accounts.value = accountList.flat()
     accountTypes.value = typeList
+    overviewTotalAssets.value = overviewList.reduce((total, item) => total + toNumber(item.totalAssets), 0)
   } catch (error) {
     accounts.value = []
+    overviewTotalAssets.value = null
     accountListError.value = error instanceof Error ? error.message : '账户列表加载失败'
   } finally {
     isLoadingAccounts.value = false
@@ -605,6 +607,11 @@ function formatAmount(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value)
+}
+
+function toNumber(value: unknown) {
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function normalizePositiveAmount(value: string) {

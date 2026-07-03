@@ -210,8 +210,7 @@ public class AssetTrendService {
 
     private BigDecimal resolveCurrentTotalAssets(Long userId, Long accountId, List<TrendAccount> accounts) {
         if (accountId == null) {
-            FinanceOverviewResponse overview = accountService.overview(userId);
-            return defaultZero(overview == null ? null : overview.getTotalAssets());
+            return accountService.calculateTotalAssets(userId, DEFAULT_ACCOUNT_STATUS);
         }
         return sumCurrentAssets(accounts);
     }
@@ -637,10 +636,11 @@ public class AssetTrendService {
     }
 
     private BigDecimal sumCurrentAssets(List<TrendAccount> accounts) {
-        return accounts.stream()
-            .map(TrendAccount::currentBalance)
-            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
-            .setScale(2, RoundingMode.HALF_UP);
+        return accountService.calculateTotalAssetsFromSignedBalances(
+            accounts.stream()
+                .map(TrendAccount::currentBalance)
+                .toList()
+        );
     }
 
     private BigDecimal sumAssetsAtDate(List<TrendAccount> accounts, TrendContext context, LocalDate targetDate) {

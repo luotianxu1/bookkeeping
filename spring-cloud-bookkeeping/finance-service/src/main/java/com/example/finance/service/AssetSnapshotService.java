@@ -62,13 +62,8 @@ public class AssetSnapshotService {
             .collect(Collectors.toSet());
         int savedCount = 0;
         for (Long userId : userIds) {
-            List<AccountResponse> activeAccounts = accountService.list(userId, null, ACTIVE_STATUS).stream()
-                .filter(item -> Boolean.TRUE.equals(item.getIncludeInNetWorth()))
-                .toList();
-            BigDecimal totalAssets = activeAccounts.stream()
-                .map(accountService::resolveSignedNetWorthBalance)
-                .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
+            List<AccountResponse> activeAccounts = accountService.listNetWorthAccounts(userId, ACTIVE_STATUS);
+            BigDecimal totalAssets = accountService.calculateTotalAssets(activeAccounts);
             for (AccountResponse account : activeAccounts) {
                 saveOrUpdateSnapshot(
                     userId,
@@ -97,18 +92,13 @@ public class AssetSnapshotService {
             return response;
         }
 
-        List<AccountResponse> currentAccounts = accountService.list(userId, null, ACTIVE_STATUS).stream()
-            .filter(item -> Boolean.TRUE.equals(item.getIncludeInNetWorth()))
-            .toList();
+        List<AccountResponse> currentAccounts = accountService.listNetWorthAccounts(userId, ACTIVE_STATUS);
         Map<Long, BigDecimal> currentAssetsByAccountId = currentAccounts.stream()
             .collect(Collectors.toMap(
                 AccountResponse::getId,
                 accountService::resolveSignedNetWorthBalance
             ));
-        BigDecimal currentTotalAssets = currentAccounts.stream()
-            .map(accountService::resolveSignedNetWorthBalance)
-            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
-            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal currentTotalAssets = accountService.calculateTotalAssets(currentAccounts);
         response.setCurrentTotalAssets(currentTotalAssets);
 
         List<AssetDailySnapshotEntity> snapshotRows = assetDailySnapshotMapper.selectList(new LambdaQueryWrapper<AssetDailySnapshotEntity>()
@@ -182,10 +172,11 @@ public class AssetSnapshotService {
             .toList();
 
         BigDecimal snapshotTotalAssets = totalSnapshot == null
-            ? accounts.stream()
-                .map(AssetAccountSnapshotItemResponse::getTotalAssets)
-                .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP)
+            ? accountService.calculateTotalAssetsFromSignedBalances(
+                accounts.stream()
+                    .map(AssetAccountSnapshotItemResponse::getTotalAssets)
+                    .toList()
+            )
             : defaultZero(totalSnapshot.getTotalAssets());
 
         response.setTotalAssets(snapshotTotalAssets);
