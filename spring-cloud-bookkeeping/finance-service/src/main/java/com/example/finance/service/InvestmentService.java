@@ -252,6 +252,7 @@ public class InvestmentService {
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
     private final InvestmentPriceQuoteMapper priceQuoteMapper;
+    private final GoldPriceService goldPriceService;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final HttpClient httpClient;
@@ -269,6 +270,7 @@ public class InvestmentService {
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         InvestmentPriceQuoteMapper priceQuoteMapper,
+        GoldPriceService goldPriceService,
         ObjectMapper objectMapper,
         PlatformTransactionManager transactionManager,
         @Value("${finance.investment.market-closed-dates:}") String marketClosedDatesConfig
@@ -283,6 +285,7 @@ public class InvestmentService {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.priceQuoteMapper = priceQuoteMapper;
+        this.goldPriceService = goldPriceService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.restClient = RestClient.builder().build();
@@ -3468,20 +3471,51 @@ public class InvestmentService {
         if (accountType == null || !POSITION_ACCOUNT_TYPE_CODES.contains(accountType.getCode())) {
             return;
         }
-        BigDecimal marketValue = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
-                .eq(InvestmentPositionEntity::getUserId, userId)
-                .eq(InvestmentPositionEntity::getAccountId, accountId)
-                .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS))
-            .stream()
-            .map(this::resolvePositionBalanceForAccount)
-            .filter(value -> value != null)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<InvestmentPositionEntity> positions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .eq(InvestmentPositionEntity::getUserId, userId)
+            .eq(InvestmentPositionEntity::getAccountId, accountId)
+            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS));
+        BigDecimal marketValue = "gold".equals(accountType.getCode())
+            ? resolveRealtimeGoldAccountBalance(positions)
+            : positions.stream()
+                .map(this::resolvePositionBalanceForAccount)
+                .filter(value -> value != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         // 待确认的买入申购已从现金账户扣款，但份额尚未进入持仓市值，
         // 需在确认前将这笔在途资金计入投资账户余额，否则总资产会短暂少算。
         BigDecimal pendingBuyAmount = sumPendingBuyTransactionAmount(userId, accountId);
         BigDecimal balance = marketValue.add(pendingBuyAmount).setScale(2, RoundingMode.HALF_UP);
         account.setCurrentBalance(balance);
         accountMapper.updateById(account);
+    }
+
+    private BigDecimal resolveRealtimeGoldAccountBalance(List<InvestmentPositionEntity> positions) {
+        if (positions == null || positions.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        BigDecimal realtimePrice = goldPriceService.getCachedSpotPrice();
+        if (realtimePrice == null || realtimePrice.compareTo(BigDecimal.ZERO) <= 0) {
+            try {
+                realtimePrice = goldPriceService.getGoldPrice("1d").getSpotGold().getPrice();
+            } catch (Exception ignored) {
+                realtimePrice = null;
+            }
+        }
+
+        if (realtimePrice != null && realtimePrice.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal totalWeight = positions.stream()
+                .map(InvestmentPositionEntity::getHoldingQuantity)
+                .filter(value -> value != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            return totalWeight.multiply(realtimePrice).setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return positions.stream()
+            .map(this::resolvePositionBalanceForAccount)
+            .filter(value -> value != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal sumPendingBuyTransactionAmount(Long userId, Long accountId) {

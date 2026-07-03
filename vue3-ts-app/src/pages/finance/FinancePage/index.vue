@@ -2,7 +2,6 @@
 // 财务首页：组合资产总览、统计入口和收支明细列表。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { financeOverview } from '@/data/finance'
 import {
   deleteTransaction,
   getAccounts,
@@ -23,9 +22,21 @@ import AssetOverviewCard from '../components/AssetOverviewCard/index.vue'
 import StatsEntry from '../components/StatsEntry/index.vue'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
+import type { FinanceOverview } from '@/types/finance'
 
 const router = useRouter()
-const overview = ref({ ...financeOverview })
+const emptyOverview: FinanceOverview = {
+  totalAssets: '',
+  monthlyBalance: '当月结余 --',
+  monthlyIncome: '收入 --',
+  monthlyExpense: '支出 --',
+  budget: '月预算 --',
+  budgetUsageLabel: '已用 --',
+  budgetUsagePercent: 0,
+  isBudgetExceeded: false,
+}
+
+const overview = ref({ ...emptyOverview })
 const transactions = ref<Transaction[]>([])
 const isLoadingTransactions = ref(false)
 const transactionListError = ref('')

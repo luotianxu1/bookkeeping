@@ -6,8 +6,8 @@ import com.example.finance.dto.AssetTrendAllocationResponse;
 import com.example.finance.dto.AssetTrendContributorResponse;
 import com.example.finance.dto.AssetTrendPointResponse;
 import com.example.finance.dto.AssetTrendResponse;
+import com.example.finance.dto.FinanceOverviewResponse;
 import com.example.finance.entity.AccountEntity;
-import com.example.finance.entity.AssetDailySnapshotEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.DebtRecordEntity;
 import com.example.finance.entity.HumanRelationRecordEntity;
@@ -166,18 +166,20 @@ public class AssetTrendService {
     public AssetTrendResponse trend(Long userId, Long accountId, String range) {
         List<TrendAccount> accounts = loadTrendAccounts(userId, accountId);
         TrendContext context = buildTrendContext(userId, accounts);
-        TrendRangeMeta rangeMeta = resolveTrendRange(range, accounts, context);
+        LocalDate earliestSnapshotDate = assetSnapshotService.getEarliestSnapshotDate(userId, accountId);
+        TrendRangeMeta rangeMeta = resolveTrendRange(range, accounts, context, earliestSnapshotDate);
+        BigDecimal totalAssets = resolveCurrentTotalAssets(userId, accountId, accounts);
         List<LocalDate> bucketDates = buildTrendBucketDates(rangeMeta);
-        List<AssetTrendPointResponse> trendPoints = buildTrendPoints(userId, accountId, accounts, context, rangeMeta, bucketDates);
-        TrendRangeMeta allRangeMeta = resolveTrendRange("all", accounts, context);
+        List<AssetTrendPointResponse> trendPoints = buildTrendPoints(userId, accountId, rangeMeta, bucketDates, totalAssets);
+        TrendRangeMeta allRangeMeta = resolveTrendRange("all", accounts, context, earliestSnapshotDate);
         ProfitSummary cumulativeSummary = buildCumulativeSummary(
-            accounts,
-            context,
+            userId,
+            accountId,
             allRangeMeta.startDate(),
-            allRangeMeta.endDate()
+            allRangeMeta.endDate(),
+            totalAssets
         );
 
-        BigDecimal totalAssets = sumCurrentAssets(accounts);
         BigDecimal periodChangeAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         BigDecimal periodChangeRate = BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
         if (trendPoints.size() >= 2) {
@@ -204,6 +206,14 @@ public class AssetTrendService {
         response.setAllocations(buildAllocations(accounts));
         response.setContributors(buildContributors(accounts, context, rangeMeta));
         return response;
+    }
+
+    private BigDecimal resolveCurrentTotalAssets(Long userId, Long accountId, List<TrendAccount> accounts) {
+        if (accountId == null) {
+            FinanceOverviewResponse overview = accountService.overview(userId);
+            return defaultZero(overview == null ? null : overview.getTotalAssets());
+        }
+        return sumCurrentAssets(accounts);
     }
 
     private List<TrendAccount> loadTrendAccounts(Long userId, Long accountId) {
@@ -414,7 +424,7 @@ public class AssetTrendService {
         );
     }
 
-    private TrendRangeMeta resolveTrendRange(String range, List<TrendAccount> accounts, TrendContext context) {
+    private TrendRangeMeta resolveTrendRange(String range, List<TrendAccount> accounts, TrendContext context, LocalDate earliestSnapshotDate) {
         String normalizedRange = switch (range == null ? "" : range.trim().toLowerCase(Locale.ROOT)) {
             case "7d" -> "7d";
             case "30d" -> "30d";
@@ -427,7 +437,9 @@ public class AssetTrendService {
             .filter(item -> item != null)
             .min(LocalDate::compareTo)
             .orElse(endDate);
-        LocalDate earliestDate = earliestDate(earliestAccountDate, context.earliestActivityDate());
+        LocalDate earliestDate = earliestSnapshotDate != null
+            ? earliestSnapshotDate
+            : earliestDate(earliestAccountDate, context.earliestActivityDate());
         LocalDate startDate;
         boolean monthlyBuckets;
         boolean yearlyBuckets;
@@ -511,10 +523,9 @@ public class AssetTrendService {
     private List<AssetTrendPointResponse> buildTrendPoints(
         Long userId,
         Long accountId,
-        List<TrendAccount> accounts,
-        TrendContext context,
         TrendRangeMeta rangeMeta,
-        List<LocalDate> bucketDates
+        List<LocalDate> bucketDates,
+        BigDecimal currentTotalAssets
     ) {
         Map<LocalDate, BigDecimal> snapshotTotals = assetSnapshotService.getTotalAssetSnapshots(
             userId,
@@ -524,72 +535,90 @@ public class AssetTrendService {
         );
         List<AssetTrendPointResponse> points = new ArrayList<>();
         for (LocalDate bucketDate : bucketDates) {
+            BigDecimal pointValue = resolveTrendPointValue(snapshotTotals, bucketDate, currentTotalAssets);
+            if (pointValue == null) {
+                continue;
+            }
             AssetTrendPointResponse point = new AssetTrendPointResponse();
             point.setKey(bucketDate.toString());
             point.setLabel(buildTrendPointLabel(bucketDate, rangeMeta));
-            point.setValue(resolveTrendPointValue(userId, accountId, accounts, context, snapshotTotals, bucketDate));
+            point.setValue(pointValue);
             points.add(point);
         }
         if (points.isEmpty()) {
             AssetTrendPointResponse point = new AssetTrendPointResponse();
-            point.setKey(rangeMeta.endDate().toString());
-            point.setLabel(buildTrendPointLabel(rangeMeta.endDate(), rangeMeta));
-            point.setValue(resolveTrendPointValue(userId, accountId, accounts, context, snapshotTotals, rangeMeta.endDate()));
+            LocalDate fallbackDate = rangeMeta.endDate();
+            point.setKey(fallbackDate.toString());
+            point.setLabel(buildTrendPointLabel(fallbackDate, rangeMeta));
+            point.setValue(defaultZero(currentTotalAssets));
             points.add(point);
         }
         return points;
     }
 
     private BigDecimal resolveTrendPointValue(
-        Long userId,
-        Long accountId,
-        List<TrendAccount> accounts,
-        TrendContext context,
         Map<LocalDate, BigDecimal> snapshotTotals,
-        LocalDate bucketDate
+        LocalDate bucketDate,
+        BigDecimal currentTotalAssets
     ) {
-        if (bucketDate != null && bucketDate.isBefore(LocalDate.now())) {
-            BigDecimal snapshotValue = snapshotTotals.get(bucketDate);
-            if (snapshotValue != null) {
-                return snapshotValue.setScale(2, RoundingMode.HALF_UP);
-            }
-            return sumAssetsAtDate(accounts, context, bucketDate);
+        if (bucketDate == null) {
+            return null;
         }
-        return sumAssetsAtDate(accounts, context, bucketDate);
+        if (LocalDate.now().equals(bucketDate)) {
+            return defaultZero(currentTotalAssets);
+        }
+        BigDecimal snapshotValue = snapshotTotals.get(bucketDate);
+        return snapshotValue == null ? null : snapshotValue.setScale(2, RoundingMode.HALF_UP);
     }
 
     private ProfitSummary buildCumulativeSummary(
-        List<TrendAccount> accounts,
-        TrendContext context,
+        Long userId,
+        Long accountId,
         LocalDate startDate,
-        LocalDate endDate
+        LocalDate endDate,
+        BigDecimal currentTotalAssets
     ) {
-        if (accounts.isEmpty() || startDate == null || endDate == null || startDate.isAfter(endDate)) {
+        if (userId == null || startDate == null || endDate == null || startDate.isAfter(endDate)) {
             return new ProfitSummary(
                 BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
                 null
             );
         }
 
+        Map<LocalDate, BigDecimal> snapshotTotals = assetSnapshotService.getTotalAssetSnapshots(
+            userId,
+            accountId,
+            startDate,
+            endDate
+        );
         BigDecimal firstPositiveValue = null;
-        LocalDate cursor = startDate;
-        while (!cursor.isAfter(endDate)) {
-            BigDecimal value = sumAssetsAtDate(accounts, context, cursor);
+        List<Map.Entry<LocalDate, BigDecimal>> snapshotEntries = new ArrayList<>(snapshotTotals.entrySet());
+        for (Map.Entry<LocalDate, BigDecimal> entry : snapshotEntries) {
+            BigDecimal value = defaultZero(entry.getValue());
             if (value.compareTo(BigDecimal.ZERO) > 0) {
                 firstPositiveValue = value.setScale(2, RoundingMode.HALF_UP);
                 break;
             }
-            cursor = cursor.plusDays(1);
         }
 
         if (firstPositiveValue == null) {
+            if (defaultZero(currentTotalAssets).compareTo(BigDecimal.ZERO) > 0) {
+                return new ProfitSummary(
+                    BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
+                    BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP)
+                );
+            }
             return new ProfitSummary(
                 BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
                 null
             );
         }
 
-        BigDecimal latestValue = sumAssetsAtDate(accounts, context, endDate);
+        BigDecimal latestValue = LocalDate.now().equals(endDate)
+            ? defaultZero(currentTotalAssets)
+            : snapshotEntries.isEmpty()
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : defaultZero(snapshotEntries.get(snapshotEntries.size() - 1).getValue());
         BigDecimal cumulativeProfit = latestValue.subtract(firstPositiveValue).setScale(2, RoundingMode.HALF_UP);
         return new ProfitSummary(
             cumulativeProfit,

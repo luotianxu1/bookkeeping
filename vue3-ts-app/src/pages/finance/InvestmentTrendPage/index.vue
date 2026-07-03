@@ -9,7 +9,10 @@ import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { useTheme } from '@/utils/theme'
 import {
+  getLatestAssetAccountSnapshots,
   getAssetTrend,
+  type AssetAccountSnapshot,
+  type AssetAccountSnapshotItem,
   type AssetTrend,
   type AssetTrendAllocation,
   type AssetTrendContributor,
@@ -30,6 +33,10 @@ interface TrendYAxisBounds {
   max?: number
 }
 
+interface SnapshotAccountItemView extends AssetAccountSnapshotItem {
+  ownerLabel?: string
+}
+
 const route = useRoute()
 
 const rangeOptions: TrendRangeLabel[] = ['近7日', '近30日', '年内', '全部']
@@ -48,8 +55,13 @@ const reverseRangeMap: Record<AssetTrendRange, TrendRangeLabel> = {
 
 const activeRange = ref<TrendRangeLabel>('近7日')
 const trend = ref<AssetTrend | null>(null)
+const yesterdaySnapshots = ref<SnapshotAccountItemView[]>([])
+const yesterdaySnapshotDate = ref('')
+const yesterdaySnapshotCurrentTotal = ref<number | null>(null)
+const yesterdaySnapshotChangeAmount = ref<number | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
+const snapshotError = ref('')
 const chartRef = ref<HTMLDivElement | null>(null)
 const { isDark } = useTheme()
 const requestSerial = ref(0)
@@ -66,6 +78,7 @@ const {
   canSwitchFamilyView,
   isReadOnlyFamilyView,
   selectedViewerUserIds,
+  viewerNameByUserId,
   loadFamilyMembers,
 } = useFinanceFamilyView()
 
@@ -101,6 +114,7 @@ const backTo = computed(() => (
 const backLabel = computed(() => (
   accountId.value ? '返回投资账户' : '返回财务首页'
 ))
+const showYesterdaySnapshotSection = computed(() => !accountId.value)
 
 const totalAssets = computed(() => formatCurrency(trend.value?.totalAssets))
 const latestTrendPoints = computed(() => trend.value?.trendPoints ?? [])
@@ -153,6 +167,18 @@ const syncText = computed(() => {
   return `更新于 ${formatDateTime(trend.value.lastSyncedAt)}`
 })
 const allocations = computed(() => trend.value?.allocations ?? [])
+const yesterdaySnapshotDateText = computed(() => (
+  yesterdaySnapshotDate.value ? `${yesterdaySnapshotDate.value} 快照` : '昨日快照'
+))
+const visibleYesterdaySnapshots = computed(() => (
+  yesterdaySnapshots.value.filter((item) => Math.abs(Number(item.changeAmount ?? 0)) > 0)
+))
+const yesterdaySnapshotCurrentTotalText = computed(() => (
+  yesterdaySnapshotCurrentTotal.value === null ? '--' : formatCurrency(yesterdaySnapshotCurrentTotal.value)
+))
+const yesterdaySnapshotChangeAmountText = computed(() => (
+  yesterdaySnapshotChangeAmount.value === null ? '--' : formatCurrency(yesterdaySnapshotChangeAmount.value)
+))
 const trendRangeKey = computed<AssetTrendRange>(() => {
   const range = trend.value?.range
   return range === '7d' || range === '30d' || range === 'ytd' || range === 'all'
@@ -361,6 +387,7 @@ async function loadTrend() {
   if (effectiveUserIds.value.length === 0) {
     pageError.value = '请先登录后查看资产趋势'
     trend.value = null
+    resetYesterdaySnapshots()
     return
   }
 
@@ -370,13 +397,20 @@ async function loadTrend() {
   pageError.value = ''
 
   try {
-    const results = await Promise.all(
-      effectiveUserIds.value.map((userId) => getAssetTrend({
-        userId,
-        accountId: accountId.value,
-        range: rangeMap[activeRange.value],
-      })),
-    )
+    const [results, snapshotResults] = await Promise.all([
+      Promise.all(
+        effectiveUserIds.value.map((userId) => getAssetTrend({
+          userId,
+          accountId: accountId.value,
+          range: rangeMap[activeRange.value],
+        })),
+      ),
+      showYesterdaySnapshotSection.value
+        ? Promise.allSettled(
+            effectiveUserIds.value.map((userId) => getLatestAssetAccountSnapshots({ userId })),
+          )
+        : Promise.resolve([]),
+    ])
 
     if (currentRequest !== requestSerial.value) {
       return
@@ -388,12 +422,14 @@ async function loadTrend() {
     if (normalizedRange) {
       activeRange.value = normalizedRange
     }
+    applyYesterdaySnapshots(snapshotResults)
   } catch (error) {
     if (currentRequest !== requestSerial.value) {
       return
     }
     trend.value = null
     pageError.value = error instanceof Error ? error.message : '资产趋势加载失败'
+    resetYesterdaySnapshots()
   } finally {
     if (currentRequest === requestSerial.value) {
       isLoading.value = false
@@ -401,6 +437,31 @@ async function loadTrend() {
       renderChart()
     }
   }
+}
+
+function applyYesterdaySnapshots(results: PromiseSettledResult<AssetAccountSnapshot>[]) {
+  if (!showYesterdaySnapshotSection.value) {
+    resetYesterdaySnapshots()
+    return
+  }
+
+  const fulfilled = results
+    .filter((item): item is PromiseFulfilledResult<AssetAccountSnapshot> => item.status === 'fulfilled')
+    .map((item) => item.value)
+
+  if (fulfilled.length === 0) {
+    yesterdaySnapshots.value = []
+    yesterdaySnapshotDate.value = ''
+    snapshotError.value = '暂无昨日账户快照'
+    return
+  }
+
+  const merged = mergeLatestAssetSnapshots(fulfilled)
+  yesterdaySnapshots.value = merged.accounts
+  yesterdaySnapshotDate.value = merged.snapshotDate
+  yesterdaySnapshotCurrentTotal.value = merged.currentTotalAssets
+  yesterdaySnapshotChangeAmount.value = merged.changeAmount
+  snapshotError.value = merged.accounts.length > 0 ? '所有账户与今日一致' : '暂无昨日账户快照'
 }
 
 function mergeAssetTrendResults(results: AssetTrend[]) {
@@ -519,6 +580,47 @@ function mergeAssetTrendResults(results: AssetTrend[]) {
     allocations: mergedAllocations,
     contributors: mergedContributors,
   } satisfies AssetTrend
+}
+
+function mergeLatestAssetSnapshots(results: AssetAccountSnapshot[]) {
+  const accounts: SnapshotAccountItemView[] = []
+  let snapshotDate = ''
+  let currentTotalAssets = 0
+  let changeAmount = 0
+
+  results.forEach((result) => {
+    if (!snapshotDate && result.snapshotDate) {
+      snapshotDate = result.snapshotDate
+    }
+    currentTotalAssets += Number(result.currentTotalAssets ?? 0)
+    changeAmount += Number(result.changeAmount ?? 0)
+
+    const ownerLabel = results.length > 1
+      ? (viewerNameByUserId.value.get(result.userId) ?? '')
+      : ''
+
+    result.accounts.forEach((item) => {
+      accounts.push({
+        ...item,
+        ownerLabel,
+      })
+    })
+  })
+
+  return {
+    snapshotDate,
+    currentTotalAssets,
+    changeAmount,
+    accounts,
+  }
+}
+
+function resetYesterdaySnapshots() {
+  yesterdaySnapshots.value = []
+  yesterdaySnapshotDate.value = ''
+  yesterdaySnapshotCurrentTotal.value = null
+  yesterdaySnapshotChangeAmount.value = null
+  snapshotError.value = ''
 }
 
 function pickEarlierDate(current: string, candidate?: string | null) {
@@ -789,6 +891,60 @@ function getTrendYAxisBounds(values: number[]) {
           </article>
         </div>
         <p v-else class="investment-trend-empty">当前区间暂无可展示的资产数据</p>
+      </section>
+
+      <section
+        v-if="showYesterdaySnapshotSection"
+        class="investment-trend-card"
+        aria-label="昨日账户快照"
+      >
+        <header class="investment-trend-card-head">
+          <div>
+            <strong>昨日账户快照</strong>
+            <p>今日总资产 <AmountText tag="span" tone="inherit" :value="yesterdaySnapshotCurrentTotalText" show-unit />，<AmountText tag="span" :value="yesterdaySnapshotChangeAmountText" show-sign show-unit /></p>
+          </div>
+          <span class="range-detail-side-text">{{ yesterdaySnapshotDateText }}</span>
+        </header>
+
+        <div v-if="visibleYesterdaySnapshots.length > 0" class="snapshot-account-list">
+          <article
+            v-for="item in visibleYesterdaySnapshots"
+            :key="`${item.userId}-${item.accountId}`"
+            class="snapshot-account-item"
+          >
+            <div class="snapshot-account-main">
+              <div class="snapshot-account-title">
+                <strong>{{ item.accountName }}</strong>
+                <span class="snapshot-account-type">{{ item.accountTypeLabel }}</span>
+                <span v-if="item.ownerLabel" class="snapshot-account-owner">{{ item.ownerLabel }}</span>
+              </div>
+              <div class="snapshot-account-compare">
+                <span>今日</span>
+                <AmountText
+                  tag="span"
+                  tone="inherit"
+                  :value="formatCurrency(item.currentAssets)"
+                  show-unit
+                />
+                <AmountText
+                  tag="span"
+                  class="snapshot-account-change"
+                  :value="formatCurrency(item.changeAmount)"
+                  show-sign
+                  show-unit
+                />
+              </div>
+            </div>
+            <AmountText
+              tag="strong"
+              tone="inherit"
+              class="snapshot-account-value"
+              :value="formatCurrency(item.totalAssets)"
+              show-unit
+            />
+          </article>
+        </div>
+        <p v-else class="investment-trend-empty">{{ snapshotError || '暂无昨日账户快照' }}</p>
       </section>
     </template>
   </section>

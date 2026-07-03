@@ -301,6 +301,89 @@
   color: var(--color-text-muted);
 }
 
+.snapshot-account-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.snapshot-account-item {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-14);
+  background: linear-gradient(180deg, var(--color-bg-card) 0%, var(--color-finance-bg-2) 100%);
+}
+
+.snapshot-account-main {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.snapshot-account-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.snapshot-account-title strong {
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.snapshot-account-type {
+  flex-shrink: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.snapshot-account-owner {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-finance-bg-2);
+  color: var(--color-brand);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.snapshot-account-compare {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  color: var(--color-text-subtle);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.snapshot-account-compare :deep(.amount-text) {
+  font-size: 11px;
+}
+
+.snapshot-account-compare :deep(.snapshot-account-change.amount-text) {
+  font-weight: 700;
+}
+
+.snapshot-account-item :deep(.snapshot-account-value.amount-text) {
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .investment-trend-message,
 .investment-trend-empty {
   margin: 0;

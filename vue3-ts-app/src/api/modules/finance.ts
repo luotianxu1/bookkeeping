@@ -674,6 +674,26 @@ export interface AssetTrendContributor {
   contributionRate: number
 }
 
+export interface AssetAccountSnapshotItem {
+  userId: number
+  accountId: number
+  accountName: string
+  accountTypeCode?: string | null
+  accountTypeLabel: string
+  totalAssets: number
+  currentAssets: number
+  changeAmount: number
+}
+
+export interface AssetAccountSnapshot {
+  userId: number
+  snapshotDate: string
+  totalAssets: number
+  currentTotalAssets: number
+  changeAmount: number
+  accounts: AssetAccountSnapshotItem[]
+}
+
 export interface AssetTrend {
   userId: number
   accountId?: number | null
@@ -1454,6 +1474,10 @@ export function getInvestmentTrend(params: { userId: number; accountId?: number;
 
 export function getAssetTrend(params: { userId: number; accountId?: number; range?: AssetTrendRange }) {
   return requestGet<AssetTrend>(financeRequest, '/api/finance/accounts/trend', { params })
+}
+
+export function getLatestAssetAccountSnapshots(params: { userId: number }) {
+  return requestGet<AssetAccountSnapshot>(financeRequest, '/api/finance/accounts/snapshots/latest', { params })
 }
 
 export function getFundProfitForecast(params: { userId: number; accountId?: number }) {

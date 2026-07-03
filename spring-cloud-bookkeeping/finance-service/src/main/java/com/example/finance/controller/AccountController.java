@@ -4,9 +4,11 @@ import com.example.common.result.Result;
 import com.example.finance.dto.AccountRequest;
 import com.example.finance.dto.AccountResponse;
 import com.example.finance.dto.AccountSortOrderRequest;
+import com.example.finance.dto.AssetAccountSnapshotResponse;
 import com.example.finance.dto.AssetTrendResponse;
 import com.example.finance.dto.FinanceOverviewResponse;
 import com.example.finance.service.AccountService;
+import com.example.finance.service.AssetSnapshotService;
 import com.example.finance.service.AssetTrendService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,10 +35,16 @@ public class AccountController {
 
     private final AccountService accountService;
     private final AssetTrendService assetTrendService;
+    private final AssetSnapshotService assetSnapshotService;
 
-    public AccountController(AccountService accountService, AssetTrendService assetTrendService) {
+    public AccountController(
+        AccountService accountService,
+        AssetTrendService assetTrendService,
+        AssetSnapshotService assetSnapshotService
+    ) {
         this.accountService = accountService;
         this.assetTrendService = assetTrendService;
+        this.assetSnapshotService = assetSnapshotService;
     }
 
     @GetMapping
@@ -65,6 +73,14 @@ public class AccountController {
         @RequestParam(name = "range", required = false, defaultValue = "ytd") String range
     ) {
         return Result.ok(assetTrendService.trend(userId, accountId, range));
+    }
+
+    @GetMapping("/snapshots/latest")
+    @Operation(summary = "查询昨日账户资产快照")
+    public Result<AssetAccountSnapshotResponse> latestSnapshots(
+        @RequestParam(name = "userId") @NotNull Long userId
+    ) {
+        return Result.ok(assetSnapshotService.getLatestAccountSnapshots(userId));
     }
 
     @GetMapping("/{id:\\d+}")
