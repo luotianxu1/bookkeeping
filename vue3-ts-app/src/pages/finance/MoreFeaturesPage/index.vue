@@ -22,6 +22,7 @@ const featureGroups: FeatureGroup[] = [
       { icon: '📉', label: '收支分析', to: '/finance/analysis' },
       { icon: '📊', label: '资产趋势', to: '/finance/trend' },
       { icon: '🏦', label: '账户管理', to: '/finance/accounts' },
+      { icon: '💼', label: '工资管理', to: '/finance/salary' },
       { icon: '🗓', label: '基金收益', to: '/finance/fund-profit' },
       { icon: '🪙', label: '攒股收息', to: '/finance/dividend-income' },
       { icon: '💰', label: '预算管理', to: '/finance/budgets' },
@@ -44,7 +45,7 @@ const featureGroups: FeatureGroup[] = [
 
 <template>
   <section class="more-features-page" aria-label="财务更多功能">
-    <PageHeader title="更多功能" back-to="/finance" back-label="返回财务首页" />
+    <PageHeader title="更多功能" back-to="/finance" back-label="返回财务首页" :prefer-back-to="true" />
 
     <section v-for="group in featureGroups" :key="group.title" class="feature-group">
       <h2>{{ group.title }}</h2>

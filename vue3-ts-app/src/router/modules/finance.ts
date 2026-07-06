@@ -32,6 +32,11 @@ import HumanRelationAccountDetailPage from '@/pages/finance/HumanRelationAccount
 import InvestmentAccountListPage from '@/pages/finance/InvestmentAccountListPage/index.vue'
 import InvestmentAccountPage from '@/pages/finance/InvestmentAccountPage/index.vue'
 import InvestmentDetailPage from '@/pages/finance/InvestmentDetailPage/index.vue'
+import SalaryHomePage from '@/pages/finance/SalaryHomePage/index.vue'
+import SalarySettingsPage from '@/pages/finance/SalarySettingsPage/index.vue'
+import SalaryRecordPage from '@/pages/finance/SalaryRecordPage/index.vue'
+import SalaryAccountPage from '@/pages/finance/SalaryAccountPage/index.vue'
+import SalaryTaxPage from '@/pages/finance/SalaryTaxPage/index.vue'
 
 export const financeRoutes: RouteRecordRaw[] = [
   {
@@ -158,6 +163,51 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '续费管理',
+    },
+  },
+  {
+    path: '/finance/salary',
+    name: 'finance-salary',
+    component: SalaryHomePage,
+    meta: {
+      section: 'finance',
+      title: '工资管理',
+    },
+  },
+  {
+    path: '/finance/salary/settings',
+    name: 'finance-salary-settings',
+    component: SalarySettingsPage,
+    meta: {
+      section: 'finance',
+      title: '工资设置',
+    },
+  },
+  {
+    path: '/finance/salary/records',
+    name: 'finance-salary-records',
+    component: SalaryRecordPage,
+    meta: {
+      section: 'finance',
+      title: '工资明细',
+    },
+  },
+  {
+    path: '/finance/salary/accounts/:accountType',
+    name: 'finance-salary-account',
+    component: SalaryAccountPage,
+    meta: {
+      section: 'finance',
+      title: '工资账户',
+    },
+  },
+  {
+    path: '/finance/salary/tax',
+    name: 'finance-salary-tax',
+    component: SalaryTaxPage,
+    meta: {
+      section: 'finance',
+      title: '工资税务',
     },
   },
   {

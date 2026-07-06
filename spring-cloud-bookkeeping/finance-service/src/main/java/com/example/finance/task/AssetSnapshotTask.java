@@ -27,4 +27,15 @@ public class AssetSnapshotTask {
             log.error("资产日快照任务失败：trigger=scheduled-00:00", ex);
         }
     }
+
+    @Scheduled(cron = "${finance.asset-snapshot.retry-cron:0 10 0 * * *}", zone = "Asia/Shanghai")
+    public void retryDailyAssetSnapshot() {
+        log.info("资产日快照补偿任务开始：trigger=scheduled-00:10");
+        try {
+            int savedCount = assetSnapshotService.captureDailySnapshots(null);
+            log.info("资产日快照补偿任务完成：trigger=scheduled-00:10, savedCount={}", savedCount);
+        } catch (Exception ex) {
+            log.error("资产日快照补偿任务失败：trigger=scheduled-00:10", ex);
+        }
+    }
 }
