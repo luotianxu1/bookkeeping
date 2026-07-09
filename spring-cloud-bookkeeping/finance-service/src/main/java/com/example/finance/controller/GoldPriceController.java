@@ -32,8 +32,9 @@ public class GoldPriceController {
     @Operation(summary = "查询金价行情")
     public Result<GoldPriceResponse> detail(
         @RequestParam(name = "range", required = false, defaultValue = "1d") String range,
-        @RequestParam(name = "forceRefreshCurrent", required = false, defaultValue = "false") boolean forceRefreshCurrent
+        @RequestParam(name = "forceRefreshCurrent", required = false, defaultValue = "false") boolean forceRefreshCurrent,
+        @RequestParam(name = "includeChart", required = false, defaultValue = "true") boolean includeChart
     ) {
-        return Result.ok(goldPriceService.getGoldPrice(range, forceRefreshCurrent));
+        return Result.ok(goldPriceService.getGoldPrice(range, forceRefreshCurrent, includeChart));
     }
 }

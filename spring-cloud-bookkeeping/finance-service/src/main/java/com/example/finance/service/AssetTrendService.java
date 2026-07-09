@@ -709,20 +709,26 @@ public class AssetTrendService {
     private BigDecimal resolvePositionAccountBalanceAtDate(Long accountId, TrendContext context, LocalDate targetDate) {
         BigDecimal total = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         for (InvestmentPositionEntity position : context.positionsByAccountId().getOrDefault(accountId, List.of())) {
-            BigDecimal quantity = resolvePositionQuantityAtDate(
-                position,
-                targetDate,
-                context.investmentTransactionsByPositionId().get(position.getId())
-            );
-            if (quantity.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
+            List<InvestmentTransactionEntity> transactions = context.investmentTransactionsByPositionId().get(position.getId());
             BigDecimal price = resolvePositionPriceAtDate(
                 position,
                 targetDate,
                 context.priceHistoryByProductId().get(position.getProductId())
             );
-            total = total.add(quantity.multiply(price).setScale(2, RoundingMode.HALF_UP)).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal pendingBuyAmount = resolvePendingBuyAmountAtDate(position, targetDate, transactions, price);
+            BigDecimal quantity = resolvePositionQuantityAtDate(
+                position,
+                targetDate,
+                transactions
+            );
+            if (quantity.compareTo(BigDecimal.ZERO) <= 0 && pendingBuyAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            BigDecimal positionBalance = pendingBuyAmount;
+            if (quantity.compareTo(BigDecimal.ZERO) > 0) {
+                positionBalance = positionBalance.add(quantity.multiply(price).setScale(2, RoundingMode.HALF_UP));
+            }
+            total = total.add(positionBalance).setScale(2, RoundingMode.HALF_UP);
         }
         return total;
     }
@@ -912,6 +918,46 @@ public class AssetTrendService {
             return position.getCurrentPrice().setScale(6, RoundingMode.HALF_UP);
         }
         return defaultZero(position.getAvgCostPrice()).setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolvePendingBuyAmountAtDate(
+        InvestmentPositionEntity position,
+        LocalDate targetDate,
+        List<InvestmentTransactionEntity> transactions,
+        BigDecimal valuationPrice
+    ) {
+        if (position == null || targetDate == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return Optional.ofNullable(transactions).orElse(List.of()).stream()
+            .filter(transaction -> transaction != null && !VOIDED_STATUS.equals(transaction.getStatus()))
+            .filter(transaction -> "buy".equals(transaction.getTradeType()))
+            .filter(transaction -> {
+                LocalDate tradeDate = transaction.getTradeAt() == null ? null : transaction.getTradeAt().toLocalDate();
+                return tradeDate != null && !tradeDate.isAfter(targetDate);
+            })
+            .filter(transaction -> {
+                if (SETTLEMENT_STATUS_PENDING.equals(transaction.getSettlementStatus())
+                    && transaction.getSettlementConfirmedAt() == null) {
+                    return true;
+                }
+                LocalDate effectiveDate = resolvePositionEffectiveDate(transaction);
+                return effectiveDate != null && effectiveDate.isAfter(targetDate);
+            })
+            .map(transaction -> resolvePendingBuyValuation(transaction, valuationPrice))
+            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolvePendingBuyValuation(InvestmentTransactionEntity transaction, BigDecimal valuationPrice) {
+        BigDecimal quantity = defaultZero(transaction.getQuantity()).setScale(6, RoundingMode.HALF_UP);
+        if (quantity.compareTo(BigDecimal.ZERO) > 0 && defaultZero(valuationPrice).compareTo(BigDecimal.ZERO) > 0) {
+            return quantity.multiply(valuationPrice).setScale(2, RoundingMode.HALF_UP);
+        }
+        return defaultZero(transaction.getAmount())
+            .add(defaultZero(transaction.getFeeAmount()))
+            .add(defaultZero(transaction.getTaxAmount()))
+            .setScale(2, RoundingMode.HALF_UP);
     }
 
     private LocalDate resolvePositionEffectiveDate(InvestmentTransactionEntity transaction) {

@@ -246,11 +246,32 @@ function onResize() {
 }
 
 async function loadGoldPrice() {
+  return loadGoldPriceWithOptions({
+    forceRefreshCurrent: true,
+    includeChart: true,
+  })
+}
+
+async function loadGoldPriceWithOptions(options: {
+  forceRefreshCurrent?: boolean
+  includeChart?: boolean
+} = {}) {
+  const {
+    forceRefreshCurrent = false,
+    includeChart = true,
+  } = options
+
   isLoadingPrice.value = true
   goldPriceError.value = ''
 
   try {
-    goldPrice.value = await getGoldPrices(activeRange.value, true)
+    const nextPrice = await getGoldPrices(activeRange.value, forceRefreshCurrent, includeChart)
+    goldPrice.value = includeChart && goldPrice.value
+      ? nextPrice
+      : {
+        ...nextPrice,
+        chartPoints: includeChart ? nextPrice.chartPoints : (goldPrice.value?.chartPoints ?? []),
+      }
   } catch (error) {
     goldPriceError.value = error instanceof Error ? error.message : '金价加载失败'
   } finally {
@@ -262,7 +283,7 @@ async function loadTrendData() {
   isLoadingTrend.value = true
 
   try {
-    await loadGoldPrice()
+    await loadGoldPriceWithOptions({ includeChart: true })
   } catch (error) {
     goldPriceError.value = error instanceof Error ? error.message : '走势加载失败'
   } finally {
@@ -278,7 +299,10 @@ async function refreshCurrentGoldPrice() {
   isRefreshingPrice.value = true
 
   try {
-    await loadGoldPrice()
+    await loadGoldPriceWithOptions({
+      forceRefreshCurrent: true,
+      includeChart: false,
+    })
   } catch (error) {
     goldPriceError.value = error instanceof Error ? error.message : '金价刷新失败'
   } finally {
@@ -291,8 +315,17 @@ function startPriceRefreshTimer() {
     window.clearInterval(priceRefreshTimer)
   }
   priceRefreshTimer = window.setInterval(() => {
-    void loadGoldPrice()
+    if (document.visibilityState !== 'visible') {
+      return
+    }
+    void loadGoldPriceWithOptions({ includeChart: false })
   }, PRICE_REFRESH_INTERVAL_MS)
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    void loadGoldPriceWithOptions({ includeChart: false })
+  }
 }
 
 function formatTime(value?: string) {
@@ -320,6 +353,7 @@ onMounted(async () => {
   await loadGoldPrice()
   startPriceRefreshTimer()
   renderChart()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('resize', onResize)
 })
 
@@ -332,6 +366,7 @@ watch([chartPoints, isDark], () => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('resize', onResize)
   if (priceRefreshTimer !== null) {
     window.clearInterval(priceRefreshTimer)
@@ -363,7 +398,7 @@ onBeforeUnmount(() => {
     <section class="spot-london-card" aria-label="现货与伦敦金价">
       <header class="card-head">
         <p>现货 / 伦敦金价</p>
-        <span>{{ isRefreshingPrice || isLoadingPrice ? '更新中...' : '每分钟实时刷新' }}</span>
+        <span>{{ isRefreshingPrice || isLoadingPrice ? '更新中...' : '自动同步缓存行情' }}</span>
       </header>
       <p v-if="isLoadingGoldPrice && !currentGoldPrice" class="gold-price-message">
         正在获取实时行情

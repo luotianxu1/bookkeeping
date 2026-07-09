@@ -50,10 +50,14 @@ public class GoldPriceService {
     }
 
     public synchronized GoldPriceResponse getGoldPrice(String range) {
-        return getGoldPrice(range, false);
+        return getGoldPrice(range, false, true);
     }
 
     public synchronized GoldPriceResponse getGoldPrice(String range, boolean forceRefreshCurrent) {
+        return getGoldPrice(range, forceRefreshCurrent, true);
+    }
+
+    public synchronized GoldPriceResponse getGoldPrice(String range, boolean forceRefreshCurrent, boolean includeChart) {
         String normalizedRange = normalizeRange(range);
         GoldPriceResponse response;
         if (forceRefreshCurrent) {
@@ -69,7 +73,7 @@ public class GoldPriceService {
                 ? emptyGoldPriceResponse()
                 : copyResponseWithoutChart(cachedCurrentPrice.response());
         }
-        response.setChartPoints(fetchChartPoints(normalizedRange));
+        response.setChartPoints(includeChart ? fetchChartPoints(normalizedRange) : List.of());
         return response;
     }
 

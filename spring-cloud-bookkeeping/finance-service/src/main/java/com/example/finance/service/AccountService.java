@@ -57,6 +57,9 @@ public class AccountService {
     private static final String LIABILITY_ACCOUNT_TYPE_CODE = "liability";
     private static final String LIABILITY_REPAYMENT_STATUS_PENDING = "pending";
     private static final String SUBSCRIPTION_STATUS_PENDING = "pending";
+    private static final String NORMAL_STATUS = "normal";
+    private static final String SETTLEMENT_STATUS_PENDING = "pending";
+    private static final String BUY_TRADE_TYPE = "buy";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
     private static final String DEBT_RECORD_TYPE_REPAYMENT = "repayment";
     private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
@@ -500,10 +503,14 @@ public class AccountService {
         }
         List<InvestmentPositionEntity> positions = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
                 .select(
+                    InvestmentPositionEntity::getId,
                     InvestmentPositionEntity::getAccountId,
                     InvestmentPositionEntity::getHoldingQuantity,
                     InvestmentPositionEntity::getCurrentPrice,
                     InvestmentPositionEntity::getMarketValue,
+                    InvestmentPositionEntity::getCostAmount,
+                    InvestmentPositionEntity::getSubscriptionStatus,
+                    InvestmentPositionEntity::getSubscriptionConfirmedAt,
                     InvestmentPositionEntity::getStatus
                 )
                 .eq(InvestmentPositionEntity::getAccountId, entity.getId())
@@ -531,7 +538,9 @@ public class AccountService {
                 .map(this::resolveInvestmentPositionBalance)
                 .filter(value -> value != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-            return marketValue.setScale(2, RoundingMode.HALF_UP);
+            return marketValue
+                .add(resolvePendingBuyTransactionAmount(entity.getId()))
+                .setScale(2, RoundingMode.HALF_UP);
         }
 
         return entity.getCurrentBalance() == null ? BigDecimal.ZERO : entity.getCurrentBalance();
@@ -799,16 +808,21 @@ public class AccountService {
         if (!positionAccountIds.isEmpty()) {
             List<InvestmentPositionEntity> positions = investmentPositionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
                 .select(
+                    InvestmentPositionEntity::getId,
                     InvestmentPositionEntity::getAccountId,
                     InvestmentPositionEntity::getHoldingQuantity,
                     InvestmentPositionEntity::getCurrentPrice,
                     InvestmentPositionEntity::getMarketValue,
+                    InvestmentPositionEntity::getCostAmount,
+                    InvestmentPositionEntity::getSubscriptionStatus,
+                    InvestmentPositionEntity::getSubscriptionConfirmedAt,
                     InvestmentPositionEntity::getStatus
                 )
                 .in(InvestmentPositionEntity::getAccountId, positionAccountIds)
                 .eq(InvestmentPositionEntity::getStatus, ACTIVE_POSITION_STATUS));
             Map<Long, List<InvestmentPositionEntity>> positionsByAccount = positions.stream()
                 .collect(Collectors.groupingBy(InvestmentPositionEntity::getAccountId));
+            Map<Long, BigDecimal> pendingBuyAmountsByAccount = loadPendingBuyAmountsByAccount(positionAccountIds);
             BigDecimal realtimeGoldPrice = resolvePreferredGoldPrice(positions);
             for (Long accountId : positionAccountIds) {
                 List<InvestmentPositionEntity> accountPositions = positionsByAccount.getOrDefault(accountId, List.of());
@@ -835,7 +849,10 @@ public class AccountService {
                         .map(this::resolveInvestmentPositionBalance)
                         .filter(value -> value != null)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
-                    accountBalances.put(accountId, marketValue.setScale(2, RoundingMode.HALF_UP));
+                    accountBalances.put(
+                        accountId,
+                        marketValue.add(pendingBuyAmountsByAccount.getOrDefault(accountId, BigDecimal.ZERO)).setScale(2, RoundingMode.HALF_UP)
+                    );
                 }
             }
         }
@@ -861,6 +878,52 @@ public class AccountService {
             totals.merge(accountId, amount, BigDecimal::add);
         }
         return totals;
+    }
+
+    private BigDecimal resolvePendingBuyTransactionAmount(Long accountId) {
+        if (accountId == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return investmentTransactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+                .eq(InvestmentTransactionEntity::getAccountId, accountId)
+                .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
+                .eq(InvestmentTransactionEntity::getSettlementStatus, SETTLEMENT_STATUS_PENDING)
+                .eq(InvestmentTransactionEntity::getTradeType, BUY_TRADE_TYPE))
+            .stream()
+            .map(transaction -> zeroIfNull(transaction.getAmount())
+                .add(zeroIfNull(transaction.getFeeAmount()))
+                .add(zeroIfNull(transaction.getTaxAmount())))
+            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private Map<Long, BigDecimal> loadPendingBuyAmountsByAccount(List<Long> accountIds) {
+        if (accountIds == null || accountIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<Long, BigDecimal> result = new HashMap<>();
+        investmentTransactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+                .in(InvestmentTransactionEntity::getAccountId, accountIds)
+                .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
+                .eq(InvestmentTransactionEntity::getSettlementStatus, SETTLEMENT_STATUS_PENDING)
+                .eq(InvestmentTransactionEntity::getTradeType, BUY_TRADE_TYPE))
+            .forEach(transaction -> {
+                Long accountId = transaction.getAccountId();
+                if (accountId == null) {
+                    return;
+                }
+                BigDecimal amount = zeroIfNull(transaction.getAmount())
+                    .add(zeroIfNull(transaction.getFeeAmount()))
+                    .add(zeroIfNull(transaction.getTaxAmount()))
+                    .setScale(2, RoundingMode.HALF_UP);
+                result.merge(accountId, amount, BigDecimal::add);
+            });
+        result.replaceAll((key, value) -> value.setScale(2, RoundingMode.HALF_UP));
+        return result;
+    }
+
+    private BigDecimal zeroIfNull(BigDecimal amount) {
+        return amount == null ? BigDecimal.ZERO : amount;
     }
 
     private BigDecimal resolveDebtBalanceDelta(DebtRecordEntity record) {

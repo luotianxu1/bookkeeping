@@ -1334,9 +1334,13 @@ export function deleteCategory(id: number) {
   return requestDelete<void>(financeRequest, `/api/finance/categories/${id}`)
 }
 
-export function getGoldPrices(range: GoldPriceRange = '1d', forceRefreshCurrent = false) {
+export function getGoldPrices(
+  range: GoldPriceRange = '1d',
+  forceRefreshCurrent = false,
+  includeChart = true,
+) {
   return requestGet<GoldPrice>(financeRequest, '/api/finance/gold-prices', {
-    params: { range, forceRefreshCurrent },
+    params: { range, forceRefreshCurrent, includeChart },
   })
 }
 

@@ -30,6 +30,7 @@ finance:
   gold-price:
     refresh-interval-millis: 300000
     retry-delay-millis: 10000
+    max-retry-attempts: 3
   investment:
     auto-invest:
       cron: 0 5 9 * * *

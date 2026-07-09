@@ -237,6 +237,24 @@ public class InvestmentService {
     private static final LocalTime FUND_CONFIRM_READY_TIME = LocalTime.of(9, 5);
     private static final LocalTime FUND_PROFIT_SYNC_READY_TIME = LocalTime.of(21, 30);
     private static final Set<String> POSITION_ACCOUNT_TYPE_CODES = Set.of("investment", "gold");
+    private static final Set<String> FUND_SUBSCRIPTION_OPEN_STATUS_KEYWORDS = Set.of(
+        "开放申购",
+        "限制大额申购",
+        "限大额申购",
+        "限大额",
+        "限额申购",
+        "暂停大额申购"
+    );
+    private static final Set<String> FUND_SUBSCRIPTION_CLOSED_STATUS_KEYWORDS = Set.of(
+        "暂停申购",
+        "停止申购",
+        "封闭",
+        "不可申购",
+        "不开放申购",
+        "认购期",
+        "清盘",
+        "终止"
+    );
     private static final DateTimeFormatter NO_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
     private static final DateTimeFormatter FUND_ESTIMATE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter FUND_ESTIMATE_TIME_WITH_SECOND_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -2908,6 +2926,7 @@ public class InvestmentService {
         InvestmentProductEntity product
     ) {
         JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
+        requireFundSubscribable(product, baseInfo);
         BigDecimal officialPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
         LocalDateTime tradeAt = request.getTradeAt() == null ? LocalDateTime.now() : request.getTradeAt();
         LocalDate appliedDate = resolveFundSubscriptionTradeDate(request.getSubscriptionTimeSlot(), tradeAt);
@@ -2975,6 +2994,7 @@ public class InvestmentService {
         LocalDate expectedSettlementDate = resolveFundExpectedConfirmDate(appliedDate, baseInfo, product);
 
         if ("buy".equals(request.getTradeType())) {
+            requireFundSubscribable(product, baseInfo);
             BigDecimal amount = defaultZero(request.getAmount()).setScale(2, RoundingMode.HALF_UP);
             if (amount.compareTo(BigDecimal.ZERO) <= 0) {
                 throw new IllegalArgumentException("申购金额必须大于0");
@@ -3074,6 +3094,40 @@ public class InvestmentService {
         }
 
         throw new IllegalArgumentException("基金仅支持加仓或减仓");
+    }
+
+    private void requireFundSubscribable(InvestmentProductEntity product, JsonNode baseInfo) {
+        String subscriptionStatus = normalizeFundSubscriptionStatus(baseInfo.path("SGZT").asText(null));
+        if (!StringUtils.hasText(subscriptionStatus)) {
+            throw new IllegalArgumentException("暂无法确认基金申购状态，请稍后重试："
+                + formatFundProductName(product));
+        }
+        if (FUND_SUBSCRIPTION_CLOSED_STATUS_KEYWORDS.stream().anyMatch(subscriptionStatus::contains)) {
+            throw new IllegalArgumentException("基金当前不可申购："
+                + formatFundProductName(product)
+                + "（申购状态：" + subscriptionStatus + "）");
+        }
+        boolean open = FUND_SUBSCRIPTION_OPEN_STATUS_KEYWORDS.stream().anyMatch(subscriptionStatus::contains);
+        if (!open) {
+            throw new IllegalArgumentException("基金当前申购状态暂不支持下单："
+                + formatFundProductName(product)
+                + "（申购状态：" + subscriptionStatus + "）");
+        }
+    }
+
+    private String normalizeFundSubscriptionStatus(String status) {
+        if (!StringUtils.hasText(status)) {
+            return "";
+        }
+        return status.replaceAll("\\s+", "");
+    }
+
+    private String formatFundProductName(InvestmentProductEntity product) {
+        if (product == null) {
+            return "未知基金";
+        }
+        String name = StringUtils.hasText(product.getName()) ? product.getName() : "未知基金";
+        return StringUtils.hasText(product.getSymbol()) ? name + "（" + product.getSymbol() + "）" : name;
     }
 
     private InvestmentTransactionEntity buildPendingFundTransactionEntity(
