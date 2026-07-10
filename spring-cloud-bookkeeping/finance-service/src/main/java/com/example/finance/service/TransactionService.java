@@ -115,6 +115,9 @@ public class TransactionService {
         List<Long> userIds,
         String type,
         Long accountId,
+        LocalDate startDate,
+        LocalDate endDate,
+        String sortOrder,
         boolean cashOnly,
         Integer page,
         Integer pageSize
@@ -128,6 +131,8 @@ public class TransactionService {
                 .filter(transaction -> transaction.getAccountId() != null && cashAccountIds.contains(transaction.getAccountId()))
                 .toList();
         }
+        transactions = filterTransactionsByDateRange(transactions, startDate, endDate);
+        transactions = sortTransactions(transactions, sortOrder);
 
         int total = transactions.size();
         int totalPages = total == 0 ? 1 : (int) Math.ceil((double) total / normalizedPageSize);
@@ -141,6 +146,9 @@ public class TransactionService {
         response.setPage(resolvedPage);
         response.setPageSize(normalizedPageSize);
         response.setTotalPages(totalPages);
+        response.setIncomeTotal(sumAmounts(transactions, TYPE_INCOME));
+        response.setExpenseTotal(sumAmounts(transactions, TYPE_EXPENSE));
+        response.setBalanceTotal(response.getIncomeTotal().subtract(response.getExpenseTotal()));
         return response;
     }
 
@@ -743,6 +751,32 @@ public class TransactionService {
             .filter(transaction -> !transaction.getOccurredAt().isBefore(startTime) && transaction.getOccurredAt().isBefore(endTime))
             .sorted(transactionComparator())
             .toList();
+    }
+
+    private List<TransactionResponse> filterTransactionsByDateRange(
+        List<TransactionResponse> transactions,
+        LocalDate startDate,
+        LocalDate endDate
+    ) {
+        LocalDateTime startTime = startDate == null ? null : startDate.atStartOfDay();
+        LocalDateTime endTime = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+        if (startTime == null && endTime == null) {
+            return transactions;
+        }
+
+        return transactions.stream()
+            .filter(transaction -> transaction.getOccurredAt() != null)
+            .filter(transaction -> startTime == null || !transaction.getOccurredAt().isBefore(startTime))
+            .filter(transaction -> endTime == null || transaction.getOccurredAt().isBefore(endTime))
+            .toList();
+    }
+
+    private List<TransactionResponse> sortTransactions(List<TransactionResponse> transactions, String sortOrder) {
+        Comparator<TransactionResponse> comparator = transactionComparator();
+        if ("asc".equalsIgnoreCase(sortOrder)) {
+            comparator = comparator.reversed();
+        }
+        return transactions.stream().sorted(comparator).toList();
     }
 
     private TransactionAnalysisSummaryResponse buildSummary(List<TransactionResponse> transactions) {

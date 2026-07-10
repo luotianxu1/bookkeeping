@@ -1,8 +1,10 @@
 import type { Transaction as ApiTransaction } from '@/api/modules/finance'
 import type { DayGroup } from '@/types/finance'
 
-export function buildTransactionDayGroups(source: ApiTransaction[]): DayGroup[] {
-  const sortedSource = [...source].sort(compareTransactionsDesc)
+type TransactionSortOrder = 'asc' | 'desc'
+
+export function buildTransactionDayGroups(source: ApiTransaction[], sortOrder: TransactionSortOrder = 'desc'): DayGroup[] {
+  const sortedSource = [...source].sort((left, right) => compareTransactions(left, right, sortOrder))
   const grouped = new Map<string, ApiTransaction[]>()
   sortedSource.forEach((transaction) => {
     const dayKey = formatDayKey(transaction)
@@ -12,7 +14,7 @@ export function buildTransactionDayGroups(source: ApiTransaction[]): DayGroup[] 
   })
 
   return Array.from(grouped.entries())
-    .sort(([leftDayKey], [rightDayKey]) => compareDayKeysDesc(leftDayKey, rightDayKey))
+    .sort(([leftDayKey], [rightDayKey]) => compareDayKeys(leftDayKey, rightDayKey, sortOrder))
     .map(([dayKey, groupTransactions]) => {
     const income = groupTransactions
       .filter((transaction) => transaction.type === 'income')
@@ -45,17 +47,19 @@ export function buildTransactionDayGroups(source: ApiTransaction[]): DayGroup[] 
   })
 }
 
-function compareTransactionsDesc(left: ApiTransaction, right: ApiTransaction) {
+function compareTransactions(left: ApiTransaction, right: ApiTransaction, sortOrder: TransactionSortOrder) {
   const leftTime = parseTransactionTime(left.occurredAt)
   const rightTime = parseTransactionTime(right.occurredAt)
+  const direction = sortOrder === 'asc' ? 1 : -1
   if (leftTime !== rightTime) {
-    return rightTime - leftTime
+    return (leftTime - rightTime) * direction
   }
-  return Number(right.id ?? 0) - Number(left.id ?? 0)
+  return (Number(left.id ?? 0) - Number(right.id ?? 0)) * direction
 }
 
-function compareDayKeysDesc(leftDayKey: string, rightDayKey: string) {
-  return parseTransactionTime(`${rightDayKey}T00:00:00`) - parseTransactionTime(`${leftDayKey}T00:00:00`)
+function compareDayKeys(leftDayKey: string, rightDayKey: string, sortOrder: TransactionSortOrder) {
+  const direction = sortOrder === 'asc' ? 1 : -1
+  return (parseTransactionTime(`${leftDayKey}T00:00:00`) - parseTransactionTime(`${rightDayKey}T00:00:00`)) * direction
 }
 
 function parseTransactionTime(value: string) {

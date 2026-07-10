@@ -1,0 +1,105 @@
+.common-bottom-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.common-bottom-sheet-overlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: var(--color-overlay);
+}
+
+.common-bottom-sheet-panel {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 480px);
+  max-height: min(82dvh, 680px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-radius: 20px 20px 0 0;
+  background: var(--color-bg-page);
+  box-shadow: var(--color-shadow-panel);
+}
+
+.common-bottom-sheet-header {
+  display: grid;
+  gap: var(--space-10);
+  padding: 8px 18px 10px;
+  background: var(--color-bg-card);
+}
+
+.common-bottom-sheet-handle {
+  justify-self: center;
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-border-soft-2);
+}
+
+.common-bottom-sheet-title-row {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.common-bottom-sheet-title-row h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-16);
+  font-weight: 700;
+}
+
+.common-bottom-sheet-close {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-10);
+  background: var(--color-bg-soft);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-18);
+  line-height: 1;
+}
+
+.common-bottom-sheet-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 18px;
+}
+
+.common-bottom-sheet-footer {
+  padding: 10px 18px calc(14px + env(safe-area-inset-bottom));
+  background: var(--color-bg-card);
+}
+
+.bottom-sheet-fade-enter-active,
+.bottom-sheet-fade-leave-active {
+  transition: opacity 200ms ease;
+}
+
+.bottom-sheet-fade-enter-from,
+.bottom-sheet-fade-leave-to {
+  opacity: 0;
+}
+
+.bottom-sheet-slide-enter-active,
+.bottom-sheet-slide-leave-active {
+  transition:
+    transform 260ms ease,
+    opacity 200ms ease;
+}
+
+.bottom-sheet-slide-enter-from,
+.bottom-sheet-slide-leave-to {
+  opacity: 0;
+  transform: translateY(100%);
+}

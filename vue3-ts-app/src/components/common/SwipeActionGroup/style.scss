@@ -1,0 +1,54 @@
+.swipe-action-group {
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
+.swipe-action {
+  width: 40px;
+  height: 100%;
+  min-height: 48px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.swipe-action svg {
+  width: 28px;
+  height: 28px;
+  padding: 7px;
+  border-radius: 14px;
+}
+
+.swipe-action-edit {
+  color: var(--color-brand-strong);
+}
+
+.swipe-action-edit svg {
+  background: var(--color-bg-brand-soft);
+}
+
+.swipe-action-delete {
+  color: var(--color-danger);
+}
+
+.swipe-action-delete svg {
+  background: var(--color-danger-soft);
+}
+
+.swipe-action span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.swipe-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

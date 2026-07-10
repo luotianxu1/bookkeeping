@@ -76,9 +76,9 @@
 
 .expense-summary-wrap {
   padding: 16px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-top-card-border);
   border-radius: 22px;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  background: var(--color-top-card-gradient);
 }
 
 .expense-summary-wrap {
@@ -340,9 +340,9 @@
   padding: 14px;
   display: grid;
   gap: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-top-card-border);
   border-radius: 20px;
-  background: #fff;
+  background: var(--color-top-card-gradient);
 }
 
 .overview-expense-metrics {

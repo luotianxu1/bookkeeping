@@ -71,23 +71,20 @@ function normalizePath(path: string) {
 
 <template>
   <header class="page-header">
-    <div class="page-header-side page-header-side-left">
+    <div class="page-header-left">
       <button class="page-header-back" type="button" :aria-label="backLabel ?? '返回'" @click="goBack">
-        &lt;
+        <span aria-hidden="true"></span>
       </button>
-    </div>
-    <div class="page-header-main">
       <h1>{{ title }}</h1>
     </div>
     <div
       v-if="$slots.right || $slots.default"
-      class="page-header-side page-header-side-right"
+      class="page-header-action"
     >
       <slot name="right">
         <slot />
       </slot>
     </div>
-    <div v-else class="page-header-side page-header-side-right page-header-side-placeholder" aria-hidden="true"></div>
   </header>
 </template>
 

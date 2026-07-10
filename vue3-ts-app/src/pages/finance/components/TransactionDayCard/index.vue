@@ -3,8 +3,9 @@
 import { ref } from 'vue'
 import type { DayGroup } from '@/types/finance'
 import AmountText from '@/components/common/AmountText/index.vue'
+import SwipeActionGroup from '@/components/common/SwipeActionGroup/index.vue'
 
-const ACTION_WIDTH = 72
+const ACTION_WIDTH = 40
 
 const props = withDefaults(defineProps<{
   group: DayGroup
@@ -50,6 +51,10 @@ function transactionAmount(transaction: DayGroup['transactions'][number]) {
 
 function transactionTone(transaction: DayGroup['transactions'][number]) {
   return transaction.type === 'expense' ? 'negative' : 'positive'
+}
+
+function transactionIconText(transaction: DayGroup['transactions'][number]) {
+  return (transaction.category || transaction.name || '账').trim().slice(0, 1)
 }
 
 function amountNumber(value: string) {
@@ -170,8 +175,11 @@ function handleDelete(transaction: DayGroup['transactions'][number]) {
 <template>
   <article :class="['day-card', `day-card-${summaryMode}`]">
     <header class="day-header">
-      <div class="day-title">
-        <strong>{{ group.date }}</strong>
+      <div class="day-title-row">
+        <div class="day-title">
+          <span class="day-title-dot" aria-hidden="true"></span>
+          <strong>{{ group.date }}</strong>
+        </div>
         <span>共 {{ group.transactions.length }} 笔</span>
       </div>
 
@@ -202,25 +210,19 @@ function handleDelete(transaction: DayGroup['transactions'][number]) {
         class="transaction-row"
         :class="{ 'transaction-row-swipeable': canSwipeDelete(transaction) }"
       >
-        <div v-if="canSwipeDelete(transaction)" class="transaction-actions" :style="{ width: `${rowActionWidth(transaction)}px` }">
-          <button
-            v-if="canEditTransaction(transaction)"
-            class="transaction-action transaction-action-edit"
-            type="button"
-            :aria-label="`修改${transaction.name}`"
-            @click="handleEdit(transaction)"
-          >
-            修改
-          </button>
-          <button
-            class="transaction-action transaction-action-delete"
-            type="button"
-            :disabled="deletingId === transaction.id"
-            :aria-label="`删除${transaction.name}`"
-            @click="handleDelete(transaction)"
-          >
-            {{ deletingId === transaction.id ? '...' : '删除' }}
-          </button>
+        <div
+          v-if="canSwipeDelete(transaction)"
+          class="transaction-actions"
+          :style="{ width: `${rowActionWidth(transaction)}px` }"
+        >
+          <SwipeActionGroup
+            :show-edit="canEditTransaction(transaction)"
+            :deleting="deletingId === transaction.id"
+            :edit-label="`修改${transaction.name}`"
+            :delete-label="`删除${transaction.name}`"
+            @edit="handleEdit(transaction)"
+            @delete="handleDelete(transaction)"
+          />
         </div>
         <div
           class="transaction-item"
@@ -231,8 +233,13 @@ function handleDelete(transaction: DayGroup['transactions'][number]) {
           @pointercancel="handlePointerUp"
         >
           <span class="transaction-copy">
-            <strong>{{ transaction.name }}</strong>
-            <span>{{ transaction.time }}</span>
+            <span :class="['transaction-icon', `transaction-icon-${transaction.type}`]" aria-hidden="true">
+              {{ transactionIconText(transaction) }}
+            </span>
+            <span class="transaction-copy-main">
+              <strong>{{ transaction.name }}</strong>
+              <span>{{ transaction.time }}</span>
+            </span>
           </span>
           <AmountText
             tag="strong"

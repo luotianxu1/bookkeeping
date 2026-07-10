@@ -23,6 +23,11 @@
   background: var(--color-bg-card);
 }
 
+.summary-card {
+  border-color: var(--color-top-card-border);
+  background: var(--color-top-card-gradient);
+}
+
 .summary-top {
   display: flex;
   align-items: flex-start;

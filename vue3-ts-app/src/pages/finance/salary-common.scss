@@ -37,8 +37,7 @@
 
 .salary-summary-card {
   padding: var(--space-12) var(--space-14);
-  background:
-    linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
+  background: var(--color-top-card-gradient);
 }
 
 .salary-card-head,

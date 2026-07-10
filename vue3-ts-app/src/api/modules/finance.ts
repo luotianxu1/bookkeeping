@@ -281,6 +281,9 @@ export interface TransactionQuery {
 export interface TransactionPageQuery extends TransactionQuery {
   userIds?: string
   cashOnly?: boolean
+  startDate?: string
+  endDate?: string
+  sortOrder?: 'asc' | 'desc'
   page?: number
   pageSize?: number
 }
@@ -291,6 +294,9 @@ export interface TransactionPage {
   page: number
   pageSize: number
   totalPages: number
+  incomeTotal?: number
+  expenseTotal?: number
+  balanceTotal?: number
 }
 
 export type TransactionAnalysisPeriod = 'month' | 'year'

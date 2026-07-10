@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -53,11 +54,14 @@ public class TransactionController {
         @RequestParam(name = "userIds", required = false) String userIds,
         @RequestParam(name = "type", required = false) String type,
         @RequestParam(name = "accountId", required = false) Long accountId,
+        @RequestParam(name = "startDate", required = false) LocalDate startDate,
+        @RequestParam(name = "endDate", required = false) LocalDate endDate,
+        @RequestParam(name = "sortOrder", required = false, defaultValue = "desc") String sortOrder,
         @RequestParam(name = "cashOnly", required = false, defaultValue = "false") boolean cashOnly,
         @RequestParam(name = "page", required = false, defaultValue = "1") Integer page,
         @RequestParam(name = "pageSize", required = false, defaultValue = "50") Integer pageSize
     ) {
-        return Result.ok(transactionService.page(parseUserIds(userId, userIds), type, accountId, cashOnly, page, pageSize));
+        return Result.ok(transactionService.page(parseUserIds(userId, userIds), type, accountId, startDate, endDate, sortOrder, cashOnly, page, pageSize));
     }
 
     @GetMapping("/accounts/{accountId}")

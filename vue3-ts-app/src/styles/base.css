@@ -66,6 +66,9 @@
   --color-finance-bg-1: #f4f8ff;
   --color-finance-bg-2: #e5eeff;
   --color-finance-card-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+  --color-top-card-gradient: linear-gradient(225deg, #eff6ff 0%, #dbeafe 56%, #bfdbfe 100%);
+  --color-top-card-border: #bbd7ff;
+  --color-top-card-shadow: 0 14px 30px rgba(37, 99, 235, 0.14);
   --color-finance-budget-track: var(--color-brand-soft);
   --color-finance-budget-danger-track: var(--color-danger-soft);
   --color-finance-budget-inner-bg: var(--color-finance-bg-1);
@@ -348,6 +351,9 @@
   --color-finance-bg-1: var(--color-bg-brand-tint);
   --color-finance-bg-2: #121b2d;
   --color-finance-card-shadow: 0 14px 28px rgba(2, 6, 23, 0.34);
+  --color-top-card-gradient: linear-gradient(225deg, #eff6ff 0%, #dbeafe 56%, #bfdbfe 100%);
+  --color-top-card-border: #bbd7ff;
+  --color-top-card-shadow: 0 14px 30px rgba(37, 99, 235, 0.14);
   --color-finance-budget-track: #233a63;
   --color-finance-budget-danger-track: #233a63;
   --color-finance-budget-inner-bg: var(--color-bg-brand-tint);
@@ -507,6 +513,13 @@
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+}
+
+header:has(> .page-header) {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--page-header-bg, var(--color-bg-page));
 }
 
 html {

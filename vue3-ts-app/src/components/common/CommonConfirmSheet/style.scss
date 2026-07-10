@@ -1,0 +1,25 @@
+.common-confirm-sheet-content {
+  display: grid;
+  gap: var(--space-8);
+  padding: 6px 0 10px;
+}
+
+.common-confirm-sheet-content p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-14);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.common-confirm-sheet-error {
+  color: var(--color-danger) !important;
+  font-size: var(--font-size-12) !important;
+  font-weight: 600;
+}
+
+.common-confirm-sheet-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-8);
+}

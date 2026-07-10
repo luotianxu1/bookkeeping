@@ -65508,464 +65508,8 @@
     },
     {
       "type": "frame",
-      "id": "q2YjnD",
-      "x": 20161,
-      "y": 0,
-      "name": "黄金账户-管理态-重新设计",
-      "clip": true,
-      "width": 393,
-      "height": 956,
-      "fill": "#F3F7FC",
-      "layout": "none",
-      "children": [
-        {
-          "type": "frame",
-          "id": "YYtrC",
-          "x": 16,
-          "y": 14,
-          "name": "顶部栏",
-          "width": 361,
-          "height": 40,
-          "layout": "none",
-          "children": [
-            {
-              "type": "frame",
-              "id": "sGCPt",
-              "x": 0,
-              "y": 5,
-              "name": "返回按钮",
-              "width": 30,
-              "height": 30,
-              "fill": "#FFF7E6",
-              "cornerRadius": 15,
-              "layout": "none",
-              "children": [
-                {
-                  "type": "icon",
-                  "id": "mlPP7",
-                  "x": 6,
-                  "y": 6,
-                  "name": "返回图标",
-                  "width": 18,
-                  "height": 18,
-                  "icon": "chevron-left",
-                  "library": "lucide",
-                  "fill": "#B45309"
-                }
-              ]
-            },
-            {
-              "type": "text",
-              "id": "b3qGmR",
-              "x": 38,
-              "y": 9,
-              "name": "页面标题",
-              "fill": "#0F172A",
-              "content": "黄金账户-管理态",
-              "fontFamily": "Inter",
-              "fontSize": 15,
-              "fontWeight": "700"
-            }
-          ]
-        },
-        {
-          "type": "frame",
-          "id": "J6KBBY",
-          "x": 16,
-          "y": 66,
-          "name": "黄金总览卡",
-          "width": 361,
-          "height": 158,
-          "fill": {
-            "type": "gradient",
-            "gradientType": "linear",
-            "enabled": true,
-            "rotation": 135,
-            "size": {
-              "height": 1
-            },
-            "colors": [
-              {
-                "color": "#F4F8FF",
-                "position": 0
-              },
-              {
-                "color": "#E5EEFF",
-                "position": 1
-              }
-            ]
-          },
-          "cornerRadius": 18,
-          "stroke": "#D9E5FF",
-          "strokeWidth": 1,
-          "layout": "none",
-          "children": [
-            {
-              "type": "text",
-              "id": "vRFql",
-              "x": 18,
-              "y": 12,
-              "name": "总重量标签",
-              "fill": "#4F6EA8",
-              "content": "总重量(克)",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "500"
-            },
-            {
-              "type": "text",
-              "id": "at9yi",
-              "x": 18,
-              "y": 32,
-              "name": "总重量值",
-              "fill": "#FACC15",
-              "content": "5.00",
-              "fontFamily": "Inter",
-              "fontSize": 30,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "CH886",
-              "x": 18,
-              "y": 78,
-              "name": "平均克价(元)标签",
-              "fill": "#64748B",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "平均克价(元)",
-              "fontFamily": "Inter",
-              "fontSize": 10,
-              "fontWeight": "500"
-            },
-            {
-              "type": "text",
-              "id": "QjxlF",
-              "x": 18,
-              "y": 94,
-              "name": "平均克价(元)值",
-              "fill": "#0F172A",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "574.61",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "ddwgI",
-              "x": 18,
-              "y": 118,
-              "name": "预估收益(元)标签",
-              "fill": "#64748B",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "预估收益(元)",
-              "fontFamily": "Inter",
-              "fontSize": 10,
-              "fontWeight": "500"
-            },
-            {
-              "type": "text",
-              "id": "MRwno",
-              "x": 18,
-              "y": 134,
-              "name": "预估收益(元)值",
-              "fill": "#E11D48",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "2215.55",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "TaysP",
-              "x": 126,
-              "y": 78,
-              "name": "购入总价(元)标签",
-              "fill": "#64748B",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "购入总价(元)",
-              "fontFamily": "Inter",
-              "fontSize": 10,
-              "fontWeight": "500"
-            },
-            {
-              "type": "text",
-              "id": "OJ6to",
-              "x": 126,
-              "y": 94,
-              "name": "购入总价(元)值",
-              "fill": "#0F172A",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "2873.05",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "gW5qF",
-              "x": 126,
-              "y": 118,
-              "name": "收益率(%)标签",
-              "fill": "#64748B",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "收益率(%)",
-              "fontFamily": "Inter",
-              "fontSize": 10,
-              "fontWeight": "500"
-            },
-            {
-              "type": "text",
-              "id": "QMVgS",
-              "x": 126,
-              "y": 134,
-              "name": "收益率(%)值",
-              "fill": "#E11D48",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "77.1149",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "fBnrU",
-              "x": 234,
-              "y": 78,
-              "name": "预估价值(元)标签",
-              "fill": "#64748B",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "预估价值(元)",
-              "fontFamily": "Inter",
-              "fontSize": 10,
-              "fontWeight": "500"
-            },
-            {
-              "type": "text",
-              "id": "m1bGHQ",
-              "x": 234,
-              "y": 94,
-              "name": "预估价值(元)值",
-              "fill": "#0F172A",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "5088.60",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "O8GGk",
-              "x": 234,
-              "y": 118,
-              "name": "累计收益(元)标签",
-              "fill": "#64748B",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "累计收益(元)",
-              "fontFamily": "Inter",
-              "fontSize": 10,
-              "fontWeight": "500"
-            },
-            {
-              "type": "text",
-              "id": "gnYMV",
-              "x": 234,
-              "y": 134,
-              "name": "累计收益(元)值",
-              "fill": "#E11D48",
-              "textGrowth": "fixed-width",
-              "width": 100,
-              "content": "2215.55",
-              "fontFamily": "Inter",
-              "fontSize": 12,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "AScqF",
-              "x": 246,
-              "y": 14,
-              "name": "当前金价标签",
-              "fill": "#64748B",
-              "textGrowth": "fixed-width",
-              "width": 96,
-              "content": "当前金价",
-              "textAlign": "right",
-              "fontFamily": "Inter",
-              "fontSize": 10,
-              "fontWeight": "600"
-            },
-            {
-              "type": "text",
-              "id": "dHsGF",
-              "x": 246,
-              "y": 34,
-              "name": "当前金价值",
-              "fill": "#0F172A",
-              "textGrowth": "fixed-width",
-              "width": 96,
-              "content": "¥640/g",
-              "textAlign": "right",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "700"
-            }
-          ]
-        },
-        {
-          "type": "text",
-          "id": "tioKy",
-          "x": 16,
-          "y": 246,
-          "name": "管理说明",
-          "fill": "#0F172A",
-          "content": "黄金账户管理",
-          "fontFamily": "Inter",
-          "fontSize": 18,
-          "fontWeight": "700"
-        },
-        {
-          "type": "frame",
-          "id": "m3IoFJ",
-          "x": 16,
-          "y": 286,
-          "name": "管理入口卡",
-          "width": 361,
-          "height": 172,
-          "fill": "#FFFFFF",
-          "cornerRadius": 16,
-          "stroke": "#D8E7FA",
-          "strokeWidth": 1,
-          "layout": "none",
-          "children": [
-            {
-              "type": "text",
-              "id": "IcWxM",
-              "x": 18,
-              "y": 18,
-              "name": "管理项0",
-              "fill": "#0F172A",
-              "content": "同步金价",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "TsD7H",
-              "x": 18,
-              "y": 40,
-              "name": "管理项说明0",
-              "fill": "#64748B",
-              "content": "更新今日金价与收益",
-              "fontFamily": "Inter",
-              "fontSize": 11,
-              "fontWeight": "600"
-            },
-            {
-              "type": "icon",
-              "id": "VcAym",
-              "x": 318,
-              "y": 24,
-              "name": "管理项箭头0",
-              "width": 18,
-              "height": 18,
-              "icon": "chevron-right",
-              "library": "lucide",
-              "fill": "#64748B"
-            },
-            {
-              "type": "text",
-              "id": "G2tZzZ",
-              "x": 18,
-              "y": 66,
-              "name": "管理项1",
-              "fill": "#0F172A",
-              "content": "账户设置",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "C3kjJ",
-              "x": 18,
-              "y": 88,
-              "name": "管理项说明1",
-              "fill": "#64748B",
-              "content": "调整黄金账户名称和展示",
-              "fontFamily": "Inter",
-              "fontSize": 11,
-              "fontWeight": "600"
-            },
-            {
-              "type": "icon",
-              "id": "nNTkR",
-              "x": 318,
-              "y": 72,
-              "name": "管理项箭头1",
-              "width": 18,
-              "height": 18,
-              "icon": "chevron-right",
-              "library": "lucide",
-              "fill": "#64748B"
-            },
-            {
-              "type": "text",
-              "id": "n5nZDu",
-              "x": 18,
-              "y": 114,
-              "name": "管理项2",
-              "fill": "#0F172A",
-              "content": "导出记录",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "jd9Pc",
-              "x": 18,
-              "y": 136,
-              "name": "管理项说明2",
-              "fill": "#64748B",
-              "content": "导出买入卖出明细",
-              "fontFamily": "Inter",
-              "fontSize": 11,
-              "fontWeight": "600"
-            },
-            {
-              "type": "icon",
-              "id": "B7zzOR",
-              "x": 318,
-              "y": 120,
-              "name": "管理项箭头2",
-              "width": 18,
-              "height": 18,
-              "icon": "chevron-right",
-              "library": "lucide",
-              "fill": "#64748B"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "type": "frame",
       "id": "dpXtH",
-      "x": 20634,
+      "x": 20161,
       "y": 0,
       "name": "黄金账户-重新设计",
       "clip": true,
@@ -65992,7 +65536,7 @@
               "name": "返回按钮",
               "width": 30,
               "height": 30,
-              "fill": "#FFF7E6",
+              "fill": "#EAF2FF",
               "cornerRadius": 15,
               "layout": "none",
               "children": [
@@ -66006,7 +65550,7 @@
                   "height": 18,
                   "icon": "chevron-left",
                   "library": "lucide",
-                  "fill": "#B45309"
+                  "fill": "#2563EB"
                 }
               ]
             },
@@ -66025,10 +65569,10 @@
             {
               "type": "frame",
               "id": "oTYKT",
-              "x": 300,
+              "x": 295,
               "y": 5,
-              "name": "管理按钮",
-              "width": 61,
+              "name": "编辑按钮",
+              "width": 30,
               "height": 30,
               "fill": "#FFFFFF",
               "cornerRadius": 15,
@@ -66037,16 +65581,44 @@
               "layout": "none",
               "children": [
                 {
-                  "type": "text",
-                  "id": "VMl5B",
-                  "x": 17,
-                  "y": 7,
-                  "name": "管理文字",
-                  "fill": "#2563EB",
-                  "content": "管理",
-                  "fontFamily": "Inter",
-                  "fontSize": 12,
-                  "fontWeight": "700"
+                  "type": "icon",
+                  "id": "U6KSr",
+                  "x": 6,
+                  "y": 6,
+                  "name": "编辑图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "pencil",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "IZsXM",
+              "x": 331,
+              "y": 5,
+              "name": "刷新按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#FFFFFF",
+              "cornerRadius": 15,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "O3zEp",
+                  "x": 6,
+                  "y": 6,
+                  "name": "刷新图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "refresh-cw",
+                  "library": "lucide",
+                  "fill": "#2563EB"
                 }
               ]
             }
@@ -66070,18 +65642,33 @@
             },
             "colors": [
               {
-                "color": "#F4F8FF",
+                "color": "#EFF6FF",
                 "position": 0
               },
               {
-                "color": "#E5EEFF",
+                "color": "#DBEAFE",
+                "position": 0.56
+              },
+              {
+                "color": "#BFDBFE",
                 "position": 1
               }
             ]
           },
-          "cornerRadius": 18,
-          "stroke": "#D9E5FF",
+          "cornerRadius": 26,
+          "stroke": "#BBD7FF",
           "strokeWidth": 1,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#2563EB24",
+            "offset": {
+              "x": 0,
+              "y": 14
+            },
+            "blur": 30
+          },
           "layout": "none",
           "children": [
             {
@@ -66131,7 +65718,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "574.61",
+              "content": "¥574.61",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66159,7 +65746,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66187,7 +65774,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2873.05",
+              "content": "¥2873.05",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66243,7 +65830,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "5088.60",
+              "content": "¥5088.60",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66271,7 +65858,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66297,7 +65884,7 @@
               "x": 246,
               "y": 34,
               "name": "当前金价值",
-              "fill": "#0F172A",
+              "fill": "#D97706",
               "textGrowth": "fixed-width",
               "width": 96,
               "content": "¥640/g",
@@ -66327,7 +65914,7 @@
           "x": 16,
           "y": 246,
           "name": "工商银行持仓卡",
-          "width": 361,
+          "width": 301,
           "height": 104,
           "fill": "#FFFFFF",
           "cornerRadius": 14,
@@ -66345,6 +65932,8 @@
               "height": 22,
               "fill": "#FEF3C7",
               "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
               "layout": "none",
               "children": [
                 {
@@ -66376,13 +65965,13 @@
             {
               "type": "text",
               "id": "bjWTB",
-              "x": 208,
+              "x": 166,
               "y": 44,
               "name": "收益",
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
-              "width": 130,
-              "content": "收益: +2215.55",
+              "width": 112,
+              "content": "收益: +¥2215.55",
               "textAlign": "right",
               "fontFamily": "Inter",
               "fontSize": 14,
@@ -66407,7 +65996,7 @@
               "fill": "#334155",
               "textGrowth": "fixed-width",
               "width": 150,
-              "content": "5克 2873.05元",
+              "content": "5克 ¥2873.05",
               "fontFamily": "Inter",
               "fontSize": 11,
               "fontWeight": "600"
@@ -66415,7 +66004,7 @@
             {
               "type": "text",
               "id": "BxDyJ",
-              "x": 246,
+              "x": 182,
               "y": 74,
               "name": "日期",
               "fill": "#64748B",
@@ -66435,7 +66024,7 @@
           "x": 16,
           "y": 362,
           "name": "建设银行持仓卡",
-          "width": 361,
+          "width": 301,
           "height": 104,
           "fill": "#FFFFFF",
           "cornerRadius": 14,
@@ -66453,6 +66042,8 @@
               "height": 22,
               "fill": "#FEF3C7",
               "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
               "layout": "none",
               "children": [
                 {
@@ -66484,13 +66075,13 @@
             {
               "type": "text",
               "id": "NguGd",
-              "x": 208,
+              "x": 166,
               "y": 44,
               "name": "收益",
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
-              "width": 130,
-              "content": "收益: +1688.40",
+              "width": 112,
+              "content": "收益: +¥1688.40",
               "textAlign": "right",
               "fontFamily": "Inter",
               "fontSize": 14,
@@ -66515,7 +66106,7 @@
               "fill": "#334155",
               "textGrowth": "fixed-width",
               "width": 150,
-              "content": "3克 1713.60元",
+              "content": "3克 ¥1713.60",
               "fontFamily": "Inter",
               "fontSize": 11,
               "fontWeight": "600"
@@ -66523,7 +66114,7 @@
             {
               "type": "text",
               "id": "fbfDo",
-              "x": 246,
+              "x": 182,
               "y": 74,
               "name": "日期",
               "fill": "#64748B",
@@ -66543,7 +66134,7 @@
           "x": 16,
           "y": 478,
           "name": "中国银行持仓卡",
-          "width": 361,
+          "width": 301,
           "height": 104,
           "fill": "#FFFFFF",
           "cornerRadius": 14,
@@ -66561,6 +66152,8 @@
               "height": 22,
               "fill": "#FEF3C7",
               "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
               "layout": "none",
               "children": [
                 {
@@ -66592,13 +66185,13 @@
             {
               "type": "text",
               "id": "Ci6Lv",
-              "x": 208,
+              "x": 166,
               "y": 44,
               "name": "收益",
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
-              "width": 130,
-              "content": "收益: +952.30",
+              "width": 112,
+              "content": "收益: +¥952.30",
               "textAlign": "right",
               "fontFamily": "Inter",
               "fontSize": 14,
@@ -66623,7 +66216,7 @@
               "fill": "#334155",
               "textGrowth": "fixed-width",
               "width": 150,
-              "content": "2克 1159.60元",
+              "content": "2克 ¥1159.60",
               "fontFamily": "Inter",
               "fontSize": 11,
               "fontWeight": "600"
@@ -66631,7 +66224,7 @@
             {
               "type": "text",
               "id": "Fgqaz",
-              "x": 246,
+              "x": 182,
               "y": 74,
               "name": "日期",
               "fill": "#64748B",
@@ -66653,12 +66246,12 @@
           "name": "新增黄金悬浮按钮",
           "width": 58,
           "height": 58,
-          "fill": "#F59E0B",
+          "fill": "#2563EB",
           "cornerRadius": 29,
           "effect": {
             "type": "shadow",
             "shadowType": "outer",
-            "color": "#F59E0B40",
+            "color": "#1D4ED84D",
             "offset": {
               "x": 0,
               "y": 8
@@ -66680,13 +66273,169 @@
               "fill": "#FFFFFF"
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "i4te8C",
+          "x": 321,
+          "y": 285,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "T7bWg",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "v1Eon",
+          "x": 351,
+          "y": 285,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "BwG1O",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "OUZC6",
+          "x": 321,
+          "y": 401,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "bLlwx",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "qLFYp",
+          "x": 351,
+          "y": 401,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "SrtTF",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "B1lZ4",
+          "x": 321,
+          "y": 517,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "wsIzJ",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "QftWu",
+          "x": 351,
+          "y": 517,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "DOooe",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
         }
       ]
     },
     {
       "type": "frame",
       "id": "CR8Uh",
-      "x": 21107,
+      "x": 22053,
       "y": 0,
       "name": "黄金账户持仓-重新设计",
       "clip": true,
@@ -66713,7 +66462,7 @@
               "name": "返回按钮",
               "width": 30,
               "height": 30,
-              "fill": "#FFF7E6",
+              "fill": "#EAF2FF",
               "cornerRadius": 15,
               "layout": "none",
               "children": [
@@ -66727,7 +66476,7 @@
                   "height": 18,
                   "icon": "chevron-left",
                   "library": "lucide",
-                  "fill": "#B45309"
+                  "fill": "#2563EB"
                 }
               ]
             },
@@ -66763,18 +66512,33 @@
             },
             "colors": [
               {
-                "color": "#F4F8FF",
+                "color": "#EFF6FF",
                 "position": 0
               },
               {
-                "color": "#E5EEFF",
+                "color": "#DBEAFE",
+                "position": 0.56
+              },
+              {
+                "color": "#BFDBFE",
                 "position": 1
               }
             ]
           },
-          "cornerRadius": 18,
-          "stroke": "#D9E5FF",
+          "cornerRadius": 26,
+          "stroke": "#BBD7FF",
           "strokeWidth": 1,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#2563EB24",
+            "offset": {
+              "x": 0,
+              "y": 14
+            },
+            "blur": 30
+          },
           "layout": "none",
           "children": [
             {
@@ -66824,7 +66588,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "574.61",
+              "content": "¥574.61",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66852,7 +66616,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66880,7 +66644,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2873.05",
+              "content": "¥2873.05",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66936,7 +66700,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "5088.60",
+              "content": "¥5088.60",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66964,7 +66728,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -66990,7 +66754,7 @@
               "x": 246,
               "y": 34,
               "name": "当前金价值",
-              "fill": "#0F172A",
+              "fill": "#D97706",
               "textGrowth": "fixed-width",
               "width": 96,
               "content": "¥640/g",
@@ -67037,6 +66801,8 @@
               "height": 22,
               "fill": "#FEF3C7",
               "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
               "layout": "none",
               "children": [
                 {
@@ -67074,7 +66840,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 130,
-              "content": "收益: +2215.55",
+              "content": "收益: +¥2215.55",
               "textAlign": "right",
               "fontFamily": "Inter",
               "fontSize": 14,
@@ -67099,7 +66865,7 @@
               "fill": "#334155",
               "textGrowth": "fixed-width",
               "width": 150,
-              "content": "5克 2873.05元",
+              "content": "5克 ¥2873.05",
               "fontFamily": "Inter",
               "fontSize": 11,
               "fontWeight": "600"
@@ -67107,7 +66873,7 @@
             {
               "type": "text",
               "id": "pVJqe",
-              "x": 246,
+              "x": 242,
               "y": 74,
               "name": "日期",
               "fill": "#64748B",
@@ -67145,6 +66911,8 @@
               "height": 22,
               "fill": "#FEF3C7",
               "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
               "layout": "none",
               "children": [
                 {
@@ -67182,7 +66950,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 130,
-              "content": "收益: +126.30",
+              "content": "收益: +¥126.30",
               "textAlign": "right",
               "fontFamily": "Inter",
               "fontSize": 14,
@@ -67207,7 +66975,7 @@
               "fill": "#334155",
               "textGrowth": "fixed-width",
               "width": 150,
-              "content": "1.5克 861.15元",
+              "content": "1.5克 ¥861.15",
               "fontFamily": "Inter",
               "fontSize": 11,
               "fontWeight": "600"
@@ -67215,7 +66983,7 @@
             {
               "type": "text",
               "id": "iGvd0",
-              "x": 246,
+              "x": 242,
               "y": 74,
               "name": "日期",
               "fill": "#64748B",
@@ -67253,6 +67021,8 @@
               "height": 22,
               "fill": "#FEF3C7",
               "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
               "layout": "none",
               "children": [
                 {
@@ -67290,7 +67060,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 130,
-              "content": "收益: +952.30",
+              "content": "收益: +¥952.30",
               "textAlign": "right",
               "fontFamily": "Inter",
               "fontSize": 14,
@@ -67315,7 +67085,7 @@
               "fill": "#334155",
               "textGrowth": "fixed-width",
               "width": 150,
-              "content": "1.5克 1053.90元",
+              "content": "1.5克 ¥1053.90",
               "fontFamily": "Inter",
               "fontSize": 11,
               "fontWeight": "600"
@@ -67323,7 +67093,7 @@
             {
               "type": "text",
               "id": "rUOE6",
-              "x": 246,
+              "x": 242,
               "y": 74,
               "name": "日期",
               "fill": "#64748B",
@@ -67342,7 +67112,7 @@
     {
       "type": "frame",
       "id": "W3klbD",
-      "x": 21580,
+      "x": 22526,
       "y": 0,
       "name": "黄金账户持仓-操作展开-重新设计",
       "clip": true,
@@ -67369,7 +67139,7 @@
               "name": "返回按钮",
               "width": 30,
               "height": 30,
-              "fill": "#FFF7E6",
+              "fill": "#EAF2FF",
               "cornerRadius": 15,
               "layout": "none",
               "children": [
@@ -67383,7 +67153,7 @@
                   "height": 18,
                   "icon": "chevron-left",
                   "library": "lucide",
-                  "fill": "#B45309"
+                  "fill": "#2563EB"
                 }
               ]
             },
@@ -67419,18 +67189,33 @@
             },
             "colors": [
               {
-                "color": "#F4F8FF",
+                "color": "#EFF6FF",
                 "position": 0
               },
               {
-                "color": "#E5EEFF",
+                "color": "#DBEAFE",
+                "position": 0.56
+              },
+              {
+                "color": "#BFDBFE",
                 "position": 1
               }
             ]
           },
-          "cornerRadius": 18,
-          "stroke": "#D9E5FF",
+          "cornerRadius": 26,
+          "stroke": "#BBD7FF",
           "strokeWidth": 1,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#2563EB24",
+            "offset": {
+              "x": 0,
+              "y": 14
+            },
+            "blur": 30
+          },
           "layout": "none",
           "children": [
             {
@@ -67480,7 +67265,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "574.61",
+              "content": "¥574.61",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -67508,7 +67293,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -67536,7 +67321,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2873.05",
+              "content": "¥2873.05",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -67592,7 +67377,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "5088.60",
+              "content": "¥5088.60",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -67620,7 +67405,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -67646,7 +67431,7 @@
               "x": 246,
               "y": 34,
               "name": "当前金价值",
-              "fill": "#0F172A",
+              "fill": "#D97706",
               "textGrowth": "fixed-width",
               "width": 96,
               "content": "¥640/g",
@@ -67693,6 +67478,8 @@
               "height": 22,
               "fill": "#FEF3C7",
               "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
               "layout": "none",
               "children": [
                 {
@@ -67730,7 +67517,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 130,
-              "content": "收益: +2215.55",
+              "content": "收益: +¥2215.55",
               "textAlign": "right",
               "fontFamily": "Inter",
               "fontSize": 14,
@@ -67755,7 +67542,7 @@
               "fill": "#334155",
               "textGrowth": "fixed-width",
               "width": 150,
-              "content": "5克 2873.05元",
+              "content": "5克 ¥2873.05",
               "fontFamily": "Inter",
               "fontSize": 11,
               "fontWeight": "600"
@@ -67763,7 +67550,7 @@
             {
               "type": "text",
               "id": "LspYC",
-              "x": 246,
+              "x": 242,
               "y": 74,
               "name": "日期",
               "fill": "#64748B",
@@ -67885,6 +67672,8 @@
               "height": 22,
               "fill": "#FEF3C7",
               "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
               "layout": "none",
               "children": [
                 {
@@ -67922,7 +67711,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 130,
-              "content": "收益: +126.30",
+              "content": "收益: +¥126.30",
               "textAlign": "right",
               "fontFamily": "Inter",
               "fontSize": 14,
@@ -67947,7 +67736,7 @@
               "fill": "#334155",
               "textGrowth": "fixed-width",
               "width": 150,
-              "content": "1.5克 861.15元",
+              "content": "1.5克 ¥861.15",
               "fontFamily": "Inter",
               "fontSize": 11,
               "fontWeight": "600"
@@ -67955,7 +67744,7 @@
             {
               "type": "text",
               "id": "T1NpLg",
-              "x": 246,
+              "x": 242,
               "y": 74,
               "name": "日期",
               "fill": "#64748B",
@@ -67993,6 +67782,8 @@
               "height": 22,
               "fill": "#FEF3C7",
               "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
               "layout": "none",
               "children": [
                 {
@@ -68030,7 +67821,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 130,
-              "content": "收益: +952.30",
+              "content": "收益: +¥952.30",
               "textAlign": "right",
               "fontFamily": "Inter",
               "fontSize": 14,
@@ -68055,7 +67846,7 @@
               "fill": "#334155",
               "textGrowth": "fixed-width",
               "width": 150,
-              "content": "1.5克 1053.90元",
+              "content": "1.5克 ¥1053.90",
               "fontFamily": "Inter",
               "fontSize": 11,
               "fontWeight": "600"
@@ -68063,7 +67854,7 @@
             {
               "type": "text",
               "id": "P9S4Of",
-              "x": 246,
+              "x": 242,
               "y": 74,
               "name": "日期",
               "fill": "#64748B",
@@ -68082,7 +67873,7 @@
     {
       "type": "frame",
       "id": "bsbLZ",
-      "x": 22053,
+      "x": 22999,
       "y": 0,
       "name": "黄金账户持仓-删除弹窗-重新设计",
       "clip": true,
@@ -68109,7 +67900,7 @@
               "name": "返回按钮",
               "width": 30,
               "height": 30,
-              "fill": "#FFF7E6",
+              "fill": "#EAF2FF",
               "cornerRadius": 15,
               "layout": "none",
               "children": [
@@ -68123,7 +67914,7 @@
                   "height": 18,
                   "icon": "chevron-left",
                   "library": "lucide",
-                  "fill": "#B45309"
+                  "fill": "#2563EB"
                 }
               ]
             },
@@ -68159,18 +67950,33 @@
             },
             "colors": [
               {
-                "color": "#F4F8FF",
+                "color": "#EFF6FF",
                 "position": 0
               },
               {
-                "color": "#E5EEFF",
+                "color": "#DBEAFE",
+                "position": 0.56
+              },
+              {
+                "color": "#BFDBFE",
                 "position": 1
               }
             ]
           },
-          "cornerRadius": 18,
-          "stroke": "#D9E5FF",
+          "cornerRadius": 26,
+          "stroke": "#BBD7FF",
           "strokeWidth": 1,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#2563EB24",
+            "offset": {
+              "x": 0,
+              "y": 14
+            },
+            "blur": 30
+          },
           "layout": "none",
           "children": [
             {
@@ -68220,7 +68026,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "574.61",
+              "content": "¥574.61",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68248,7 +68054,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68276,7 +68082,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2873.05",
+              "content": "¥2873.05",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68332,7 +68138,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "5088.60",
+              "content": "¥5088.60",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68360,7 +68166,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68386,7 +68192,7 @@
               "x": 246,
               "y": 34,
               "name": "当前金价值",
-              "fill": "#0F172A",
+              "fill": "#D97706",
               "textGrowth": "fixed-width",
               "width": 96,
               "content": "¥640/g",
@@ -68554,7 +68360,7 @@
     {
       "type": "frame",
       "id": "xd6OY",
-      "x": 22526,
+      "x": 23472,
       "y": 0,
       "name": "黄金账户持仓-修改弹窗-重新设计",
       "clip": true,
@@ -68581,7 +68387,7 @@
               "name": "返回按钮",
               "width": 30,
               "height": 30,
-              "fill": "#FFF7E6",
+              "fill": "#EAF2FF",
               "cornerRadius": 15,
               "layout": "none",
               "children": [
@@ -68595,7 +68401,7 @@
                   "height": 18,
                   "icon": "chevron-left",
                   "library": "lucide",
-                  "fill": "#B45309"
+                  "fill": "#2563EB"
                 }
               ]
             },
@@ -68631,18 +68437,33 @@
             },
             "colors": [
               {
-                "color": "#F4F8FF",
+                "color": "#EFF6FF",
                 "position": 0
               },
               {
-                "color": "#E5EEFF",
+                "color": "#DBEAFE",
+                "position": 0.56
+              },
+              {
+                "color": "#BFDBFE",
                 "position": 1
               }
             ]
           },
-          "cornerRadius": 18,
-          "stroke": "#D9E5FF",
+          "cornerRadius": 26,
+          "stroke": "#BBD7FF",
           "strokeWidth": 1,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#2563EB24",
+            "offset": {
+              "x": 0,
+              "y": 14
+            },
+            "blur": 30
+          },
           "layout": "none",
           "children": [
             {
@@ -68692,7 +68513,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "574.61",
+              "content": "¥574.61",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68720,7 +68541,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68748,7 +68569,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2873.05",
+              "content": "¥2873.05",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68804,7 +68625,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "5088.60",
+              "content": "¥5088.60",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68832,7 +68653,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -68858,7 +68679,7 @@
               "x": 246,
               "y": 34,
               "name": "当前金价值",
-              "fill": "#0F172A",
+              "fill": "#D97706",
               "textGrowth": "fixed-width",
               "width": 96,
               "content": "¥640/g",
@@ -69109,7 +68930,7 @@
               "name": "保存按钮",
               "width": 153.5,
               "height": 42,
-              "fill": "#F59E0B",
+              "fill": "#2563EB",
               "cornerRadius": 8,
               "layout": "none",
               "children": [
@@ -69134,7 +68955,7 @@
     {
       "type": "frame",
       "id": "hfqt2",
-      "x": 22999,
+      "x": 23945,
       "y": 0,
       "name": "黄金账户持仓-卖出弹窗-重新设计",
       "clip": true,
@@ -69161,7 +68982,7 @@
               "name": "返回按钮",
               "width": 30,
               "height": 30,
-              "fill": "#FFF7E6",
+              "fill": "#EAF2FF",
               "cornerRadius": 15,
               "layout": "none",
               "children": [
@@ -69175,7 +68996,7 @@
                   "height": 18,
                   "icon": "chevron-left",
                   "library": "lucide",
-                  "fill": "#B45309"
+                  "fill": "#2563EB"
                 }
               ]
             },
@@ -69211,18 +69032,33 @@
             },
             "colors": [
               {
-                "color": "#F4F8FF",
+                "color": "#EFF6FF",
                 "position": 0
               },
               {
-                "color": "#E5EEFF",
+                "color": "#DBEAFE",
+                "position": 0.56
+              },
+              {
+                "color": "#BFDBFE",
                 "position": 1
               }
             ]
           },
-          "cornerRadius": 18,
-          "stroke": "#D9E5FF",
+          "cornerRadius": 26,
+          "stroke": "#BBD7FF",
           "strokeWidth": 1,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#2563EB24",
+            "offset": {
+              "x": 0,
+              "y": 14
+            },
+            "blur": 30
+          },
           "layout": "none",
           "children": [
             {
@@ -69272,7 +69108,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "574.61",
+              "content": "¥574.61",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -69300,7 +69136,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -69328,7 +69164,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2873.05",
+              "content": "¥2873.05",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -69384,7 +69220,7 @@
               "fill": "#0F172A",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "5088.60",
+              "content": "¥5088.60",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -69412,7 +69248,7 @@
               "fill": "#E11D48",
               "textGrowth": "fixed-width",
               "width": 100,
-              "content": "2215.55",
+              "content": "¥2215.55",
               "fontFamily": "Inter",
               "fontSize": 12,
               "fontWeight": "700"
@@ -69438,7 +69274,7 @@
               "x": 246,
               "y": 34,
               "name": "当前金价值",
-              "fill": "#0F172A",
+              "fill": "#D97706",
               "textGrowth": "fixed-width",
               "width": 96,
               "content": "¥640/g",
@@ -69685,7 +69521,7 @@
               "name": "确认卖出按钮",
               "width": 153.5,
               "height": 42,
-              "fill": "#F59E0B",
+              "fill": "#2563EB",
               "cornerRadius": 8,
               "layout": "none",
               "children": [
@@ -69697,6 +69533,3428 @@
                   "name": "确认卖出文字",
                   "fill": "#FFFFFF",
                   "content": "确认卖出",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "peJAv",
+      "x": 20634,
+      "y": 0,
+      "name": "黄金账户-新增弹窗-重新设计",
+      "clip": true,
+      "width": 393,
+      "height": 956,
+      "fill": "#F3F7FC",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "O6cHF",
+          "x": 16,
+          "y": 14,
+          "name": "顶部栏",
+          "width": 361,
+          "height": 40,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "Ybs0t",
+              "x": 0,
+              "y": 5,
+              "name": "返回按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#EAF2FF",
+              "cornerRadius": 15,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "vIcwe",
+                  "x": 6,
+                  "y": 6,
+                  "name": "返回图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "chevron-left",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "C6bfLy",
+              "x": 38,
+              "y": 9,
+              "name": "页面标题",
+              "fill": "#0F172A",
+              "content": "黄金账户",
+              "fontFamily": "Inter",
+              "fontSize": 15,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "vjXoB",
+              "x": 295,
+              "y": 5,
+              "name": "编辑按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#FFFFFF",
+              "cornerRadius": 15,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "r8AjWc",
+                  "x": 6,
+                  "y": 6,
+                  "name": "编辑图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "pencil",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lMpTP",
+              "x": 331,
+              "y": 5,
+              "name": "刷新按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#FFFFFF",
+              "cornerRadius": 15,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "u36Nf4",
+                  "x": 6,
+                  "y": 6,
+                  "name": "刷新图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "refresh-cw",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "tGpSz",
+          "x": 16,
+          "y": 66,
+          "name": "黄金总览卡",
+          "width": 361,
+          "height": 158,
+          "fill": {
+            "type": "gradient",
+            "gradientType": "linear",
+            "enabled": true,
+            "rotation": 135,
+            "size": {
+              "height": 1
+            },
+            "colors": [
+              {
+                "color": "#EFF6FF",
+                "position": 0
+              },
+              {
+                "color": "#DBEAFE",
+                "position": 0.56
+              },
+              {
+                "color": "#BFDBFE",
+                "position": 1
+              }
+            ]
+          },
+          "cornerRadius": 26,
+          "stroke": "#BBD7FF",
+          "strokeWidth": 1,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#2563EB24",
+            "offset": {
+              "x": 0,
+              "y": 14
+            },
+            "blur": 30
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "l8FBo",
+              "x": 18,
+              "y": 12,
+              "name": "总重量标签",
+              "fill": "#4F6EA8",
+              "content": "总重量(克)",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "vv4XW",
+              "x": 18,
+              "y": 32,
+              "name": "总重量值",
+              "fill": "#FACC15",
+              "content": "5.00",
+              "fontFamily": "Inter",
+              "fontSize": 30,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "C7XKpV",
+              "x": 18,
+              "y": 78,
+              "name": "平均克价(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "平均克价(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "Q72Wcl",
+              "x": 18,
+              "y": 94,
+              "name": "平均克价(元)值",
+              "fill": "#0F172A",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥574.61",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "XVrnj",
+              "x": 18,
+              "y": 118,
+              "name": "预估收益(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "预估收益(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "xX9Rn",
+              "x": 18,
+              "y": 134,
+              "name": "预估收益(元)值",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥2215.55",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "VHiRo",
+              "x": 126,
+              "y": 78,
+              "name": "购入总价(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "购入总价(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "qSncn",
+              "x": 126,
+              "y": 94,
+              "name": "购入总价(元)值",
+              "fill": "#0F172A",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥2873.05",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "T7gIA",
+              "x": 126,
+              "y": 118,
+              "name": "收益率(%)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "收益率(%)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "QrkoN",
+              "x": 126,
+              "y": 134,
+              "name": "收益率(%)值",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "77.1149",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "SDgPT",
+              "x": 234,
+              "y": 78,
+              "name": "预估价值(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "预估价值(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "pLm0e",
+              "x": 234,
+              "y": 94,
+              "name": "预估价值(元)值",
+              "fill": "#0F172A",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥5088.60",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "eWYxJ",
+              "x": 234,
+              "y": 118,
+              "name": "累计收益(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "累计收益(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "o6URT",
+              "x": 234,
+              "y": 134,
+              "name": "累计收益(元)值",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥2215.55",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "fCro8",
+              "x": 246,
+              "y": 14,
+              "name": "当前金价标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "当前金价",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "uAEzN",
+              "x": 246,
+              "y": 34,
+              "name": "当前金价值",
+              "fill": "#D97706",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "¥640/g",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "v43T9",
+          "x": 16,
+          "y": 246,
+          "name": "持仓明细标题",
+          "enabled": false,
+          "fill": "#0F172A",
+          "content": "持仓明细",
+          "fontFamily": "Inter",
+          "fontSize": 18,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "rBaa7",
+          "x": 16,
+          "y": 246,
+          "name": "工商银行持仓卡",
+          "width": 301,
+          "height": 104,
+          "fill": "#FFFFFF",
+          "cornerRadius": 14,
+          "stroke": "#E2E8F0",
+          "strokeWidth": 1,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "gWGiZ",
+              "x": 14,
+              "y": 12,
+              "name": "克价标签",
+              "width": 88,
+              "height": 22,
+              "fill": "#FEF3C7",
+              "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "AX54U",
+                  "x": 8,
+                  "y": 4,
+                  "name": "克价文字",
+                  "fill": "#D97706",
+                  "content": "574.61元/克",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "Fszo2",
+              "x": 14,
+              "y": 44,
+              "name": "主标题",
+              "fill": "#0F172A",
+              "content": "工商银行",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "ZDYzP",
+              "x": 166,
+              "y": 44,
+              "name": "收益",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 112,
+              "content": "收益: +¥2215.55",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "CAQFx",
+              "x": 14,
+              "y": 78,
+              "name": "黄金点",
+              "fill": "#FACC15",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "text",
+              "id": "PCmIg",
+              "x": 24,
+              "y": 74,
+              "name": "元信息",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 150,
+              "content": "5克 ¥2873.05",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "L9Fi2d",
+              "x": 182,
+              "y": 74,
+              "name": "日期",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "2024.08.05",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "zbJqu",
+          "x": 16,
+          "y": 362,
+          "name": "建设银行持仓卡",
+          "width": 301,
+          "height": 104,
+          "fill": "#FFFFFF",
+          "cornerRadius": 14,
+          "stroke": "#E2E8F0",
+          "strokeWidth": 1,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "IqFnH",
+              "x": 14,
+              "y": 12,
+              "name": "克价标签",
+              "width": 88,
+              "height": 22,
+              "fill": "#FEF3C7",
+              "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "xPZT0",
+                  "x": 8,
+                  "y": 4,
+                  "name": "克价文字",
+                  "fill": "#D97706",
+                  "content": "571.20元/克",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "Tqq6M",
+              "x": 14,
+              "y": 44,
+              "name": "主标题",
+              "fill": "#0F172A",
+              "content": "建设银行",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "LTmoZ",
+              "x": 166,
+              "y": 44,
+              "name": "收益",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 112,
+              "content": "收益: +¥1688.40",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "AuEUv",
+              "x": 14,
+              "y": 78,
+              "name": "黄金点",
+              "fill": "#FACC15",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "text",
+              "id": "Cmk8m",
+              "x": 24,
+              "y": 74,
+              "name": "元信息",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 150,
+              "content": "3克 ¥1713.60",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "vpFdz",
+              "x": 182,
+              "y": 74,
+              "name": "日期",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "2024.09.12",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "b5IT2d",
+          "x": 16,
+          "y": 478,
+          "name": "中国银行持仓卡",
+          "width": 301,
+          "height": 104,
+          "fill": "#FFFFFF",
+          "cornerRadius": 14,
+          "stroke": "#E2E8F0",
+          "strokeWidth": 1,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "thoQn",
+              "x": 14,
+              "y": 12,
+              "name": "克价标签",
+              "width": 88,
+              "height": 22,
+              "fill": "#FEF3C7",
+              "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "L7k1zv",
+                  "x": 8,
+                  "y": 4,
+                  "name": "克价文字",
+                  "fill": "#D97706",
+                  "content": "579.80元/克",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "EZ7sW",
+              "x": 14,
+              "y": 44,
+              "name": "主标题",
+              "fill": "#0F172A",
+              "content": "中国银行",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "A7I56o",
+              "x": 166,
+              "y": 44,
+              "name": "收益",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 112,
+              "content": "收益: +¥952.30",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "Zshv3",
+              "x": 14,
+              "y": 78,
+              "name": "黄金点",
+              "fill": "#FACC15",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "text",
+              "id": "Gjt52",
+              "x": 24,
+              "y": 74,
+              "name": "元信息",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 150,
+              "content": "2克 ¥1159.60",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "J7XDD",
+              "x": 182,
+              "y": 74,
+              "name": "日期",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "2024.10.03",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "FfCgL",
+          "x": 319,
+          "y": 872,
+          "name": "新增黄金悬浮按钮",
+          "width": 58,
+          "height": 58,
+          "fill": "#2563EB",
+          "cornerRadius": 29,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#1D4ED84D",
+            "offset": {
+              "x": 0,
+              "y": 8
+            },
+            "blur": 18
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "NC6gs",
+              "x": 17,
+              "y": 17,
+              "name": "新增图标",
+              "width": 24,
+              "height": 24,
+              "icon": "plus",
+              "library": "lucide",
+              "fill": "#FFFFFF"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "q4xoRl",
+          "x": 321,
+          "y": 285,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "D0IsLx",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "FSYbk",
+          "x": 351,
+          "y": 285,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "ixF1e",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "biF3S",
+          "x": 321,
+          "y": 401,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "QJ0wV",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "EGjdH",
+          "x": 351,
+          "y": 401,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "sidAf",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "buiuZ",
+          "x": 321,
+          "y": 517,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "b8n8N",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "mLKX6",
+          "x": 351,
+          "y": 517,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "TuBp8",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "kRFpD",
+          "x": 0,
+          "y": 0,
+          "name": "页面遮罩",
+          "fill": "#0F172A66",
+          "width": 393,
+          "height": 956
+        },
+        {
+          "type": "frame",
+          "id": "qCqYs",
+          "x": 20,
+          "y": 286,
+          "name": "新增黄金账户弹窗",
+          "width": 353,
+          "height": 384,
+          "fill": "#FFFFFF",
+          "cornerRadius": 16,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A33",
+            "offset": {
+              "x": 0,
+              "y": 16
+            },
+            "blur": 32
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "GdTQ8",
+              "x": 18,
+              "y": 18,
+              "name": "弹窗标题",
+              "fill": "#0F172A",
+              "content": "新增黄金账户",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "xFXCv",
+              "x": 305,
+              "y": 15,
+              "name": "关闭按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#F1F5F9",
+              "cornerRadius": 15,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "qBKT5",
+                  "x": 8,
+                  "y": 8,
+                  "name": "关闭按钮图标",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "x",
+                  "library": "lucide",
+                  "fill": "#64748B"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "aZztM",
+              "x": 18,
+              "y": 62,
+              "name": "账户名称标签",
+              "fill": "#0F172A",
+              "content": "账户名称：",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "Y609d",
+              "x": 18,
+              "y": 86,
+              "name": "账户名称输入框",
+              "width": 317,
+              "height": 42,
+              "fill": "#F8FAFC",
+              "cornerRadius": 8,
+              "stroke": "#DCE6F3",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "AERaF",
+                  "x": 12,
+                  "y": 12,
+                  "name": "账户名称内容",
+                  "fill": "#94A3B8",
+                  "textGrowth": "fixed-width",
+                  "width": 293,
+                  "content": "例如：工商银行积存金",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "hiAKS",
+              "x": 18,
+              "y": 138,
+              "name": "备注标签",
+              "fill": "#0F172A",
+              "content": "备注：",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "hiP9q",
+              "x": 18,
+              "y": 162,
+              "name": "备注输入框",
+              "width": 317,
+              "height": 82,
+              "fill": "#F8FAFC",
+              "cornerRadius": 8,
+              "stroke": "#DCE6F3",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "gKnRr",
+                  "x": 12,
+                  "y": 12,
+                  "name": "备注内容",
+                  "fill": "#94A3B8",
+                  "textGrowth": "fixed-width",
+                  "width": 293,
+                  "content": "例如：黄金账户备注",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "rV8HS",
+              "x": 18,
+              "y": 324,
+              "name": "取消按钮",
+              "width": 153.5,
+              "height": 42,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "IVCu0",
+                  "x": 62,
+                  "y": 11,
+                  "name": "取消文字",
+                  "fill": "#2563EB",
+                  "content": "取消",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "VkDQb",
+              "x": 181.5,
+              "y": 324,
+              "name": "保存按钮",
+              "width": 153.5,
+              "height": 42,
+              "fill": "#2563EB",
+              "cornerRadius": 8,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "F8Xs2F",
+                  "x": 50,
+                  "y": 11,
+                  "name": "保存文字",
+                  "fill": "#FFFFFF",
+                  "content": "保存",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "ZJLGc",
+              "x": 18,
+              "y": 268,
+              "name": "是否计入总资产标签",
+              "fill": "#0F172A",
+              "content": "是否计入总资产",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "s0in3",
+              "x": 295,
+              "y": 262,
+              "name": "计入总资产开关",
+              "width": 40,
+              "height": 24,
+              "fill": "#2563EB",
+              "cornerRadius": 12,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "K5xpyr",
+                  "x": 18,
+                  "y": 3,
+                  "name": "开关圆点",
+                  "fill": "#FFFFFF",
+                  "width": 18,
+                  "height": 18
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "gFO94",
+      "x": 21107,
+      "y": 0,
+      "name": "黄金账户-修改弹窗-重新设计",
+      "clip": true,
+      "width": 393,
+      "height": 956,
+      "fill": "#F3F7FC",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "c23TpP",
+          "x": 16,
+          "y": 14,
+          "name": "顶部栏",
+          "width": 361,
+          "height": 40,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "i1q7Zo",
+              "x": 0,
+              "y": 5,
+              "name": "返回按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#EAF2FF",
+              "cornerRadius": 15,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "l7PbJR",
+                  "x": 6,
+                  "y": 6,
+                  "name": "返回图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "chevron-left",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "cvPsr",
+              "x": 38,
+              "y": 9,
+              "name": "页面标题",
+              "fill": "#0F172A",
+              "content": "黄金账户",
+              "fontFamily": "Inter",
+              "fontSize": 15,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "Ze6uv",
+              "x": 295,
+              "y": 5,
+              "name": "编辑按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#FFFFFF",
+              "cornerRadius": 15,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "ghJaY",
+                  "x": 6,
+                  "y": 6,
+                  "name": "编辑图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "pencil",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ygOgw",
+              "x": 331,
+              "y": 5,
+              "name": "刷新按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#FFFFFF",
+              "cornerRadius": 15,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "EoJhn",
+                  "x": 6,
+                  "y": 6,
+                  "name": "刷新图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "refresh-cw",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "o7nB2",
+          "x": 16,
+          "y": 66,
+          "name": "黄金总览卡",
+          "width": 361,
+          "height": 158,
+          "fill": {
+            "type": "gradient",
+            "gradientType": "linear",
+            "enabled": true,
+            "rotation": 135,
+            "size": {
+              "height": 1
+            },
+            "colors": [
+              {
+                "color": "#EFF6FF",
+                "position": 0
+              },
+              {
+                "color": "#DBEAFE",
+                "position": 0.56
+              },
+              {
+                "color": "#BFDBFE",
+                "position": 1
+              }
+            ]
+          },
+          "cornerRadius": 26,
+          "stroke": "#BBD7FF",
+          "strokeWidth": 1,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#2563EB24",
+            "offset": {
+              "x": 0,
+              "y": 14
+            },
+            "blur": 30
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "r53gA",
+              "x": 18,
+              "y": 12,
+              "name": "总重量标签",
+              "fill": "#4F6EA8",
+              "content": "总重量(克)",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "VOqXY",
+              "x": 18,
+              "y": 32,
+              "name": "总重量值",
+              "fill": "#FACC15",
+              "content": "5.00",
+              "fontFamily": "Inter",
+              "fontSize": 30,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "uagHd",
+              "x": 18,
+              "y": 78,
+              "name": "平均克价(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "平均克价(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "NmfrG",
+              "x": 18,
+              "y": 94,
+              "name": "平均克价(元)值",
+              "fill": "#0F172A",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥574.61",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "kzkTl",
+              "x": 18,
+              "y": 118,
+              "name": "预估收益(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "预估收益(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "kQVxQ",
+              "x": 18,
+              "y": 134,
+              "name": "预估收益(元)值",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥2215.55",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "CzR7x",
+              "x": 126,
+              "y": 78,
+              "name": "购入总价(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "购入总价(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "ENM8S",
+              "x": 126,
+              "y": 94,
+              "name": "购入总价(元)值",
+              "fill": "#0F172A",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥2873.05",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "PIuhg",
+              "x": 126,
+              "y": 118,
+              "name": "收益率(%)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "收益率(%)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "K7dQl",
+              "x": 126,
+              "y": 134,
+              "name": "收益率(%)值",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "77.1149",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "t1vfl",
+              "x": 234,
+              "y": 78,
+              "name": "预估价值(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "预估价值(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "J1QB0",
+              "x": 234,
+              "y": 94,
+              "name": "预估价值(元)值",
+              "fill": "#0F172A",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥5088.60",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "y8wDmV",
+              "x": 234,
+              "y": 118,
+              "name": "累计收益(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "累计收益(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "PEYsH",
+              "x": 234,
+              "y": 134,
+              "name": "累计收益(元)值",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥2215.55",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "YCoja",
+              "x": 246,
+              "y": 14,
+              "name": "当前金价标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "当前金价",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "AlYUt",
+              "x": 246,
+              "y": 34,
+              "name": "当前金价值",
+              "fill": "#D97706",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "¥640/g",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "Xx9Zc",
+          "x": 16,
+          "y": 246,
+          "name": "持仓明细标题",
+          "enabled": false,
+          "fill": "#0F172A",
+          "content": "持仓明细",
+          "fontFamily": "Inter",
+          "fontSize": 18,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "UdcF8",
+          "x": 16,
+          "y": 246,
+          "name": "工商银行持仓卡",
+          "width": 301,
+          "height": 104,
+          "fill": "#FFFFFF",
+          "cornerRadius": 14,
+          "stroke": "#E2E8F0",
+          "strokeWidth": 1,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "Io1D7",
+              "x": 14,
+              "y": 12,
+              "name": "克价标签",
+              "width": 88,
+              "height": 22,
+              "fill": "#FEF3C7",
+              "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "j1Ia1L",
+                  "x": 8,
+                  "y": 4,
+                  "name": "克价文字",
+                  "fill": "#D97706",
+                  "content": "574.61元/克",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "JwxEK",
+              "x": 14,
+              "y": 44,
+              "name": "主标题",
+              "fill": "#0F172A",
+              "content": "工商银行",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "OoZVY",
+              "x": 166,
+              "y": 44,
+              "name": "收益",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 112,
+              "content": "收益: +¥2215.55",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "XUIcj",
+              "x": 14,
+              "y": 78,
+              "name": "黄金点",
+              "fill": "#FACC15",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "text",
+              "id": "p8m8W1",
+              "x": 24,
+              "y": 74,
+              "name": "元信息",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 150,
+              "content": "5克 ¥2873.05",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "WrTbJ",
+              "x": 182,
+              "y": 74,
+              "name": "日期",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "2024.08.05",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "e0ebQJ",
+          "x": 16,
+          "y": 362,
+          "name": "建设银行持仓卡",
+          "width": 301,
+          "height": 104,
+          "fill": "#FFFFFF",
+          "cornerRadius": 14,
+          "stroke": "#E2E8F0",
+          "strokeWidth": 1,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "eeV2l",
+              "x": 14,
+              "y": 12,
+              "name": "克价标签",
+              "width": 88,
+              "height": 22,
+              "fill": "#FEF3C7",
+              "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "A7oJac",
+                  "x": 8,
+                  "y": 4,
+                  "name": "克价文字",
+                  "fill": "#D97706",
+                  "content": "571.20元/克",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "Z4GLET",
+              "x": 14,
+              "y": 44,
+              "name": "主标题",
+              "fill": "#0F172A",
+              "content": "建设银行",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "n6DfnH",
+              "x": 166,
+              "y": 44,
+              "name": "收益",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 112,
+              "content": "收益: +¥1688.40",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "we6uz",
+              "x": 14,
+              "y": 78,
+              "name": "黄金点",
+              "fill": "#FACC15",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "text",
+              "id": "e9uKKz",
+              "x": 24,
+              "y": 74,
+              "name": "元信息",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 150,
+              "content": "3克 ¥1713.60",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "l3ybVj",
+              "x": 182,
+              "y": 74,
+              "name": "日期",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "2024.09.12",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "qMqBL",
+          "x": 16,
+          "y": 478,
+          "name": "中国银行持仓卡",
+          "width": 301,
+          "height": 104,
+          "fill": "#FFFFFF",
+          "cornerRadius": 14,
+          "stroke": "#E2E8F0",
+          "strokeWidth": 1,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "w53L2",
+              "x": 14,
+              "y": 12,
+              "name": "克价标签",
+              "width": 88,
+              "height": 22,
+              "fill": "#FEF3C7",
+              "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "pjURH",
+                  "x": 8,
+                  "y": 4,
+                  "name": "克价文字",
+                  "fill": "#D97706",
+                  "content": "579.80元/克",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "v53dXA",
+              "x": 14,
+              "y": 44,
+              "name": "主标题",
+              "fill": "#0F172A",
+              "content": "中国银行",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "zuWVR",
+              "x": 166,
+              "y": 44,
+              "name": "收益",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 112,
+              "content": "收益: +¥952.30",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "PLiOP",
+              "x": 14,
+              "y": 78,
+              "name": "黄金点",
+              "fill": "#FACC15",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "text",
+              "id": "j4n45",
+              "x": 24,
+              "y": 74,
+              "name": "元信息",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 150,
+              "content": "2克 ¥1159.60",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "E51a1R",
+              "x": 182,
+              "y": 74,
+              "name": "日期",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "2024.10.03",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "tpB9H",
+          "x": 319,
+          "y": 872,
+          "name": "新增黄金悬浮按钮",
+          "width": 58,
+          "height": 58,
+          "fill": "#2563EB",
+          "cornerRadius": 29,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#1D4ED84D",
+            "offset": {
+              "x": 0,
+              "y": 8
+            },
+            "blur": 18
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "aZKaR",
+              "x": 17,
+              "y": 17,
+              "name": "新增图标",
+              "width": 24,
+              "height": 24,
+              "icon": "plus",
+              "library": "lucide",
+              "fill": "#FFFFFF"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "snC1H",
+          "x": 321,
+          "y": 285,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "mG0no",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "wOjDK",
+          "x": 351,
+          "y": 285,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "UX4Hc",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "VDsor",
+          "x": 321,
+          "y": 401,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "qiGYN",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "gBsaa",
+          "x": 351,
+          "y": 401,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "ssMEA",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Q8vzG",
+          "x": 321,
+          "y": 517,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "V9Xaat",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "K2H4dQ",
+          "x": 351,
+          "y": 517,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "awMJG",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "LZslj",
+          "x": 0,
+          "y": 0,
+          "name": "页面遮罩",
+          "fill": "#0F172A66",
+          "width": 393,
+          "height": 956
+        },
+        {
+          "type": "frame",
+          "id": "gfHcW",
+          "x": 20,
+          "y": 286,
+          "name": "修改黄金账户弹窗",
+          "width": 353,
+          "height": 384,
+          "fill": "#FFFFFF",
+          "cornerRadius": 16,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A33",
+            "offset": {
+              "x": 0,
+              "y": 16
+            },
+            "blur": 32
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "Aij7n",
+              "x": 18,
+              "y": 18,
+              "name": "弹窗标题",
+              "fill": "#0F172A",
+              "content": "修改黄金账户",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "GP55M",
+              "x": 305,
+              "y": 15,
+              "name": "关闭按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#F1F5F9",
+              "cornerRadius": 15,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "msmjZ",
+                  "x": 8,
+                  "y": 8,
+                  "name": "关闭按钮图标",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "x",
+                  "library": "lucide",
+                  "fill": "#64748B"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "lDJYr",
+              "x": 18,
+              "y": 62,
+              "name": "账户名称标签",
+              "fill": "#0F172A",
+              "content": "账户名称：",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "s7bJl6",
+              "x": 18,
+              "y": 86,
+              "name": "账户名称输入框",
+              "width": 317,
+              "height": 42,
+              "fill": "#F8FAFC",
+              "cornerRadius": 8,
+              "stroke": "#DCE6F3",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "sYHaC",
+                  "x": 12,
+                  "y": 12,
+                  "name": "账户名称内容",
+                  "fill": "#475569",
+                  "textGrowth": "fixed-width",
+                  "width": 293,
+                  "content": "工商银行",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "KvYPi",
+              "x": 18,
+              "y": 138,
+              "name": "备注标签",
+              "fill": "#0F172A",
+              "content": "备注：",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "qcNA1",
+              "x": 18,
+              "y": 162,
+              "name": "备注输入框",
+              "width": 317,
+              "height": 82,
+              "fill": "#F8FAFC",
+              "cornerRadius": 8,
+              "stroke": "#DCE6F3",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "IRjNy",
+                  "x": 12,
+                  "y": 12,
+                  "name": "备注内容",
+                  "fill": "#475569",
+                  "textGrowth": "fixed-width",
+                  "width": 293,
+                  "content": "工商银行积存金",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "E2wuZE",
+              "x": 18,
+              "y": 324,
+              "name": "取消按钮",
+              "width": 153.5,
+              "height": 42,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "txTKG",
+                  "x": 62,
+                  "y": 11,
+                  "name": "取消文字",
+                  "fill": "#2563EB",
+                  "content": "取消",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Z8qGAh",
+              "x": 181.5,
+              "y": 324,
+              "name": "保存修改按钮",
+              "width": 153.5,
+              "height": 42,
+              "fill": "#2563EB",
+              "cornerRadius": 8,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "DvXTZ",
+                  "x": 50,
+                  "y": 11,
+                  "name": "保存修改文字",
+                  "fill": "#FFFFFF",
+                  "content": "保存修改",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "l55WXt",
+              "x": 18,
+              "y": 268,
+              "name": "是否计入总资产标签",
+              "fill": "#0F172A",
+              "content": "是否计入总资产",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "I0b5s",
+              "x": 295,
+              "y": 262,
+              "name": "计入总资产开关",
+              "width": 40,
+              "height": 24,
+              "fill": "#2563EB",
+              "cornerRadius": 12,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "PLDc7",
+                  "x": 18,
+                  "y": 3,
+                  "name": "开关圆点",
+                  "fill": "#FFFFFF",
+                  "width": 18,
+                  "height": 18
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "MsUH1",
+      "x": 21580,
+      "y": 0,
+      "name": "黄金账户-删除弹窗-重新设计",
+      "clip": true,
+      "width": 393,
+      "height": 956,
+      "fill": "#F3F7FC",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "YgR2f",
+          "x": 16,
+          "y": 14,
+          "name": "顶部栏",
+          "width": 361,
+          "height": 40,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "xyrpQ",
+              "x": 0,
+              "y": 5,
+              "name": "返回按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#EAF2FF",
+              "cornerRadius": 15,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "qDKL8",
+                  "x": 6,
+                  "y": 6,
+                  "name": "返回图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "chevron-left",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "VcH7w",
+              "x": 38,
+              "y": 9,
+              "name": "页面标题",
+              "fill": "#0F172A",
+              "content": "黄金账户",
+              "fontFamily": "Inter",
+              "fontSize": 15,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "MNIGj",
+              "x": 295,
+              "y": 5,
+              "name": "编辑按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#FFFFFF",
+              "cornerRadius": 15,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "sRwFw",
+                  "x": 6,
+                  "y": 6,
+                  "name": "编辑图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "pencil",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "I00970",
+              "x": 331,
+              "y": 5,
+              "name": "刷新按钮",
+              "width": 30,
+              "height": 30,
+              "fill": "#FFFFFF",
+              "cornerRadius": 15,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "YFLUJ",
+                  "x": 6,
+                  "y": 6,
+                  "name": "刷新图标",
+                  "width": 18,
+                  "height": 18,
+                  "icon": "refresh-cw",
+                  "library": "lucide",
+                  "fill": "#2563EB"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "L2VRYF",
+          "x": 16,
+          "y": 66,
+          "name": "黄金总览卡",
+          "width": 361,
+          "height": 158,
+          "fill": {
+            "type": "gradient",
+            "gradientType": "linear",
+            "enabled": true,
+            "rotation": 135,
+            "size": {
+              "height": 1
+            },
+            "colors": [
+              {
+                "color": "#EFF6FF",
+                "position": 0
+              },
+              {
+                "color": "#DBEAFE",
+                "position": 0.56
+              },
+              {
+                "color": "#BFDBFE",
+                "position": 1
+              }
+            ]
+          },
+          "cornerRadius": 26,
+          "stroke": "#BBD7FF",
+          "strokeWidth": 1,
+          "strokeAlignment": "inner",
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#2563EB24",
+            "offset": {
+              "x": 0,
+              "y": 14
+            },
+            "blur": 30
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "MOz4i",
+              "x": 18,
+              "y": 12,
+              "name": "总重量标签",
+              "fill": "#4F6EA8",
+              "content": "总重量(克)",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "Maq4k",
+              "x": 18,
+              "y": 32,
+              "name": "总重量值",
+              "fill": "#FACC15",
+              "content": "5.00",
+              "fontFamily": "Inter",
+              "fontSize": 30,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "s94gOE",
+              "x": 18,
+              "y": 78,
+              "name": "平均克价(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "平均克价(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "PO881",
+              "x": 18,
+              "y": 94,
+              "name": "平均克价(元)值",
+              "fill": "#0F172A",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥574.61",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "FLuTm",
+              "x": 18,
+              "y": 118,
+              "name": "预估收益(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "预估收益(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "oPbCp",
+              "x": 18,
+              "y": 134,
+              "name": "预估收益(元)值",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥2215.55",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "N14gzG",
+              "x": 126,
+              "y": 78,
+              "name": "购入总价(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "购入总价(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "QWOBR",
+              "x": 126,
+              "y": 94,
+              "name": "购入总价(元)值",
+              "fill": "#0F172A",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥2873.05",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "vGunz",
+              "x": 126,
+              "y": 118,
+              "name": "收益率(%)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "收益率(%)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "G15DCc",
+              "x": 126,
+              "y": 134,
+              "name": "收益率(%)值",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "77.1149",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "PH1sl",
+              "x": 234,
+              "y": 78,
+              "name": "预估价值(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "预估价值(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "b6cBj",
+              "x": 234,
+              "y": 94,
+              "name": "预估价值(元)值",
+              "fill": "#0F172A",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥5088.60",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "qRUSr",
+              "x": 234,
+              "y": 118,
+              "name": "累计收益(元)标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "累计收益(元)",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "500"
+            },
+            {
+              "type": "text",
+              "id": "yzmyZ",
+              "x": 234,
+              "y": 134,
+              "name": "累计收益(元)值",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 100,
+              "content": "¥2215.55",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "dIqbF",
+              "x": 246,
+              "y": 14,
+              "name": "当前金价标签",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "当前金价",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 10,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "s4znj8",
+              "x": 246,
+              "y": 34,
+              "name": "当前金价值",
+              "fill": "#D97706",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "¥640/g",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "yNB0w",
+          "x": 16,
+          "y": 246,
+          "name": "持仓明细标题",
+          "enabled": false,
+          "fill": "#0F172A",
+          "content": "持仓明细",
+          "fontFamily": "Inter",
+          "fontSize": 18,
+          "fontWeight": "700"
+        },
+        {
+          "type": "frame",
+          "id": "Fsndf",
+          "x": 16,
+          "y": 246,
+          "name": "工商银行持仓卡",
+          "width": 301,
+          "height": 104,
+          "fill": "#FFFFFF",
+          "cornerRadius": 14,
+          "stroke": "#E2E8F0",
+          "strokeWidth": 1,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "SFTym",
+              "x": 14,
+              "y": 12,
+              "name": "克价标签",
+              "width": 88,
+              "height": 22,
+              "fill": "#FEF3C7",
+              "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "bP3Kb",
+                  "x": 8,
+                  "y": 4,
+                  "name": "克价文字",
+                  "fill": "#D97706",
+                  "content": "574.61元/克",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "jo09W",
+              "x": 14,
+              "y": 44,
+              "name": "主标题",
+              "fill": "#0F172A",
+              "content": "工商银行",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "YqrQM",
+              "x": 166,
+              "y": 44,
+              "name": "收益",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 112,
+              "content": "收益: +¥2215.55",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "qPOFd",
+              "x": 14,
+              "y": 78,
+              "name": "黄金点",
+              "fill": "#FACC15",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "text",
+              "id": "BnraQ",
+              "x": 24,
+              "y": 74,
+              "name": "元信息",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 150,
+              "content": "5克 ¥2873.05",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "P2VzhJ",
+              "x": 182,
+              "y": 74,
+              "name": "日期",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "2024.08.05",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "E46Jk",
+          "x": 16,
+          "y": 362,
+          "name": "建设银行持仓卡",
+          "width": 301,
+          "height": 104,
+          "fill": "#FFFFFF",
+          "cornerRadius": 14,
+          "stroke": "#E2E8F0",
+          "strokeWidth": 1,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "WZxtf",
+              "x": 14,
+              "y": 12,
+              "name": "克价标签",
+              "width": 88,
+              "height": 22,
+              "fill": "#FEF3C7",
+              "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "xMKmg",
+                  "x": 8,
+                  "y": 4,
+                  "name": "克价文字",
+                  "fill": "#D97706",
+                  "content": "571.20元/克",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "dTecB",
+              "x": 14,
+              "y": 44,
+              "name": "主标题",
+              "fill": "#0F172A",
+              "content": "建设银行",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "UL1d6",
+              "x": 166,
+              "y": 44,
+              "name": "收益",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 112,
+              "content": "收益: +¥1688.40",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "bPcxX",
+              "x": 14,
+              "y": 78,
+              "name": "黄金点",
+              "fill": "#FACC15",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "text",
+              "id": "Q6ci7l",
+              "x": 24,
+              "y": 74,
+              "name": "元信息",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 150,
+              "content": "3克 ¥1713.60",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "Bb4yS",
+              "x": 182,
+              "y": 74,
+              "name": "日期",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "2024.09.12",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "m2pRVg",
+          "x": 16,
+          "y": 478,
+          "name": "中国银行持仓卡",
+          "width": 301,
+          "height": 104,
+          "fill": "#FFFFFF",
+          "cornerRadius": 14,
+          "stroke": "#E2E8F0",
+          "strokeWidth": 1,
+          "layout": "none",
+          "children": [
+            {
+              "type": "frame",
+              "id": "y0wWD",
+              "x": 14,
+              "y": 12,
+              "name": "克价标签",
+              "width": 88,
+              "height": 22,
+              "fill": "#FEF3C7",
+              "cornerRadius": 9,
+              "stroke": "#FDE68A",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "W7eMa",
+                  "x": 8,
+                  "y": 4,
+                  "name": "克价文字",
+                  "fill": "#D97706",
+                  "content": "579.80元/克",
+                  "fontFamily": "Inter",
+                  "fontSize": 11,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "g0aYj",
+              "x": 14,
+              "y": 44,
+              "name": "主标题",
+              "fill": "#0F172A",
+              "content": "中国银行",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "g5Yap2",
+              "x": 166,
+              "y": 44,
+              "name": "收益",
+              "fill": "#E11D48",
+              "textGrowth": "fixed-width",
+              "width": 112,
+              "content": "收益: +¥952.30",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 14,
+              "fontWeight": "700"
+            },
+            {
+              "type": "ellipse",
+              "id": "oVDiy",
+              "x": 14,
+              "y": 78,
+              "name": "黄金点",
+              "fill": "#FACC15",
+              "width": 6,
+              "height": 6
+            },
+            {
+              "type": "text",
+              "id": "P2mH9i",
+              "x": 24,
+              "y": 74,
+              "name": "元信息",
+              "fill": "#334155",
+              "textGrowth": "fixed-width",
+              "width": 150,
+              "content": "2克 ¥1159.60",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            },
+            {
+              "type": "text",
+              "id": "xYE7b",
+              "x": 182,
+              "y": 74,
+              "name": "日期",
+              "fill": "#64748B",
+              "textGrowth": "fixed-width",
+              "width": 96,
+              "content": "2024.10.03",
+              "textAlign": "right",
+              "fontFamily": "Inter",
+              "fontSize": 11,
+              "fontWeight": "600"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "L05XV",
+          "x": 319,
+          "y": 872,
+          "name": "新增黄金悬浮按钮",
+          "width": 58,
+          "height": 58,
+          "fill": "#2563EB",
+          "cornerRadius": 29,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#1D4ED84D",
+            "offset": {
+              "x": 0,
+              "y": 8
+            },
+            "blur": 18
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "kt6zR",
+              "x": 17,
+              "y": 17,
+              "name": "新增图标",
+              "width": 24,
+              "height": 24,
+              "icon": "plus",
+              "library": "lucide",
+              "fill": "#FFFFFF"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "RDz16",
+          "x": 321,
+          "y": 285,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "L51kC",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ITB5V",
+          "x": 351,
+          "y": 285,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "UeAD8",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "VMx0p",
+          "x": 321,
+          "y": 401,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "VkyXV",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Q3h0O",
+          "x": 351,
+          "y": 401,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "dGQtK",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "TfhzO",
+          "x": 321,
+          "y": 517,
+          "name": "修改按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#EAF3FF",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "C3M9B",
+              "x": 7,
+              "y": 7,
+              "name": "修改图标",
+              "width": 14,
+              "height": 14,
+              "icon": "pencil",
+              "library": "lucide",
+              "fill": "#2563EB"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "b8l9dP",
+          "x": 351,
+          "y": 517,
+          "name": "删除按钮",
+          "width": 26,
+          "height": 26,
+          "fill": "#FEE2E2",
+          "cornerRadius": 13,
+          "layout": "none",
+          "children": [
+            {
+              "type": "icon",
+              "id": "X5pRGc",
+              "x": 9,
+              "y": 9,
+              "name": "删除图标",
+              "width": 10,
+              "height": 10,
+              "icon": "minus",
+              "library": "lucide",
+              "fill": "#EF4444"
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "GKnI4",
+          "x": 0,
+          "y": 0,
+          "name": "页面遮罩",
+          "fill": "#0F172A66",
+          "width": 393,
+          "height": 956
+        },
+        {
+          "type": "frame",
+          "id": "Ee9MA",
+          "x": 20,
+          "y": 314,
+          "name": "删除黄金账户弹窗",
+          "width": 353,
+          "height": 300,
+          "fill": "#FFFFFF",
+          "cornerRadius": 16,
+          "effect": {
+            "type": "shadow",
+            "shadowType": "outer",
+            "color": "#0F172A33",
+            "offset": {
+              "x": 0,
+              "y": 16
+            },
+            "blur": 32
+          },
+          "layout": "none",
+          "children": [
+            {
+              "type": "text",
+              "id": "Vmcxu",
+              "x": 18,
+              "y": 18,
+              "name": "弹窗标题",
+              "fill": "#0F172A",
+              "content": "删除黄金账户",
+              "fontFamily": "Inter",
+              "fontSize": 16,
+              "fontWeight": "700"
+            },
+            {
+              "type": "frame",
+              "id": "Dn63W",
+              "x": 149,
+              "y": 62,
+              "name": "删除警示背景",
+              "width": 56,
+              "height": 56,
+              "fill": "#FEE2E2",
+              "cornerRadius": 28,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "NEkhC",
+                  "x": 16,
+                  "y": 16,
+                  "name": "删除警示图标",
+                  "width": 24,
+                  "height": 24,
+                  "icon": "trash-2",
+                  "library": "lucide",
+                  "fill": "#E11D2E"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "WD5wk",
+              "x": 64,
+              "y": 134,
+              "name": "删除确认文案",
+              "fill": "#0F172A",
+              "content": "确认删除“工商银行”？",
+              "fontFamily": "Inter",
+              "fontSize": 18,
+              "fontWeight": "700"
+            },
+            {
+              "type": "text",
+              "id": "qhXcB",
+              "x": 42,
+              "y": 172,
+              "name": "删除说明",
+              "fill": "#64748B",
+              "content": "删除后将移除该账户及相关黄金记录",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "600"
+            },
+            {
+              "type": "frame",
+              "id": "D0nx6I",
+              "x": 18,
+              "y": 238,
+              "name": "取消按钮",
+              "width": 153.5,
+              "height": 42,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": "#D8E7FA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "kBgwI",
+                  "x": 62,
+                  "y": 11,
+                  "name": "取消文字",
+                  "fill": "#2563EB",
+                  "content": "取消",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "700"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "E1sDxm",
+              "x": 181.5,
+              "y": 238,
+              "name": "删除按钮",
+              "width": 153.5,
+              "height": 42,
+              "fill": "#FFFFFF",
+              "cornerRadius": 8,
+              "stroke": "#FCA5A5",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "HpsjY",
+                  "x": 62,
+                  "y": 11,
+                  "name": "删除文字",
+                  "fill": "#E11D2E",
+                  "content": "删除",
                   "fontFamily": "Inter",
                   "fontSize": 13,
                   "fontWeight": "700"

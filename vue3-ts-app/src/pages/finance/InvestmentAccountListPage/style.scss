@@ -42,7 +42,7 @@
   padding: var(--space-16);
   border: 1px solid var(--color-border-blue);
   border-radius: var(--radius-20);
-  background: linear-gradient(135deg, var(--color-finance-bg-1) 0%, var(--color-finance-bg-2) 100%);
+  background: var(--color-top-card-gradient);
   box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
 }
 

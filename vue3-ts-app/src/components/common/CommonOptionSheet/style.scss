@@ -1,0 +1,54 @@
+.common-option-sheet-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.common-option-sheet-item {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-14);
+  background: var(--color-bg-card);
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.common-option-sheet-item.active {
+  border-color: var(--color-brand-soft);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand);
+}
+
+.common-option-sheet-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.common-option-sheet-copy strong {
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.common-option-sheet-copy span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  line-height: 1.4;
+}
+
+.common-option-sheet-check {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border-soft-2);
+  border-radius: 999px;
+  background: var(--color-bg-card);
+}
+
+.common-option-sheet-item.active .common-option-sheet-check {
+  border: 5px solid var(--color-brand);
+}

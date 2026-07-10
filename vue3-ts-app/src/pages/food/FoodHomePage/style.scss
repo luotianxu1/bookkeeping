@@ -18,8 +18,8 @@
   gap: 14px;
   padding: 18px;
   border-radius: 24px;
-  background: linear-gradient(135deg, var(--color-food-hero-grad-start) 0%, var(--color-food-hero-grad-end) 100%);
-  border-color: var(--color-food-hero-border);
+  background: var(--color-top-card-gradient);
+  border-color: var(--color-top-card-border);
 }
 
 .hero-title-wrap h2,
