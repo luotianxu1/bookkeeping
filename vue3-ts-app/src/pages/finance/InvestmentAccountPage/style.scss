@@ -393,12 +393,6 @@
   color: var(--color-text-muted);
 }
 
-.investment-metric-divider {
-  width: var(--space-1);
-  height: var(--space-20);
-  background: var(--color-bg-soft-2);
-}
-
 .investment-holdings {
   display: grid;
   gap: var(--space-6);
@@ -809,10 +803,6 @@
 :global(:root[data-theme='dark']) .investment-modal-button.secondary {
   background: #182233;
   color: #cbd5e1;
-}
-
-:global(:root[data-theme='dark']) .investment-metric-divider {
-  background: #253045;
 }
 
 :global(:root[data-theme='dark']) .investment-holding-card {

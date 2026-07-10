@@ -943,18 +943,15 @@ function showFeedback(message: string, type: 'success' | 'error') {
         </div>
 
         <div class="investment-metrics">
-          <template v-for="(metric, index) in summaryMetrics" :key="metric.label">
-            <div class="investment-metric-item">
-              <span>{{ metric.label }}</span>
-              <AmountText
-                tag="strong"
-                class="investment-metric-value"
-                font-size="12px"
-                :value="metric.isRate ? `${formatAmount(metric.value)}%` : formatAmount(metric.value)"
-              />
-            </div>
-            <div v-if="index !== summaryMetrics.length - 1" class="investment-metric-divider"></div>
-          </template>
+          <div v-for="metric in summaryMetrics" :key="metric.label" class="investment-metric-item">
+            <span>{{ metric.label }}</span>
+            <AmountText
+              tag="strong"
+              class="investment-metric-value"
+              font-size="12px"
+              :value="metric.isRate ? `${formatAmount(metric.value)}%` : formatAmount(metric.value)"
+            />
+          </div>
         </div>
       </section>
 

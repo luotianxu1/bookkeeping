@@ -4,14 +4,18 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
+import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
+import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import {
   deleteTransaction,
   getAccount,
   getTransactionPage,
+  updateAccount,
   type Account,
   type Transaction as ApiTransaction,
   type TransactionPage,
@@ -42,6 +46,13 @@ const deleteError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
+const showEditAccountModal = ref(false)
+const isSavingAccount = ref(false)
+const accountFormError = ref('')
+const formName = ref('')
+const formAmount = ref('')
+const formRemark = ref('')
+const setAsCommon = ref(true)
 let requestVersion = 0
 
 const accountId = computed(() => Number(route.params.accountId))
@@ -79,6 +90,84 @@ function openEditTransaction(transaction: Transaction) {
       redirect: `/finance/accounts/cash/${accountId.value}`,
     },
   })
+}
+
+function openEditAccountModal() {
+  if (!account.value) {
+    return
+  }
+
+  formName.value = account.value.name
+  formAmount.value = String(account.value.currentBalance ?? 0)
+  formRemark.value = account.value.remark ?? ''
+  setAsCommon.value = account.value.includeInNetWorth
+  accountFormError.value = ''
+  showEditAccountModal.value = true
+}
+
+function closeEditAccountModal() {
+  showEditAccountModal.value = false
+  resetAccountForm()
+}
+
+function resetAccountForm() {
+  formName.value = ''
+  formAmount.value = ''
+  formRemark.value = ''
+  setAsCommon.value = true
+  accountFormError.value = ''
+}
+
+async function saveCashAccount() {
+  if (isSavingAccount.value || !account.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  const trimmedName = formName.value.trim()
+  const trimmedRemark = formRemark.value.trim()
+
+  if (!currentUser) {
+    accountFormError.value = '请先登录后再修改账户'
+    return
+  }
+
+  if (!trimmedName) {
+    accountFormError.value = '请输入账户名称'
+    return
+  }
+
+  const numericAmount = Number(formAmount.value || '0')
+  const normalizedAmount = Number.isFinite(numericAmount) ? numericAmount : 0
+  isSavingAccount.value = true
+  accountFormError.value = ''
+
+  try {
+    await updateAccount(account.value.id, {
+      userId: currentUser.id,
+      accountTypeId: account.value.accountTypeId,
+      contactId: account.value.contactId ?? null,
+      name: trimmedName,
+      icon: getCashIconCode(trimmedName),
+      color: account.value.color ?? null,
+      currencyCode: account.value.currencyCode || 'CNY',
+      currentBalance: normalizedAmount,
+      includeInNetWorth: setAsCommon.value,
+      sortOrder: account.value.sortOrder,
+      status: account.value.status || 'active',
+      remark: trimmedRemark || null,
+    })
+
+    closeEditAccountModal()
+    showFeedback('修改成功', 'success')
+    await loadDetail()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '账户保存失败'
+    accountFormError.value = message
+    showFeedback(message, 'error')
+  } finally {
+    isSavingAccount.value = false
+  }
 }
 
 async function loadDetail() {
@@ -258,6 +347,19 @@ function formatAmount(value: number) {
   })
 }
 
+function getCashIconCode(name: string) {
+  if (name.includes('银行') || name.includes('卡')) {
+    return 'bank-card'
+  }
+  if (name.includes('支付宝') || name.includes('微信')) {
+    return 'alipay'
+  }
+  if (name.includes('备用')) {
+    return 'reserve-fund'
+  }
+  return 'wallet'
+}
+
 </script>
 
 <template>
@@ -269,7 +371,20 @@ function formatAmount(value: number) {
     />
 
     <header class="cash-asset-detail-header">
-      <PageHeader title="资产详情" back-to="/finance/accounts/cash" back-label="返回现金账户" />
+      <PageHeader title="资产详情" back-to="/finance/accounts/cash" back-label="返回现金账户">
+        <template #right>
+          <CommonHeaderActionButton
+            v-if="account"
+            label="修改现金账户"
+            @click="openEditAccountModal"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z" stroke="currentColor" stroke-width="1.8" />
+              <path d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </CommonHeaderActionButton>
+        </template>
+      </PageHeader>
     </header>
 
     <p v-if="pageError" class="cash-asset-message cash-asset-message-error">
@@ -355,6 +470,31 @@ function formatAmount(value: number) {
           </CommonButton>
           <CommonButton variant="primary" :disabled="Boolean(deletingId)" @click="confirmDeleteTransaction">
             {{ deletingId ? '删除中...' : '确认删除' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+
+    <CommonModal v-model="showEditAccountModal" title="修改现金账户">
+      <form class="cash-create-form" @submit.prevent="saveCashAccount">
+        <CommonInput v-model="formName" label="账户名称" placeholder="例如：日常钱包" />
+        <CommonInput
+          v-model="formAmount"
+          label="当前余额"
+          placeholder="0.00"
+          input-type="number"
+          input-mode="decimal"
+        />
+        <CommonInput v-model="formRemark" label="备注" placeholder="例如：日常零用" />
+        <CommonSwitch v-model="setAsCommon" label="是否计入总资产" />
+        <p v-if="accountFormError" class="cash-form-error">{{ accountFormError }}</p>
+      </form>
+
+      <template #footer>
+        <div class="cash-create-actions">
+          <CommonButton variant="secondary" :disabled="isSavingAccount" @click="closeEditAccountModal">取消</CommonButton>
+          <CommonButton variant="primary" :disabled="isSavingAccount" @click="saveCashAccount">
+            {{ isSavingAccount ? '保存中...' : '保存' }}
           </CommonButton>
         </div>
       </template>
