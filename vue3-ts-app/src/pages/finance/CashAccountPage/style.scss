@@ -10,13 +10,22 @@
 }
 
 .cash-account-manage {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  display: inline-grid;
+  place-items: center;
   padding: 0;
   border: 0;
-  background: transparent;
-  min-height: var(--space-28);
+  border-radius: 15px;
+  background: var(--color-bg-blue-soft);
   color: var(--color-brand-strong);
-  font-size: var(--font-size-14);
-  font-weight: 600;
+  cursor: pointer;
+}
+
+.cash-account-manage svg {
+  width: var(--space-16);
+  height: var(--space-16);
 }
 
 .cash-overview-card {
@@ -46,7 +55,7 @@
 
 .cash-list {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-12);
 }
 
 .cash-list-message {
@@ -68,49 +77,21 @@
 }
 
 .cash-list-row {
-  min-height: var(--space-60);
+  height: 64px;
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-}
-
-.cash-remove-trigger,
-.cash-edit-trigger {
-  width: var(--space-20);
-  height: var(--space-20);
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 20px;
-  border-radius: var(--radius-10);
-}
-
-.cash-remove-trigger {
-  background: var(--color-danger);
-}
-
-.cash-edit-trigger {
-  background: var(--color-brand);
-  color: var(--color-white);
-  font-size: var(--font-size-14);
-  font-weight: 700;
-  line-height: 1;
-}
-
-.cash-remove-dash {
-  width: var(--space-8);
-  height: var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--color-bg-card);
+  gap: var(--space-8);
 }
 
 .cash-list-item {
-  min-height: var(--space-60);
+  height: 64px;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
   padding: 0 12px;
-  border: 1px solid var(--color-bg-soft-2);
+  border: 0;
   border-radius: var(--radius-14);
   background: var(--color-bg-card);
   flex: 1;
@@ -118,25 +99,52 @@
 }
 
 .cash-list-item.manage-shifted {
+  flex: 0 1 calc(100% - 88px);
   min-width: 0;
+}
+
+.cash-list-actions {
+  flex: 0 0 80px;
+  height: var(--space-60);
 }
 
 .cash-item-left {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-10);
 }
 
 .cash-item-icon {
-  width: var(--space-16);
+  width: var(--space-36);
+  height: var(--space-36);
+  flex: 0 0 var(--space-36);
   display: inline-grid;
   place-items: center;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-16);
+  border-radius: var(--radius-10);
+  background: var(--color-bg-blue-soft);
+  color: var(--color-brand-strong);
+}
+
+.cash-item-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.cash-item-icon-bank-card {
+  background: var(--color-bg-success-soft);
+}
+
+.cash-item-icon-alipay {
+  background: var(--color-bg-neutral-soft);
+}
+
+.cash-item-icon-reserve-fund {
+  background: var(--color-bg-purple-soft);
 }
 
 .cash-item-text {
+  min-width: 0;
   display: grid;
   gap: var(--space-6);
 }
@@ -158,6 +166,20 @@
   font-size: var(--font-size-14);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.cash-item-right {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin-left: var(--space-8);
+}
+
+.cash-item-chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--color-text-muted);
 }
 
 .cash-account-fab {

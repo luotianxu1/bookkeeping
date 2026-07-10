@@ -1,12 +1,19 @@
 .account-group-card {
+  display: grid;
+  gap: var(--space-8);
   overflow: hidden;
+}
+
+.account-group-card.is-collapsed {
+  min-height: 44px;
+  padding: 8px 12px;
   border: 1px solid var(--color-bg-soft-2);
-  border-radius: var(--radius-14);
+  border-radius: var(--radius-10);
   background: var(--color-bg-card);
-  padding: var(--space-12);
 }
 
 .account-group-header {
+  min-height: 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -18,21 +25,22 @@
   flex: 1;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--space-10);
 }
 
 .account-group-card h2 {
   margin: 0;
-  min-height: 34px;
+  min-height: 28px;
   display: flex;
   align-items: center;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-14);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-13);
   font-weight: 600;
 }
 
 .account-group-title-link {
-  min-height: 34px;
+  min-height: 28px;
   display: flex;
   align-items: center;
   gap: var(--space-6);
@@ -47,59 +55,60 @@
 .account-group-amount {
   flex-shrink: 0;
   color: var(--color-text-primary);
-  font-size: var(--font-size-14);
-  font-weight: 700;
+  font-size: var(--font-size-12);
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .account-group-toggle {
-  min-width: 64px;
-  min-height: 34px;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 0 10px;
-  border: none;
+  padding: 0;
+  border: 1px solid var(--color-border-blue);
   border-radius: 999px;
-  background: var(--color-bg-page);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-12);
-  font-weight: 600;
+  background: var(--color-bg-blue-soft);
+  color: var(--color-brand-strong);
 }
 
 .account-group-toggle-icon {
-  font-size: var(--font-size-12);
-  line-height: 1;
+  width: 7px;
+  height: 7px;
+  border-top: 1.5px solid currentColor;
+  border-left: 1.5px solid currentColor;
+  transform: translateY(2px) rotate(45deg);
   transition: transform 180ms ease;
 }
 
 .account-group-toggle-icon.is-collapsed {
-  transform: rotate(180deg);
+  transform: translateY(-2px) rotate(225deg);
 }
 
 .account-list {
   list-style: none;
-  margin: var(--space-8) 0 0;
+  margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-8);
 }
 
 .account-list-item {
-  min-height: 50px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: var(--radius-10);
-  background: var(--color-bg-page);
+  background: var(--color-bg-card);
 }
 
 .account-item-link {
   width: 100%;
-  min-height: 50px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -112,7 +121,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-10);
 }
 
 .account-item-text {
@@ -121,9 +130,13 @@
 }
 
 .account-item-icon {
-  width: var(--space-16);
+  width: 36px;
+  height: 36px;
   display: inline-grid;
   place-items: center;
+  flex: 0 0 auto;
+  border-radius: var(--radius-10);
+  background: var(--color-bg-blue-soft);
   color: var(--color-brand);
   font-size: var(--font-size-16);
 }
@@ -143,7 +156,10 @@
 .account-item-right {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
+  justify-content: flex-end;
+  gap: var(--space-8);
+  flex: 0 0 auto;
+  min-width: 120px;
 }
 
 .account-item-right strong {
@@ -151,4 +167,12 @@
   font-size: var(--font-size-14);
   font-weight: 600;
   white-space: nowrap;
+}
+
+.account-item-chevron {
+  width: 8px;
+  height: 8px;
+  border-top: 1.5px solid var(--color-text-subtle);
+  border-right: 1.5px solid var(--color-text-subtle);
+  transform: rotate(45deg);
 }

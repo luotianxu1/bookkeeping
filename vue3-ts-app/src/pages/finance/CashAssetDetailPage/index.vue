@@ -8,19 +8,33 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
-import { deleteTransaction, getAccount, getAccountTransactions, type Account, type Transaction as ApiTransaction } from '@/api/modules/finance'
+import {
+  deleteTransaction,
+  getAccount,
+  getTransactionPage,
+  type Account,
+  type Transaction as ApiTransaction,
+  type TransactionPage,
+} from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
 import type { DayGroup, Transaction } from '@/types/finance'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
+
+const CASH_TRANSACTION_PAGE_SIZE = 50
 
 const route = useRoute()
 const router = useRouter()
 
 const account = ref<Account | null>(null)
 const transactions = ref<ApiTransaction[]>([])
+const currentPage = ref(1)
+const totalPages = ref(1)
+const totalItems = ref(0)
 const isLoading = ref(false)
+const isLoadingTransactions = ref(false)
 const pageError = ref('')
+const historyError = ref('')
 const deletingId = ref<number | null>(null)
 const pendingDeleteTransaction = ref<Transaction | null>(null)
 const showDeleteConfirmModal = ref(false)
@@ -31,14 +45,19 @@ const feedbackType = ref<'success' | 'error'>('success')
 let requestVersion = 0
 
 const accountId = computed(() => Number(route.params.accountId))
-const historyCountText = computed(() => `共 ${transactions.value.length} 条`)
+const historyCountText = computed(() => `共 ${totalItems.value} 条`)
 const accountName = computed(() => account.value?.name ?? '现金账户')
 const accountTypeName = computed(() => account.value?.accountTypeName ? `${account.value.accountTypeName}账户` : '现金账户')
 const accountAmount = computed(() => formatAmount(Number(account.value?.currentBalance ?? 0)))
 const dayGroups = computed<DayGroup[]>(() => buildTransactionDayGroups(transactions.value))
+const hasPagination = computed(() => totalPages.value > 1)
+const paginationSummary = computed(() => `第 ${currentPage.value} / ${totalPages.value} 页，共 ${totalItems.value} 条`)
+const canGoPrevPage = computed(() => currentPage.value > 1)
+const canGoNextPage = computed(() => currentPage.value < totalPages.value)
 
 watch(accountId, () => {
-  loadDetail()
+  currentPage.value = 1
+  void loadDetail()
 }, { immediate: true })
 
 function openEditTransaction(transaction: Transaction) {
@@ -66,6 +85,7 @@ async function loadDetail() {
   const currentRequestVersion = ++requestVersion
   account.value = null
   transactions.value = []
+  resetPagination()
 
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
@@ -78,20 +98,27 @@ async function loadDetail() {
   }
 
   isLoading.value = true
+  isLoadingTransactions.value = false
   pageError.value = ''
+  historyError.value = ''
 
   try {
-    const [accountDetail, transactionList] = await Promise.all([
+    const [accountDetail, transactionPage] = await Promise.all([
       getAccount(accountId.value),
-      getAccountTransactions(accountId.value, {
+      getTransactionPage({
         userId: currentUser.id,
+        accountId: accountId.value,
+        cashOnly: true,
+        sortOrder: 'desc',
+        page: currentPage.value,
+        pageSize: CASH_TRANSACTION_PAGE_SIZE,
       }),
     ])
     if (currentRequestVersion !== requestVersion) {
       return
     }
     account.value = accountDetail
-    transactions.value = transactionList.filter((transaction) => transaction.accountId === accountId.value)
+    applyTransactionPage(transactionPage)
   } catch (error) {
     if (currentRequestVersion !== requestVersion) {
       return
@@ -102,6 +129,75 @@ async function loadDetail() {
       isLoading.value = false
     }
   }
+}
+
+async function loadTransactionPage() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    historyError.value = '请先登录后查看收支记录'
+    return
+  }
+  if (!Number.isFinite(accountId.value) || accountId.value <= 0) {
+    historyError.value = '账户不存在'
+    return
+  }
+
+  const currentRequestVersion = ++requestVersion
+  isLoadingTransactions.value = true
+  historyError.value = ''
+
+  try {
+    const transactionPage = await getTransactionPage({
+      userId: currentUser.id,
+      accountId: accountId.value,
+      cashOnly: true,
+      sortOrder: 'desc',
+      page: currentPage.value,
+      pageSize: CASH_TRANSACTION_PAGE_SIZE,
+    })
+    if (currentRequestVersion !== requestVersion) {
+      return
+    }
+    applyTransactionPage(transactionPage)
+  } catch (error) {
+    if (currentRequestVersion !== requestVersion) {
+      return
+    }
+    transactions.value = []
+    historyError.value = error instanceof Error ? error.message : '收支记录加载失败'
+  } finally {
+    if (currentRequestVersion === requestVersion) {
+      isLoadingTransactions.value = false
+    }
+  }
+}
+
+function applyTransactionPage(transactionPage: TransactionPage) {
+  transactions.value = transactionPage.items.filter((transaction) => transaction.accountId === accountId.value)
+  currentPage.value = Math.max(1, transactionPage.page || 1)
+  totalPages.value = Math.max(1, transactionPage.totalPages || 1)
+  totalItems.value = Math.max(0, transactionPage.total || 0)
+}
+
+function resetPagination() {
+  totalPages.value = 1
+  totalItems.value = 0
+}
+
+function goToPrevPage() {
+  if (!canGoPrevPage.value || isLoadingTransactions.value || isLoading.value) {
+    return
+  }
+  currentPage.value -= 1
+  void loadTransactionPage()
+}
+
+function goToNextPage() {
+  if (!canGoNextPage.value || isLoadingTransactions.value || isLoading.value) {
+    return
+  }
+  currentPage.value += 1
+  void loadTransactionPage()
 }
 
 function openDeleteConfirm(transaction: Transaction) {
@@ -136,6 +232,9 @@ async function confirmDeleteTransaction() {
     showDeleteConfirmModal.value = false
     pendingDeleteTransaction.value = null
     showFeedback('删除成功', 'success')
+    if (transactions.value.length === 1 && currentPage.value > 1) {
+      currentPage.value -= 1
+    }
     await loadDetail()
   } catch (error) {
     const message = error instanceof Error ? error.message : '删除失败'
@@ -196,8 +295,10 @@ function formatAmount(value: number) {
           <span>{{ historyCountText }}</span>
         </header>
 
-        <section class="cash-asset-history-groups">
-          <p v-if="transactions.length === 0" class="cash-asset-empty">暂无收支记录</p>
+        <CommonLoading v-if="isLoadingTransactions" />
+        <section v-else class="cash-asset-history-groups">
+          <p v-if="historyError" class="cash-asset-empty cash-asset-empty-error">{{ historyError }}</p>
+          <p v-else-if="transactions.length === 0" class="cash-asset-empty">暂无收支记录</p>
 
           <template v-else>
             <TransactionDayCard
@@ -210,6 +311,26 @@ function formatAmount(value: number) {
               @edit="openEditTransaction"
               @delete="openDeleteConfirm"
             />
+
+            <div v-if="hasPagination" class="cash-asset-pagination" aria-label="收支记录分页">
+              <button
+                class="cash-asset-pagination-button"
+                type="button"
+                :disabled="!canGoPrevPage || isLoadingTransactions"
+                @click="goToPrevPage"
+              >
+                上一页
+              </button>
+              <span class="cash-asset-pagination-summary">{{ paginationSummary }}</span>
+              <button
+                class="cash-asset-pagination-button"
+                type="button"
+                :disabled="!canGoNextPage || isLoadingTransactions"
+                @click="goToNextPage"
+              >
+                下一页
+              </button>
+            </div>
           </template>
         </section>
       </section>

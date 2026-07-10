@@ -98,6 +98,45 @@
   gap: 10px;
 }
 
+:deep(.common-modal-panel) {
+  width: min(100%, 313px);
+  border-radius: var(--radius-18);
+}
+
+:deep(.common-modal-header) {
+  min-height: 26px;
+  padding: 16px 16px 0;
+}
+
+:deep(.common-modal-header h2) {
+  font-size: var(--font-size-18);
+  line-height: 1.45;
+}
+
+:deep(.common-modal-body) {
+  padding: 10px 16px 0;
+}
+
+:deep(.common-modal-footer) {
+  padding: 10px 16px 16px;
+}
+
+.create-account-form :deep(.common-field) {
+  gap: 8px;
+}
+
+.create-account-form :deep(.common-field span) {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.create-account-form :deep(.common-field-control) {
+  min-height: 42px;
+  border-radius: var(--radius-10);
+  background: var(--color-bg-card);
+  font-weight: 500;
+}
+
 .create-account-name-hint {
   margin: -2px 0 0;
   color: var(--color-text-muted);
@@ -118,12 +157,27 @@
   gap: 10px;
 }
 
+.create-account-actions :deep(.common-button) {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border-radius: var(--radius-14);
+  font-size: var(--font-size-13);
+  font-weight: 500;
+}
+
+.create-account-actions :deep(.common-button-secondary) {
+  border-color: var(--color-border-blue);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-strong);
+}
+
 .create-account-form :deep(.common-switch-row) {
   min-height: 42px;
   padding: 0 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-10);
-  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-blue);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-neutral-soft-2);
 }
 
 .create-account-form :deep(.common-switch-row > span) {

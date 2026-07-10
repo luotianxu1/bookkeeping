@@ -10,6 +10,7 @@ import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
+import SwipeActionGroup from '@/components/common/SwipeActionGroup/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import { createAccount, deleteAccount, getAccounts, getAccountTypes, updateAccount, type Account, type AccountType } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -248,15 +249,15 @@ function formatAmount(value: number) {
 }
 
 function getCashIcon(icon?: string | null) {
-  const iconMap: Record<string, string> = {
-    wallet: '💵',
-    cash: '💵',
-    'bank-card': '🏦',
-    alipay: '💳',
-    'reserve-fund': '🧧',
+  const iconMap: Record<string, 'wallet' | 'bank-card' | 'alipay' | 'reserve-fund'> = {
+    wallet: 'wallet',
+    cash: 'wallet',
+    'bank-card': 'bank-card',
+    alipay: 'alipay',
+    'reserve-fund': 'reserve-fund',
   }
 
-  return icon ? iconMap[icon] ?? icon : '💵'
+  return icon ? iconMap[icon] ?? 'wallet' : 'wallet'
 }
 
 function getCashIconCode(name: string) {
@@ -290,8 +291,19 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <header class="cash-account-header">
       <PageHeader title="现金账户" back-to="/finance/accounts" back-label="返回账户管理">
         <template #right>
-          <button class="cash-account-manage" type="button" @click="toggleManageMode">
-            管理
+          <button
+            class="cash-account-manage"
+            type="button"
+            :aria-label="isManageMode ? '完成管理' : '管理现金账户'"
+            @click="toggleManageMode"
+          >
+            <svg v-if="isManageMode" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z" stroke="currentColor" stroke-width="1.8" />
+              <path d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
           </button>
         </template>
       </PageHeader>
@@ -312,40 +324,54 @@ function showFeedback(message: string, type: 'success' | 'error') {
       <template v-else>
       <article v-for="account in accountItems" :key="account.id" class="cash-list-row">
         <button
-          v-if="isManageMode"
-          type="button"
-          class="cash-remove-trigger"
-          :aria-label="`删除${account.name}`"
-          @click="openDeleteConfirmModal(account)"
-        >
-          <span class="cash-remove-dash"></span>
-        </button>
-
-        <button
-          v-if="isManageMode"
-          type="button"
-          class="cash-edit-trigger"
-          :aria-label="`修改${account.name}`"
-          @click="openEditModal(account)"
-        >
-          ✎
-        </button>
-
-        <button
           :class="['cash-list-item', { 'manage-shifted': isManageMode }]"
           type="button"
           @click="handleAccountClick(account)"
         >
         <span class="cash-item-left">
-          <span class="cash-item-icon">{{ toAccountItem(account).icon }}</span>
+          <span :class="['cash-item-icon', `cash-item-icon-${toAccountItem(account).icon}`]" aria-hidden="true">
+            <svg v-if="toAccountItem(account).icon === 'bank-card'" viewBox="0 0 24 24" fill="none">
+              <path d="M3 8H21M6 16H10M4 5H20C20.55 5 21 5.45 21 6V18C21 18.55 20.55 19 20 19H4C3.45 19 3 18.55 3 18V6C3 5.45 3.45 5 4 5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <svg v-else-if="toAccountItem(account).icon === 'alipay'" viewBox="0 0 24 24" fill="none">
+              <path d="M8 2H16C17.1 2 18 2.9 18 4V20C18 21.1 17.1 22 16 22H8C6.9 22 6 21.1 6 20V4C6 2.9 6.9 2 8 2Z" stroke="currentColor" stroke-width="1.8" />
+              <path d="M10 18H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <svg v-else-if="toAccountItem(account).icon === 'reserve-fund'" viewBox="0 0 24 24" fill="none">
+              <path d="M6 8H18L20 20H4L6 8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+              <path d="M9 8V6A3 3 0 0 1 15 6V8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M9 13H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none">
+              <path d="M20 7H5C3.9 7 3 7.9 3 9V18C3 19.1 3.9 20 5 20H20C20.55 20 21 19.55 21 19V8C21 7.45 20.55 7 20 7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+              <path d="M16 13H21V17H16C14.9 17 14 16.1 14 15C14 13.9 14.9 13 16 13Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+              <path d="M6 7V5C6 4.45 6.45 4 7 4H18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </span>
           <span class="cash-item-text">
             <span class="cash-item-name">{{ account.name }}</span>
             <span class="cash-item-subtitle">{{ toAccountItem(account).subtitle }}</span>
           </span>
         </span>
 
-        <AmountText tag="strong" class="cash-item-amount" :value="toAccountItem(account).amount" />
+        <span class="cash-item-right">
+          <AmountText tag="strong" class="cash-item-amount" :value="toAccountItem(account).amount" />
+          <svg v-if="!isManageMode" class="cash-item-chevron" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
         </button>
+
+        <SwipeActionGroup
+          v-if="isManageMode"
+          class="cash-list-actions"
+          show-edit
+          :deleting="isDeletingAccount && deletingAccount?.id === account.id"
+          :edit-label="`修改${account.name}`"
+          :delete-label="`删除${account.name}`"
+          @edit="openEditModal(account)"
+          @delete="openDeleteConfirmModal(account)"
+        />
       </article>
       </template>
     </section>

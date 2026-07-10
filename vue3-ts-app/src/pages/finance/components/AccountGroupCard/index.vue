@@ -11,10 +11,24 @@ defineProps<{
 defineEmits<{
   toggle: []
 }>()
+
+function isNegativeAmount(value?: string | number) {
+  const normalized = String(value ?? '').trim()
+  if (normalized.startsWith('-')) {
+    return true
+  }
+
+  const parsed = Number(normalized.replace(/[^\d.+-]/g, ''))
+  return Number.isFinite(parsed) && parsed < 0
+}
+
+function getAmountTone(value?: string | number): 'negative' | 'inherit' {
+  return isNegativeAmount(value) ? 'negative' : 'inherit'
+}
 </script>
 
 <template>
-  <section class="account-group-card">
+  <section :class="['account-group-card', { 'is-collapsed': group.collapsed }]">
     <header class="account-group-header">
       <div class="account-group-heading">
         <RouterLink v-if="group.path" class="account-group-title-link" :to="group.path">
@@ -27,6 +41,8 @@ defineEmits<{
           class="account-group-amount"
           tag="strong"
           :value="group.amount"
+          :tone="getAmountTone(group.amount)"
+          :show-sign="isNegativeAmount(group.amount)"
           show-unit
         />
       </div>
@@ -38,8 +54,7 @@ defineEmits<{
         :aria-label="group.collapsed ? `展开${group.title}` : `收起${group.title}`"
         @click="$emit('toggle')"
       >
-        <span>{{ group.collapsed ? '展开' : '收起' }}</span>
-        <span class="account-group-toggle-icon" :class="{ 'is-collapsed': group.collapsed }">⌃</span>
+        <span class="account-group-toggle-icon" :class="{ 'is-collapsed': group.collapsed }" aria-hidden="true"></span>
       </button>
     </header>
 
@@ -57,7 +72,14 @@ defineEmits<{
             </span>
           </span>
           <span class="account-item-right">
-            <AmountText tag="strong" :value="item.amount" show-unit />
+            <AmountText
+              tag="strong"
+              :value="item.amount"
+              :tone="getAmountTone(item.amount)"
+              :show-sign="isNegativeAmount(item.amount)"
+              show-unit
+            />
+            <span class="account-item-chevron" aria-hidden="true"></span>
           </span>
         </RouterLink>
 
@@ -69,7 +91,13 @@ defineEmits<{
             </span>
           </span>
           <span class="account-item-right">
-            <AmountText tag="strong" :value="item.amount" show-unit />
+            <AmountText
+              tag="strong"
+              :value="item.amount"
+              :tone="getAmountTone(item.amount)"
+              :show-sign="isNegativeAmount(item.amount)"
+              show-unit
+            />
           </span>
         </template>
       </li>
