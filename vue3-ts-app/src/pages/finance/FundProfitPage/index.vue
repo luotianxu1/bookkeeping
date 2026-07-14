@@ -35,7 +35,7 @@ const summaryShortcutOrder: Record<string, number> = {
 
 const selectedView = ref<FundProfitView>('day')
 const selectedAccountId = ref('all')
-const selectedSummaryShortcut = ref('cumulative')
+const selectedSummaryShortcut = ref('')
 const selectedDetailFilter = ref<DetailFilter>('all')
 const selectedKey = ref('')
 const dayAnchor = ref(formatMonthValue(new Date()))
@@ -54,11 +54,7 @@ const selectedAccountLabel = computed(() =>
 )
 
 const summaryShortcuts = computed(() =>
-  [...(pageData.value?.summary.shortcuts ?? [])].sort((left, right) => {
-    const leftOrder = summaryShortcutOrder[left.key] ?? 99
-    const rightOrder = summaryShortcutOrder[right.key] ?? 99
-    return leftOrder - rightOrder
-  }),
+  sortSummaryShortcuts(pageData.value?.summary.shortcuts ?? []),
 )
 
 const selectedSummaryMetric = computed<FundProfitPageSummaryMetric | null>(() => {
@@ -366,10 +362,8 @@ function syncPageState(data: FundProfitPage) {
     (data.summary.shortcuts ?? []).map((item) => item.key),
   )
   if (!shortcutKeys.has(selectedSummaryShortcut.value)) {
-    const nextShortcut = data.summary.shortcuts?.[0]
-    selectedSummaryShortcut.value = shortcutKeys.has(data.summary.activeShortcut)
-      ? data.summary.activeShortcut
-      : nextShortcut?.key || 'cumulative'
+    const nextShortcut = sortSummaryShortcuts(data.summary.shortcuts ?? [])[0]
+    selectedSummaryShortcut.value = nextShortcut?.key || data.summary.activeShortcut || 'cumulative'
   }
 
   const validAccountIds = new Set(['all', ...data.accounts.map((account) => String(account.accountId))])
@@ -442,6 +436,14 @@ function normalizeView(value: string) {
     return value
   }
   return 'day'
+}
+
+function sortSummaryShortcuts(items: FundProfitPageSummaryMetric[]) {
+  return [...items].sort((left, right) => {
+    const leftOrder = summaryShortcutOrder[left.key] ?? 99
+    const rightOrder = summaryShortcutOrder[right.key] ?? 99
+    return leftOrder - rightOrder
+  })
 }
 
 function handleCalendarSelect(item: FundProfitCalendarCell) {

@@ -673,10 +673,11 @@ function formatSummaryWeight(value: number | null | undefined) {
 }
 
 function formatRate(value: number | null | undefined) {
-  return Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 4,
-    maximumFractionDigits: 4,
+  const rate = Number(value ?? 0).toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })
+  return `${rate}%`
 }
 
 function formatAveragePriceTag(value: number | null | undefined) {

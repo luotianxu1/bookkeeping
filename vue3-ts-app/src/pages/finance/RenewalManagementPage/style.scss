@@ -4,7 +4,6 @@
   padding-bottom: var(--space-72);
 }
 
-.renewal-create-action,
 .renewal-card-action {
   padding: 0;
   border: 0;
@@ -14,12 +13,6 @@
 .renewal-management-page :deep(.page-header h1) {
   font-size: 18px;
   font-weight: 700;
-}
-
-.renewal-create-action {
-  color: var(--color-brand-strong);
-  font-size: 14px;
-  font-weight: 600;
 }
 
 .renewal-message {

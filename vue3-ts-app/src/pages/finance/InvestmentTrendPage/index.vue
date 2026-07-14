@@ -26,6 +26,7 @@ interface RangeDetailPoint {
   key: string
   label: string
   value: number | null
+  changeAmount: number | null
 }
 
 interface TrendYAxisBounds {
@@ -191,15 +192,16 @@ const rangeDetailSummaryText = computed(() => {
   if (trendRangeKey.value === 'ytd') return '12个月总资产'
   return '按年总资产'
 })
+const rangeDetailCompareText = computed(() => {
+  if (trendRangeKey.value === '7d' || trendRangeKey.value === '30d') return '较上一天'
+  if (trendRangeKey.value === 'ytd') return '较上月'
+  return '较上年'
+})
 const rangeDetailPoints = computed<RangeDetailPoint[]>(() => {
   const points = latestTrendPoints.value
 
   if (trendRangeKey.value !== 'ytd') {
-    return points.map((item) => ({
-      key: item.key,
-      label: item.label,
-      value: Number(item.value ?? 0),
-    })).reverse()
+    return points.map((item, index) => buildRangeDetailPoint(item, points[index - 1])).reverse()
   }
 
   const pointMap = new Map<string, AssetTrendPoint>(
@@ -212,10 +214,12 @@ const rangeDetailPoints = computed<RangeDetailPoint[]>(() => {
   return Array.from({ length: endMonth }, (_, index) => {
     const label = `${index + 1}月`
     const matchedPoint = pointMap.get(label)
+    const previousPoint = index > 0 ? pointMap.get(`${index}月`) : undefined
     return {
       key: matchedPoint?.key ?? `ytd-${index + 1}`,
       label,
       value: matchedPoint ? Number(matchedPoint.value ?? 0) : null,
+      changeAmount: matchedPoint ? getRangeDetailChangeAmount(matchedPoint, previousPoint) : null,
     }
   }).reverse()
 })
@@ -623,6 +627,24 @@ function resetYesterdaySnapshots() {
   snapshotError.value = ''
 }
 
+function buildRangeDetailPoint(item: AssetTrendPoint, previous?: AssetTrendPoint) {
+  return {
+    key: item.key,
+    label: item.label,
+    value: Number(item.value ?? 0),
+    changeAmount: getRangeDetailChangeAmount(item, previous),
+  } satisfies RangeDetailPoint
+}
+
+function getRangeDetailChangeAmount(item: AssetTrendPoint, previous?: AssetTrendPoint) {
+  if (!previous) {
+    return null
+  }
+  const currentValue = Number(item.value ?? 0)
+  const previousValue = Number(previous.value ?? 0)
+  return currentValue - previousValue
+}
+
 function pickEarlierDate(current: string, candidate?: string | null) {
   if (!candidate) {
     return current
@@ -869,7 +891,7 @@ function getTrendYAxisBounds(values: number[]) {
           <div>
             <strong>区间资产明细</strong>
           </div>
-          <span class="range-detail-side-text">{{ rangeDetailSummaryText }}</span>
+          <span class="range-detail-side-text">{{ rangeDetailSummaryText }} · {{ rangeDetailCompareText }}</span>
         </header>
 
         <div v-if="rangeDetailPoints.length > 0" class="range-detail-list">
@@ -879,15 +901,27 @@ function getTrendYAxisBounds(values: number[]) {
             class="range-detail-item"
           >
             <span class="range-detail-label">{{ item.label }}</span>
-            <AmountText
-              v-if="item.value !== null"
-              tag="strong"
-              tone="inherit"
-              class="range-detail-value"
-              :value="formatCurrency(item.value)"
-              show-unit
-            />
-            <strong v-else class="range-detail-value range-detail-value--empty">--</strong>
+            <div class="range-detail-main">
+              <AmountText
+                v-if="item.value !== null"
+                tag="strong"
+                tone="inherit"
+                class="range-detail-value"
+                :value="formatCurrency(item.value)"
+                show-unit
+              />
+              <strong v-else class="range-detail-value range-detail-value--empty">--</strong>
+              <div class="range-detail-change">
+                <span>{{ rangeDetailCompareText }}</span>
+                <AmountText
+                  tag="span"
+                  class="range-detail-change-value"
+                  :value="item.changeAmount === null ? '--' : formatCurrency(item.changeAmount)"
+                  show-sign
+                  show-unit
+                />
+              </div>
+            </div>
           </article>
         </div>
         <p v-else class="investment-trend-empty">当前区间暂无可展示的资产数据</p>
