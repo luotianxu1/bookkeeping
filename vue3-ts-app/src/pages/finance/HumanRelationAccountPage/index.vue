@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
@@ -38,7 +39,6 @@ type HumanRelationCardView = {
   netAmount: number
   netAmountText: string
   recordCount: number
-  latestRecordText: string
 }
 
 type DeleteTarget = {
@@ -118,7 +118,6 @@ const relationCards = computed<HumanRelationCardView[]>(() =>
     const outgoingTotal = sumByDirection(accountRecords, 'outgoing')
     const incomingTotal = sumByDirection(accountRecords, 'incoming')
     const netAmount = outgoingTotal - incomingTotal
-    const latestRecord = accountRecords[0]
 
     return {
       account,
@@ -126,13 +125,12 @@ const relationCards = computed<HumanRelationCardView[]>(() =>
       avatarText: (contact?.name?.trim() || account.name || '礼').slice(0, 1),
       avatarClass: `human-relation-avatar-${index % 4}`,
       secondaryText: contact?.phone?.trim() ? `手机号 ${contact.phone.trim()}` : '未填写联系人手机号',
-      noteText: contact?.remark?.trim() || account.remark?.trim() || '点击查看该联系人的全部人情往来记录',
+      noteText: contact?.remark?.trim() || account.remark?.trim() || '',
       outgoingTotal,
       incomingTotal,
       netAmount,
       netAmountText: formatSignedCurrency(netAmount),
       recordCount: accountRecords.length,
-      latestRecordText: latestRecord ? `最近一笔 ${formatDate(latestRecord.occurredAt)}` : '暂无人情记录',
     }
   }),
 )
@@ -338,14 +336,6 @@ function formatSignedCurrency(value: number) {
   return `${sign}¥${formatNumber(value)}`
 }
 
-function formatDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
-}
-
 function showFeedback(message: string, type: 'success' | 'error') {
   feedbackMessage.value = message
   feedbackType.value = type
@@ -364,14 +354,18 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <header class="human-relation-account-header">
       <PageHeader title="人情账户" back-to="/finance/accounts" back-label="返回账户管理">
         <template #right>
-          <button
-            type="button"
-            :class="['human-relation-manage-button', { active: isManageMode }]"
-            :aria-label="isManageMode ? '退出管理模式' : '进入管理模式'"
+          <CommonHeaderActionButton
+            :label="isManageMode ? '完成管理' : '管理人情账户'"
             @click="toggleManageMode"
           >
-            {{ isManageMode ? '完成' : '管理' }}
-          </button>
+            <svg v-if="isManageMode" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z" stroke="currentColor" stroke-width="1.8" />
+              <path d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </CommonHeaderActionButton>
         </template>
       </PageHeader>
     </header>
@@ -455,17 +449,13 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <span>{{ card.recordCount }} 条记录</span>
           </div>
 
-          <div class="human-relation-account-card-bottom">
-            <span>{{ card.latestRecordText }}</span>
-            <div v-if="isManageMode" class="human-relation-account-card-actions">
-              <button type="button" class="human-relation-card-action" @click.stop="openEditAccountModal(card.account)">
-                编辑
-              </button>
-              <button type="button" class="human-relation-card-action is-danger" @click.stop="openDeleteModal(card.account)">
-                删除
-              </button>
-            </div>
-            <span v-else class="human-relation-account-card-arrow">&gt;</span>
+          <div v-if="isManageMode" class="human-relation-account-card-actions">
+            <button type="button" class="human-relation-card-action" @click.stop="openEditAccountModal(card.account)">
+              编辑
+            </button>
+            <button type="button" class="human-relation-card-action is-danger" @click.stop="openDeleteModal(card.account)">
+              删除
+            </button>
           </div>
         </article>
       </section>

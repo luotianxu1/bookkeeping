@@ -90,6 +90,11 @@
   justify-items: end;
 }
 
+.investment-list-summary-rate {
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
 .investment-list-summary-side :deep(.amount-text--positive) {
   color: var(--color-danger);
 }
@@ -98,60 +103,66 @@
   color: var(--color-success);
 }
 
+.investment-list-summary-side :deep(.amount-text--neutral) {
+  color: var(--color-text-primary);
+}
+
 .investment-list-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  align-items: stretch;
+  min-height: var(--space-24);
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 
 .investment-list-metric-item {
+  flex: 1;
   min-width: 0;
   display: grid;
-  gap: 4px;
+  justify-items: center;
   align-content: center;
-  min-height: 52px;
-  padding: 10px 12px;
-  border-radius: var(--radius-14);
-  background: var(--color-finance-metric-bg);
-  overflow: hidden;
 }
 
 .investment-list-metric-item span {
+  width: 100%;
   overflow: hidden;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-finance-metric-label);
+  color: var(--color-text-muted);
   font-size: var(--font-size-12);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .investment-list-metric-item strong {
   display: block;
+  width: 100%;
   overflow: hidden;
   line-height: 1.2;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-finance-metric-value);
-  font-size: var(--font-size-14);
+  color: var(--color-success);
   font-weight: 700;
 }
 
-.investment-list-metric-item :deep(.amount-text) {
+.investment-list-metric-item :deep(.investment-list-metric-value) {
   display: block;
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.investment-list-metric-item :deep(.amount-text--positive) {
+.investment-list-metric-item :deep(.investment-list-metric-value.amount-text--positive) {
   color: var(--color-danger);
 }
 
-.investment-list-metric-item :deep(.amount-text--negative) {
+.investment-list-metric-item :deep(.investment-list-metric-value.amount-text--negative) {
   color: var(--color-success);
+}
+
+.investment-list-metric-item :deep(.investment-list-metric-value.amount-text--neutral) {
+  color: var(--color-text-muted);
 }
 
 .investment-account-list {

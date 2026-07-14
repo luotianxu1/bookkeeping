@@ -123,11 +123,25 @@ const investmentAccountCards = computed<InvestmentAccountCard[]>(() =>
 )
 
 const totalSummaryProfit = computed(() => Number(summary.value.cumulativeProfit ?? 0) + Number(summary.value.holdingProfit ?? 0))
+const totalSummaryProfitRate = computed(() => {
+  const currentCostAmount = Number(summary.value.totalMarketValue ?? 0) - Number(summary.value.holdingProfit ?? 0)
+  if (!Number.isFinite(currentCostAmount) || currentCostAmount <= 0) {
+    return 0
+  }
+  return (totalSummaryProfit.value / currentCostAmount) * 100
+})
+const summaryDayProfitText = computed(() =>
+  summary.value.dayProfit === null || summary.value.dayProfit === undefined ? '--' : formatMetricAmount(summary.value.dayProfit),
+)
+const summaryDayProfitRateText = computed(() =>
+  summary.value.dayProfitRate === null || summary.value.dayProfitRate === undefined ? '--' : `${formatMetricAmount(summary.value.dayProfitRate)}%`,
+)
 
 const summaryMetrics = computed(() => [
-  { label: '今日盈亏', value: summary.value.dayProfit, isRate: false },
   { label: '持仓盈亏', value: summary.value.holdingProfit, isRate: false },
+  { label: '持仓盈亏率', value: summary.value.holdingProfitRate, isRate: true },
   { label: '累计总收益', value: totalSummaryProfit.value, isRate: false },
+  { label: '累计总收益率', value: totalSummaryProfitRate.value, isRate: true },
 ])
 
 onMounted(() => {
@@ -320,17 +334,14 @@ async function confirmDelete() {
   }
 }
 
-function formatMetricValue(value: number | null | undefined, isRate: boolean, isCount = false) {
+function formatMetricValue(value: number | null | undefined, isRate: boolean) {
   if (value === null || value === undefined) {
     return '--'
   }
-  if (isCount) {
-    return String(value)
-  }
   if (isRate) {
-    return formatSignedRate(value)
+    return `${formatMetricAmount(value)}%`
   }
-  return formatSignedCurrency(value)
+  return formatMetricAmount(value)
 }
 
 function formatAmount(value: number, digits = 2) {
@@ -340,13 +351,15 @@ function formatAmount(value: number, digits = 2) {
   }).format(Math.abs(value))
 }
 
-function formatCurrency(value: number) {
-  return `¥${formatAmount(value)}`
+function formatMetricAmount(value: number, digits = 2) {
+  return new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value)
 }
 
-function formatSignedRate(value: number) {
-  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
-  return `${sign}${formatAmount(value)}%`
+function formatCurrency(value: number) {
+  return `¥${formatAmount(value)}`
 }
 
 function formatSignedCurrency(value: number) {
@@ -356,10 +369,6 @@ function formatSignedCurrency(value: number) {
 
 function formatNullableSignedCurrency(value?: number | null) {
   return value === null || value === undefined ? '--' : formatSignedCurrency(value)
-}
-
-function formatNullableSignedRate(value?: number | null) {
-  return value === null || value === undefined ? '--' : formatSignedRate(value)
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {
@@ -406,8 +415,9 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <span>同步于 {{ summary.lastSyncedAt ? new Date(summary.lastSyncedAt).toLocaleString('zh-CN') : '暂无' }}</span>
           </div>
           <div class="investment-list-summary-side">
-            <span>今日收益率</span>
-            <AmountText tag="strong" :value="formatNullableSignedRate(summary.dayProfitRate)" />
+            <span>今日盈亏</span>
+            <AmountText tag="strong" class="investment-list-summary-profit" font-size="18px" :value="summaryDayProfitText" />
+            <AmountText tag="span" class="investment-list-summary-rate" :value="summaryDayProfitRateText" />
           </div>
         </div>
 
@@ -417,6 +427,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <span>{{ metric.label }}</span>
               <AmountText
                 tag="strong"
+                class="investment-list-metric-value"
                 tone="auto"
                 font-size="12px"
                 :value="formatMetricValue(metric.value, metric.isRate)"

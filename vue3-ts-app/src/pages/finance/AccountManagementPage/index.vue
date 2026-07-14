@@ -175,6 +175,9 @@ const accountGroups = computed<AccountGroup[]>(() => {
     if (account.status !== 'active') {
       return
     }
+    if (isZeroAmount(getSignedBalance(account))) {
+      return
+    }
 
     const groupAccounts = groupedAccounts.get(account.accountTypeId) ?? []
     groupAccounts.push(account)
@@ -648,6 +651,10 @@ function getSignedBalance(account: Account) {
   }
   const accountType = accountTypes.value.find((type) => type.id === account.accountTypeId)
   return accountType?.balanceDirection === 'credit' ? rawBalance * -1 : rawBalance
+}
+
+function isZeroAmount(value: number) {
+  return Math.abs(value) < 0.005
 }
 
 function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {

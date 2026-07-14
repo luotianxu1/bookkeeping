@@ -9,16 +9,6 @@
   background: var(--color-bg-page);
 }
 
-.human-relation-manage-button {
-  min-height: var(--space-28);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-brand);
-  font-size: var(--font-size-14);
-  font-weight: 700;
-}
-
 .human-relation-page-message {
   min-height: 88px;
   display: grid;
@@ -150,8 +140,7 @@
   cursor: default;
 }
 
-.human-relation-account-card-top,
-.human-relation-account-card-bottom {
+.human-relation-account-card-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -217,8 +206,7 @@
 }
 
 .human-relation-account-card-phone,
-.human-relation-account-card-text p,
-.human-relation-account-card-bottom span {
+.human-relation-account-card-text p {
   color: var(--color-text-secondary);
   font-size: var(--font-size-12);
   font-weight: 500;
@@ -280,15 +268,10 @@
   font-weight: 600;
 }
 
-.human-relation-account-card-arrow {
-  color: var(--color-text-subtle);
-  font-size: var(--font-size-16);
-  font-weight: 700;
-}
-
 .human-relation-account-card-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 

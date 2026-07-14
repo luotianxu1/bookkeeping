@@ -33,11 +33,13 @@ type CalendarCell = {
 
 const period = ref<PeriodLabel>('月')
 const periodOptions: PeriodLabel[] = ['月', '年']
+const DETAIL_PAGE_SIZE = 10
 const summaryTab = ref<SummaryTab>('支出')
 const activeMonth = ref(buildMonthKey(new Date()))
 const activeYear = ref(new Date().getFullYear())
 const selectedDayKey = ref('')
 const selectedYearMonthKey = ref('')
+const detailCurrentPage = ref(1)
 const analysis = ref<TransactionAnalysis | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
@@ -179,6 +181,16 @@ const detailTransactions = computed(() => {
   }
   return source
 })
+const detailTotalItems = computed(() => detailTransactions.value.length)
+const detailTotalPages = computed(() => Math.max(1, Math.ceil(detailTotalItems.value / DETAIL_PAGE_SIZE)))
+const detailPagedTransactions = computed(() => {
+  const startIndex = (detailCurrentPage.value - 1) * DETAIL_PAGE_SIZE
+  return detailTransactions.value.slice(startIndex, startIndex + DETAIL_PAGE_SIZE)
+})
+const hasDetailPagination = computed(() => detailTotalPages.value > 1)
+const detailPaginationSummary = computed(() => `第 ${detailCurrentPage.value} / ${detailTotalPages.value} 页，共 ${detailTotalItems.value} 条`)
+const canGoPrevDetailPage = computed(() => detailCurrentPage.value > 1)
+const canGoNextDetailPage = computed(() => detailCurrentPage.value < detailTotalPages.value)
 const detailTitle = computed(() => {
   if (!currentDetailSummary.value) {
     return analysisPeriod.value === 'month' ? '暂无日期' : '暂无月份'
@@ -254,6 +266,16 @@ watch(isLoading, (loading) => {
 
 watch(isDark, () => {
   void syncCharts()
+})
+
+watch([summaryTab, selectedDayKey, selectedYearMonthKey, analysisPeriod], () => {
+  detailCurrentPage.value = 1
+})
+
+watch(detailTotalPages, (totalPages) => {
+  if (detailCurrentPage.value > totalPages) {
+    detailCurrentPage.value = totalPages
+  }
 })
 
 onMounted(() => {
@@ -519,6 +541,16 @@ function selectCalendarDay(key: string) {
 function selectYearMonth(key: string) {
   if (!key) return
   selectedYearMonthKey.value = key
+}
+
+function goToPrevDetailPage() {
+  if (!canGoPrevDetailPage.value) return
+  detailCurrentPage.value -= 1
+}
+
+function goToNextDetailPage() {
+  if (!canGoNextDetailPage.value) return
+  detailCurrentPage.value += 1
 }
 
 function buildMetricAmount(summaryItem: TransactionAnalysisPeriodSummary) {
@@ -929,13 +961,32 @@ function formatTime(value: string) {
             </div>
           </header>
           <p v-if="detailTransactions.length === 0" class="card-empty">这一天暂无对应记录</p>
-          <article v-for="row in detailTransactions" :key="row.id" class="day-detail-row">
+          <article v-for="row in detailPagedTransactions" :key="row.id" class="day-detail-row">
             <div>
               <strong>{{ row.title }}</strong>
               <span>{{ detailMetaText(row) }}</span>
             </div>
             <AmountText tag="strong" class="expense" :value="detailAmountText(row)" />
           </article>
+          <div v-if="hasDetailPagination" class="detail-pagination" aria-label="明细分页">
+            <button
+              class="detail-pagination-button"
+              type="button"
+              :disabled="!canGoPrevDetailPage"
+              @click="goToPrevDetailPage"
+            >
+              上一页
+            </button>
+            <span class="detail-pagination-summary">{{ detailPaginationSummary }}</span>
+            <button
+              class="detail-pagination-button"
+              type="button"
+              :disabled="!canGoNextDetailPage"
+              @click="goToNextDetailPage"
+            >
+              下一页
+            </button>
+          </div>
         </div>
       </section>
 
@@ -969,13 +1020,32 @@ function formatTime(value: string) {
             </div>
           </header>
           <p v-if="detailTransactions.length === 0" class="card-empty">这个月份暂无对应记录</p>
-          <article v-for="row in detailTransactions" :key="row.id" class="day-detail-row">
+          <article v-for="row in detailPagedTransactions" :key="row.id" class="day-detail-row">
             <div>
               <strong>{{ row.title }}</strong>
               <span>{{ detailMetaText(row) }}</span>
             </div>
             <AmountText tag="strong" class="expense" :value="detailAmountText(row)" />
           </article>
+          <div v-if="hasDetailPagination" class="detail-pagination" aria-label="明细分页">
+            <button
+              class="detail-pagination-button"
+              type="button"
+              :disabled="!canGoPrevDetailPage"
+              @click="goToPrevDetailPage"
+            >
+              上一页
+            </button>
+            <span class="detail-pagination-summary">{{ detailPaginationSummary }}</span>
+            <button
+              class="detail-pagination-button"
+              type="button"
+              :disabled="!canGoNextDetailPage"
+              @click="goToNextDetailPage"
+            >
+              下一页
+            </button>
+          </div>
         </div>
       </section>
     </template>

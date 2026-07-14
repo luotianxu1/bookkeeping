@@ -210,7 +210,7 @@
   align-content: center;
   gap: var(--space-6);
   border-radius: var(--radius-8);
-  background: transparent;
+  background: var(--color-bg-page);
 }
 
 .calendar-cell.empty {
@@ -242,12 +242,11 @@
 }
 
 .calendar-cell.active {
-  background: var(--color-brand);
+  background: var(--color-bg-brand-tint);
 }
 
-.calendar-cell.active .day,
-.calendar-cell.active .amount {
-  color: var(--color-white);
+.calendar-cell.active .day {
+  color: var(--color-brand);
 }
 
 .day-detail {
@@ -318,6 +317,42 @@
 .day-detail-row strong.expense {
   font-size: var(--font-size-12);
   font-weight: 600;
+}
+
+.detail-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: 12px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+}
+
+.detail-pagination-button {
+  min-width: 78px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(29, 78, 216, 0.14);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.88);
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.detail-pagination-button:disabled {
+  opacity: 0.45;
+}
+
+.detail-pagination-summary {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  text-align: center;
 }
 
 .year-grid {
