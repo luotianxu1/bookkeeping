@@ -57,11 +57,8 @@ const quoteRows = computed(() => {
   if (!currentGoldPrice.value?.stats) return []
 
   return [
-    { label: '今日开盘', value: formatMoney(currentGoldPrice.value.stats.openPrice) },
     { label: '最高', value: formatMoney(currentGoldPrice.value.stats.highPrice) },
     { label: '最低', value: formatMoney(currentGoldPrice.value.stats.lowPrice) },
-    { label: '买入参考', value: formatMoney(currentGoldPrice.value.stats.buyPrice) },
-    { label: '卖出参考', value: formatMoney(currentGoldPrice.value.stats.sellPrice) },
   ].filter((item) => item.value !== '--')
 })
 

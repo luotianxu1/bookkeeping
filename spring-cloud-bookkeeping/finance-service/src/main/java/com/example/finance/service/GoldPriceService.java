@@ -420,6 +420,11 @@ public class GoldPriceService {
     private long minimumTimestampForRange(String range) {
         long now = System.currentTimeMillis();
         return switch (range) {
+            case "1d" -> LocalDateTime.now(DEFAULT_ZONE)
+                .toLocalDate()
+                .atStartOfDay(DEFAULT_ZONE)
+                .toInstant()
+                .toEpochMilli();
             case "7d" -> now - 7L * 24 * 60 * 60 * 1000;
             case "30d" -> now - 30L * 24 * 60 * 60 * 1000;
             case "1y" -> now - 365L * 24 * 60 * 60 * 1000;

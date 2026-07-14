@@ -37,6 +37,16 @@
   gap: var(--space-12);
 }
 
+.overview-picker-row {
+  width: 100%;
+}
+
+.overview-picker-row :deep(.month-picker),
+.overview-picker-row :deep(.year-picker) {
+  width: 100%;
+  flex: 1 1 100%;
+}
+
 .overview-panel-head strong,
 .chart-card-head strong {
   display: block;
