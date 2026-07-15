@@ -865,9 +865,9 @@ function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line
       xAxisIndex: 0,
       yAxisIndex: 0,
       symbol: 'circle',
-      symbolSize: 10,
+      symbolSize: 6,
       itemStyle: { color: '#2563EB' },
-      emphasis: { scale: 1.15 },
+      emphasis: { scale: 1.1 },
       z: 5,
     })
   }
@@ -879,9 +879,9 @@ function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line
       xAxisIndex: 0,
       yAxisIndex: 0,
       symbol: 'diamond',
-      symbolSize: 12,
+      symbolSize: 7,
       itemStyle: { color: '#DC2626' },
-      emphasis: { scale: 1.15 },
+      emphasis: { scale: 1.1 },
       z: 5,
     })
   }

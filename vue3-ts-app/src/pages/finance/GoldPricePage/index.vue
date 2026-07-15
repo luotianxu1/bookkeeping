@@ -8,6 +8,11 @@ import { getGoldPrices, type GoldPrice, type GoldPriceRange } from '@/api/module
 import { useTheme } from '@/utils/theme'
 
 type TrendKey = '1日' | '7日' | '30日' | '1年'
+type ChartExtremum = {
+  index: number
+  label: string
+  price: number
+}
 const PRICE_REFRESH_INTERVAL_MS = 60_000
 
 const activeTrend = ref<TrendKey>('1日')
@@ -52,6 +57,32 @@ const trendData = computed(() => ({
   x: chartPoints.value.map((item) => item.label),
   y: chartPoints.value.map((item) => item.price),
 }))
+
+const chartExtrema = computed(() => {
+  const validPoints = chartPoints.value
+    .map((item, index) => ({ ...item, index }))
+    .filter((item) => (
+      Number.isFinite(Number(item.price)) && Number(item.price) > 0
+    ))
+
+  if (validPoints.length === 0) {
+    return { high: null, low: null } as { high: ChartExtremum | null; low: ChartExtremum | null }
+  }
+
+  return validPoints.reduce(
+    (result, item) => {
+      const price = Number(item.price)
+      if (!result.high || price > result.high.price) {
+        result.high = { index: item.index, label: item.label, price }
+      }
+      if (!result.low || price < result.low.price) {
+        result.low = { index: item.index, label: item.label, price }
+      }
+      return result
+    },
+    { high: null, low: null } as { high: ChartExtremum | null; low: ChartExtremum | null },
+  )
+})
 
 const quoteRows = computed(() => {
   if (!currentGoldPrice.value?.stats) return []
@@ -134,7 +165,19 @@ const chartOption = computed<EChartsCoreOption>(() => {
   const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
   const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
   const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
+  const dangerColor = rootStyle.getPropertyValue('--color-danger').trim()
+  const successColor = rootStyle.getPropertyValue('--color-success').trim()
   const xLabels = trendData.value.x
+  const extremaMarkPoints = buildExtremaMarkPoints(
+    chartExtrema.value.high,
+    chartExtrema.value.low,
+    xLabels,
+    dangerColor,
+    successColor,
+    tooltipBg,
+    tooltipBorder,
+    tooltipText,
+  )
 
   return {
     animation: false,
@@ -147,7 +190,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
     },
     xAxis: {
       type: 'category',
-      boundaryGap: false,
+      boundaryGap: activeRange.value === '1y',
       data: xLabels,
       axisLine: { lineStyle: { color: axisLine } },
       axisTick: { show: false },
@@ -189,10 +232,85 @@ const chartOption = computed<EChartsCoreOption>(() => {
             ],
           },
         },
+        markPoint: {
+          symbol: 'circle',
+          symbolSize: 9,
+          label: {
+            color: tooltipText,
+            fontSize: 10,
+            fontWeight: 700,
+          },
+          data: extremaMarkPoints,
+        },
       },
     ],
   }
 })
+
+function buildExtremaMarkPoints(
+  high: ChartExtremum | null,
+  low: ChartExtremum | null,
+  labels: string[],
+  highColor: string,
+  lowColor: string,
+  labelBg: string,
+  labelBorder: string,
+  labelText: string,
+) {
+  const baseLabel = {
+    color: labelText,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: [2, 0],
+    fontSize: 10,
+    fontWeight: 700,
+  }
+
+  return [
+    high
+      ? {
+        name: '最高价',
+        coord: [high.index, high.price],
+        value: formatMoney(high.price),
+        itemStyle: {
+          color: highColor,
+          borderColor: labelBg || labelBorder,
+          borderWidth: 2,
+        },
+        label: {
+          ...baseLabel,
+          formatter: formatMoney(high.price),
+          position: getExtremumLabelPosition(high.index, labels),
+        },
+      }
+      : null,
+    low && (!high || low.label !== high.label || low.price !== high.price)
+      ? {
+        name: '最低价',
+        coord: [low.index, low.price],
+        value: formatMoney(low.price),
+        itemStyle: {
+          color: lowColor,
+          borderColor: labelBg || labelBorder,
+          borderWidth: 2,
+        },
+        label: {
+          ...baseLabel,
+          formatter: formatMoney(low.price),
+          position: getExtremumLabelPosition(low.index, labels),
+        },
+      }
+      : null,
+  ].filter(Boolean)
+}
+
+function getExtremumLabelPosition(index: number, labels: string[]) {
+  if (index > labels.length / 2) {
+    return 'left'
+  }
+
+  return 'right'
+}
 
 function shouldShowAxisLabel(index: number, labels: string[]) {
   if (activeRange.value !== '7d') {
