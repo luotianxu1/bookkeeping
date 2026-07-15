@@ -209,7 +209,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
         smooth: activeRange.value !== '1d',
         showSymbol: false,
         data: trendData.value.y,
-        lineStyle: { width: 3, color: lineColor },
+        lineStyle: { width: 1.5, color: lineColor },
         areaStyle: {
           color: {
             type: 'linear',

@@ -8,7 +8,10 @@ export default defineConfig({
         },
     },
     server: {
-        allowedHosts: ['mk6189tf2224.vicp.fun'],
+        host: '0.0.0.0',
+        port: 5173,
+        strictPort: true,
+        allowedHosts: ['dvtr44606945.vicp.fun', '.trycloudflare.com'],
         proxy: {
             '/auth-api': {
                 target: 'http://localhost:8081',
@@ -36,6 +39,11 @@ export default defineConfig({
                 rewrite: (path) => path.replace(/^\/api-proxy/, ''),
             },
         },
+    },
+    preview: {
+        host: '0.0.0.0',
+        port: 4173,
+        strictPort: true,
     },
     plugins: [vue()],
 })

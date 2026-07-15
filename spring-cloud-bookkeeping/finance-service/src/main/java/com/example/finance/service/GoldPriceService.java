@@ -350,7 +350,7 @@ public class GoldPriceService {
     private List<GoldPriceResponse.GoldChartPoint> fetchUnifiedJijinhaoPoints(String range) {
         try {
             return switch (range) {
-                case "1d" -> fetchJijinhaoHistoryPoints(6, range);
+                case "1d" -> fetchJijinhaoHistoryPoints(1, range, 500);
                 case "7d" -> fetchJijinhaoHistoryPoints(2, range);
                 case "30d" -> fetchJijinhaoHistoryPoints(3, range);
                 case "1y" -> fetchJijinhaoHistoryPoints(3, range, 400);

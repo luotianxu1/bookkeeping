@@ -3,6 +3,7 @@
 ## Project Structure
 
 Monorepo with two independent components:
+
 - `vue3-ts-app/` — Vue 3 mobile-first frontend
 - `spring-cloud-bookkeeping/` — Spring Cloud Java backend (Maven multi-module)
 - `database/` — MySQL schema files (numbered for sequential migration)
@@ -51,6 +52,7 @@ mvn clean install -pl common,auth-service   # single module
 ## Database
 
 No migration framework — manual SQL execution. Files are numbered:
+
 ```bash
 mysql -u root -p bookkeeping_app < database/001_create_database_and_users.mysql.sql
 mysql -u root -p bookkeeping_app < database/002_create_account_types.mysql.sql
@@ -65,5 +67,8 @@ mysql -u root -p bookkeeping_app < database/002_create_account_types.mysql.sql
 ## Environment Variables (Frontend)
 
 In `vue3-ts-app/.env` or shell:
-- `VITE_API_BASE_URL` — default API base (fallback: http://localhost:8081)
+
+- `VITE_API_BASE_URL` — default API base (fallback: <http://localhost:8081>)
 - `VITE_AUTH_API_BASE_URL`, `VITE_FINANCE_API_BASE_URL`, `VITE_TOOL_API_BASE_URL`, `VITE_FOOD_API_BASE_URL`
+
+cloudflared tunnel --url <http://localhost:5173>
