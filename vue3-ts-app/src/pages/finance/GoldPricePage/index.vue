@@ -84,15 +84,6 @@ const chartExtrema = computed(() => {
   )
 })
 
-const quoteRows = computed(() => {
-  if (!currentGoldPrice.value?.stats) return []
-
-  return [
-    { label: '最高', value: formatMoney(currentGoldPrice.value.stats.highPrice) },
-    { label: '最低', value: formatMoney(currentGoldPrice.value.stats.lowPrice) },
-  ].filter((item) => item.value !== '--')
-})
-
 const showPriceFallback = computed(() => (
   !isLoadingGoldPrice.value && !hasSpotGold.value && !hasLondonGold.value
 ))
@@ -558,14 +549,6 @@ onBeforeUnmount(() => {
       <p v-if="!isLoadingTrend && chartPoints.length === 0" class="gold-price-message">
         暂无可靠走势数据
       </p>
-    </section>
-
-    <section class="quote-card" aria-label="关键报价">
-      <div v-for="item in quoteRows" :key="item.label" class="quote-row">
-        <span>{{ item.label }}</span>
-        <AmountText tag="strong" :value="item.value" />
-      </div>
-      <p v-if="quoteRows.length === 0" class="gold-price-message">暂无报价数据</p>
     </section>
 
     <section class="jewelry-card" aria-label="首饰金价参考">

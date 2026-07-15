@@ -1093,6 +1093,14 @@ export interface InvestmentTransaction {
   updatedAt: string
 }
 
+export interface InvestmentTransactionPage {
+  items: InvestmentTransaction[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
 export type InvestmentAutoInvestFrequency = 'daily' | 'weekly' | 'monthly'
 
 export interface InvestmentAutoInvestPlan {
@@ -1541,6 +1549,10 @@ export function deleteInvestmentPosition(id: number, userId: number) {
 
 export function getInvestmentTransactions(params: { userId: number; accountId?: number; positionId?: number }) {
   return requestGet<InvestmentTransaction[]>(financeRequest, '/api/finance/investments/transactions', { params })
+}
+
+export function getInvestmentTransactionPage(params: { userId: number; accountId?: number; positionId?: number; page?: number; pageSize?: number }) {
+  return requestGet<InvestmentTransactionPage>(financeRequest, '/api/finance/investments/transactions/page', { params })
 }
 
 export function createInvestmentTransaction(params: SaveInvestmentTransactionParams) {

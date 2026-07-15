@@ -573,6 +573,42 @@
   font-weight: 700;
 }
 
+.investment-detail-transactions-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-bg-soft-2);
+}
+
+.investment-detail-transactions-pagination-button {
+  min-width: 88px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(29, 78, 216, 0.14);
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.88);
+  color: var(--color-brand);
+  font-size: var(--font-size-13);
+  font-weight: 700;
+}
+
+.investment-detail-transactions-pagination-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.investment-detail-transactions-pagination-summary {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
 .investment-detail-modal-form {
   display: grid;
   gap: var(--space-8);

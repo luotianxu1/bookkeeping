@@ -17,6 +17,7 @@ import com.example.finance.dto.InvestmentProductResponse;
 import com.example.finance.dto.InvestmentSummaryResponse;
 import com.example.finance.dto.InvestmentTrendResponse;
 import com.example.finance.dto.InvestmentTransactionRequest;
+import com.example.finance.dto.InvestmentTransactionPageResponse;
 import com.example.finance.dto.InvestmentTransactionResponse;
 import com.example.finance.dto.FundProfitForecastResponse;
 import com.example.finance.dto.FundProfitPageResponse;
@@ -186,6 +187,18 @@ public class InvestmentController {
         @RequestParam(name = "positionId", required = false) Long positionId
     ) {
         return Result.ok(investmentService.listTransactions(userId, accountId, positionId));
+    }
+
+    @GetMapping("/transactions/page")
+    @Operation(summary = "分页查询投资交易流水")
+    public Result<InvestmentTransactionPageResponse> pageTransactions(
+        @RequestParam(name = "userId") @NotNull Long userId,
+        @RequestParam(name = "accountId", required = false) Long accountId,
+        @RequestParam(name = "positionId", required = false) Long positionId,
+        @RequestParam(name = "page", defaultValue = "1") Integer page,
+        @RequestParam(name = "pageSize", defaultValue = "20") Integer pageSize
+    ) {
+        return Result.ok(investmentService.pageTransactions(userId, accountId, positionId, page, pageSize));
     }
 
     @PostMapping("/transactions")

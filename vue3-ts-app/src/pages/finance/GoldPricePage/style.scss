@@ -36,7 +36,6 @@
 
 .spot-london-card,
 .trend-card,
-.quote-card,
 .jewelry-card {
   display: grid;
   gap: var(--space-6);
@@ -173,29 +172,6 @@
 .trend-chart {
   width: 100%;
   height: 210px;
-}
-
-.quote-card {
-  grid-template-columns: 1fr 1fr;
-}
-
-.quote-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-}
-
-.quote-row span {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-12);
-  font-weight: 500;
-}
-
-.quote-row strong {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-12);
-  font-weight: 600;
 }
 
 .jewelry-row {

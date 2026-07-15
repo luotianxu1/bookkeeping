@@ -38,6 +38,7 @@ import com.example.finance.dto.InvestmentTrendContributorResponse;
 import com.example.finance.dto.InvestmentTrendPointResponse;
 import com.example.finance.dto.InvestmentTrendResponse;
 import com.example.finance.dto.InvestmentTransactionRequest;
+import com.example.finance.dto.InvestmentTransactionPageResponse;
 import com.example.finance.dto.InvestmentTransactionResponse;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
@@ -2219,17 +2220,68 @@ public class InvestmentService {
     }
 
     public List<InvestmentTransactionResponse> listTransactions(Long userId, Long accountId, Long positionId) {
-        List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
-            .eq(userId != null, InvestmentTransactionEntity::getUserId, userId)
-            .eq(accountId != null, InvestmentTransactionEntity::getAccountId, accountId)
-            .eq(positionId != null, InvestmentTransactionEntity::getPositionId, positionId)
-            .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
+        List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(buildTransactionQuery(userId, accountId, positionId)
             .orderByDesc(InvestmentTransactionEntity::getTradeAt)
             .orderByDesc(InvestmentTransactionEntity::getId));
         if (transactions.isEmpty() && positionId != null) {
             return inferInitialTransaction(userId, accountId, positionId);
         }
         return toTransactionResponses(transactions);
+    }
+
+    public InvestmentTransactionPageResponse pageTransactions(Long userId, Long accountId, Long positionId, Integer page, Integer pageSize) {
+        int resolvedPageSize = sanitizePageSize(pageSize);
+        int resolvedPage = Math.max(1, page == null ? 1 : page);
+        Long totalCount = transactionMapper.selectCount(buildTransactionQuery(userId, accountId, positionId));
+        long total = totalCount == null ? 0 : totalCount;
+
+        if (total == 0 && positionId != null) {
+            List<InvestmentTransactionResponse> inferredTransactions = inferInitialTransaction(userId, accountId, positionId);
+            return buildTransactionPageResponse(inferredTransactions, inferredTransactions.size(), resolvedPage, resolvedPageSize);
+        }
+
+        int totalPages = Math.max(1, (int) Math.ceil(total / (double) resolvedPageSize));
+        resolvedPage = Math.min(resolvedPage, totalPages);
+        long offset = (long) (resolvedPage - 1) * resolvedPageSize;
+        List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(buildTransactionQuery(userId, accountId, positionId)
+            .orderByDesc(InvestmentTransactionEntity::getTradeAt)
+            .orderByDesc(InvestmentTransactionEntity::getId)
+            .last("LIMIT " + offset + ", " + resolvedPageSize));
+        return buildTransactionPageResponse(toTransactionResponses(transactions), total, resolvedPage, resolvedPageSize);
+    }
+
+    private LambdaQueryWrapper<InvestmentTransactionEntity> buildTransactionQuery(Long userId, Long accountId, Long positionId) {
+        return new LambdaQueryWrapper<InvestmentTransactionEntity>()
+            .eq(userId != null, InvestmentTransactionEntity::getUserId, userId)
+            .eq(accountId != null, InvestmentTransactionEntity::getAccountId, accountId)
+            .eq(positionId != null, InvestmentTransactionEntity::getPositionId, positionId)
+            .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS);
+    }
+
+    private int sanitizePageSize(Integer pageSize) {
+        if (pageSize == null || pageSize <= 0) {
+            return 20;
+        }
+        return Math.min(pageSize, 100);
+    }
+
+    private InvestmentTransactionPageResponse buildTransactionPageResponse(
+        List<InvestmentTransactionResponse> items,
+        long total,
+        int page,
+        int pageSize
+    ) {
+        int totalPages = Math.max(1, (int) Math.ceil(total / (double) pageSize));
+        int resolvedPage = Math.min(Math.max(1, page), totalPages);
+        int fromIndex = total == 0 ? 0 : Math.min((resolvedPage - 1) * pageSize, items.size());
+        int toIndex = total == 0 ? 0 : Math.min(fromIndex + pageSize, items.size());
+        InvestmentTransactionPageResponse response = new InvestmentTransactionPageResponse();
+        response.setItems(items.size() > pageSize ? items.subList(fromIndex, toIndex) : items);
+        response.setTotal(total);
+        response.setPage(resolvedPage);
+        response.setPageSize(pageSize);
+        response.setTotalPages(totalPages);
+        return response;
     }
 
     @Transactional

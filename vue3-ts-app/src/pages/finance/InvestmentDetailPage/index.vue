@@ -18,6 +18,7 @@ import {
   getAccounts,
   getInvestmentAutoInvestPlans,
   getInvestmentPositionDetail,
+  getInvestmentTransactionPage,
   getInvestmentTransactions,
   updateInvestmentAutoInvestPlan,
   updateInvestmentPosition,
@@ -30,6 +31,7 @@ import {
   type InvestmentDividendRecord,
   type InvestmentFundRedeemFeeOption,
   type InvestmentPosition,
+  type InvestmentTransactionPage,
   type InvestmentTransaction,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -93,7 +95,17 @@ const selectedFundTrendRange = ref<FundTrendRange>('3m')
 const fullFundChartPoints = ref<InvestmentChartPoint[]>([])
 const fundTrendValueMap = ref<Record<string, FundTrendValueEntry>>({})
 const fundTrendValueMode = ref<FundTrendValueMode>('cumulative')
+const TRANSACTION_PAGE_SIZE = 20
+const transactionPageItems = ref<InvestmentTransaction[]>([])
+const transactionTotal = ref(0)
+const transactionPageSize = ref(TRANSACTION_PAGE_SIZE)
+const isLoadingTransactionPage = ref(false)
 let chart: ECharts | null = null
+const TRADE_MARKER_COLORS = {
+  buy: '#DC2626',
+  sell: '#16A34A',
+} as const
+const currentTransactionPage = ref(1)
 
 const positionId = computed(() => {
   const raw = Array.isArray(route.query.positionId) ? route.query.positionId[0] : route.query.positionId
@@ -144,6 +156,7 @@ const todayTone = computed<'positive' | 'negative' | 'neutral'>(() => {
   return resolvedValue > 0 ? 'positive' : 'negative'
 })
 const dividendRecords = computed<InvestmentDividendRecord[]>(() => detail.value?.dividendRecords ?? [])
+const showDividendRecordsSection = computed(() => dividendRecords.value.length > 0)
 const showTodayMetrics = computed(() => {
   if (currentPosition.value?.subscriptionStatus === 'pending') {
     return false
@@ -157,11 +170,19 @@ const displayUpdatedAt = computed(() => {
   const syncedAt = formatDateTimeLabel(currentPosition.value?.lastSyncedAt)
   return syncedAt === '--' ? '同步于 --' : `同步于 ${syncedAt}`
 })
-const transactionCountText = computed(() => `共 ${transactions.value.length} 条`)
+const transactionCountText = computed(() => `共 ${transactionTotal.value} 条`)
+const totalTransactionPages = computed(() => Math.max(1, Math.ceil(transactionTotal.value / transactionPageSize.value)))
+const hasTransactionPagination = computed(() => totalTransactionPages.value > 1)
+const transactionPaginationSummary = computed(() =>
+  `第 ${currentTransactionPage.value} / ${totalTransactionPages.value} 页，共 ${transactionTotal.value} 条`,
+)
+const canGoPrevTransactionPage = computed(() => currentTransactionPage.value > 1)
+const canGoNextTransactionPage = computed(() => currentTransactionPage.value < totalTransactionPages.value)
 const currentPosition = computed<InvestmentPosition | null>(() => detail.value?.position ?? null)
 const isPendingSubscription = computed(() => currentPosition.value?.subscriptionStatus === 'pending')
 const isFundPosition = computed(() => (detail.value?.productType || currentPosition.value?.productType) === 'fund')
 const showAutoInvestSection = computed(() => isFundPosition.value && !isPendingSubscription.value)
+const showAutoInvestPlansSection = computed(() => showAutoInvestSection.value && autoInvestPlans.value.length > 0)
 const currentUnitName = computed(() => detail.value?.unitName || detail.value?.position.unitName || '份')
 const showDividendReminder = computed(() =>
   isFundPosition.value
@@ -425,6 +446,12 @@ watch(selectedFundTrendRange, () => {
   applyFundTrendRange()
 })
 
+watch(totalTransactionPages, (totalPages) => {
+  if (currentTransactionPage.value > totalPages) {
+    currentTransactionPage.value = totalPages
+  }
+})
+
 async function loadDetail() {
   if (!positionId.value) {
     pageError.value = '投资资产不存在'
@@ -439,11 +466,14 @@ async function loadDetail() {
     fundTrendValueMode.value = 'cumulative'
     selectedFundTrendRange.value = '3m'
     const currentUser = getStoredCurrentUser()
-    const [detailData, transactionList, planList, accountList] = await Promise.all([
+    const [detailData, transactionList, transactionPage, planList, accountList] = await Promise.all([
       getInvestmentPositionDetail(positionId.value),
       currentUser
         ? getInvestmentTransactions({ userId: currentUser.id, positionId: positionId.value })
         : Promise.resolve([]),
+      currentUser
+        ? getInvestmentTransactionPage({ userId: currentUser.id, positionId: positionId.value, page: 1, pageSize: TRANSACTION_PAGE_SIZE })
+        : Promise.resolve({ items: [], total: 0, page: 1, pageSize: TRANSACTION_PAGE_SIZE, totalPages: 1 }),
       currentUser
         ? getInvestmentAutoInvestPlans({ userId: currentUser.id, positionId: positionId.value })
         : Promise.resolve([]),
@@ -453,6 +483,7 @@ async function loadDetail() {
     ])
     detail.value = detailData
     transactions.value = transactionList
+    applyTransactionPage(transactionPage)
     autoInvestPlans.value = planList
     fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
     loadExternalMarketData(detailData)
@@ -866,7 +897,7 @@ function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line
       yAxisIndex: 0,
       symbol: 'circle',
       symbolSize: 6,
-      itemStyle: { color: '#2563EB' },
+      itemStyle: { color: TRADE_MARKER_COLORS.buy },
       emphasis: { scale: 1.1 },
       z: 5,
     })
@@ -880,7 +911,7 @@ function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line
       yAxisIndex: 0,
       symbol: 'diamond',
       symbolSize: 7,
-      itemStyle: { color: '#DC2626' },
+      itemStyle: { color: TRADE_MARKER_COLORS.sell },
       emphasis: { scale: 1.1 },
       z: 5,
     })
@@ -1868,6 +1899,53 @@ function formatTradeTime(value: string) {
   return `${month}-${day} ${time}`
 }
 
+function applyTransactionPage(pageData: InvestmentTransactionPage) {
+  transactionPageItems.value = pageData.items ?? []
+  transactionTotal.value = Number(pageData.total ?? 0)
+  transactionPageSize.value = Number(pageData.pageSize || TRANSACTION_PAGE_SIZE)
+  currentTransactionPage.value = Math.max(1, Number(pageData.page || 1))
+}
+
+async function loadTransactionPage(page: number) {
+  if (isLoadingTransactionPage.value || !positionId.value) {
+    return
+  }
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    applyTransactionPage({ items: [], total: 0, page: 1, pageSize: TRANSACTION_PAGE_SIZE, totalPages: 1 })
+    return
+  }
+
+  isLoadingTransactionPage.value = true
+  try {
+    const pageData = await getInvestmentTransactionPage({
+      userId: currentUser.id,
+      positionId: positionId.value,
+      page,
+      pageSize: TRANSACTION_PAGE_SIZE,
+    })
+    applyTransactionPage(pageData)
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : '交易记录加载失败', 'error')
+  } finally {
+    isLoadingTransactionPage.value = false
+  }
+}
+
+function goToPrevTransactionPage() {
+  if (!canGoPrevTransactionPage.value || isLoadingTransactionPage.value) {
+    return
+  }
+  void loadTransactionPage(currentTransactionPage.value - 1)
+}
+
+function goToNextTransactionPage() {
+  if (!canGoNextTransactionPage.value || isLoadingTransactionPage.value) {
+    return
+  }
+  void loadTransactionPage(currentTransactionPage.value + 1)
+}
+
 function formatDateInput(value: Date) {
   const year = value.getFullYear()
   const month = String(value.getMonth() + 1).padStart(2, '0')
@@ -2203,12 +2281,12 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
         </div>
       </section>
 
-      <section class="investment-detail-card" aria-label="近一年分红记录">
+      <section v-if="showDividendRecordsSection" class="investment-detail-card" aria-label="近一年分红记录">
         <header class="investment-detail-card-head">
           <h2>近一年分红记录</h2>
           <span>{{ dividendRecords.length }} 条</span>
         </header>
-        <div v-if="dividendRecords.length > 0" class="investment-detail-dividend-list">
+        <div class="investment-detail-dividend-list">
           <article
             v-for="entry in dividendRecords"
             :key="entry.id"
@@ -2233,15 +2311,14 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
             </div>
           </article>
         </div>
-        <p v-else class="investment-detail-empty">近一年暂无分红记录</p>
       </section>
 
-      <section v-if="showAutoInvestSection" class="investment-detail-card" aria-label="定投计划">
+      <section v-if="showAutoInvestPlansSection" class="investment-detail-card" aria-label="定投计划">
         <header class="investment-detail-card-head">
           <h2>定投计划</h2>
         </header>
 
-        <div v-if="autoInvestPlans.length > 0" class="investment-auto-invest-list">
+        <div class="investment-auto-invest-list">
           <article
             v-for="plan in autoInvestPlans"
             :key="plan.id"
@@ -2287,7 +2364,6 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
             </div>
           </article>
         </div>
-        <p v-else class="investment-detail-empty">暂无定投计划</p>
       </section>
 
       <section class="investment-detail-transactions-wrap" aria-label="交易记录">
@@ -2298,7 +2374,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
 
         <section class="investment-detail-transactions-card">
           <article
-            v-for="entry in transactions"
+            v-for="entry in transactionPageItems"
             :key="entry.id"
             class="investment-detail-transaction-item"
           >
@@ -2316,7 +2392,27 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
               />
             </div>
           </article>
-          <p v-if="transactions.length === 0" class="investment-detail-empty">暂无交易记录</p>
+          <p v-if="transactionTotal === 0" class="investment-detail-empty">暂无交易记录</p>
+
+          <div v-if="hasTransactionPagination" class="investment-detail-transactions-pagination" aria-label="交易记录分页">
+            <button
+              class="investment-detail-transactions-pagination-button"
+              type="button"
+              :disabled="!canGoPrevTransactionPage || isLoadingTransactionPage"
+              @click="goToPrevTransactionPage"
+            >
+              上一页
+            </button>
+            <span class="investment-detail-transactions-pagination-summary">{{ transactionPaginationSummary }}</span>
+            <button
+              class="investment-detail-transactions-pagination-button"
+              type="button"
+              :disabled="!canGoNextTransactionPage || isLoadingTransactionPage"
+              @click="goToNextTransactionPage"
+            >
+              下一页
+            </button>
+          </div>
         </section>
       </section>
     </template>
