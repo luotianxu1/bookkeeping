@@ -21,6 +21,8 @@ import java.util.List;
 public class GoldPriceService {
 
     private static final BigDecimal TROY_OUNCE_GRAMS = new BigDecimal("31.1034768");
+    private static final String DOMESTIC_GOLD_CODE = "JO_71";
+    private static final String LONDON_GOLD_CODE = "JO_92233";
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Shanghai");
     private static final int CONNECT_TIMEOUT_MILLIS = 1500;
     private static final int READ_TIMEOUT_MILLIS = 2000;
@@ -115,76 +117,112 @@ public class GoldPriceService {
     }
 
     private GoldPriceResponse buildCurrentResponse(BigDecimal usdCny, JsonNode quotes) {
-        if (usdCny == null || usdCny.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException("汇率数据缺失");
-        }
+        JsonNode domesticGoldNode = quotes.path(DOMESTIC_GOLD_CODE);
+        JsonNode londonGoldNode = quotes.path(LONDON_GOLD_CODE);
+        BigDecimal domesticPrice = firstDecimal(domesticGoldNode, "price", "last", "last_price", "close", "q63", "q2");
+        BigDecimal domesticOpen = firstDecimal(domesticGoldNode, "open_price", "open", "openPrice", "q1");
+        BigDecimal domesticHigh = firstDecimal(domesticGoldNode, "high_price", "high", "highPrice", "q3");
+        BigDecimal domesticLow = firstDecimal(domesticGoldNode, "low_price", "low", "lowPrice", "q4");
+        BigDecimal domesticBuy = firstDecimal(domesticGoldNode, "q5", "buy", "bid");
+        BigDecimal domesticSell = firstDecimal(domesticGoldNode, "q6", "sell", "ask");
+        BigDecimal domesticChange = firstDecimal(domesticGoldNode, "change", "ch", "change_price", "changePrice", "q70");
+        BigDecimal domesticChangePercent = firstDecimal(domesticGoldNode, "change_percent", "chp", "change_margin", "changePercent", "q80");
 
-        JsonNode goldNode = quotes.path("JO_92233");
-        BigDecimal londonPrice = firstDecimal(goldNode, "price", "last", "last_price", "close", "ask");
+        BigDecimal londonPrice = firstDecimal(londonGoldNode, "price", "last", "last_price", "close", "ask");
         if (londonPrice == null) {
-            londonPrice = firstDecimal(goldNode, "q63");
+            londonPrice = firstDecimal(londonGoldNode, "q63");
         }
-        BigDecimal londonOpen = firstDecimal(goldNode, "open_price", "open", "openPrice");
+        BigDecimal londonOpen = firstDecimal(londonGoldNode, "open_price", "open", "openPrice");
         if (londonOpen == null) {
-            londonOpen = firstDecimal(goldNode, "q1");
+            londonOpen = firstDecimal(londonGoldNode, "q1");
         }
-        BigDecimal londonHigh = firstDecimal(goldNode, "high_price", "high", "highPrice");
+        BigDecimal londonHigh = firstDecimal(londonGoldNode, "high_price", "high", "highPrice");
         if (londonHigh == null) {
-            londonHigh = firstDecimal(goldNode, "q3");
+            londonHigh = firstDecimal(londonGoldNode, "q3");
         }
-        BigDecimal londonLow = firstDecimal(goldNode, "low_price", "low", "lowPrice");
+        BigDecimal londonLow = firstDecimal(londonGoldNode, "low_price", "low", "lowPrice");
         if (londonLow == null) {
-            londonLow = firstDecimal(goldNode, "q4");
+            londonLow = firstDecimal(londonGoldNode, "q4");
         }
-        BigDecimal londonBuy = firstDecimal(goldNode, "q5");
-        BigDecimal londonSell = firstDecimal(goldNode, "q6");
-        BigDecimal londonChange = firstDecimal(goldNode, "change", "ch", "change_price", "changePrice");
+        BigDecimal londonChange = firstDecimal(londonGoldNode, "change", "ch", "change_price", "changePrice");
         if (londonChange == null) {
-            londonChange = firstDecimal(goldNode, "q70");
+            londonChange = firstDecimal(londonGoldNode, "q70");
         }
-        BigDecimal londonChangePercent = firstDecimal(goldNode, "change_percent", "chp", "change_margin", "changePercent");
+        BigDecimal londonChangePercent = firstDecimal(londonGoldNode, "change_percent", "chp", "change_margin", "changePercent");
         if (londonChangePercent == null) {
-            londonChangePercent = firstDecimal(goldNode, "q80");
+            londonChangePercent = firstDecimal(londonGoldNode, "q80");
         }
 
-        if (londonPrice == null || londonPrice.compareTo(BigDecimal.ZERO) <= 0) {
+        if ((domesticPrice == null || domesticPrice.compareTo(BigDecimal.ZERO) <= 0)
+            && (londonPrice == null || londonPrice.compareTo(BigDecimal.ZERO) <= 0)) {
             throw new IllegalStateException("金价数据缺少价格字段");
         }
 
-        if (londonOpen == null) {
+        if ((domesticPrice == null || domesticPrice.compareTo(BigDecimal.ZERO) <= 0)
+            && usdCny != null && usdCny.compareTo(BigDecimal.ZERO) > 0) {
+            domesticPrice = usdOzToCnyGram(londonPrice, usdCny);
+            domesticChange = londonChange == null ? null : usdOzToCnyGram(londonChange, usdCny);
+        }
+        if (domesticPrice == null || domesticPrice.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalStateException("人民币金价数据缺少价格字段");
+        }
+
+        if (domesticOpen == null) {
+            domesticOpen = domesticChange == null
+                ? domesticPrice.subtract(defaultSpotDelta(domesticPrice))
+                : domesticPrice.subtract(domesticChange);
+        }
+        if (domesticChange == null) {
+            domesticChange = domesticPrice.subtract(domesticOpen);
+        }
+        if (domesticChangePercent == null && domesticOpen.compareTo(BigDecimal.ZERO) > 0) {
+            domesticChangePercent = domesticChange.divide(domesticOpen, 6, RoundingMode.HALF_UP)
+                .multiply(new BigDecimal("100"));
+        }
+        if (domesticHigh == null) {
+            domesticHigh = domesticPrice.max(domesticOpen).add(defaultSpotDelta(domesticPrice));
+        }
+        if (domesticLow == null) {
+            domesticLow = domesticPrice.min(domesticOpen).subtract(defaultSpotDelta(domesticPrice));
+        }
+        if (domesticBuy == null || domesticBuy.compareTo(BigDecimal.ZERO) <= 0) {
+            domesticBuy = domesticPrice.add(new BigDecimal("0.15"));
+        }
+        if (domesticSell == null || domesticSell.compareTo(BigDecimal.ZERO) <= 0) {
+            domesticSell = domesticPrice.subtract(new BigDecimal("0.15"));
+        }
+
+        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0 && londonOpen == null) {
             londonOpen = londonPrice.subtract(defaultLondonDelta(londonPrice));
         }
-        if (londonChange == null) {
+        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0 && londonChange == null) {
             londonChange = londonPrice.subtract(londonOpen);
         }
-        if (londonChangePercent == null && londonOpen.compareTo(BigDecimal.ZERO) > 0) {
+        if (londonChangePercent == null && londonOpen != null && londonOpen.compareTo(BigDecimal.ZERO) > 0) {
             londonChangePercent = londonChange.divide(londonOpen, 6, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
         }
-        if (londonHigh == null) {
+        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0 && londonHigh == null) {
             londonHigh = londonPrice.max(londonOpen).add(defaultLondonDelta(londonPrice));
         }
-        if (londonLow == null) {
+        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0 && londonLow == null) {
             londonLow = londonPrice.min(londonOpen).subtract(defaultLondonDelta(londonPrice));
         }
 
-        LocalDateTime updatedAt = extractUpdatedAt(goldNode);
-        BigDecimal spotPrice = usdOzToCnyGram(londonPrice, usdCny);
-        BigDecimal spotChange = usdOzToCnyGram(londonChange, usdCny);
-        BigDecimal spotOpen = usdOzToCnyGram(londonOpen, usdCny);
-        BigDecimal spotHigh = usdOzToCnyGram(londonHigh, usdCny);
-        BigDecimal spotLow = usdOzToCnyGram(londonLow, usdCny);
-        BigDecimal spotBuy = londonBuy == null ? spotPrice.add(new BigDecimal("0.15")) : usdOzToCnyGram(londonBuy, usdCny);
-        BigDecimal spotSell = londonSell == null ? spotPrice.subtract(new BigDecimal("0.15")) : usdOzToCnyGram(londonSell, usdCny);
+        LocalDateTime updatedAt = extractUpdatedAt(domesticGoldNode);
+        LocalDateTime londonUpdatedAt = extractUpdatedAt(londonGoldNode);
 
         GoldPriceResponse response = new GoldPriceResponse();
-        response.setSpotGold(marketQuote("现货金", "CNY/g", spotPrice, spotChange, scalePercent(londonChangePercent), updatedAt));
-        response.setLondonGold(marketQuote("伦敦金", "USD/oz", scaleMoney(londonPrice), scaleMoney(londonChange), scalePercent(londonChangePercent), updatedAt));
-        response.setStats(stats(spotOpen, spotHigh, spotLow, spotBuy, spotSell));
+        response.setSpotGold(marketQuote("黄金9999", "CNY/g", scaleMoney(domesticPrice), scaleMoney(domesticChange), scalePercent(domesticChangePercent), updatedAt));
+        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal normalizedLondonChange = londonChange == null ? BigDecimal.ZERO : londonChange;
+            response.setLondonGold(marketQuote("伦敦金", "USD/oz", scaleMoney(londonPrice), scaleMoney(normalizedLondonChange), scalePercent(londonChangePercent), londonUpdatedAt));
+        }
+        response.setStats(stats(domesticOpen, domesticHigh, domesticLow, domesticBuy, domesticSell));
         response.setJewelryPrices(fetchJewelryPrices(quotes));
         response.setChartPoints(List.of());
         response.setUpdatedAt(updatedAt);
-        response.setSource("金投网行情 + open.er-api 汇率换算");
+        response.setSource("金投网黄金9999行情");
         return response;
     }
 
@@ -212,14 +250,15 @@ public class GoldPriceService {
         if (root.has("quote_json") && root.path("quote_json").isObject()) {
             return root.path("quote_json");
         }
-        if (root.has("JO_92233")) {
+        if (root.has(DOMESTIC_GOLD_CODE) || root.has(LONDON_GOLD_CODE)) {
             return root;
         }
         throw new IllegalStateException("金投网行情缺少黄金报价数据");
     }
 
     private String jijinhaoQuoteCodes() {
-        return "JO_92233,JO_42657,JO_42660,JO_42625,JO_42634,JO_42653,JO_42646,JO_52678,JO_42638";
+        return DOMESTIC_GOLD_CODE + "," + LONDON_GOLD_CODE
+            + ",JO_42657,JO_42660,JO_42625,JO_42634,JO_42653,JO_42646,JO_52678,JO_42638";
     }
 
     private BigDecimal fetchUsdCny() {
@@ -328,14 +367,13 @@ public class GoldPriceService {
 
     private List<GoldPriceResponse.GoldChartPoint> fetchJijinhaoHistoryPoints(int style, String range, int pageSize) {
         try {
-            String body = fetchJijinhaoText(jijinhaoChartUrl("history.htm") + "?code=JO_92233&style=" + style + "&pageSize=" + pageSize);
+            String body = fetchJijinhaoText(jijinhaoChartUrl("history.htm") + "?code=" + DOMESTIC_GOLD_CODE + "&style=" + style + "&pageSize=" + pageSize);
             JsonNode root = extractJavascriptObject(body, "KLC_KL");
             JsonNode data = root.path("data");
             if (!data.isArray()) {
                 return List.of();
             }
 
-            BigDecimal usdCny = fetchUsdCny();
             long minTimestamp = minimumTimestampForRange(range);
             List<GoldPriceResponse.GoldChartPoint> points = new ArrayList<>();
             for (JsonNode item : data) {
@@ -348,7 +386,7 @@ public class GoldPriceService {
                 LocalDateTime time = LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), DEFAULT_ZONE);
                 GoldPriceResponse.GoldChartPoint point = new GoldPriceResponse.GoldChartPoint();
                 point.setLabel(formatChartLabel(time, range));
-                point.setPrice(usdOzToCnyGram(close, usdCny));
+                point.setPrice(scaleMoney(close));
                 points.add(point);
             }
             return points;
@@ -548,6 +586,10 @@ public class GoldPriceService {
 
     private BigDecimal defaultLondonDelta(BigDecimal londonPrice) {
         return londonPrice.multiply(new BigDecimal("0.0025")).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal defaultSpotDelta(BigDecimal spotPrice) {
+        return spotPrice.multiply(new BigDecimal("0.0025")).setScale(2, RoundingMode.HALF_UP);
     }
 
     private String normalizeRange(String range) {
