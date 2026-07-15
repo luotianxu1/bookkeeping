@@ -1,5 +1,6 @@
 package com.example.finance.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.finance.entity.ScheduledTaskRunEntity;
 import com.example.finance.mapper.ScheduledTaskRunMapper;
 import org.slf4j.Logger;
@@ -34,6 +35,24 @@ public class ScheduledTaskRunService {
             finish(run, STATUS_FAILED, null, ex.getMessage());
             throw ex;
         }
+    }
+
+    public boolean hasSuccessfulRunBetween(
+        String taskName,
+        String triggerName,
+        LocalDateTime startedAtFrom,
+        LocalDateTime startedAtTo
+    ) {
+        if (startedAtFrom == null || startedAtTo == null || !startedAtFrom.isBefore(startedAtTo)) {
+            return false;
+        }
+        Long count = scheduledTaskRunMapper.selectCount(new LambdaQueryWrapper<ScheduledTaskRunEntity>()
+            .eq(ScheduledTaskRunEntity::getTaskName, trim(taskName))
+            .eq(ScheduledTaskRunEntity::getTriggerName, trim(triggerName))
+            .eq(ScheduledTaskRunEntity::getStatus, STATUS_SUCCESS)
+            .ge(ScheduledTaskRunEntity::getStartedAt, startedAtFrom)
+            .lt(ScheduledTaskRunEntity::getStartedAt, startedAtTo));
+        return count != null && count > 0;
     }
 
     private ScheduledTaskRunEntity start(String taskName, String triggerName) {
