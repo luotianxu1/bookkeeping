@@ -7,7 +7,7 @@ import AmountText from '@/components/common/AmountText/index.vue'
 import { getGoldPrices, type GoldPrice, type GoldPriceRange } from '@/api/modules/finance'
 import { useTheme } from '@/utils/theme'
 
-type TrendKey = '1日' | '7日' | '30日' | '1年'
+type TrendKey = '1日' | '7日' | '30日' | '3个月' | '1年' | '3年'
 type ChartExtremum = {
   index: number
   label: string
@@ -16,7 +16,7 @@ type ChartExtremum = {
 const PRICE_REFRESH_INTERVAL_MS = 60_000
 
 const activeTrend = ref<TrendKey>('1日')
-const trendOptions: TrendKey[] = ['1日', '7日', '30日', '1年']
+const trendOptions: TrendKey[] = ['1日', '7日', '30日', '3个月', '1年', '3年']
 
 const { isDark } = useTheme()
 const chartRef = ref<HTMLDivElement | null>(null)
@@ -33,7 +33,9 @@ const trendRangeMap: Record<TrendKey, GoldPriceRange> = {
   '1日': '1d',
   '7日': '7d',
   '30日': '30d',
+  '3个月': '3m',
   '1年': '1y',
+  '3年': '3y',
 }
 
 const activeRange = computed(() => trendRangeMap[activeTrend.value])

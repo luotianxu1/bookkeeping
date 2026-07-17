@@ -353,7 +353,9 @@ public class GoldPriceService {
                 case "1d" -> fetchJijinhaoHistoryPoints(1, range, 500);
                 case "7d" -> fetchJijinhaoHistoryPoints(2, range);
                 case "30d" -> fetchJijinhaoHistoryPoints(3, range);
+                case "3m" -> fetchJijinhaoHistoryPoints(3, range, 120);
                 case "1y" -> fetchJijinhaoHistoryPoints(3, range, 400);
+                case "3y" -> fetchJijinhaoHistoryPoints(5, range, 40);
                 default -> fetchJijinhaoHistoryPoints(6, range);
             };
         } catch (Exception ex) {
@@ -400,6 +402,7 @@ public class GoldPriceService {
             case "1d" -> String.format("%02d:%02d", time.getHour(), time.getMinute());
             case "7d" -> String.format("%d/%d %02d:%02d", time.getMonthValue(), time.getDayOfMonth(), time.getHour(), time.getMinute());
             case "1y" -> time.getMonthValue() + "月";
+            case "3y" -> time.getYear() + "/" + time.getMonthValue();
             default -> time.getMonthValue() + "/" + time.getDayOfMonth();
         };
     }
@@ -414,6 +417,8 @@ public class GoldPriceService {
 
         int maxCount = switch (range) {
             case "30d" -> 48;
+            case "3m" -> 60;
+            case "3y" -> 40;
             default -> 52;
         };
         if (points.size() <= maxCount) {
@@ -465,7 +470,9 @@ public class GoldPriceService {
                 .toEpochMilli();
             case "7d" -> now - 7L * 24 * 60 * 60 * 1000;
             case "30d" -> now - 30L * 24 * 60 * 60 * 1000;
+            case "3m" -> now - 90L * 24 * 60 * 60 * 1000;
             case "1y" -> now - 365L * 24 * 60 * 60 * 1000;
+            case "3y" -> now - 3L * 365 * 24 * 60 * 60 * 1000;
             default -> 0L;
         };
     }
@@ -593,7 +600,11 @@ public class GoldPriceService {
     }
 
     private String normalizeRange(String range) {
-        if ("7d".equals(range) || "30d".equals(range) || "1y".equals(range)) {
+        if ("7d".equals(range)
+            || "30d".equals(range)
+            || "3m".equals(range)
+            || "1y".equals(range)
+            || "3y".equals(range)) {
             return range;
         }
         return "1d";

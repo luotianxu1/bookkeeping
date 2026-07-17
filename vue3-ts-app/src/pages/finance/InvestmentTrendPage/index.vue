@@ -246,7 +246,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
 
   return {
     animation: false,
-    grid: { left: 16, right: 16, top: 14, bottom: 8, containLabel: true },
+    grid: { left: 4, right: 8, top: 14, bottom: 8, containLabel: true },
     tooltip: {
       trigger: 'axis',
       backgroundColor: tooltipBg,
@@ -721,8 +721,11 @@ function formatCurrency(value?: number | null) {
 
 function formatCompactMoney(value: number) {
   const normalized = Number(value ?? 0)
+  if (Math.abs(normalized) >= 100000000) {
+    return `${(normalized / 100000000).toFixed(2)}亿`
+  }
   if (Math.abs(normalized) >= 10000) {
-    return `${(normalized / 10000).toFixed(2)}w`
+    return `${(normalized / 10000).toFixed(2)}万`
   }
   return normalized.toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
@@ -935,7 +938,7 @@ function getTrendYAxisBounds(values: number[]) {
         <header class="investment-trend-card-head">
           <div>
             <strong>昨日账户快照</strong>
-            <p>今日总资产 <AmountText tag="span" tone="inherit" :value="yesterdaySnapshotCurrentTotalText" show-unit />，<AmountText tag="span" :value="yesterdaySnapshotChangeAmountText" show-sign show-unit /></p>
+            <p class="snapshot-total-summary">今日总资产 <AmountText tag="span" tone="inherit" :value="yesterdaySnapshotCurrentTotalText" show-unit />，<AmountText tag="span" :value="yesterdaySnapshotChangeAmountText" show-sign show-unit /></p>
           </div>
           <span class="range-detail-side-text">{{ yesterdaySnapshotDateText }}</span>
         </header>

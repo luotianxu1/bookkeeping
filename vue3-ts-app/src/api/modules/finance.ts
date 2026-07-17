@@ -164,7 +164,7 @@ export interface CategoryQuery {
   status?: string
 }
 
-export type GoldPriceRange = '1d' | '7d' | '30d' | '1y'
+export type GoldPriceRange = '1d' | '7d' | '30d' | '3m' | '1y' | '3y'
 
 export interface GoldRealtimePrice {
   name: string
