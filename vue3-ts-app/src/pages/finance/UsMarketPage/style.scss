@@ -1,0 +1,117 @@
+.us-market-page {
+  display: grid;
+  gap: var(--space-6);
+  --page-header-bg: var(--color-bg-page);
+}
+
+.us-market-header {
+  background: var(--color-bg-page);
+}
+
+.us-market-status {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.us-market-grid {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.market-card {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-12);
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+}
+
+.market-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.market-name {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.market-code {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.market-price {
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-32);
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.market-change {
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.market-card.up .market-price,
+.market-card.up .market-change {
+  color: var(--color-danger);
+}
+
+.market-card.down .market-price,
+.market-card.down .market-change {
+  color: var(--color-success);
+}
+
+.market-chart {
+  width: 100%;
+  height: 64px;
+}
+
+.market-detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4) var(--space-12);
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.market-detail span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.market-detail span b {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.market-error {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.us-market-foot {
+  margin-top: var(--space-6);
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-11, 11px);
+  line-height: 1.6;
+}

@@ -7,6 +7,7 @@ import InvestmentTrendPage from '@/pages/finance/InvestmentTrendPage/index.vue'
 import MoreFeaturesPage from '@/pages/finance/MoreFeaturesPage/index.vue'
 import ExchangeRatePage from '@/pages/finance/ExchangeRatePage/index.vue'
 import GoldPricePage from '@/pages/finance/GoldPricePage/index.vue'
+import UsMarketPage from '@/pages/finance/UsMarketPage/index.vue'
 import MarketNewsPage from '@/pages/finance/MarketNewsPage/index.vue'
 import GoldAccountPage from '@/pages/finance/GoldAccountPage/index.vue'
 import GoldAccountPositionPage from '@/pages/finance/GoldAccountPositionPage/index.vue'
@@ -100,6 +101,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '市场快讯',
+    },
+  },
+  {
+    path: '/finance/us-market',
+    name: 'finance-us-market',
+    component: UsMarketPage,
+    meta: {
+      section: 'finance',
+      title: '美股行情',
     },
   },
   {
