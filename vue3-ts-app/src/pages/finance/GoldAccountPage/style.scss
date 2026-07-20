@@ -15,55 +15,6 @@
   gap: var(--space-8);
 }
 
-.gold-account-manage {
-  width: 28px;
-  height: 28px;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 28px;
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
-}
-
-.gold-account-manage.active {
-  border-color: rgba(37, 99, 235, 0.22);
-  background: rgba(219, 234, 254, 0.96);
-}
-
-.gold-account-manage-icon {
-  color: var(--color-brand-strong);
-  font-size: var(--font-size-16);
-  line-height: 1;
-  font-weight: 700;
-}
-
-.gold-account-refresh {
-  width: 28px;
-  height: 28px;
-  display: inline-grid;
-  place-items: center;
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
-}
-
-.gold-account-refresh:disabled {
-  opacity: 0.72;
-}
-
-.gold-account-refresh-icon {
-  color: var(--color-brand-strong);
-  font-size: var(--font-size-16);
-  line-height: 1;
-}
-
-.gold-account-refresh-icon.spinning {
-  animation: gold-account-refresh-spin 720ms linear infinite;
-}
-
 .gold-account-message {
   margin: 0;
   padding: var(--space-10) 0;
@@ -372,10 +323,4 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-6);
-}
-
-@keyframes gold-account-refresh-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }

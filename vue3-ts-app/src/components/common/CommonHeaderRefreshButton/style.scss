@@ -1,0 +1,17 @@
+.common-header-refresh-icon.spinning {
+  transform-origin: center;
+  animation: common-header-refresh-spin 720ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .common-header-refresh-icon.spinning {
+    animation: none;
+    opacity: 0.65;
+  }
+}
+
+@keyframes common-header-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -8,32 +8,6 @@
   background: var(--color-bg-page);
 }
 
-.gold-price-refresh {
-  width: 28px;
-  height: 28px;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 28px;
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-pill);
-  background: var(--color-bg-card-glass);
-  box-shadow: var(--color-shadow-soft);
-}
-
-.gold-price-refresh:disabled {
-  opacity: 0.72;
-}
-
-.gold-price-refresh-icon {
-  color: var(--color-brand-strong);
-  font-size: var(--font-size-16);
-  line-height: 1;
-}
-
-.gold-price-refresh-icon.spinning {
-  animation: gold-price-refresh-spin 720ms linear infinite;
-}
-
 .spot-london-card,
 .trend-card,
 .jewelry-card {
@@ -197,10 +171,4 @@
   color: var(--color-text-primary);
   font-size: var(--font-size-12);
   font-weight: 600;
-}
-
-@keyframes gold-price-refresh-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }

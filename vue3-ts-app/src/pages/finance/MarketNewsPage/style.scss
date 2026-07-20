@@ -14,33 +14,6 @@
   font-weight: 700;
 }
 
-.market-news-refresh {
-  width: var(--space-36);
-  height: var(--space-36);
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--color-bg-card);
-  color: var(--color-brand);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
-}
-
-.market-news-refresh:disabled {
-  opacity: 0.72;
-}
-
-.market-news-refresh-icon {
-  font-size: var(--font-size-18);
-  line-height: 1;
-}
-
-.market-news-refresh-icon.spinning {
-  animation: market-news-spin 720ms linear infinite;
-}
-
 .market-news-summary-card {
   display: flex;
   align-items: stretch;
@@ -212,15 +185,4 @@
 
 .market-news-message-error {
   color: var(--color-danger);
-}
-
-
-@keyframes market-news-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
 }

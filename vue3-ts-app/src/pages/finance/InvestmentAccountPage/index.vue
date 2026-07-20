@@ -3,6 +3,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -911,16 +912,12 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
     <PageHeader title="投资详情" back-to="/finance/accounts/investment" back-label="返回投资账户">
       <template #right>
-        <CommonButton
+        <CommonHeaderRefreshButton
           v-if="shouldShowQuoteRefreshButton"
-          class="investment-account-header-refresh"
-          variant="secondary"
-          size="sm"
-          aria-label="刷新投资持仓数据"
+          label="刷新投资持仓数据"
+          :loading="isRefreshingQuotes"
           @click="refreshQuoteData"
-        >
-          刷新持仓
-        </CommonButton>
+        />
       </template>
     </PageHeader>
 

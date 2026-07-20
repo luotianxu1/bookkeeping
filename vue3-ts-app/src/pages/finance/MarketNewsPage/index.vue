@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getMarketNews, type MarketNews, type MarketNewsCategory } from '@/api/modules/finance'
@@ -112,15 +113,11 @@ function formatPublishedAt(value: string | null) {
     <header class="market-news-header">
       <PageHeader title="市场快讯" back-to="/finance/more-features" back-label="返回更多功能">
         <template #right>
-          <button
-            class="market-news-refresh"
-            type="button"
-            :disabled="isRefreshing"
-            aria-label="刷新市场快讯"
+          <CommonHeaderRefreshButton
+            label="刷新市场快讯"
+            :loading="isRefreshing"
             @click="loadMarketNews(true)"
-          >
-            <span :class="['market-news-refresh-icon', { spinning: isRefreshing }]">↻</span>
-          </button>
+          />
         </template>
       </PageHeader>
     </header>

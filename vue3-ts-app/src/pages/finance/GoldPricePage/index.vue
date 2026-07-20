@@ -2,6 +2,7 @@
 // 金价页：使用 ECharts 折线图展示价格走势，并支持暗黑模式配色。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
+import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import { getGoldPrices, type GoldPrice, type GoldPriceRange } from '@/api/modules/finance'
@@ -490,15 +491,11 @@ onBeforeUnmount(() => {
     <header class="gold-price-header">
       <PageHeader title="金价" back-label="返回更多功能">
         <template #right>
-          <button
-            class="gold-price-refresh"
-            type="button"
-            :disabled="isRefreshingPrice"
-            aria-label="刷新金价"
+          <CommonHeaderRefreshButton
+            label="刷新金价"
+            :loading="isRefreshingPrice"
             @click="refreshCurrentGoldPrice"
-          >
-            <span :class="['gold-price-refresh-icon', { spinning: isRefreshingPrice }]">↻</span>
-          </button>
+          />
         </template>
       </PageHeader>
     </header>

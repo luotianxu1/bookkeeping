@@ -18,32 +18,6 @@
   line-height: 1.4;
 }
 
-.gold-position-refresh {
-  width: 28px;
-  height: 28px;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 28px;
-  border: 1px solid var(--color-border-soft);
-  border-radius: 999px;
-  background: var(--color-bg-card-glass);
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
-}
-
-.gold-position-refresh:disabled {
-  opacity: 0.72;
-}
-
-.gold-position-refresh-icon {
-  color: var(--color-brand-strong);
-  font-size: 16px;
-  line-height: 1;
-}
-
-.gold-position-refresh-icon.spinning {
-  animation: gold-position-refresh-spin 720ms linear infinite;
-}
-
 .gold-position-message {
   margin: 0;
   padding: 12px 0;
@@ -369,11 +343,4 @@
   font-size: 14px;
   font-weight: 600;
   line-height: 1.6;
-}
-
-
-@keyframes gold-position-refresh-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
