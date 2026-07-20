@@ -22,6 +22,7 @@ public class SalaryAccountPageResponse {
     private List<MetricItem> metrics;
     private List<DetailItem> details;
     private List<RecordItem> records;
+    private Forecast forecast;
     private LocalDateTime updatedAt;
 
     @Data
@@ -50,5 +51,15 @@ public class SalaryAccountPageResponse {
         private BigDecimal balanceValue;
         private String note;
         private boolean editable;
+    }
+
+    @Data
+    public static class Forecast {
+        private Integer sourceYear;
+        private Integer forecastYear;
+        private BigDecimal sourceAnnualGrossIncome;
+        private BigDecimal predictedMonthlyBase;
+        private BigDecimal predictedPersonal;
+        private BigDecimal predictedCompany;
     }
 }

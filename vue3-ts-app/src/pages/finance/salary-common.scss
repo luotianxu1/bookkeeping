@@ -57,6 +57,13 @@
   gap: var(--space-6);
 }
 
+.salary-summary-eyebrow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
 .salary-summary-main-top {
   align-items: center;
 }
@@ -268,6 +275,35 @@
   border: 1px solid var(--color-border);
   background: var(--color-bg-card-soft);
   padding: var(--space-10) var(--space-12);
+}
+
+.salary-forecast-panel {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.salary-forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-10);
+}
+
+.salary-forecast-item {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.salary-forecast-item span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-11);
+  font-weight: 600;
+}
+
+.salary-forecast-item strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-16);
+  font-weight: 700;
 }
 
 .salary-linked-card {

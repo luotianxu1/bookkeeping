@@ -104,7 +104,7 @@ public class SalaryService {
 
         response.setMetrics(List.of(
             metric("税前工资", computation.grossMonthlyIncome),
-            metric("五险一金", computation.personalDeductionMonthly.subtract(computation.currentMonthTax)),
+            metric("五险一金", computation.personalDeductionMonthly),
             metric("个人所得税", computation.currentMonthTax)
         ));
 
@@ -145,6 +145,7 @@ public class SalaryService {
     public SalarySettingsResponse saveSettings(SalarySettingsRequest request) {
         SalaryProfileEntity profile = ensureProfile(request.getUserId());
         fillProfile(profile, request);
+        profile.setUpdatedAt(LocalDateTime.now(SHANGHAI_ZONE));
         salaryProfileMapper.updateById(profile);
 
         SalarySpecialDeductionEntity deduction = ensureSpecialDeduction(request.getUserId(), request.getTaxYear());
@@ -152,10 +153,11 @@ public class SalaryService {
         if (deduction.getId() == null) {
             salarySpecialDeductionMapper.insert(deduction);
         } else {
+            deduction.setUpdatedAt(LocalDateTime.now(SHANGHAI_ZONE));
             salarySpecialDeductionMapper.updateById(deduction);
         }
 
-        ensureYearData(request.getUserId(), profile, request.getTaxYear());
+        refreshLatestDueMonthData(request.getUserId(), profile, request.getTaxYear());
         return toSettingsResponse(profile, deduction, request.getTaxYear(), compute(request.getUserId(), profile, deduction, request.getTaxYear(), resolveCurrentPaidMonths(request.getTaxYear(), profile.getPayDay())));
     }
 
@@ -515,8 +517,64 @@ public class SalaryService {
         ));
         response.setDetails(buildAccountDetails(accountType, computation, currentBalance, initialBalance));
         response.setRecords(buildAccountRecords(yearRecords));
+        response.setForecast(buildSalaryAccountForecast(userId, accountType, year, profile));
         response.setUpdatedAt(records.isEmpty() ? profile.getUpdatedAt() : records.get(records.size() - 1).getUpdatedAt());
         return response;
+    }
+
+    private SalaryAccountPageResponse.Forecast buildSalaryAccountForecast(
+        Long userId,
+        String accountType,
+        int year,
+        SalaryProfileEntity profile
+    ) {
+        BigDecimal defaultMonthlyGrossSalary = scale(profile.getMonthlyGrossSalary());
+        BigDecimal sourceAnnualGrossIncome = sumMonthlyGrossSalaries(
+            resolveMonthlyGrossSalaries(userId, year, 12, defaultMonthlyGrossSalary),
+            12
+        ).add(defaultZero(profile.getAnnualBonus())).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal predictedMonthlyBase = sourceAnnualGrossIncome
+            .divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
+
+        BigDecimal predictedPersonal;
+        BigDecimal predictedCompany;
+        if (ACCOUNT_HOUSING.equals(accountType)) {
+            predictedPersonal = roundedYuanRateAmount(
+                predictedMonthlyBase,
+                resolveRate(profile.getHousingFundPersonalRate(), DEFAULT_HOUSING_FUND_PERSONAL_RATE)
+            );
+            predictedCompany = roundedYuanRateAmount(
+                predictedMonthlyBase,
+                resolveRate(profile.getHousingFundCompanyRate(), DEFAULT_HOUSING_FUND_COMPANY_RATE)
+            );
+        } else if (ACCOUNT_MEDICAL.equals(accountType)) {
+            predictedPersonal = rateAmount(
+                predictedMonthlyBase,
+                resolveRate(profile.getMedicalPersonalRate(), DEFAULT_MEDICAL_PERSONAL_RATE)
+            );
+            predictedCompany = rateAmount(
+                predictedMonthlyBase,
+                resolveRate(profile.getMedicalCompanyRate(), DEFAULT_MEDICAL_COMPANY_RATE)
+            );
+        } else {
+            predictedPersonal = rateAmount(
+                predictedMonthlyBase,
+                resolveRate(profile.getPensionPersonalRate(), DEFAULT_PENSION_PERSONAL_RATE)
+            );
+            predictedCompany = rateAmount(
+                predictedMonthlyBase,
+                resolveRate(profile.getPensionCompanyRate(), DEFAULT_PENSION_COMPANY_RATE)
+            );
+        }
+
+        SalaryAccountPageResponse.Forecast forecast = new SalaryAccountPageResponse.Forecast();
+        forecast.setSourceYear(year);
+        forecast.setForecastYear(year + 1);
+        forecast.setSourceAnnualGrossIncome(scale(sourceAnnualGrossIncome));
+        forecast.setPredictedMonthlyBase(scale(predictedMonthlyBase));
+        forecast.setPredictedPersonal(scale(predictedPersonal));
+        forecast.setPredictedCompany(scale(predictedCompany));
+        return forecast;
     }
 
     private List<SalaryAccountPageResponse.DetailItem> buildAccountDetails(
@@ -663,7 +721,23 @@ public class SalaryService {
         recalculateBalances(userId, ACCOUNT_MEDICAL);
     }
 
+    private void refreshLatestDueMonthData(Long userId, SalaryProfileEntity profile, int year) {
+        int dueMonth = shouldMaintainAutoRecordsForYear(year)
+            ? resolveCurrentPaidMonths(year, profile.getPayDay())
+            : 0;
+        ensureAutoRecord(userId, profile, ACCOUNT_SOCIAL, year, dueMonth);
+        ensureAutoRecord(userId, profile, ACCOUNT_HOUSING, year, dueMonth);
+        ensureAutoRecord(userId, profile, ACCOUNT_MEDICAL, year, dueMonth);
+        recalculateBalances(userId, ACCOUNT_SOCIAL);
+        recalculateBalances(userId, ACCOUNT_HOUSING);
+        recalculateBalances(userId, ACCOUNT_MEDICAL);
+    }
+
     private void ensureAutoRecord(Long userId, SalaryProfileEntity profile, String accountType, int year) {
+        ensureAutoRecord(userId, profile, accountType, year, 0);
+    }
+
+    private void ensureAutoRecord(Long userId, SalaryProfileEntity profile, String accountType, int year, int refreshMonth) {
         if (!shouldMaintainAutoRecordsForYear(year)) {
             return;
         }
@@ -707,7 +781,8 @@ public class SalaryService {
         for (int month = 1; month <= endMonth; month++) {
             LocalDate recordMonth = LocalDate.of(year, month, 1);
             String key = MONTH_KEY_FORMATTER.format(recordMonth);
-            if (existingMap.containsKey(key)) {
+            SalaryAccountRecordEntity entity = existingMap.get(key);
+            if (entity != null && (month != refreshMonth || isDeletedAutoRecord(entity))) {
                 continue;
             }
 
@@ -715,22 +790,29 @@ public class SalaryService {
             BigDecimal personal = monthlyPersonal(accountType, computation);
             BigDecimal company = monthlyCompany(accountType, computation);
             BigDecimal amount = autoRecordAmount(accountType, personal, company);
-            if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            if (entity == null && amount.compareTo(BigDecimal.ZERO) <= 0) {
                 continue;
             }
 
-            SalaryAccountRecordEntity entity = new SalaryAccountRecordEntity();
-            entity.setUserId(userId);
-            entity.setAccountType(accountType);
-            entity.setRecordType(RECORD_AUTO);
+            if (entity == null) {
+                entity = new SalaryAccountRecordEntity();
+                entity.setUserId(userId);
+                entity.setAccountType(accountType);
+                entity.setRecordType(RECORD_AUTO);
+                entity.setBalanceAfter(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            }
             entity.setRecordMonth(recordMonth);
             entity.setAmount(amount);
             entity.setPersonalAmount(personal);
             entity.setCompanyAmount(company);
-            entity.setBalanceAfter(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             entity.setSyncToCurrent(true);
             entity.setNote(note);
-            salaryAccountRecordMapper.insert(entity);
+            entity.setUpdatedAt(LocalDateTime.now(SHANGHAI_ZONE));
+            if (entity.getId() == null) {
+                salaryAccountRecordMapper.insert(entity);
+            } else {
+                salaryAccountRecordMapper.updateById(entity);
+            }
         }
     }
 
@@ -863,14 +945,16 @@ public class SalaryService {
             .add(defaultZero(deduction.getOtherDeduction()))
             .setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal personalSocial = computation.housingFundPersonal
-            .add(computation.pensionPersonal)
-            .add(computation.medicalPersonal)
-            .add(computation.medicalFixedAmount)
-            .add(computation.unemploymentPersonal)
-            .setScale(2, RoundingMode.HALF_UP);
-
-        computation.personalDeductionMonthly = personalSocial;
+        List<BigDecimal> monthlyPersonalDeductions = resolveMonthlyPersonalDeductions(
+            userId,
+            profile,
+            year,
+            computation.paidMonths,
+            monthlyGrossSalaries
+        );
+        BigDecimal currentMonthPersonalDeduction = monthlyPersonalDeductions.get(computation.paidMonths - 1);
+        BigDecimal paidPersonalDeduction = sumMonthlyGrossSalaries(monthlyPersonalDeductions, computation.paidMonths);
+        computation.personalDeductionMonthly = currentMonthPersonalDeduction;
 
         BigDecimal paidGrossIncome = sumMonthlyGrossSalaries(monthlyGrossSalaries, computation.paidMonths);
         BigDecimal annualIncome = paidGrossIncome
@@ -879,7 +963,7 @@ public class SalaryService {
         computation.annualIncome = annualIncome;
 
         BigDecimal annualTaxableIncome = annualIncome
-            .subtract(personalSocial.multiply(BigDecimal.valueOf(computation.paidMonths)))
+            .subtract(paidPersonalDeduction)
             .subtract(computation.monthlySpecialDeductionTotal.multiply(BigDecimal.valueOf(computation.paidMonths)))
             .subtract(defaultZero(profile.getTaxFreeThreshold()).multiply(BigDecimal.valueOf(computation.paidMonths)))
             .max(BigDecimal.ZERO)
@@ -893,8 +977,9 @@ public class SalaryService {
             BigDecimal previousAnnualIncome = sumMonthlyGrossSalaries(monthlyGrossSalaries, computation.paidMonths - 1)
                 .add(defaultZero(profile.getAnnualBonus()))
                 .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal previousPersonalDeduction = sumMonthlyGrossSalaries(monthlyPersonalDeductions, computation.paidMonths - 1);
             BigDecimal previousTaxableIncome = previousAnnualIncome
-                .subtract(personalSocial.multiply(BigDecimal.valueOf(computation.paidMonths - 1L)))
+                .subtract(previousPersonalDeduction)
                 .subtract(computation.monthlySpecialDeductionTotal.multiply(BigDecimal.valueOf(computation.paidMonths - 1L)))
                 .subtract(defaultZero(profile.getTaxFreeThreshold()).multiply(BigDecimal.valueOf(computation.paidMonths - 1L)))
                 .max(BigDecimal.ZERO)
@@ -903,11 +988,11 @@ public class SalaryService {
         }
 
         computation.currentMonthTakeHome = computation.grossMonthlyIncome
-            .subtract(personalSocial)
+            .subtract(currentMonthPersonalDeduction)
             .subtract(computation.currentMonthTax)
             .setScale(2, RoundingMode.HALF_UP);
         computation.annualNetIncome = annualIncome
-            .subtract(personalSocial.multiply(BigDecimal.valueOf(computation.paidMonths)))
+            .subtract(paidPersonalDeduction)
             .subtract(annualTax)
             .setScale(2, RoundingMode.HALF_UP);
         computation.netRate = computation.grossMonthlyIncome.compareTo(BigDecimal.ZERO) <= 0
@@ -1039,6 +1124,69 @@ public class SalaryService {
                 .thenComparing(SalaryMonthRecordEntity::getUpdatedAt, Comparator.nullsLast(LocalDateTime::compareTo))
                 .thenComparing(SalaryMonthRecordEntity::getId, Comparator.nullsLast(Long::compareTo)))
             .toList();
+    }
+
+    private List<BigDecimal> resolveMonthlyPersonalDeductions(
+        Long userId,
+        SalaryProfileEntity profile,
+        int year,
+        int months,
+        List<BigDecimal> monthlyGrossSalaries
+    ) {
+        Map<Integer, Map<String, SalaryAccountRecordEntity>> recordsByMonth = new HashMap<>();
+        salaryAccountRecordMapper.selectList(new LambdaQueryWrapper<SalaryAccountRecordEntity>()
+                .eq(SalaryAccountRecordEntity::getUserId, userId)
+                .eq(SalaryAccountRecordEntity::getRecordType, RECORD_AUTO)
+                .ge(SalaryAccountRecordEntity::getRecordMonth, LocalDate.of(year, 1, 1))
+                .lt(SalaryAccountRecordEntity::getRecordMonth, LocalDate.of(year + 1, 1, 1)))
+            .stream()
+            .filter(record -> record.getRecordMonth() != null)
+            .forEach(record -> recordsByMonth
+                .computeIfAbsent(record.getRecordMonth().getMonthValue(), ignored -> new HashMap<>())
+                .putIfAbsent(record.getAccountType(), record));
+
+        List<BigDecimal> deductions = new ArrayList<>();
+        for (int month = 1; month <= months; month++) {
+            BigDecimal monthlyGrossSalary = monthlyGrossSalaries.get(month - 1);
+            BigDecimal socialSecurityBase = resolveBase(profile.getSocialSecurityBase(), monthlyGrossSalary);
+            BigDecimal housingFundBase = resolveBase(profile.getHousingFundBase(), monthlyGrossSalary);
+            Map<String, SalaryAccountRecordEntity> monthRecords = recordsByMonth.getOrDefault(month, Map.of());
+
+            BigDecimal housingFundPersonal = resolveRecordedPersonalAmount(
+                monthRecords.get(ACCOUNT_HOUSING),
+                roundedYuanRateAmount(housingFundBase, resolveRate(profile.getHousingFundPersonalRate(), DEFAULT_HOUSING_FUND_PERSONAL_RATE))
+            );
+            BigDecimal pensionPersonal = resolveRecordedPersonalAmount(
+                monthRecords.get(ACCOUNT_SOCIAL),
+                rateAmount(socialSecurityBase, resolveRate(profile.getPensionPersonalRate(), DEFAULT_PENSION_PERSONAL_RATE))
+            );
+            BigDecimal medicalPersonal = resolveRecordedPersonalAmount(
+                monthRecords.get(ACCOUNT_MEDICAL),
+                rateAmount(socialSecurityBase, resolveRate(profile.getMedicalPersonalRate(), DEFAULT_MEDICAL_PERSONAL_RATE))
+            );
+            BigDecimal unemploymentPersonal = rateAmount(
+                socialSecurityBase,
+                resolveRate(profile.getUnemploymentPersonalRate(), DEFAULT_UNEMPLOYMENT_PERSONAL_RATE)
+            );
+
+            deductions.add(housingFundPersonal
+                .add(pensionPersonal)
+                .add(medicalPersonal)
+                .add(resolveMedicalFixedAmount(profile.getMedicalFixedAmount()))
+                .add(unemploymentPersonal)
+                .setScale(2, RoundingMode.HALF_UP));
+        }
+        return deductions;
+    }
+
+    private BigDecimal resolveRecordedPersonalAmount(SalaryAccountRecordEntity record, BigDecimal fallback) {
+        if (record == null) {
+            return defaultZero(fallback);
+        }
+        if (isDeletedAutoRecord(record)) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return defaultZero(record.getPersonalAmount());
     }
 
     private BigDecimal monthlyPersonal(String accountType, SalaryComputation computation) {

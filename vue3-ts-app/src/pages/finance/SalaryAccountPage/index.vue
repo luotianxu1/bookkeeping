@@ -347,19 +347,37 @@ function openFeedback(message: string, type: 'success' | 'error') {
               </div>
               <div class="salary-record-amount">
                 <strong>{{ formatSalaryCurrency(record.amountValue) }}</strong>
-                <span>{{ record.pillText }}</span>
-              </div>
-            </div>
-            <div class="salary-row">
-              <div>
-                <p class="salary-row-desc">{{ record.balanceLabel }}</p>
-              </div>
-              <div class="salary-row-value">
-                <strong>{{ formatSalaryCurrency(record.balanceValue) }}</strong>
                 <span v-if="record.editable">点击修改</span>
               </div>
             </div>
           </article>
+        </div>
+      </section>
+
+      <section v-if="pageData.forecast" class="salary-card">
+        <div class="salary-card-head">
+          <strong>明年预测</strong>
+          <span class="salary-pill">{{ pageData.forecast.forecastYear }} 年</span>
+        </div>
+        <div class="salary-forecast-panel">
+          <div class="salary-row">
+            <div>
+              <p class="salary-row-label">预测缴费基数</p>
+            </div>
+            <div class="salary-row-value">
+              <strong>{{ formatSalaryCurrency(pageData.forecast.predictedMonthlyBase) }}</strong>
+            </div>
+          </div>
+          <div class="salary-forecast-grid">
+            <div class="salary-forecast-item">
+              <span>个人缴存</span>
+              <strong>{{ formatSalaryCurrency(pageData.forecast.predictedPersonal) }}</strong>
+            </div>
+            <div class="salary-forecast-item">
+              <span>单位缴存</span>
+              <strong>{{ formatSalaryCurrency(pageData.forecast.predictedCompany) }}</strong>
+            </div>
+          </div>
         </div>
       </section>
     </template>

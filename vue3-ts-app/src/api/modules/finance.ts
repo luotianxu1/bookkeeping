@@ -1853,6 +1853,15 @@ export interface SalaryAccountRecordItem {
   editable: boolean
 }
 
+export interface SalaryAccountForecast {
+  sourceYear: number
+  forecastYear: number
+  sourceAnnualGrossIncome: number
+  predictedMonthlyBase: number
+  predictedPersonal: number
+  predictedCompany: number
+}
+
 export interface SalaryAccountPage {
   accountType: SalaryAccountType
   title: string
@@ -1867,6 +1876,7 @@ export interface SalaryAccountPage {
   metrics: SalaryAccountMetricItem[]
   details: SalaryAccountDetailItem[]
   records: SalaryAccountRecordItem[]
+  forecast: SalaryAccountForecast
   updatedAt?: string | null
 }
 

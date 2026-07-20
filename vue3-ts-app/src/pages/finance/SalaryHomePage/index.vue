@@ -64,15 +64,16 @@ function openFeedback(message: string, type: 'success' | 'error') {
     <template v-else-if="pageData">
       <section class="salary-summary-card">
         <div class="salary-summary-head">
-          <p class="salary-summary-eyebrow">{{ pageData.monthKey }} 工资测算</p>
+          <div class="salary-summary-eyebrow-row">
+            <p class="salary-summary-eyebrow">{{ pageData.monthKey }} 工资测算</p>
+            <span class="salary-pill">{{ pageData.payDay }} 日发薪</span>
+          </div>
           <div class="salary-summary-main">
             <div class="salary-summary-main-top">
               <strong>{{ formatSalaryCurrency(pageData.netIncome) }}</strong>
-              <span class="salary-pill">{{ pageData.payDay }} 日发薪</span>
-            </div>
-            <div class="salary-summary-sub">
-              <span>税前 {{ formatSalaryCurrency(pageData.grossIncome) }}</span>
-              <span class="highlight">到手率 {{ formatSalaryPercent(pageData.netRate) }}</span>
+              <div class="salary-summary-sub">
+                <span class="highlight">到手率 {{ formatSalaryPercent(pageData.netRate) }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -84,7 +85,6 @@ function openFeedback(message: string, type: 'success' | 'error') {
           </div>
           <div class="salary-linked-amount">
             <strong>{{ formatSalaryCurrency(pageData.annualIncome) }}</strong>
-            <span>税额 {{ formatSalaryCurrency(pageData.taxAmount) }}</span>
           </div>
         </div>
 

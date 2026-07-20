@@ -177,10 +177,6 @@ function openFeedback(message: string, type: 'success' | 'error') {
               <strong>{{ formatSalaryCurrency(pageData.recordedGrossIncome) }}</strong>
               <span class="salary-pill">已补录 {{ pageData.recordedMonths }} 个月</span>
             </div>
-            <div class="salary-summary-sub">
-              <span>默认月薪 {{ formatSalaryCurrency(pageData.defaultMonthlyGrossSalary) }}</span>
-              <span class="highlight">全年预计 {{ formatSalaryCurrency(pageData.estimatedAnnualGrossIncome) }}</span>
-            </div>
           </div>
         </div>
 
