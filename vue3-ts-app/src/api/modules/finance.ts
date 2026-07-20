@@ -1860,6 +1860,9 @@ export interface SalaryAccountForecast {
   predictedMonthlyBase: number
   predictedPersonal: number
   predictedCompany: number
+  predictedInterest?: number | null
+  interestAnnualRate?: number | null
+  interestSettlementDate?: string | null
 }
 
 export interface SalaryAccountPage {

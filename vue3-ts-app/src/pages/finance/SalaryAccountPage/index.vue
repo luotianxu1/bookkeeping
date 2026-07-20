@@ -22,6 +22,7 @@ import {
   createRecentYearOptions,
   dateToMonthInput,
   formatSalaryCurrency,
+  formatSalaryPercent,
   monthInputToDate,
   recordCanDelete,
   salaryAccountDisplayName,
@@ -246,6 +247,14 @@ function openFeedback(message: string, type: 'success' | 'error') {
   feedbackType.value = type
   feedbackVisible.value = true
 }
+
+function formatInterestSettlementDate(value?: string | null) {
+  const matched = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!matched) {
+    return `${pageData.value?.forecast.forecastYear ?? ''} 年 7 月 1 日`
+  }
+  return `${matched[1]} 年 ${Number(matched[2])} 月 ${Number(matched[3])} 日`
+}
 </script>
 
 <template>
@@ -376,6 +385,21 @@ function openFeedback(message: string, type: 'success' | 'error') {
             <div class="salary-forecast-item">
               <span>单位缴存</span>
               <strong>{{ formatSalaryCurrency(pageData.forecast.predictedCompany) }}</strong>
+            </div>
+          </div>
+          <div
+            v-if="pageData.accountType === 'housing_fund' && pageData.forecast.predictedInterest != null"
+            class="salary-row salary-forecast-interest"
+          >
+            <div>
+              <p class="salary-row-label">预测利息</p>
+              <p class="salary-row-desc">
+                {{ formatInterestSettlementDate(pageData.forecast.interestSettlementDate) }}结息 · 年利率
+                {{ formatSalaryPercent(pageData.forecast.interestAnnualRate) }}
+              </p>
+            </div>
+            <div class="salary-row-value">
+              <strong>{{ formatSalaryCurrency(pageData.forecast.predictedInterest) }}</strong>
             </div>
           </div>
         </div>

@@ -63,6 +63,7 @@ public class SalaryService {
     private static final BigDecimal DEFAULT_MEDICAL_COMPANY_RATE = new BigDecimal("10.0000");
     private static final BigDecimal DEFAULT_UNEMPLOYMENT_PERSONAL_RATE = new BigDecimal("0.5000");
     private static final BigDecimal DEFAULT_UNEMPLOYMENT_COMPANY_RATE = new BigDecimal("0.5000");
+    private static final BigDecimal HOUSING_FUND_INTEREST_ANNUAL_RATE = new BigDecimal("1.5000");
 
     private final SalaryProfileMapper salaryProfileMapper;
     private final SalarySpecialDeductionMapper salarySpecialDeductionMapper;
@@ -517,7 +518,7 @@ public class SalaryService {
         ));
         response.setDetails(buildAccountDetails(accountType, computation, currentBalance, initialBalance));
         response.setRecords(buildAccountRecords(yearRecords));
-        response.setForecast(buildSalaryAccountForecast(userId, accountType, year, profile));
+        response.setForecast(buildSalaryAccountForecast(userId, accountType, year, profile, records));
         response.setUpdatedAt(records.isEmpty() ? profile.getUpdatedAt() : records.get(records.size() - 1).getUpdatedAt());
         return response;
     }
@@ -526,7 +527,8 @@ public class SalaryService {
         Long userId,
         String accountType,
         int year,
-        SalaryProfileEntity profile
+        SalaryProfileEntity profile,
+        List<SalaryAccountRecordEntity> accountRecords
     ) {
         BigDecimal defaultMonthlyGrossSalary = scale(profile.getMonthlyGrossSalary());
         BigDecimal sourceAnnualGrossIncome = sumMonthlyGrossSalaries(
@@ -574,7 +576,76 @@ public class SalaryService {
         forecast.setPredictedMonthlyBase(scale(predictedMonthlyBase));
         forecast.setPredictedPersonal(scale(predictedPersonal));
         forecast.setPredictedCompany(scale(predictedCompany));
+        if (ACCOUNT_HOUSING.equals(accountType)) {
+            forecast.setPredictedInterest(predictHousingFundInterest(
+                accountRecords,
+                year,
+                predictedPersonal.add(predictedCompany)
+            ));
+            forecast.setInterestAnnualRate(scaleRate(HOUSING_FUND_INTEREST_ANNUAL_RATE));
+            forecast.setInterestSettlementDate(LocalDate.of(year + 1, 7, 1));
+        }
         return forecast;
+    }
+
+    private BigDecimal predictHousingFundInterest(
+        List<SalaryAccountRecordEntity> records,
+        int sourceYear,
+        BigDecimal predictedMonthlyContribution
+    ) {
+        YearMonth cycleStart = YearMonth.of(sourceYear, 7);
+        YearMonth settlementMonth = YearMonth.of(sourceYear + 1, 7);
+        LocalDate cycleStartDate = cycleStart.atDay(1);
+
+        BigDecimal openingBalance = records.stream()
+            .filter(record -> record.getRecordMonth() != null)
+            .filter(record -> record.getRecordMonth().isBefore(cycleStartDate))
+            .filter(record -> !Boolean.FALSE.equals(record.getSyncToCurrent()))
+            .map(SalaryAccountRecordEntity::getAmount)
+            .map(this::defaultZero)
+            .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add);
+
+        Set<YearMonth> recordedAutoMonths = records.stream()
+            .filter(record -> RECORD_AUTO.equals(record.getRecordType()))
+            .filter(record -> record.getRecordMonth() != null)
+            .map(record -> YearMonth.from(record.getRecordMonth()))
+            .filter(month -> !month.isBefore(cycleStart) && month.isBefore(settlementMonth))
+            .collect(Collectors.toSet());
+
+        BigDecimal weightedBalanceMonths = openingBalance.multiply(BigDecimal.valueOf(12));
+        for (SalaryAccountRecordEntity record : records) {
+            if (record.getRecordMonth() == null || Boolean.FALSE.equals(record.getSyncToCurrent())) {
+                continue;
+            }
+            YearMonth recordMonth = YearMonth.from(record.getRecordMonth());
+            if (recordMonth.isBefore(cycleStart) || !recordMonth.isBefore(settlementMonth)) {
+                continue;
+            }
+            int remainingMonths = monthsBetween(recordMonth, settlementMonth);
+            weightedBalanceMonths = weightedBalanceMonths.add(
+                defaultZero(record.getAmount()).multiply(BigDecimal.valueOf(remainingMonths))
+            );
+        }
+
+        BigDecimal monthlyContribution = scale(predictedMonthlyContribution);
+        for (YearMonth month = cycleStart; month.isBefore(settlementMonth); month = month.plusMonths(1)) {
+            if (recordedAutoMonths.contains(month)) {
+                continue;
+            }
+            int remainingMonths = monthsBetween(month, settlementMonth);
+            weightedBalanceMonths = weightedBalanceMonths.add(
+                monthlyContribution.multiply(BigDecimal.valueOf(remainingMonths))
+            );
+        }
+
+        return weightedBalanceMonths
+            .multiply(HOUSING_FUND_INTEREST_ANNUAL_RATE)
+            .divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)
+            .divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
+    }
+
+    private int monthsBetween(YearMonth start, YearMonth end) {
+        return (end.getYear() - start.getYear()) * 12 + end.getMonthValue() - start.getMonthValue();
     }
 
     private List<SalaryAccountPageResponse.DetailItem> buildAccountDetails(

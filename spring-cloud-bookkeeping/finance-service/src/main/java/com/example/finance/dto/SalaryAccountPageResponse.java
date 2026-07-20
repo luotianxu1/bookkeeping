@@ -3,6 +3,7 @@ package com.example.finance.dto;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -61,5 +62,8 @@ public class SalaryAccountPageResponse {
         private BigDecimal predictedMonthlyBase;
         private BigDecimal predictedPersonal;
         private BigDecimal predictedCompany;
+        private BigDecimal predictedInterest;
+        private BigDecimal interestAnnualRate;
+        private LocalDate interestSettlementDate;
     }
 }
