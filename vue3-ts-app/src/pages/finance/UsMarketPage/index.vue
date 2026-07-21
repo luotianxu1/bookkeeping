@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
+import { getUsPremarket, type UsPremarketData, type UsPremarketIndex } from '@/api/modules/finance'
 import { useTheme } from '@/utils/theme'
 
 type IndexConfig = {
@@ -65,6 +66,9 @@ const cards = reactive<IndexCard[]>(
 const isRefreshing = ref(false)
 const hasLoadedOnce = ref(false)
 const updatedAtText = ref('')
+const premarketData = ref<UsPremarketData | null>(null)
+const premarketLoading = ref(false)
+const premarketError = ref('')
 
 const chartEls = new Map<string, HTMLDivElement>()
 const chartInstances = new Map<string, ECharts>()
@@ -105,6 +109,45 @@ function formatChange(card: IndexCard) {
   }
   const sign = card.change >= 0 ? '+' : ''
   return `${sign}${formatNumber(card.change)}  ${sign}${card.changePercent.toFixed(2)}%`
+}
+
+function formatPremarketChange(index: UsPremarketIndex) {
+  if (index.changePercent == null || !Number.isFinite(index.changePercent)) {
+    return '--'
+  }
+  const sign = index.changePercent >= 0 ? '+' : ''
+  return `${sign}${index.changePercent.toFixed(2)}%`
+}
+
+function premarketTone(index: UsPremarketIndex) {
+  if (index.changePercent == null || !Number.isFinite(index.changePercent)) {
+    return ''
+  }
+  return index.changePercent >= 0 ? 'up' : 'down'
+}
+
+function formatVolume(value?: number | null) {
+  if (value == null || !Number.isFinite(value)) {
+    return '--'
+  }
+  if (value >= 100_000_000) {
+    return `${(value / 100_000_000).toFixed(2)}亿`
+  }
+  if (value >= 10_000) {
+    return `${(value / 10_000).toFixed(1)}万`
+  }
+  return Math.round(value).toLocaleString('zh-CN')
+}
+
+function formatPremarketTime(value?: string | null) {
+  if (!value) {
+    return '--:--'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '--:--'
+  }
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
 // JSONP 请求，绕过跨域，与项目内其它东财行情调用保持一致
@@ -214,13 +257,33 @@ async function loadOne(card: IndexCard) {
   }
 }
 
+async function loadPremarket() {
+  if (premarketLoading.value) {
+    return
+  }
+  premarketLoading.value = true
+  premarketError.value = ''
+  try {
+    premarketData.value = await getUsPremarket()
+  } catch (error) {
+    if (!premarketData.value) {
+      premarketError.value = error instanceof Error ? error.message : '盘前行情加载失败'
+    }
+  } finally {
+    premarketLoading.value = false
+  }
+}
+
 async function refresh() {
   if (isRefreshing.value) {
     return
   }
   isRefreshing.value = true
   try {
-    await Promise.all(cards.map((card) => loadOne(card)))
+    await Promise.all([
+      ...cards.map((card) => loadOne(card)),
+      loadPremarket(),
+    ])
     updatedAtText.value = new Date().toLocaleTimeString('zh-CN')
   } finally {
     hasLoadedOnce.value = true
@@ -379,6 +442,50 @@ onBeforeUnmount(() => {
 
     <p class="us-market-status">{{ statusText }}</p>
 
+    <section v-if="premarketData" class="premarket-card" aria-label="美股盘前行情">
+      <header class="premarket-heading">
+        <div>
+          <h2>盘前行情</h2>
+          <span class="premarket-session">{{ premarketData.sessionLabel }}</span>
+        </div>
+        <time :datetime="premarketData.updatedAt">{{ formatPremarketTime(premarketData.updatedAt) }}</time>
+      </header>
+
+      <div class="premarket-index-grid">
+        <article
+          v-for="index in premarketData.indices"
+          :key="index.indexCode"
+          :class="premarketTone(index)"
+        >
+          <header>
+            <div>
+              <strong>{{ index.indexName }}</strong>
+              <span>盘前代理 {{ index.proxySymbol }}</span>
+            </div>
+            <span class="premarket-change">{{ formatPremarketChange(index) }}</span>
+          </header>
+          <p class="premarket-price">{{ formatNumber(index.price) }}</p>
+          <div class="premarket-index-detail">
+            <span>成交量 {{ formatVolume(index.volume) }}</span>
+            <span>买 {{ formatNumber(index.bidPrice) }} · 卖 {{ formatNumber(index.askPrice) }}</span>
+          </div>
+        </article>
+      </div>
+
+      <footer>
+        <span>SPY / QQQ 代理盘前方向，每30秒更新</span>
+        <span>{{ premarketData.source }}</span>
+      </footer>
+    </section>
+
+    <div v-else-if="premarketLoading" class="premarket-placeholder" aria-live="polite">
+      盘前行情加载中…
+    </div>
+    <div v-else-if="premarketError" class="premarket-error" role="alert">
+      <span>{{ premarketError }}</span>
+      <button type="button" @click="loadPremarket">重新加载</button>
+    </div>
+
     <div class="us-market-grid">
       <article
         v-for="card in cards"
@@ -410,7 +517,7 @@ onBeforeUnmount(() => {
     </div>
 
     <footer class="us-market-foot">
-      数据来源：东方财富 push2delay 快照 + 分时接口（延迟约十几秒~分钟级，非逐笔）。折线为当日分时走势，虚线为昨收基准。
+      指数来源：东方财富 push2delay 快照 + 分时接口；盘前股票来源：Nasdaq公开行情。数据可能延迟，不构成投资建议。
     </footer>
   </section>
 </template>

@@ -308,6 +308,8 @@ export interface StockScreenQuery {
   minLastDayDecline?: number
   requireVolumeUp?: boolean
   requireNoLowerShadow?: boolean
+  includeChiNext?: boolean
+  includeStar?: boolean
   page?: number
   pageSize?: number
 }
@@ -366,6 +368,28 @@ export interface LimitUpDownStatistics {
   source: string
   limitUps: LimitUpDownStock[]
   limitDowns: LimitUpDownStock[]
+}
+
+export interface UsPremarketIndex {
+  indexCode: string
+  indexName: string
+  proxySymbol: string
+  proxyName: string
+  price: number
+  change?: number | null
+  changePercent?: number | null
+  volume?: number | null
+  bidPrice?: number | null
+  askPrice?: number | null
+  lastTradeTime?: string | null
+}
+
+export interface UsPremarketData {
+  sessionStatus: string
+  sessionLabel: string
+  updatedAt: string
+  source: string
+  indices: UsPremarketIndex[]
 }
 
 export type TransactionType = 'expense' | 'income'
@@ -1524,6 +1548,10 @@ export function getLimitUpDownStatistics() {
 
 export function getMarketStatus() {
   return requestGet<MarketStatus>(financeRequest, '/api/finance/market-status')
+}
+
+export function getUsPremarket() {
+  return requestGet<UsPremarketData>(financeRequest, '/api/finance/us-market/premarket', { timeout: 15000 })
 }
 
 export function createTransaction(params: CreateTransactionParams) {

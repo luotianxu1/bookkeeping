@@ -196,6 +196,8 @@ public class StockScreenerService {
         BigDecimal minLastDayDecline,
         Boolean requireVolumeUp,
         Boolean requireNoLowerShadow,
+        Boolean includeChiNext,
+        Boolean includeStar,
         Integer page,
         Integer pageSize
     ) {
@@ -217,7 +219,8 @@ public class StockScreenerService {
 
         LambdaQueryWrapper<StockScreenSnapshotEntity> countQuery = buildScreenQuery(
             successfulRun.getId(), market, keyword, bearishCount, threeDayDecline, lastDayDecline,
-            Boolean.TRUE.equals(requireVolumeUp), Boolean.TRUE.equals(requireNoLowerShadow)
+            Boolean.TRUE.equals(requireVolumeUp), Boolean.TRUE.equals(requireNoLowerShadow),
+            Boolean.TRUE.equals(includeChiNext), Boolean.TRUE.equals(includeStar)
         );
         Long total = snapshotMapper.selectCount(countQuery);
         response.setTotal(total == null ? 0L : total);
@@ -228,7 +231,8 @@ public class StockScreenerService {
         long offset = (long) (normalizedPage - 1) * normalizedPageSize;
         LambdaQueryWrapper<StockScreenSnapshotEntity> pageQuery = buildScreenQuery(
             successfulRun.getId(), market, keyword, bearishCount, threeDayDecline, lastDayDecline,
-            Boolean.TRUE.equals(requireVolumeUp), Boolean.TRUE.equals(requireNoLowerShadow)
+            Boolean.TRUE.equals(requireVolumeUp), Boolean.TRUE.equals(requireNoLowerShadow),
+            Boolean.TRUE.equals(includeChiNext), Boolean.TRUE.equals(includeStar)
         )
             .orderByDesc(StockScreenSnapshotEntity::getSignalScore)
             .orderByDesc(StockScreenSnapshotEntity::getThreeDayDeclinePct)
@@ -524,7 +528,9 @@ public class StockScreenerService {
         BigDecimal minThreeDayDecline,
         BigDecimal minLastDayDecline,
         boolean requireVolumeUp,
-        boolean requireNoLowerShadow
+        boolean requireNoLowerShadow,
+        boolean includeChiNext,
+        boolean includeStar
     ) {
         LambdaQueryWrapper<StockScreenSnapshotEntity> query = new LambdaQueryWrapper<StockScreenSnapshotEntity>()
             .eq(StockScreenSnapshotEntity::getRunId, runId)
@@ -550,6 +556,14 @@ public class StockScreenerService {
         }
         if (requireNoLowerShadow) {
             query.eq(StockScreenSnapshotEntity::getNoLowerShadow, true);
+        }
+        // 创业板股票代码以 "30" 开头（300/301）；默认关闭时排除。
+        if (!includeChiNext) {
+            query.notLikeRight(StockScreenSnapshotEntity::getStockCode, "30");
+        }
+        // 科创板股票代码以 "688" 开头；默认关闭时排除。
+        if (!includeStar) {
+            query.notLikeRight(StockScreenSnapshotEntity::getStockCode, "688");
         }
         return query;
     }

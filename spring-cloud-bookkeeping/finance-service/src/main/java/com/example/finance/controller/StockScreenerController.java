@@ -44,6 +44,8 @@ public class StockScreenerController {
         @RequestParam(name = "minLastDayDecline", required = false, defaultValue = "3") BigDecimal minLastDayDecline,
         @RequestParam(name = "requireVolumeUp", required = false, defaultValue = "false") Boolean requireVolumeUp,
         @RequestParam(name = "requireNoLowerShadow", required = false, defaultValue = "false") Boolean requireNoLowerShadow,
+        @RequestParam(name = "includeChiNext", required = false, defaultValue = "false") Boolean includeChiNext,
+        @RequestParam(name = "includeStarMarket", required = false, defaultValue = "false") Boolean includeStarMarket,
         @RequestParam(name = "page", required = false, defaultValue = "1") Integer page,
         @RequestParam(name = "pageSize", required = false, defaultValue = "20") Integer pageSize
     ) {
@@ -55,6 +57,8 @@ public class StockScreenerController {
             minLastDayDecline,
             requireVolumeUp,
             requireNoLowerShadow,
+            includeChiNext,
+            includeStarMarket,
             page,
             pageSize
         ));

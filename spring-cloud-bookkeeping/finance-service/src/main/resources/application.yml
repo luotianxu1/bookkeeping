@@ -21,6 +21,8 @@ knife4j:
     language: zh_cn
 
 finance:
+  us-premarket:
+    quote-info-api-url: https://api.nasdaq.com/api/quote
   market-status:
     index-api-url: https://push2delay.eastmoney.com/api/qt/ulist.np/get
   limit-up-down:

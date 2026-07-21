@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import type { ECharts } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import CommonSelect from '@/components/common/CommonSelect/index.vue'
+import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   getLimitUpDownStatistics,
@@ -17,36 +20,38 @@ import {
   type StockScreenRun,
 } from '@/api/modules/finance'
 
-type ScreeningRuleKey = 'sunrise-rise' | 'custom'
-
-type ScreeningRuleOption = {
-  value: ScreeningRuleKey
+type ScreeningRule = {
+  key: string
   label: string
+  title: string
   description: string
+  points: string[]
 }
 
-const sunriseRiseRule: ScreeningRuleOption = {
-  value: 'sunrise-rise',
-  label: '旭日东升',
-  description: '连续下跌末端出现缩量阳线实体反包',
-}
-
-const screeningRuleOptions: ScreeningRuleOption[] = [
-  sunriseRiseRule,
+// 选股规则目录：后续新增规则时，在此追加一项即可自动出现在下拉框中。
+const screeningRules: ScreeningRule[] = [
   {
-    value: 'custom',
-    label: '自定义条件',
-    description: '基于旭日东升结构，自行调整阴线数量与跌幅阈值',
+    key: 'sunrise-rise',
+    label: '旭日东升',
+    title: '旭日东升',
+    description: '连续下跌末端出现缩量阳线实体反包，捕捉超跌反转的启动信号。',
+    points: [
+      '近6日至少 4 根阴线，处于连续下跌通道',
+      '最后3日累计跌幅不低于 9%，第3根阴线单日跌幅不低于 3%',
+      '最后3日连续收阴，次日阳线实体反包且缩量',
+    ],
   },
 ]
 
-const activeRuleKey = ref<ScreeningRuleKey>('sunrise-rise')
+const activeRuleKey = ref<string>(screeningRules[0].key)
 const criteria = reactive({
   minBearishCount: 4,
   minThreeDayDecline: 9,
   minLastDayDecline: 3,
   requireVolumeUp: false,
   requireNoLowerShadow: false,
+  includeChiNext: false,
+  includeStar: false,
 })
 const screenPage = ref<StockScreenPage | null>(null)
 const latestRun = ref<StockScreenRun | null>(null)
@@ -69,7 +74,27 @@ let waitingForSubmittedScan = false
 let submittedAfterRunId = 0
 let statusRequestInFlight = false
 
+type KlinePoint = {
+  label: string
+  open: number
+  close: number
+  high: number
+  low: number
+  volume: number
+}
+
+// 展开的股票 K 线：一次只展开一只，数据前端直连腾讯行情，按 key 缓存已拉取的点位。
+const expandedKey = ref('')
+const klineLoadingKey = ref('')
+const klineErrorKey = ref('')
+const klineChartError = ref('')
+const klineCache = new Map<string, KlinePoint[]>()
+const klineCharts = new Map<string, ECharts>()
+const klineContainers = new Map<string, HTMLElement>()
+
 const STATUS_POLL_INTERVAL = 2000
+
+const cardKey = (item: StockScreenItem) => `${item.signalDate}-${item.stockCode}`
 
 const scanIsRunning = computed(() => latestRun.value?.status === 'running')
 const resultTotal = computed(() => screenPage.value?.total || 0)
@@ -83,9 +108,11 @@ const primaryMarketIndices = computed<MarketStatusIndex[]>(() => {
   return (marketStatus.value?.indices || []).filter((item) => primaryCodes.has(item.code))
 })
 const activeRule = computed(() => (
-  screeningRuleOptions.find((rule) => rule.value === activeRuleKey.value) || sunriseRiseRule
+  screeningRules.find((rule) => rule.key === activeRuleKey.value) || screeningRules[0]
 ))
-const thresholdInputsDisabled = computed(() => activeRuleKey.value === 'sunrise-rise')
+const ruleOptions = computed(() => (
+  screeningRules.map((rule) => ({ label: rule.label, value: rule.key }))
+))
 const hasMore = computed(() => results.value.length < resultTotal.value)
 const dataTradeDate = computed(() => screenPage.value?.run?.tradeDate || latestRun.value?.tradeDate || '')
 
@@ -101,6 +128,7 @@ onBeforeUnmount(() => {
   stopStatusPolling()
   window.removeEventListener('focus', handlePageFocus)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  disposeAllKlineCharts()
 })
 
 async function loadInitialData() {
@@ -348,27 +376,6 @@ function createOptimisticRunningState(current: StockScreenRun | null): StockScre
   }
 }
 
-function resetRules() {
-  activeRuleKey.value = 'sunrise-rise'
-  applySunriseRisePreset()
-  void applyRules()
-}
-
-function handleRuleSelection() {
-  if (activeRuleKey.value === 'sunrise-rise') {
-    applySunriseRisePreset()
-    void applyRules()
-  }
-}
-
-function applySunriseRisePreset() {
-  criteria.minBearishCount = 4
-  criteria.minThreeDayDecline = 9
-  criteria.minLastDayDecline = 3
-  criteria.requireVolumeUp = false
-  criteria.requireNoLowerShadow = false
-}
-
 function buildQuery(page: number) {
   return {
     minBearishCount: clampNumber(criteria.minBearishCount, 1, 6, 4),
@@ -376,6 +383,8 @@ function buildQuery(page: number) {
     minLastDayDecline: clampNumber(criteria.minLastDayDecline, 0, 50, 3),
     requireVolumeUp: criteria.requireVolumeUp,
     requireNoLowerShadow: criteria.requireNoLowerShadow,
+    includeChiNext: criteria.includeChiNext,
+    includeStar: criteria.includeStar,
     page,
     pageSize: 20,
   }
@@ -392,20 +401,9 @@ function formatDate(value?: string | null) {
   return parts.length === 3 ? `${parts[0]}.${parts[1]}.${parts[2]}` : value
 }
 
-function formatPercent(value?: number | null) {
-  const normalized = Number(value)
-  return Number.isFinite(normalized) ? `${normalized.toFixed(2)}%` : '--'
-}
-
 function formatPrice(value?: number | null) {
   const normalized = Number(value)
   return Number.isFinite(normalized) ? normalized.toFixed(2) : '--'
-}
-
-function formatVolumeChange(ratio?: number | null) {
-  const normalized = Number(ratio)
-  if (!Number.isFinite(normalized)) return '--'
-  return `缩量 ${Math.max(0, (1 - normalized) * 100).toFixed(1)}%`
 }
 
 function formatSignedPercent(value?: number | null) {
@@ -440,6 +438,238 @@ function marketChangeClass(value?: number | null) {
 
 function marketLabel(market: string) {
   return market === 'SH' ? '沪市' : market === 'SZ' ? '深市' : market === 'BJ' ? '北交所' : market
+}
+
+// 今日涨幅：信号日收盘相对前一日收盘的百分比。
+function itemChangePercent(item: StockScreenItem) {
+  const prev = Number(item.previousClose)
+  const close = Number(item.signalClose)
+  if (!Number.isFinite(prev) || !Number.isFinite(close) || prev <= 0) {
+    return null
+  }
+  return ((close - prev) / prev) * 100
+}
+
+async function toggleCard(item: StockScreenItem) {
+  const key = cardKey(item)
+  if (expandedKey.value === key) {
+    disposeKlineChart(key)
+    expandedKey.value = ''
+    return
+  }
+  // 一次只展开一只：先销毁上一只的图表实例。
+  if (expandedKey.value) {
+    disposeKlineChart(expandedKey.value)
+  }
+  expandedKey.value = key
+  await loadKline(item)
+}
+
+async function loadKline(item: StockScreenItem) {
+  const key = cardKey(item)
+  klineErrorKey.value = ''
+  if (klineCache.has(key)) {
+    await renderKline(key)
+    return
+  }
+  klineLoadingKey.value = key
+  try {
+    const points = await fetchStockKline(toScreenerSymbol(item.stockCode, item.market))
+    if (points.length === 0) {
+      throw new Error('未获取到日K数据')
+    }
+    klineCache.set(key, points)
+    // 拉取期间用户可能已收起或切换到别的卡片。
+    if (expandedKey.value === key) {
+      await renderKline(key)
+    }
+  } catch (error) {
+    if (expandedKey.value === key) {
+      klineErrorKey.value = key
+      pageError.value = ''
+      klineChartError.value = toErrorMessage(error, '日K加载失败')
+    }
+  } finally {
+    if (klineLoadingKey.value === key) {
+      klineLoadingKey.value = ''
+    }
+  }
+}
+
+async function renderKline(key: string) {
+  const points = klineCache.get(key)
+  if (!points || points.length === 0) {
+    return
+  }
+  await nextTick()
+  const container = klineContainers.get(key)
+  if (!container || expandedKey.value !== key) {
+    return
+  }
+  const echarts = await import('echarts')
+  let chart = klineCharts.get(key)
+  if (!chart) {
+    chart = echarts.init(container)
+    klineCharts.set(key, chart)
+  }
+
+  const rootStyle = getComputedStyle(document.documentElement)
+  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
+  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
+  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
+  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const dates = points.map((point) => point.label)
+  const candleData = points.map((point) => [point.open, point.close, point.low, point.high])
+  // 成交量柱子跟随当日 K 线红涨绿跌：收盘 ≥ 开盘为红，否则为绿。
+  const volumeData = points.map((point) => ({
+    value: point.volume ?? 0,
+    itemStyle: { color: point.close >= point.open ? '#DC2626' : '#16A34A' },
+  }))
+  // 默认展示最近半个月（约 10 个交易日）的行情，K线与成交量共用同一 dataZoom 保持横轴对应。
+  const defaultSpan = 10
+  const zoomStartIndex = Math.max(0, points.length - defaultSpan)
+  const zoomEndIndex = Math.max(0, points.length - 1)
+
+  chart.setOption({
+    animation: false,
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      confine: true,
+      // tooltip 固定停在图表顶部，避免压在光标/手指下方遮挡数据。
+      position: (point: number[], _params: unknown, _dom: unknown, _rect: unknown, size: { contentSize: number[] }) => {
+        const [pointerX] = point
+        const [tooltipWidth] = size.contentSize
+        const chartWidth = chart?.getWidth() ?? 0
+        const x = Math.min(Math.max(pointerX - tooltipWidth / 2, 0), Math.max(0, chartWidth - tooltipWidth))
+        return [x, 0]
+      },
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText },
+      formatter: (params: any) => {
+        const items = Array.isArray(params) ? params : [params]
+        if (items.length === 0) {
+          return '--'
+        }
+        const title = items[0]?.axisValueLabel || items[0]?.axisValue || '--'
+        const lines = [title]
+        for (const entry of items) {
+          if (entry.seriesType === 'candlestick' && Array.isArray(entry.data)) {
+            const [, open, close, low, high] = entry.data
+            lines.push(`${entry.marker}${entry.seriesName} 开 ${formatKlineNumber(open)} 收 ${formatKlineNumber(close)} 高 ${formatKlineNumber(high)} 低 ${formatKlineNumber(low)}`)
+            continue
+          }
+          if (entry.seriesType === 'bar') {
+            lines.push(`${entry.marker}${entry.seriesName} ${formatKlineNumber(entry.value, 0)}`)
+          }
+        }
+        return lines.join('<br/>')
+      },
+    },
+    legend: {
+      top: 0,
+      left: 0,
+      icon: 'roundRect',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { color: axisText, fontSize: 11 },
+      data: ['日K', '成交量'],
+    },
+    grid: [
+      { left: 42, right: 14, top: 42, height: '54%' },
+      { left: 42, right: 14, top: '76%', height: '14%' },
+    ],
+    xAxis: [
+      { type: 'category', data: dates, boundaryGap: true, axisTick: { alignWithLabel: true }, axisLabel: { color: axisText, fontSize: 10 } },
+      { type: 'category', gridIndex: 1, data: dates, boundaryGap: true, axisTick: { alignWithLabel: true, show: false }, axisLabel: { show: false } },
+    ],
+    yAxis: [
+      { scale: true, axisLabel: { color: axisText, fontSize: 10 }, splitLine: { lineStyle: { color: splitLine } } },
+      { scale: true, gridIndex: 1, axisLabel: { show: false }, axisTick: { show: false }, axisLine: { show: false }, splitLine: { show: false } },
+    ],
+    dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], startValue: zoomStartIndex, endValue: zoomEndIndex }],
+    series: [
+      {
+        name: '日K',
+        type: 'candlestick',
+        data: candleData,
+        barWidth: '60%',
+        itemStyle: {
+          color: '#DC2626',
+          color0: '#16A34A',
+          borderColor: '#DC2626',
+          borderColor0: '#16A34A',
+        },
+      },
+      {
+        name: '成交量',
+        type: 'bar',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: volumeData,
+        barWidth: '60%',
+      },
+    ],
+  }, true)
+  requestAnimationFrame(() => chart?.resize())
+}
+
+function setKlineContainer(key: string, el: Element | null) {
+  if (el instanceof HTMLElement) {
+    klineContainers.set(key, el)
+  } else {
+    klineContainers.delete(key)
+  }
+}
+
+function disposeKlineChart(key: string) {
+  const chart = klineCharts.get(key)
+  if (chart) {
+    chart.dispose()
+    klineCharts.delete(key)
+  }
+  if (klineErrorKey.value === key) {
+    klineErrorKey.value = ''
+  }
+}
+
+function disposeAllKlineCharts() {
+  for (const chart of klineCharts.values()) {
+    chart.dispose()
+  }
+  klineCharts.clear()
+}
+
+// 日K数据前端直连腾讯行情，复用投资详情页的接口口径。
+async function fetchStockKline(symbol: string): Promise<KlinePoint[]> {
+  const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${encodeURIComponent(`${symbol},day,,,120,qfq`)}`)
+  const data = await response.json()
+  const rows = data?.data?.[symbol]?.qfqday || data?.data?.[symbol]?.day || []
+  if (!Array.isArray(rows)) {
+    return []
+  }
+  return rows
+    .map((row: any) => ({
+      label: row?.[0] as string,
+      open: Number(row?.[1]),
+      close: Number(row?.[2]),
+      high: Number(row?.[3]),
+      low: Number(row?.[4]),
+      volume: Number(row?.[5]),
+    }))
+    .filter((item: KlinePoint) => item.label && Number.isFinite(item.close))
+}
+
+function toScreenerSymbol(code: string, market: string) {
+  const prefix = market === 'SH' ? 'sh' : market === 'SZ' ? 'sz' : market === 'BJ' ? 'bj' : (code.startsWith('6') ? 'sh' : 'sz')
+  return `${prefix}${code}`
+}
+
+function formatKlineNumber(value: unknown, fractionDigits = 2) {
+  const normalized = Number(value)
+  return Number.isFinite(normalized) ? normalized.toFixed(fractionDigits) : '--'
 }
 
 function toErrorMessage(error: unknown, fallback: string) {
@@ -598,75 +828,30 @@ function toErrorMessage(error: unknown, fallback: string) {
     <p v-if="actionMessage" class="page-message" aria-live="polite">{{ actionMessage }}</p>
     <p v-if="pageError" class="page-message error" role="alert">{{ pageError }}</p>
 
-    <form class="rule-panel" @submit.prevent="applyRules()">
+    <section class="rule-panel">
       <div class="rule-panel-heading">
         <div>
-          <span>选股规则</span>
-          <h2>选择形态策略</h2>
+          <strong>选股规则</strong>
         </div>
-        <button class="text-button" type="button" @click="resetRules">恢复默认</button>
       </div>
 
-      <label class="rule-select-field">
-        <span>规则名称</span>
-        <div class="rule-select-control">
-          <select v-model="activeRuleKey" @change="handleRuleSelection">
-            <option v-for="rule in screeningRuleOptions" :key="rule.value" :value="rule.value">
-              {{ rule.label }}
-            </option>
-          </select>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m7 10 5 5 5-5" />
-          </svg>
-        </div>
-        <small>{{ activeRule.description }}</small>
-      </label>
+      <CommonSelect v-model="activeRuleKey" label="规则" :options="ruleOptions" />
 
-      <div class="threshold-grid">
-        <label>
-          <span>6日阴线至少</span>
-          <div :class="['number-input', { disabled: thresholdInputsDisabled }]">
-            <input v-model.number="criteria.minBearishCount" type="number" min="1" max="6" step="1" :disabled="thresholdInputsDisabled">
-            <b>根</b>
-          </div>
-        </label>
-        <label>
-          <span>3日累计跌幅（收盘计）</span>
-          <div :class="['number-input', { disabled: thresholdInputsDisabled }]">
-            <input v-model.number="criteria.minThreeDayDecline" type="number" min="0" max="50" step="0.5" :disabled="thresholdInputsDisabled">
-            <b>%</b>
-          </div>
-        </label>
-        <label>
-          <span>第3根阴线单日跌幅</span>
-          <div :class="['number-input', { disabled: thresholdInputsDisabled }]">
-            <input v-model.number="criteria.minLastDayDecline" type="number" min="0" max="50" step="0.5" :disabled="thresholdInputsDisabled">
-            <b>%</b>
-          </div>
-        </label>
+      <div class="rule-strategy" :aria-label="`${activeRule.title}策略说明`">
+        <h3>{{ activeRule.title }}</h3>
+        <p>{{ activeRule.description }}</p>
+        <ul>
+          <li v-for="point in activeRule.points" :key="point">{{ point }}</li>
+        </ul>
       </div>
 
-      <div class="required-rules" aria-label="固定条件">
-        <span>固定条件</span>
-        <p>最后3日连续收阴 · 次日阳线实体反包 · 反包阳线缩量</p>
-      </div>
+      <CommonSwitch v-model="criteria.includeChiNext" label="包含创业板（300/301）" @update:model-value="applyRules()" />
+      <CommonSwitch v-model="criteria.includeStar" label="包含科创板（688）" @update:model-value="applyRules()" />
 
-      <details class="preference-rules">
-        <summary>优选条件 <span>可选</span></summary>
-        <label>
-          <input v-model="criteria.requireVolumeUp" type="checkbox">
-          <span><b>3根阴线连续放量</b><small>成交量逐日增加，强化下跌末端特征</small></span>
-        </label>
-        <label>
-          <input v-model="criteria.requireNoLowerShadow" type="checkbox">
-          <span><b>反包阳线近似无下影线</b><small>下影线不超过开盘价的 0.15%</small></span>
-        </label>
-      </details>
-
-      <button class="apply-button" type="submit" :disabled="isLoading">
-        {{ isLoading ? '筛选中…' : '应用规则' }}
+      <button class="apply-button" type="button" :disabled="isLoading" @click="applyRules()">
+        {{ isLoading ? '筛选中…' : '搜索匹配股票' }}
       </button>
-    </form>
+    </section>
 
     <CommonLoading v-if="isLoading && results.length === 0" text="正在读取全市场指标..." />
 
@@ -679,8 +864,20 @@ function toErrorMessage(error: unknown, fallback: string) {
         <span v-if="dataTradeDate" class="trade-date">{{ formatDate(dataTradeDate) }}</span>
       </div>
 
-      <article v-for="item in results" :key="`${item.signalDate}-${item.stockCode}`" class="stock-card">
-        <header>
+      <article
+        v-for="item in results"
+        :key="`${item.signalDate}-${item.stockCode}`"
+        :class="['stock-card', { expanded: expandedKey === `${item.signalDate}-${item.stockCode}` }]"
+      >
+        <header
+          role="button"
+          tabindex="0"
+          :aria-expanded="expandedKey === `${item.signalDate}-${item.stockCode}`"
+          :aria-label="`${item.stockName} 日K走势`"
+          @click="toggleCard(item)"
+          @keydown.enter.prevent="toggleCard(item)"
+          @keydown.space.prevent="toggleCard(item)"
+        >
           <div class="stock-identity">
             <span class="market-badge">{{ marketLabel(item.market) }}</span>
             <div>
@@ -688,30 +885,31 @@ function toErrorMessage(error: unknown, fallback: string) {
               <p>{{ item.stockCode }}</p>
             </div>
           </div>
-          <div class="signal-score">
-            <strong>{{ item.signalScore }}</strong>
-            <span>信号分</span>
+          <div class="stock-card-trailing">
+            <div class="stock-price">
+              <strong>{{ formatPrice(item.signalClose) }}</strong>
+              <span :class="marketChangeClass(itemChangePercent(item))">{{ formatSignedPercent(itemChangePercent(item)) }}</span>
+            </div>
+            <svg class="expand-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 10 5 5 5-5" />
+            </svg>
           </div>
         </header>
 
-        <div class="stock-metrics">
-          <div><span>3日跌幅</span><strong>{{ formatPercent(item.threeDayDeclinePct) }}</strong></div>
-          <div><span>末日跌幅</span><strong>{{ formatPercent(item.lastDayDeclinePct) }}</strong></div>
-          <div><span>成交量</span><strong>{{ formatVolumeChange(item.volumeRatio) }}</strong></div>
+        <div v-if="expandedKey === `${item.signalDate}-${item.stockCode}`" class="kline-panel">
+          <div
+            v-show="klineLoadingKey !== `${item.signalDate}-${item.stockCode}` && klineErrorKey !== `${item.signalDate}-${item.stockCode}`"
+            :ref="(el) => setKlineContainer(`${item.signalDate}-${item.stockCode}`, el as Element | null)"
+            class="kline-chart"
+          ></div>
+          <div v-if="klineLoadingKey === `${item.signalDate}-${item.stockCode}`" class="kline-status" aria-live="polite">
+            日K加载中…
+          </div>
+          <div v-else-if="klineErrorKey === `${item.signalDate}-${item.stockCode}`" class="kline-status error" role="alert">
+            <span>{{ klineChartError }}</span>
+            <button type="button" @click="loadKline(item)">重试</button>
+          </div>
         </div>
-
-        <div class="condition-tags" aria-label="命中条件">
-          <span>6日{{ item.bearishCount6 }}阴</span>
-          <span>实体反包</span>
-          <span>阳线缩量</span>
-          <span v-if="item.lastThreeVolumeUp" class="preferred">阴线放量</span>
-          <span v-if="item.noLowerShadow" class="preferred">近似光脚</span>
-        </div>
-
-        <footer>
-          <span>{{ formatDate(item.previousDate) }} 阴线 {{ formatPrice(item.previousOpen) }} → {{ formatPrice(item.previousClose) }}</span>
-          <span>{{ formatDate(item.signalDate) }} 阳线 {{ formatPrice(item.signalOpen) }} → {{ formatPrice(item.signalClose) }}</span>
-        </footer>
       </article>
 
       <div v-if="results.length === 0" class="empty-state">
