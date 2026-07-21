@@ -32,6 +32,7 @@ const featureGroups: FeatureGroup[] = [
   {
     title: '行情工具',
     items: [
+      { icon: '⌁', label: 'A股选股', to: '/finance/stock-screener' },
       { icon: '🥇', label: '金价', to: '/finance/gold-price' },
       { icon: '🇺🇸', label: '美股行情', to: '/finance/us-market' },
       { icon: '📰', label: '市场快讯', to: '/finance/market-news' },

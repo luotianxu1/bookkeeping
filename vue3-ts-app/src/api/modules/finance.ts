@@ -247,6 +247,127 @@ export interface MarketNews {
   items: MarketNewsItem[]
 }
 
+export type StockScreenMarket = 'ALL' | 'SH' | 'SZ' | 'BJ'
+
+export interface StockScreenRun {
+  id: number
+  tradeDate?: string | null
+  triggerName: string
+  status: 'running' | 'success' | 'failed' | 'canceled' | string
+  totalStocks: number
+  processedStocks: number
+  matchedStocks: number
+  failedStocks: number
+  dataSource: string
+  ruleVersion?: string | null
+  resultMessage?: string | null
+  errorMessage?: string | null
+  startedAt: string
+  finishedAt?: string | null
+}
+
+export interface StockScreenItem {
+  stockCode: string
+  stockName: string
+  market: Exclude<StockScreenMarket, 'ALL'>
+  bearishCount6: number
+  lastThreeBearish: boolean
+  lastThreeVolumeUp: boolean
+  threeDayDeclinePct: number
+  lastDayDeclinePct: number
+  bullishEngulfing: boolean
+  noLowerShadow: boolean
+  volumeShrinking: boolean
+  volumeRatio: number
+  lowerShadowPct: number
+  signalScore: number
+  bearishStartDate: string
+  previousDate: string
+  signalDate: string
+  previousOpen: number
+  previousClose: number
+  signalOpen: number
+  signalClose: number
+  previousVolume: number
+  signalVolume: number
+}
+
+export interface StockScreenPage {
+  run?: StockScreenRun | null
+  total: number
+  page: number
+  pageSize: number
+  items: StockScreenItem[]
+}
+
+export interface StockScreenQuery {
+  market?: StockScreenMarket
+  keyword?: string
+  minBearishCount?: number
+  minThreeDayDecline?: number
+  minLastDayDecline?: number
+  requireVolumeUp?: boolean
+  requireNoLowerShadow?: boolean
+  page?: number
+  pageSize?: number
+}
+
+export interface StockScreenRunSubmission {
+  status: 'accepted' | 'running' | 'reused' | string
+  message: string
+  runId?: number | null
+  tradeDate?: string | null
+  submittedAt: string
+}
+
+export interface StockScreenStopSubmission {
+  status: 'accepted' | 'idle' | string
+  message: string
+  runId?: number | null
+  submittedAt: string
+}
+
+export interface MarketStatusIndex {
+  code: string
+  name: string
+  value: number
+  change: number
+  changePercent: number
+}
+
+export interface MarketStatus {
+  statusKey: 'strong' | 'rebound' | 'balanced' | 'weak' | 'panic' | string
+  statusLabel: string
+  tone: 'positive' | 'neutral' | 'negative' | string
+  summary: string
+  advanceCount: number
+  declineCount: number
+  flatCount: number
+  advanceRatio: number
+  turnover: number
+  updatedAt: string
+  source: string
+  indices: MarketStatusIndex[]
+}
+
+export interface LimitUpDownStock {
+  code: string
+  name: string
+  changePercent: number
+  industry: string
+}
+
+export interface LimitUpDownStatistics {
+  limitUpCount: number
+  limitDownCount: number
+  brokenLimitCount: number
+  sealRate: number
+  updatedAt: string
+  source: string
+  limitUps: LimitUpDownStock[]
+  limitDowns: LimitUpDownStock[]
+}
+
 export type TransactionType = 'expense' | 'income'
 
 export interface Transaction {
@@ -1370,6 +1491,39 @@ export function getExchangeRate(from: string, to: string) {
 
 export function getMarketNews(params: { category?: MarketNewsCategory; limit?: number } = {}) {
   return requestGet<MarketNews>(financeRequest, '/api/finance/market-news', { params })
+}
+
+export function getStockScreenStatus() {
+  return requestGet<StockScreenRun | null>(financeRequest, '/api/finance/stock-screener/status')
+}
+
+export function getStockScreenResults(params: StockScreenQuery = {}) {
+  return requestGet<StockScreenPage>(financeRequest, '/api/finance/stock-screener/results', { params })
+}
+
+export function triggerStockScreenRun(force = false) {
+  return requestPost<StockScreenRunSubmission, Record<string, never>>(
+    financeRequest,
+    '/api/finance/stock-screener/runs',
+    {},
+    { params: { force } },
+  )
+}
+
+export function stopStockScreenRun() {
+  return requestPost<StockScreenStopSubmission, Record<string, never>>(
+    financeRequest,
+    '/api/finance/stock-screener/runs/stop',
+    {},
+  )
+}
+
+export function getLimitUpDownStatistics() {
+  return requestGet<LimitUpDownStatistics>(financeRequest, '/api/finance/limit-up-down')
+}
+
+export function getMarketStatus() {
+  return requestGet<MarketStatus>(financeRequest, '/api/finance/market-status')
 }
 
 export function createTransaction(params: CreateTransactionParams) {

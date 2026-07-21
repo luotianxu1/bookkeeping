@@ -1,0 +1,63 @@
+-- A-share stock screener runs and calculated daily signal snapshots.
+-- Usage:
+--   mysql -u root -p bookkeeping_app < database/040_create_stock_screener.mysql.sql
+
+CREATE TABLE IF NOT EXISTS stock_screen_runs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '扫描任务ID',
+  trade_date DATE NULL COMMENT '本次行情对应的交易日',
+  trigger_name VARCHAR(80) NOT NULL COMMENT '触发来源',
+  status ENUM('running', 'success', 'failed', 'canceled') NOT NULL DEFAULT 'running' COMMENT '运行状态',
+  total_stocks INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '待扫描股票数',
+  processed_stocks INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '已处理股票数',
+  matched_stocks INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '默认规则命中数',
+  failed_stocks INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '行情获取失败数',
+  data_source VARCHAR(120) NOT NULL DEFAULT '东方财富股票列表 / 新浪日K' COMMENT '数据来源',
+  rule_version VARCHAR(64) NOT NULL DEFAULT 'downtrend-engulf-v1' COMMENT '选股规则版本，用于判断扫描结果是否可复用',
+  result_message VARCHAR(500) NULL COMMENT '运行结果摘要',
+  error_message VARCHAR(1000) NULL COMMENT '失败原因',
+  started_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '开始时间',
+  finished_at DATETIME(3) NULL COMMENT '完成时间',
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
+  PRIMARY KEY (id),
+  KEY idx_stock_screen_runs_status_date (status, trade_date),
+  KEY idx_stock_screen_runs_reusable (status, trade_date, rule_version),
+  KEY idx_stock_screen_runs_started (started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='A股选股扫描任务';
+
+CREATE TABLE IF NOT EXISTS stock_screen_snapshots (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '指标快照ID',
+  run_id BIGINT UNSIGNED NOT NULL COMMENT '扫描任务ID',
+  trade_date DATE NOT NULL COMMENT '信号交易日',
+  stock_code VARCHAR(12) NOT NULL COMMENT '股票代码',
+  stock_name VARCHAR(80) NOT NULL COMMENT '股票名称',
+  market VARCHAR(8) NOT NULL COMMENT '市场：SH/SZ/BJ',
+  bearish_count_6 TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '反包日前6日阴线数量',
+  last_three_bearish TINYINT(1) NOT NULL DEFAULT 0 COMMENT '反包日前3日是否连续收阴',
+  last_three_volume_up TINYINT(1) NOT NULL DEFAULT 0 COMMENT '3根阴线是否连续放量',
+  three_day_decline_pct DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '3根阴线累计跌幅百分比',
+  last_day_decline_pct DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '最后阴线实体跌幅百分比',
+  bullish_engulfing TINYINT(1) NOT NULL DEFAULT 0 COMMENT '次日阳线是否实体反包',
+  no_lower_shadow TINYINT(1) NOT NULL DEFAULT 0 COMMENT '阳线是否近似无下影线',
+  volume_shrinking TINYINT(1) NOT NULL DEFAULT 0 COMMENT '反包阳线是否缩量',
+  volume_ratio DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '阳线量/前一阴线量',
+  lower_shadow_pct DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '阳线下影线相对开盘价比例',
+  signal_score SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '默认规则信号评分',
+  default_matched TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否命中默认规则',
+  bearish_start_date DATE NOT NULL COMMENT '最后3根阴线首日',
+  previous_date DATE NOT NULL COMMENT '反包日前一交易日',
+  signal_date DATE NOT NULL COMMENT '反包阳线日期',
+  previous_open DECIMAL(18,4) NOT NULL COMMENT '前一阴线开盘价',
+  previous_close DECIMAL(18,4) NOT NULL COMMENT '前一阴线收盘价',
+  signal_open DECIMAL(18,4) NOT NULL COMMENT '反包阳线开盘价',
+  signal_close DECIMAL(18,4) NOT NULL COMMENT '反包阳线收盘价',
+  signal_low DECIMAL(18,4) NOT NULL COMMENT '反包阳线最低价',
+  previous_volume BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '前一阴线成交量',
+  signal_volume BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '反包阳线成交量',
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_stock_screen_snapshot_run_code (run_id, stock_code),
+  KEY idx_stock_screen_snapshot_run_match (run_id, default_matched, signal_score),
+  KEY idx_stock_screen_snapshot_run_market (run_id, market),
+  CONSTRAINT fk_stock_screen_snapshot_run FOREIGN KEY (run_id) REFERENCES stock_screen_runs (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='A股选股日线指标快照';

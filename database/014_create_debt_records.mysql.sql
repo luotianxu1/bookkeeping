@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS debt_records (
   account_id BIGINT UNSIGNED NOT NULL COMMENT '债务账户ID',
   funding_account_id BIGINT UNSIGNED NULL COMMENT '关联现金账户ID',
   direction ENUM('payable', 'receivable') NOT NULL COMMENT '债务方向：借入/借出',
+  record_type ENUM('borrow', 'repayment') NOT NULL DEFAULT 'borrow' COMMENT '记录类型：借款/还款',
   amount DECIMAL(18, 2) NOT NULL COMMENT '债务金额，统一存正数',
   currency_code CHAR(3) NOT NULL DEFAULT 'CNY' COMMENT '币种编码',
   remark VARCHAR(255) NULL COMMENT '备注',

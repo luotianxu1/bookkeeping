@@ -9,6 +9,7 @@ import ExchangeRatePage from '@/pages/finance/ExchangeRatePage/index.vue'
 import GoldPricePage from '@/pages/finance/GoldPricePage/index.vue'
 import UsMarketPage from '@/pages/finance/UsMarketPage/index.vue'
 import MarketNewsPage from '@/pages/finance/MarketNewsPage/index.vue'
+import StockScreenerPage from '@/pages/finance/StockScreenerPage/index.vue'
 import GoldAccountPage from '@/pages/finance/GoldAccountPage/index.vue'
 import GoldAccountPositionPage from '@/pages/finance/GoldAccountPositionPage/index.vue'
 import GoldLiquidationPage from '@/pages/finance/GoldLiquidationPage/index.vue'
@@ -101,6 +102,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '市场快讯',
+    },
+  },
+  {
+    path: '/finance/stock-screener',
+    name: 'finance-stock-screener',
+    component: StockScreenerPage,
+    meta: {
+      section: 'finance',
+      title: 'A股选股',
     },
   },
   {

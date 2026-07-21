@@ -21,6 +21,18 @@ knife4j:
     language: zh_cn
 
 finance:
+  market-status:
+    index-api-url: https://push2delay.eastmoney.com/api/qt/ulist.np/get
+  limit-up-down:
+    stock-list-api-url: https://push2delay.eastmoney.com/api/qt/clist/get
+  stock-screener:
+    # 沪深北交易日收盘后执行；公开行情源通常在16点前完成日K更新。
+    cron: 0 10 16 * * MON-FRI
+    fetch-concurrency: 12
+    connect-timeout-millis: 3000
+    read-timeout-millis: 5000
+    stock-list-api-url: https://push2delay.eastmoney.com/api/qt/clist/get
+    daily-kline-api-url: https://quotes.sina.cn/cn/api/jsonp_v2.php
   asset-snapshot:
     cron: 0 0 0 * * *
     retry-cron: 0 10 0 * * *
