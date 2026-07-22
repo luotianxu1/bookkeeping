@@ -45,6 +45,12 @@ finance:
     refresh-interval-millis: 300000
     retry-delay-millis: 10000
     max-retry-attempts: 3
+    # 上金所交易时段：仅在交易日的日盘/夜盘刷新金价，其余时间不刷新。
+    trading-session:
+      day-start: "09:00"
+      day-end: "15:30"
+      night-start: "21:00"
+      night-end: "02:30"
   investment:
     auto-invest:
       cron: 0 5 9 * * *

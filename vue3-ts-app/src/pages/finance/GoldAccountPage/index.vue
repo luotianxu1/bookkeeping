@@ -90,12 +90,13 @@ const displaySummary = computed(() => (
     }
 ))
 const accountRows = computed(() =>
-  goldAccounts.value.map((account) => {
+  goldAccounts.value.map((account, index) => {
     const accountHolding = holdingsByAccountId.value[account.id]
 
     return {
       id: account.id,
       account,
+      orderIndex: index,
       name: account.name,
       avgCostPrice: Number(accountHolding?.avgCostPrice ?? 0),
       purchaseAmount: Number(accountHolding?.purchaseAmount ?? 0),
@@ -104,6 +105,13 @@ const accountRows = computed(() =>
       createdAt: accountHolding?.createdAt ?? null,
       remark: account.remark ?? '',
     }
+  }).sort((left, right) => {
+    const profitDiff = right.holdingProfit - left.holdingProfit
+    if (profitDiff !== 0) {
+      return profitDiff
+    }
+
+    return left.orderIndex - right.orderIndex
   }),
 )
 const hasAccounts = computed(() => accountRows.value.length > 0)

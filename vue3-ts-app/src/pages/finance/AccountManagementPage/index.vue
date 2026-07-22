@@ -195,7 +195,15 @@ const accountGroups = computed<AccountGroup[]>(() => {
 
   return groupTypeIds.map((accountTypeId) => {
     const groupAccounts = groupedAccounts.get(accountTypeId) ?? []
-    const firstAccount = groupAccounts[0]
+    const sortedGroupAccounts = [...groupAccounts].sort((left, right) => {
+      const amountDifference = getSignedBalance(right) - getSignedBalance(left)
+      if (amountDifference !== 0) {
+        return amountDifference
+      }
+
+      return left.name.localeCompare(right.name, 'zh-CN') || left.id - right.id
+    })
+    const firstAccount = sortedGroupAccounts[0]
     const accountType = typeById.get(accountTypeId)
     const groupCode = accountType?.code ?? firstAccount?.accountTypeCode
     const groupStorageKey = buildGroupStorageKey(accountTypeId, groupCode, accountType?.name ?? firstAccount?.accountTypeName)
@@ -230,7 +238,7 @@ const accountGroups = computed<AccountGroup[]>(() => {
           ? '/finance/accounts/investment'
         : undefined,
       collapsed: collapsedGroupState.value[groupStorageKey] ?? false,
-      items: groupAccounts.map((account) => ({
+      items: sortedGroupAccounts.map((account) => ({
           id: account.id,
           icon: getAccountIcon(account.icon, account.accountTypeCode),
           name: isReadOnlyFamilyView.value

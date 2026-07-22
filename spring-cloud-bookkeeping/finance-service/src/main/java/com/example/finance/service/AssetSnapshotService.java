@@ -18,8 +18,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -98,6 +98,8 @@ public class AssetSnapshotService {
                 AccountResponse::getId,
                 accountService::resolveSignedNetWorthBalance
             ));
+        Map<Long, AccountResponse> currentAccountById = currentAccounts.stream()
+            .collect(Collectors.toMap(AccountResponse::getId, item -> item));
         BigDecimal currentTotalAssets = accountService.calculateTotalAssets(currentAccounts);
         response.setCurrentTotalAssets(currentTotalAssets);
 
@@ -126,18 +128,28 @@ public class AssetSnapshotService {
             return response;
         }
 
-        Set<Long> accountIds = accountSnapshots.stream()
-            .map(AssetDailySnapshotEntity::getAccountId)
-            .collect(Collectors.toSet());
-        List<AccountEntity> accountEntities = accountMapper.selectList(new LambdaQueryWrapper<AccountEntity>()
+        Map<Long, AssetDailySnapshotEntity> snapshotByAccountId = accountSnapshots.stream()
+            .collect(Collectors.toMap(AssetDailySnapshotEntity::getAccountId, item -> item, (left, right) -> left));
+        Set<Long> accountIds = new LinkedHashSet<>();
+        currentAccounts.stream()
+            .map(AccountResponse::getId)
+            .filter(item -> item != null)
+            .forEach(accountIds::add);
+        snapshotByAccountId.keySet().stream()
+            .filter(item -> item != null)
+            .forEach(accountIds::add);
+
+        List<AccountEntity> accountEntities = accountIds.isEmpty()
+            ? Collections.emptyList()
+            : accountMapper.selectList(new LambdaQueryWrapper<AccountEntity>()
             .in(AccountEntity::getId, accountIds)
             .orderByAsc(AccountEntity::getSortOrder)
             .orderByAsc(AccountEntity::getId));
         Map<Long, AccountEntity> accountById = accountEntities.stream()
             .collect(Collectors.toMap(AccountEntity::getId, item -> item));
-        Map<Long, Integer> accountOrderIndex = new HashMap<>();
-        for (int index = 0; index < accountEntities.size(); index++) {
-            accountOrderIndex.put(accountEntities.get(index).getId(), index);
+        Map<Long, Integer> accountOrderIndex = new LinkedHashMap<>();
+        for (int index = 0; index < currentAccounts.size(); index++) {
+            accountOrderIndex.put(currentAccounts.get(index).getId(), index);
         }
 
         Set<Long> accountTypeIds = accountEntities.stream()
@@ -148,22 +160,32 @@ public class AssetSnapshotService {
             : accountTypeMapper.selectByIds(accountTypeIds).stream()
                 .collect(Collectors.toMap(AccountTypeEntity::getId, item -> item));
 
-        List<AssetAccountSnapshotItemResponse> accounts = accountSnapshots.stream()
+        List<AssetAccountSnapshotItemResponse> accounts = accountIds.stream()
             .sorted(Comparator
-                .comparingInt((AssetDailySnapshotEntity item) -> accountOrderIndex.getOrDefault(item.getAccountId(), Integer.MAX_VALUE))
-                .thenComparing(item -> item.getAccountId() == null ? Long.MAX_VALUE : item.getAccountId()))
-            .map(item -> {
-                AccountEntity account = accountById.get(item.getAccountId());
-                AccountTypeEntity accountType = account == null ? null : accountTypes.get(account.getAccountTypeId());
+                .comparingInt((Long item) -> accountOrderIndex.getOrDefault(item, Integer.MAX_VALUE))
+                .thenComparing(item -> item == null ? Long.MAX_VALUE : item))
+            .map(accountId -> {
+                AccountResponse currentAccount = currentAccountById.get(accountId);
+                AssetDailySnapshotEntity snapshot = snapshotByAccountId.get(accountId);
+                AccountEntity account = accountById.get(accountId);
+                AccountTypeEntity accountType = currentAccount != null
+                    ? accountTypes.get(currentAccount.getAccountTypeId())
+                    : account == null ? null : accountTypes.get(account.getAccountTypeId());
 
                 AssetAccountSnapshotItemResponse snapshotItem = new AssetAccountSnapshotItemResponse();
                 snapshotItem.setUserId(userId);
-                snapshotItem.setAccountId(item.getAccountId());
-                snapshotItem.setAccountName(account == null ? "账户" + item.getAccountId() : account.getName());
-                snapshotItem.setAccountTypeCode(accountType == null ? null : accountType.getCode());
-                snapshotItem.setAccountTypeLabel(accountType == null ? "其他" : accountType.getName());
-                BigDecimal snapshotAssets = defaultZero(item.getTotalAssets());
-                BigDecimal currentAssets = currentAssetsByAccountId.getOrDefault(item.getAccountId(), BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+                snapshotItem.setAccountId(accountId);
+                snapshotItem.setAccountName(currentAccount != null
+                    ? currentAccount.getName()
+                    : account == null ? "账户" + accountId : account.getName());
+                snapshotItem.setAccountTypeCode(currentAccount != null
+                    ? currentAccount.getAccountTypeCode()
+                    : accountType == null ? null : accountType.getCode());
+                snapshotItem.setAccountTypeLabel(currentAccount != null
+                    ? currentAccount.getAccountTypeName()
+                    : accountType == null ? "其他" : accountType.getName());
+                BigDecimal snapshotAssets = snapshot == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : defaultZero(snapshot.getTotalAssets());
+                BigDecimal currentAssets = currentAssetsByAccountId.getOrDefault(accountId, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                 snapshotItem.setTotalAssets(snapshotAssets);
                 snapshotItem.setCurrentAssets(currentAssets);
                 snapshotItem.setChangeAmount(currentAssets.subtract(snapshotAssets).setScale(2, RoundingMode.HALF_UP));
