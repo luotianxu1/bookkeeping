@@ -167,15 +167,14 @@ public class GoldPriceService {
             throw new IllegalStateException("人民币金价数据缺少价格字段");
         }
 
-        if (domesticOpen == null) {
+        if (domesticOpen == null || domesticOpen.compareTo(BigDecimal.ZERO) <= 0) {
             domesticOpen = domesticChange == null
                 ? domesticPrice.subtract(defaultSpotDelta(domesticPrice))
                 : domesticPrice.subtract(domesticChange);
         }
-        if (domesticChange == null) {
-            domesticChange = domesticPrice.subtract(domesticOpen);
-        }
-        if (domesticChangePercent == null && domesticOpen.compareTo(BigDecimal.ZERO) > 0) {
+        // 页面涨跌额和涨跌幅统一以今日开盘价为基准，不沿用行情源可能基于昨收的字段。
+        domesticChange = domesticPrice.subtract(domesticOpen);
+        if (domesticOpen.compareTo(BigDecimal.ZERO) > 0) {
             domesticChangePercent = domesticChange.divide(domesticOpen, 6, RoundingMode.HALF_UP)
                 .multiply(new BigDecimal("100"));
         }
@@ -192,15 +191,16 @@ public class GoldPriceService {
             domesticSell = domesticPrice.subtract(new BigDecimal("0.15"));
         }
 
-        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0 && londonOpen == null) {
+        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0
+            && (londonOpen == null || londonOpen.compareTo(BigDecimal.ZERO) <= 0)) {
             londonOpen = londonPrice.subtract(defaultLondonDelta(londonPrice));
         }
-        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0 && londonChange == null) {
+        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0) {
             londonChange = londonPrice.subtract(londonOpen);
-        }
-        if (londonChangePercent == null && londonOpen != null && londonOpen.compareTo(BigDecimal.ZERO) > 0) {
-            londonChangePercent = londonChange.divide(londonOpen, 6, RoundingMode.HALF_UP)
-                .multiply(new BigDecimal("100"));
+            if (londonOpen.compareTo(BigDecimal.ZERO) > 0) {
+                londonChangePercent = londonChange.divide(londonOpen, 6, RoundingMode.HALF_UP)
+                    .multiply(new BigDecimal("100"));
+            }
         }
         if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0 && londonHigh == null) {
             londonHigh = londonPrice.max(londonOpen).add(defaultLondonDelta(londonPrice));

@@ -83,7 +83,7 @@ public class UsPremarketService {
         response.setSessionStatus(sessionStatus);
         response.setSessionLabel(resolveSessionLabel(sessionStatus));
         response.setUpdatedAt(LocalDateTime.now(MARKET_ZONE));
-        response.setSource("Nasdaq ETF盘前行情");
+        response.setSource(resolveSourceLabel(sessionStatus));
         response.setIndices(results.stream().map(IndexResult::quote).toList());
         return response;
     }
@@ -92,25 +92,28 @@ public class UsPremarketService {
         String url = quoteInfoApiUrl + "/" + proxy.proxySymbol() + "/info?assetclass=etf";
         JsonNode data = requestJson(url).path("data");
         JsonNode primary = data.path("primaryData");
+        JsonNode secondary = data.path("secondaryData");
         if (primary.isMissingNode() || primary.isNull()) {
             return null;
         }
+        String sessionStatus = normalizeSessionStatus(data.path("marketStatus").asText("Unknown"));
+        JsonNode activeQuote = selectActiveQuote(primary, secondary, sessionStatus);
         UsPremarketResponse.IndexQuote quote = new UsPremarketResponse.IndexQuote();
         quote.setIndexCode(proxy.indexCode());
         quote.setIndexName(proxy.indexName());
         quote.setProxySymbol(proxy.proxySymbol());
         quote.setProxyName(proxy.proxyName());
-        quote.setPrice(decimal(primary.path("lastSalePrice")));
-        quote.setChange(decimal(primary.path("netChange")));
-        quote.setChangePercent(decimal(primary.path("percentageChange")));
-        quote.setVolume(longValue(primary.path("volume")));
-        quote.setBidPrice(decimal(primary.path("bidPrice")));
-        quote.setAskPrice(decimal(primary.path("askPrice")));
-        quote.setLastTradeTime(primary.path("lastTradeTimestamp").asText(""));
+        quote.setPrice(decimal(firstField(activeQuote, primary, "lastSalePrice")));
+        quote.setChange(decimal(firstField(activeQuote, primary, "netChange")));
+        quote.setChangePercent(decimal(firstField(activeQuote, primary, "percentageChange")));
+        quote.setVolume(longValue(firstField(activeQuote, primary, "volume")));
+        quote.setBidPrice(decimal(firstField(activeQuote, primary, "bidPrice")));
+        quote.setAskPrice(decimal(firstField(activeQuote, primary, "askPrice")));
+        quote.setLastTradeTime(firstText(activeQuote, primary, "lastTradeTimestamp"));
         if (quote.getPrice() == null) {
             return null;
         }
-        return new IndexResult(data.path("marketStatus").asText("Unknown"), quote);
+        return new IndexResult(sessionStatus, quote);
     }
 
     private JsonNode requestJson(String url) {
@@ -157,6 +160,52 @@ public class UsPremarketService {
         return value == null ? null : value.longValue();
     }
 
+    private JsonNode selectActiveQuote(JsonNode primary, JsonNode secondary, String status) {
+        if (isExtendedSession(status) && hasPrice(secondary)) {
+            return secondary;
+        }
+        return primary;
+    }
+
+    private boolean isExtendedSession(String status) {
+        return "Pre-Market".equals(status) || "After-Hours".equals(status);
+    }
+
+    private boolean hasPrice(JsonNode node) {
+        return decimal(node.path("lastSalePrice")) != null;
+    }
+
+    private JsonNode firstField(JsonNode preferred, JsonNode fallback, String fieldName) {
+        JsonNode preferredValue = preferred.path(fieldName);
+        if (!isBlankValue(preferredValue)) {
+            return preferredValue;
+        }
+        return fallback.path(fieldName);
+    }
+
+    private String firstText(JsonNode preferred, JsonNode fallback, String fieldName) {
+        JsonNode value = firstField(preferred, fallback, fieldName);
+        return isBlankValue(value) ? "" : value.asText("");
+    }
+
+    private boolean isBlankValue(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return true;
+        }
+        String value = node.asText("").trim();
+        return value.isEmpty() || "N/A".equalsIgnoreCase(value);
+    }
+
+    private String normalizeSessionStatus(String status) {
+        return switch (status) {
+            case "Open", "Market Open" -> "Market Open";
+            case "Pre-Market", "Premarket" -> "Pre-Market";
+            case "After-Hours", "After Hours" -> "After-Hours";
+            case "Closed", "Market Closed" -> "Market Closed";
+            default -> status == null || status.isBlank() ? "Unknown" : status;
+        };
+    }
+
     private String resolveSessionLabel(String status) {
         return switch (status) {
             case "Pre-Market" -> "盘前交易中";
@@ -164,6 +213,15 @@ public class UsPremarketService {
             case "After-Hours" -> "盘后交易中";
             case "Market Closed" -> "已收盘";
             default -> "最近行情";
+        };
+    }
+
+    private String resolveSourceLabel(String status) {
+        return switch (status) {
+            case "Pre-Market" -> "Nasdaq ETF盘前行情";
+            case "Market Open" -> "Nasdaq ETF实时行情";
+            case "After-Hours" -> "Nasdaq ETF盘后行情";
+            default -> "Nasdaq ETF最近行情";
         };
     }
 

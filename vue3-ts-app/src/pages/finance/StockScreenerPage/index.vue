@@ -4,6 +4,7 @@ import type { ECharts } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
+import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   getLimitUpDownStatistics,
@@ -682,13 +683,20 @@ function toErrorMessage(error: unknown, fallback: string) {
     <PageHeader title="A股选股" back-to="/finance/more-features" back-label="返回更多功能">
       <template #right>
         <button
-          :class="['header-scan-button', { danger: scanIsRunning }]"
+          v-if="scanIsRunning"
+          class="header-scan-button danger"
           type="button"
-          :disabled="isSubmittingScan || isStoppingScan"
+          :disabled="isStoppingScan"
           @click="handleHeaderScanAction"
         >
-          {{ scanIsRunning ? (isStoppingScan ? '停止中' : '停止扫描') : isSubmittingScan ? '提交中' : '更新数据' }}
+          {{ isStoppingScan ? '停止中' : '停止扫描' }}
         </button>
+        <CommonHeaderRefreshButton
+          v-else
+          label="刷新选股数据"
+          :loading="isSubmittingScan"
+          @click="handleHeaderScanAction"
+        />
       </template>
     </PageHeader>
 
@@ -845,8 +853,8 @@ function toErrorMessage(error: unknown, fallback: string) {
         </ul>
       </div>
 
-      <CommonSwitch v-model="criteria.includeChiNext" label="包含创业板（300/301）" @update:model-value="applyRules()" />
-      <CommonSwitch v-model="criteria.includeStar" label="包含科创板（688）" @update:model-value="applyRules()" />
+      <CommonSwitch v-model="criteria.includeChiNext" label="包含创业板（300/301）" />
+      <CommonSwitch v-model="criteria.includeStar" label="包含科创板（688）" />
 
       <button class="apply-button" type="button" :disabled="isLoading" @click="applyRules()">
         {{ isLoading ? '筛选中…' : '搜索匹配股票' }}
@@ -917,7 +925,7 @@ function toErrorMessage(error: unknown, fallback: string) {
           <path d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 19h18" />
         </svg>
         <strong>{{ screenPage?.run ? '暂无符合当前规则的股票' : '还没有可用的扫描数据' }}</strong>
-        <p>{{ screenPage?.run ? '可以适当降低跌幅阈值或取消优选条件' : '点击右上角“更新数据”启动首次全市场扫描' }}</p>
+        <p>{{ screenPage?.run ? '可以适当降低跌幅阈值或取消优选条件' : '点击右上角刷新按钮启动首次全市场扫描' }}</p>
       </div>
 
       <button v-if="hasMore" class="load-more-button" type="button" :disabled="isLoadingMore" @click="loadMore">

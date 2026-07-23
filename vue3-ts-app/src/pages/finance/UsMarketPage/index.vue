@@ -69,6 +69,90 @@ const updatedAtText = ref('')
 const premarketData = ref<UsPremarketData | null>(null)
 const premarketLoading = ref(false)
 const premarketError = ref('')
+const nowTime = ref(Date.now())
+
+const sessionTitle = computed(() => {
+  switch (premarketData.value?.sessionStatus) {
+    case 'Pre-Market':
+      return '盘前行情'
+    case 'Market Open':
+    case 'Open':
+      return '常规行情'
+    case 'After-Hours':
+      return '盘后行情'
+    case 'Market Closed':
+    case 'Closed':
+      return '最近行情'
+    default:
+      return 'ETF代理行情'
+  }
+})
+
+const proxyLabel = computed(() => {
+  switch (premarketData.value?.sessionStatus) {
+    case 'Pre-Market':
+      return '盘前代理'
+    case 'Market Open':
+    case 'Open':
+      return '实时代理'
+    case 'After-Hours':
+      return '盘后代理'
+    default:
+      return 'ETF代理'
+  }
+})
+
+const premarketFootText = computed(() => {
+  switch (premarketData.value?.sessionStatus) {
+    case 'Pre-Market':
+      return 'SPY / QQQ 代理盘前方向，每30秒更新'
+    case 'Market Open':
+    case 'Open':
+      return 'SPY / QQQ 代理常规交易方向，每30秒更新'
+    case 'After-Hours':
+      return 'SPY / QQQ 代理盘后方向，每30秒更新'
+    default:
+      return 'SPY / QQQ 代理指数方向，每30秒更新'
+  }
+})
+
+const showProxyMarketCard = computed(() => {
+  if (isUsRegularMarketTime(new Date(nowTime.value))) {
+    return false
+  }
+  const status = premarketData.value?.sessionStatus
+  return status !== 'Market Open' && status !== 'Open'
+})
+
+const newYorkDateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  weekday: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+
+function isUsRegularMarketTime(date: Date) {
+  const parts = Object.fromEntries(
+    newYorkDateTimeFormatter.formatToParts(date).map((part) => [part.type, part.value]),
+  )
+  if (parts.weekday === 'Sat' || parts.weekday === 'Sun') {
+    return false
+  }
+  const hour = Number(parts.hour)
+  const minute = Number(parts.minute)
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return false
+  }
+  const minutes = hour * 60 + minute
+  return minutes >= 9 * 60 + 30 && minutes < 16 * 60
+}
+
+function clearProxyMarketState() {
+  premarketData.value = null
+  premarketLoading.value = false
+  premarketError.value = ''
+}
 
 const chartEls = new Map<string, HTMLDivElement>()
 const chartInstances = new Map<string, ECharts>()
@@ -258,6 +342,10 @@ async function loadOne(card: IndexCard) {
 }
 
 async function loadPremarket() {
+  if (isUsRegularMarketTime(new Date(nowTime.value))) {
+    clearProxyMarketState()
+    return
+  }
   if (premarketLoading.value) {
     return
   }
@@ -278,6 +366,7 @@ async function refresh() {
   if (isRefreshing.value) {
     return
   }
+  nowTime.value = Date.now()
   isRefreshing.value = true
   try {
     await Promise.all([
@@ -442,10 +531,10 @@ onBeforeUnmount(() => {
 
     <p class="us-market-status">{{ statusText }}</p>
 
-    <section v-if="premarketData" class="premarket-card" aria-label="美股盘前行情">
+    <section v-if="premarketData && showProxyMarketCard" class="premarket-card" aria-label="美股ETF代理行情">
       <header class="premarket-heading">
         <div>
-          <h2>盘前行情</h2>
+          <h2>{{ sessionTitle }}</h2>
           <span class="premarket-session">{{ premarketData.sessionLabel }}</span>
         </div>
         <time :datetime="premarketData.updatedAt">{{ formatPremarketTime(premarketData.updatedAt) }}</time>
@@ -460,7 +549,7 @@ onBeforeUnmount(() => {
           <header>
             <div>
               <strong>{{ index.indexName }}</strong>
-              <span>盘前代理 {{ index.proxySymbol }}</span>
+              <span>{{ proxyLabel }} {{ index.proxySymbol }}</span>
             </div>
             <span class="premarket-change">{{ formatPremarketChange(index) }}</span>
           </header>
@@ -473,15 +562,15 @@ onBeforeUnmount(() => {
       </div>
 
       <footer>
-        <span>SPY / QQQ 代理盘前方向，每30秒更新</span>
+        <span>{{ premarketFootText }}</span>
         <span>{{ premarketData.source }}</span>
       </footer>
     </section>
 
-    <div v-else-if="premarketLoading" class="premarket-placeholder" aria-live="polite">
+    <div v-else-if="!premarketData && premarketLoading" class="premarket-placeholder" aria-live="polite">
       盘前行情加载中…
     </div>
-    <div v-else-if="premarketError" class="premarket-error" role="alert">
+    <div v-else-if="!premarketData && premarketError" class="premarket-error" role="alert">
       <span>{{ premarketError }}</span>
       <button type="button" @click="loadPremarket">重新加载</button>
     </div>
@@ -517,7 +606,7 @@ onBeforeUnmount(() => {
     </div>
 
     <footer class="us-market-foot">
-      指数来源：东方财富 push2delay 快照 + 分时接口；盘前股票来源：Nasdaq公开行情。数据可能延迟，不构成投资建议。
+      指数来源：东方财富 push2delay 快照 + 分时接口；ETF代理行情来源：Nasdaq公开行情。数据可能延迟，不构成投资建议。
     </footer>
   </section>
 </template>

@@ -79,9 +79,9 @@ const bucketSectionTitle = computed(() => {
 })
 
 const trendSeriesName = computed(() => {
-  if (viewMode.value === 'calendar') return '当天总收益'
-  if (viewMode.value === 'month') return '当月总收益'
-  return '当年总收益'
+  if (viewMode.value === 'calendar') return '当天总金额'
+  if (viewMode.value === 'month') return '当月总金额'
+  return '当年总金额'
 })
 
 const lineHasData = computed(() => trendPoints.value.some((item) => Number(item.contractAmount) > 0 || Number(item.orderCount) > 0))
@@ -556,11 +556,6 @@ function handleResize() {
           :model-value="monthYear"
           @update:model-value="monthYear = $event"
         />
-        <YearPicker
-          v-else
-          :model-value="yearWindowEnd"
-          @update:model-value="yearWindowEnd = $event"
-        />
       </div>
 
       <div class="overview-stats-grid">
@@ -570,8 +565,8 @@ function handleResize() {
           <p>已拍摄 {{ summary?.shotOrders ?? 0 }} · 未拍摄 {{ summary?.pendingOrders ?? 0 }}</p>
         </article>
         <article class="overview-stat-card">
-          <span>已收金额</span>
-          <strong :class="amountTextClass(summary?.totalReceivedAmount)">{{ formatCurrency(summary?.totalReceivedAmount) }}</strong>
+          <span>总金额</span>
+          <strong :class="amountTextClass(summary?.totalContractAmount)">{{ formatCurrency(summary?.totalContractAmount) }}</strong>
           <p>订金 {{ formatCurrency(summary?.depositIncome) }} · 尾款 {{ formatCurrency(summary?.finalIncome) }}</p>
         </article>
       </div>
@@ -618,7 +613,7 @@ function handleResize() {
               </div>
               <div class="bucket-card-metrics">
                 <span>{{ bucket.orderCount }} 单</span>
-                <b :class="amountTextClass(bucket.totalIncome)">{{ formatCurrency(bucket.totalIncome) }}</b>
+                <b :class="amountTextClass(bucket.contractAmount)">{{ formatCurrency(bucket.contractAmount) }}</b>
               </div>
             </template>
           </button>
