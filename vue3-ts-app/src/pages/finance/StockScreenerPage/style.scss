@@ -27,11 +27,6 @@
   font-size: var(--font-size-12);
 }
 
-.header-scan-button.danger {
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-}
-
 .header-scan-button:disabled,
 .apply-button:disabled,
 .load-more-button:disabled {
@@ -42,9 +37,127 @@
 .header-scan-button:focus-visible,
 .text-button:focus-visible,
 .apply-button:focus-visible,
-.load-more-button:focus-visible {
+.load-more-button:focus-visible,
+.scan-progress-action:focus-visible {
   outline: 3px solid var(--color-ring-focus);
   outline-offset: 2px;
+}
+
+.scan-progress-content {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.scan-progress-heading {
+  min-height: 32px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.scan-progress-heading span {
+  color: var(--color-text-secondary);
+  font-weight: 700;
+}
+
+.scan-progress-heading strong {
+  color: var(--color-brand);
+  font-size: var(--font-size-24);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-progress-track {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-8);
+  background: var(--color-bg-soft);
+}
+
+.scan-progress-track span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-brand);
+  transition: width 0.24s ease;
+}
+
+.scan-progress-track.indeterminate span {
+  width: 38%;
+  animation: stock-scan-progress 1.15s ease-in-out infinite;
+}
+
+.scan-progress-content > p {
+  min-height: 42px;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-13);
+  line-height: 1.6;
+}
+
+.scan-progress-content > p.error {
+  color: var(--color-danger);
+}
+
+.scan-progress-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.scan-progress-metrics > div {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.scan-progress-metrics span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-11);
+}
+
+.scan-progress-metrics strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-15);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+}
+
+.scan-progress-action {
+  width: 100%;
+  min-height: var(--space-40);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: var(--color-brand);
+  color: var(--color-white);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.scan-progress-action.danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.scan-progress-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@keyframes stock-scan-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(275%);
+  }
 }
 
 .market-status-card {
@@ -817,7 +930,12 @@
   .text-button,
   .apply-button,
   .load-more-button,
-  .expand-icon {
+  .expand-icon,
+  .scan-progress-track span {
     transition: none;
+  }
+
+  .scan-progress-track.indeterminate span {
+    animation: none;
   }
 }

@@ -49,14 +49,22 @@ public class StockScreenerService {
     private static final String STATUS_SUCCESS = "success";
     private static final String STATUS_FAILED = "failed";
     private static final String STATUS_CANCELED = "canceled";
+    private static final String RULE_SUNRISE_RISE = "sunrise-rise";
+    private static final String RULE_YIN_YANG_DOUBLE_BEAR = "yin-yang-double-bear";
     private static final String DATA_SOURCE = "东方财富股票列表 / 新浪日K";
-    private static final String CURRENT_RULE_VERSION = "downtrend-engulf-v2";
+    private static final String CURRENT_RULE_VERSION = "downtrend-engulf-v3";
     private static final LocalTime MARKET_DATA_READY_TIME = LocalTime.of(16, 0);
     private static final int UNIVERSE_PAGE_SIZE = 100;
     private static final int K_LINE_COUNT = 12;
     private static final BigDecimal DEFAULT_THREE_DAY_DECLINE = new BigDecimal("9");
     private static final BigDecimal DEFAULT_LAST_DAY_DECLINE = new BigDecimal("3");
     private static final BigDecimal NO_LOWER_SHADOW_TOLERANCE = new BigDecimal("0.15");
+    private static final BigDecimal DOUBLE_BEAR_MIN_BODY_PCT = new BigDecimal("5");
+    private static final BigDecimal DOUBLE_BEAR_MAX_BODY_PCT = new BigDecimal("15");
+    private static final BigDecimal DOUBLE_BEAR_MIN_GAP_DOWN_PCT = new BigDecimal("1.5");
+    private static final BigDecimal DOUBLE_BEAR_MIN_VOLUME_RATIO = new BigDecimal("1.5");
+    private static final BigDecimal DOUBLE_BEAR_MAX_VOLUME_RATIO = new BigDecimal("4");
+    private static final BigDecimal LIMIT_UP_THRESHOLD_PCT = new BigDecimal("9.5");
 
     private final StockScreenRunMapper runMapper;
     private final StockScreenSnapshotMapper snapshotMapper;
@@ -191,6 +199,7 @@ public class StockScreenerService {
     public StockScreenPageResponse screen(
         String market,
         String keyword,
+        String ruleKey,
         Integer minBearishCount,
         BigDecimal minThreeDayDecline,
         BigDecimal minLastDayDecline,
@@ -206,6 +215,7 @@ public class StockScreenerService {
         int bearishCount = Math.max(1, Math.min(6, minBearishCount == null ? 4 : minBearishCount));
         BigDecimal threeDayDecline = normalizePercent(minThreeDayDecline, DEFAULT_THREE_DAY_DECLINE);
         BigDecimal lastDayDecline = normalizePercent(minLastDayDecline, DEFAULT_LAST_DAY_DECLINE);
+        String normalizedRuleKey = normalizeRuleKey(ruleKey);
 
         StockScreenRunEntity successfulRun = latestSuccessfulRun();
         StockScreenPageResponse response = new StockScreenPageResponse();
@@ -220,7 +230,7 @@ public class StockScreenerService {
         LambdaQueryWrapper<StockScreenSnapshotEntity> countQuery = buildScreenQuery(
             successfulRun.getId(), market, keyword, bearishCount, threeDayDecline, lastDayDecline,
             Boolean.TRUE.equals(requireVolumeUp), Boolean.TRUE.equals(requireNoLowerShadow),
-            Boolean.TRUE.equals(includeChiNext), Boolean.TRUE.equals(includeStar)
+            Boolean.TRUE.equals(includeChiNext), Boolean.TRUE.equals(includeStar), normalizedRuleKey
         );
         Long total = snapshotMapper.selectCount(countQuery);
         response.setTotal(total == null ? 0L : total);
@@ -232,11 +242,16 @@ public class StockScreenerService {
         LambdaQueryWrapper<StockScreenSnapshotEntity> pageQuery = buildScreenQuery(
             successfulRun.getId(), market, keyword, bearishCount, threeDayDecline, lastDayDecline,
             Boolean.TRUE.equals(requireVolumeUp), Boolean.TRUE.equals(requireNoLowerShadow),
-            Boolean.TRUE.equals(includeChiNext), Boolean.TRUE.equals(includeStar)
-        )
-            .orderByDesc(StockScreenSnapshotEntity::getSignalScore)
-            .orderByDesc(StockScreenSnapshotEntity::getThreeDayDeclinePct)
-            .orderByAsc(StockScreenSnapshotEntity::getStockCode)
+            Boolean.TRUE.equals(includeChiNext), Boolean.TRUE.equals(includeStar), normalizedRuleKey
+        );
+        if (RULE_YIN_YANG_DOUBLE_BEAR.equals(normalizedRuleKey)) {
+            pageQuery.orderByDesc(StockScreenSnapshotEntity::getYinYangScore)
+                .orderByDesc(StockScreenSnapshotEntity::getYinYangPenetrationPct);
+        } else {
+            pageQuery.orderByDesc(StockScreenSnapshotEntity::getSignalScore)
+                .orderByDesc(StockScreenSnapshotEntity::getThreeDayDeclinePct);
+        }
+        pageQuery.orderByAsc(StockScreenSnapshotEntity::getStockCode)
             .last("LIMIT " + normalizedPageSize + " OFFSET " + offset);
         response.setItems(snapshotMapper.selectList(pageQuery).stream().map(this::toItemResponse).toList());
         return response;
@@ -476,6 +491,7 @@ public class StockScreenerService {
             && lastDayDecline.compareTo(DEFAULT_LAST_DAY_DECLINE) > 0
             && bullishEngulfing
             && volumeShrinking;
+        YinYangSignal yinYangSignal = analyzeYinYangDoubleBear(bars);
 
         int score = 0;
         if (bearishCount >= 4) score += 8;
@@ -517,7 +533,140 @@ public class StockScreenerService {
         snapshot.setSignalLow(signal.low());
         snapshot.setPreviousVolume(previous.volume());
         snapshot.setSignalVolume(signal.volume());
+        snapshot.setYinYangDoubleBearMatched(yinYangSignal.matched());
+        snapshot.setYinYangPenetrationPct(yinYangSignal.penetrationPct());
+        snapshot.setYinYangType(yinYangSignal.type());
+        snapshot.setYinYangScore(yinYangSignal.score());
         return snapshot;
+    }
+
+    private YinYangSignal analyzeYinYangDoubleBear(List<DailyBar> bars) {
+        int signalIndex = bars.size() - 1;
+        int bearishIndex = signalIndex - 1;
+        if (bearishIndex < 6) {
+            return YinYangSignal.empty();
+        }
+
+        DailyBar beforeBearish = bars.get(bearishIndex - 1);
+        DailyBar bearish = bars.get(bearishIndex);
+        DailyBar bullish = bars.get(signalIndex);
+        BigDecimal bearishBody = bearish.open().subtract(bearish.close()).max(BigDecimal.ZERO);
+        BigDecimal bullishBody = bullish.close().subtract(bullish.open()).max(BigDecimal.ZERO);
+        BigDecimal bearishBodyPct = percent(bearishBody, bearish.open());
+        BigDecimal bullishBodyPct = percent(bullishBody, bullish.open());
+        BigDecimal maxBodyPct = bearishBodyPct.max(bullishBodyPct);
+        BigDecimal gapDownPct = percent(bearish.close().subtract(bullish.open()), bearish.close());
+
+        boolean bearishThenBullish = isBearish(bearish) && isBullish(bullish);
+        boolean closesInsideBearishBody = bullish.close().compareTo(bearish.close()) > 0
+            && bullish.close().compareTo(bearish.open()) < 0;
+        BigDecimal penetrationPct = bearishBody.signum() <= 0
+            ? BigDecimal.ZERO
+            : percent(bullish.close().subtract(bearish.close()).max(BigDecimal.ZERO), bearishBody)
+                .min(BigDecimal.valueOf(100));
+        String type = closesInsideBearishBody ? resolveYinYangType(penetrationPct) : null;
+
+        boolean movingAverageRising = isFiveDayAverageRising(bars, bearishIndex - 1);
+        boolean noRecentFourLimitUps = !hasFourConsecutiveLimitUps(bars, bearishIndex - 1);
+        boolean validBodySize = maxBodyPct.compareTo(DOUBLE_BEAR_MIN_BODY_PCT) >= 0
+            && maxBodyPct.compareTo(DOUBLE_BEAR_MAX_BODY_PCT) <= 0;
+        boolean sufficientlyLowerOpen = gapDownPct.compareTo(DOUBLE_BEAR_MIN_GAP_DOWN_PCT) >= 0;
+        boolean validBodyRatio = bearishBody.compareTo(bullishBody.multiply(BigDecimal.valueOf(2))) <= 0;
+        BigDecimal upperShadow = bullish.high().subtract(bullish.close()).max(BigDecimal.ZERO);
+        boolean validUpperShadow = upperShadow.compareTo(bullishBody) <= 0;
+        boolean previousIsNotAdjustmentBearish = !isBearish(beforeBearish);
+
+        BigDecimal previousAverageVolume = averageVolume(bars, bearishIndex - 5, bearishIndex);
+        BigDecimal bearishVolumeRatio = previousAverageVolume.signum() <= 0
+            ? BigDecimal.ZERO
+            : BigDecimal.valueOf(bearish.volume()).divide(previousAverageVolume, 4, RoundingMode.HALF_UP);
+        boolean bearishVolumeInRange = bearishVolumeRatio.compareTo(DOUBLE_BEAR_MIN_VOLUME_RATIO) >= 0
+            && bearishVolumeRatio.compareTo(DOUBLE_BEAR_MAX_VOLUME_RATIO) <= 0;
+        boolean bullishVolumeShrinking = bullish.volume() < bearish.volume();
+
+        boolean matched = bearishThenBullish
+            && movingAverageRising
+            && noRecentFourLimitUps
+            && validBodySize
+            && sufficientlyLowerOpen
+            && closesInsideBearishBody
+            && validBodyRatio
+            && validUpperShadow
+            && previousIsNotAdjustmentBearish
+            && bearishVolumeInRange
+            && bullishVolumeShrinking;
+
+        int score = 0;
+        if (movingAverageRising) score += 20;
+        if (validBodySize) score += 15;
+        if (sufficientlyLowerOpen) score += 10;
+        if (closesInsideBearishBody) score += 15;
+        if (validBodyRatio && validUpperShadow) score += 10;
+        if (bearishVolumeInRange && bullishVolumeShrinking) score += 15;
+        if (previousIsNotAdjustmentBearish && noRecentFourLimitUps) score += 5;
+        if (closesInsideBearishBody) {
+            int distanceFromIdeal = penetrationPct.subtract(BigDecimal.valueOf(50)).abs().intValue();
+            score += Math.max(0, 10 - distanceFromIdeal / 5);
+        }
+
+        return new YinYangSignal(matched, penetrationPct.setScale(4, RoundingMode.HALF_UP), type, Math.min(100, score));
+    }
+
+    private boolean isFiveDayAverageRising(List<DailyBar> bars, int endIndex) {
+        if (endIndex < 6) {
+            return false;
+        }
+        BigDecimal current = averageClose(bars, endIndex - 4, endIndex + 1);
+        BigDecimal previous = averageClose(bars, endIndex - 5, endIndex);
+        BigDecimal earlier = averageClose(bars, endIndex - 6, endIndex - 1);
+        return current.compareTo(previous) > 0
+            && previous.compareTo(earlier) > 0
+            && bars.get(endIndex).close().compareTo(current) > 0;
+    }
+
+    private boolean hasFourConsecutiveLimitUps(List<DailyBar> bars, int endIndex) {
+        int consecutive = 0;
+        int startIndex = Math.max(1, endIndex - 7);
+        for (int index = startIndex; index <= endIndex; index++) {
+            DailyBar current = bars.get(index);
+            DailyBar previous = bars.get(index - 1);
+            BigDecimal changePct = percent(current.close().subtract(previous.close()), previous.close());
+            consecutive = changePct.compareTo(LIMIT_UP_THRESHOLD_PCT) >= 0 ? consecutive + 1 : 0;
+            if (consecutive >= 4) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private BigDecimal averageClose(List<DailyBar> bars, int fromInclusive, int toExclusive) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (int index = fromInclusive; index < toExclusive; index++) {
+            total = total.add(bars.get(index).close());
+        }
+        return total.divide(BigDecimal.valueOf(toExclusive - fromInclusive), 6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal averageVolume(List<DailyBar> bars, int fromInclusive, int toExclusive) {
+        long total = 0;
+        for (int index = fromInclusive; index < toExclusive; index++) {
+            total += bars.get(index).volume();
+        }
+        return BigDecimal.valueOf(total).divide(
+            BigDecimal.valueOf(toExclusive - fromInclusive),
+            4,
+            RoundingMode.HALF_UP
+        );
+    }
+
+    private String resolveYinYangType(BigDecimal penetrationPct) {
+        if (penetrationPct.compareTo(new BigDecimal("33.3333")) < 0) {
+            return "相交型";
+        }
+        if (penetrationPct.compareTo(new BigDecimal("66.6667")) < 0) {
+            return "上吞型";
+        }
+        return "深吞型";
     }
 
     private LambdaQueryWrapper<StockScreenSnapshotEntity> buildScreenQuery(
@@ -530,16 +679,21 @@ public class StockScreenerService {
         boolean requireVolumeUp,
         boolean requireNoLowerShadow,
         boolean includeChiNext,
-        boolean includeStar
+        boolean includeStar,
+        String ruleKey
     ) {
         LambdaQueryWrapper<StockScreenSnapshotEntity> query = new LambdaQueryWrapper<StockScreenSnapshotEntity>()
-            .eq(StockScreenSnapshotEntity::getRunId, runId)
-            .ge(StockScreenSnapshotEntity::getBearishCount6, minBearishCount)
-            .eq(StockScreenSnapshotEntity::getLastThreeBearish, true)
-            .gt(StockScreenSnapshotEntity::getThreeDayDeclinePct, minThreeDayDecline)
-            .gt(StockScreenSnapshotEntity::getLastDayDeclinePct, minLastDayDecline)
-            .eq(StockScreenSnapshotEntity::getBullishEngulfing, true)
-            .eq(StockScreenSnapshotEntity::getVolumeShrinking, true);
+            .eq(StockScreenSnapshotEntity::getRunId, runId);
+        if (RULE_YIN_YANG_DOUBLE_BEAR.equals(ruleKey)) {
+            query.eq(StockScreenSnapshotEntity::getYinYangDoubleBearMatched, true);
+        } else {
+            query.ge(StockScreenSnapshotEntity::getBearishCount6, minBearishCount)
+                .eq(StockScreenSnapshotEntity::getLastThreeBearish, true)
+                .gt(StockScreenSnapshotEntity::getThreeDayDeclinePct, minThreeDayDecline)
+                .gt(StockScreenSnapshotEntity::getLastDayDeclinePct, minLastDayDecline)
+                .eq(StockScreenSnapshotEntity::getBullishEngulfing, true)
+                .eq(StockScreenSnapshotEntity::getVolumeShrinking, true);
+        }
         String normalizedMarket = market == null ? "ALL" : market.trim().toUpperCase(Locale.ROOT);
         if (List.of("SH", "SZ", "BJ").contains(normalizedMarket)) {
             query.eq(StockScreenSnapshotEntity::getMarket, normalizedMarket);
@@ -568,9 +722,16 @@ public class StockScreenerService {
         return query;
     }
 
+    private String normalizeRuleKey(String ruleKey) {
+        return RULE_YIN_YANG_DOUBLE_BEAR.equals(ruleKey == null ? null : ruleKey.trim())
+            ? RULE_YIN_YANG_DOUBLE_BEAR
+            : RULE_SUNRISE_RISE;
+    }
+
     private StockScreenRunEntity latestSuccessfulRun() {
         return runMapper.selectOne(new LambdaQueryWrapper<StockScreenRunEntity>()
             .eq(StockScreenRunEntity::getStatus, STATUS_SUCCESS)
+            .eq(StockScreenRunEntity::getRuleVersion, CURRENT_RULE_VERSION)
             .orderByDesc(StockScreenRunEntity::getTradeDate)
             .orderByDesc(StockScreenRunEntity::getFinishedAt)
             .last("LIMIT 1"));
@@ -682,6 +843,10 @@ public class StockScreenerService {
         return bar.close().compareTo(bar.open()) < 0;
     }
 
+    private boolean isBullish(DailyBar bar) {
+        return bar.close().compareTo(bar.open()) > 0;
+    }
+
     private BigDecimal percent(BigDecimal numerator, BigDecimal denominator) {
         if (denominator == null || denominator.signum() == 0) {
             return BigDecimal.ZERO;
@@ -772,6 +937,10 @@ public class StockScreenerService {
         response.setSignalClose(entity.getSignalClose());
         response.setPreviousVolume(entity.getPreviousVolume());
         response.setSignalVolume(entity.getSignalVolume());
+        response.setYinYangDoubleBearMatched(entity.getYinYangDoubleBearMatched());
+        response.setYinYangPenetrationPct(entity.getYinYangPenetrationPct());
+        response.setYinYangType(entity.getYinYangType());
+        response.setYinYangScore(entity.getYinYangScore());
         return response;
     }
 
@@ -836,5 +1005,16 @@ public class StockScreenerService {
     }
 
     private record ScanOutcome(StockScreenSnapshotEntity snapshot, boolean failed) {
+    }
+
+    private record YinYangSignal(
+        boolean matched,
+        BigDecimal penetrationPct,
+        String type,
+        int score
+    ) {
+        private static YinYangSignal empty() {
+            return new YinYangSignal(false, BigDecimal.ZERO, null, 0);
+        }
     }
 }

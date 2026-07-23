@@ -290,6 +290,10 @@ export interface StockScreenItem {
   signalClose: number
   previousVolume: number
   signalVolume: number
+  yinYangDoubleBearMatched: boolean
+  yinYangPenetrationPct: number
+  yinYangType?: string | null
+  yinYangScore: number
 }
 
 export interface StockScreenPage {
@@ -303,6 +307,7 @@ export interface StockScreenPage {
 export interface StockScreenQuery {
   market?: StockScreenMarket
   keyword?: string
+  ruleKey?: string
   minBearishCount?: number
   minThreeDayDecline?: number
   minLastDayDecline?: number

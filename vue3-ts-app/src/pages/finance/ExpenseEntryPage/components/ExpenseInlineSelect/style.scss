@@ -1,0 +1,167 @@
+.expense-inline-select {
+  position: relative;
+}
+
+.expense-inline-select--wide {
+  flex-basis: 212px;
+  min-width: 212px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.expense-inline-select-trigger {
+  width: 100%;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--font-size-13);
+  font-weight: 500;
+  text-align: right;
+  cursor: pointer;
+  outline: none;
+}
+
+.expense-inline-select-trigger:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-tertiary);
+}
+
+.expense-inline-select-trigger:focus-visible {
+  border-radius: var(--radius-8);
+  box-shadow: 0 0 0 3px var(--color-ring-focus);
+}
+
+.expense-inline-select-value {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--space-6);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.expense-inline-select-main,
+.expense-inline-select-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expense-inline-select-main {
+  flex: 0 1 auto;
+}
+
+.expense-inline-select-sub {
+  flex: 0 1 auto;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 500;
+}
+
+.expense-inline-select-arrow {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  opacity: 0.72;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.18s ease;
+}
+
+.expense-inline-select-trigger[aria-expanded='true'] .expense-inline-select-arrow {
+  transform: translateY(1px) rotate(225deg);
+}
+
+.expense-inline-select-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + var(--space-6));
+  right: 0;
+  width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--space-6);
+  border: 1px solid var(--color-border-soft-2);
+  border-radius: var(--radius-10);
+  background: var(--color-bg-card);
+  box-shadow: var(--color-shadow-card);
+}
+
+.expense-inline-select-option {
+  width: 100%;
+  min-height: var(--space-40);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: 0 var(--space-10);
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--font-size-14);
+  text-align: left;
+  cursor: pointer;
+}
+
+.expense-inline-select-option .expense-inline-select-main {
+  flex: 1 1 auto;
+}
+
+.expense-inline-select-option.active,
+.expense-inline-select-option:hover {
+  background: var(--color-bg-soft);
+}
+
+.expense-inline-select-option.selected {
+  color: var(--color-brand);
+  font-weight: 700;
+}
+
+.expense-inline-select-option.selected .expense-inline-select-sub {
+  color: var(--color-brand);
+}
+
+.expense-inline-select-option:disabled {
+  cursor: not-allowed;
+  color: var(--color-text-tertiary);
+}
+
+.expense-inline-select-check {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 13px;
+  margin-right: 2px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.expense-inline-select-menu-enter-active,
+.expense-inline-select-menu-leave-active {
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.expense-inline-select-menu-enter-from,
+.expense-inline-select-menu-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}

@@ -21,9 +21,3 @@ CREATE TABLE IF NOT EXISTS families (
   CONSTRAINT fk_families_owner_user
     FOREIGN KEY (owner_user_id) REFERENCES users (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='家庭表：支撑邀请码、成员绑定和解绑';
-
-ALTER TABLE users
-  ADD COLUMN family_id BIGINT UNSIGNED NULL COMMENT '当前所属家庭ID' AFTER role_name,
-  ADD KEY idx_users_family_id (family_id),
-  ADD CONSTRAINT fk_users_family
-    FOREIGN KEY (family_id) REFERENCES families (id);

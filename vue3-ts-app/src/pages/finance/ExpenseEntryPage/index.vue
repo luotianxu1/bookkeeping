@@ -6,6 +6,10 @@ import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
+import ExpenseInlineSelect, {
+  type ExpenseInlineSelectOption,
+  type ExpenseInlineSelectValue,
+} from './components/ExpenseInlineSelect/index.vue'
 import {
   createTransaction,
   getAccounts,
@@ -55,14 +59,18 @@ const secondaryCategoryOptions = computed(() => categories.value
     icon: displayIcon(category.icon),
     label: category.name,
   })))
-
 // 表单数据：账户、时间、备注和金额。
 const accountId = ref<number | null>(null)
 const accountOptions = ref<Account[]>([])
-const transferOutAccount = ref('现金账户')
-const transferInAccount = ref('投资账户')
-const transferOutOptions = ['现金账户', '招商银行卡', '支付宝', '微信']
-const transferInOptions = ['投资账户', '现金账户', '招商银行卡', '支付宝']
+const transferOutAccount = ref<number | null>(null)
+const transferInAccount = ref<number | null>(null)
+const accountSelectOptions = computed<ExpenseInlineSelectOption[]>(() => (
+  accountOptions.value.map((account) => ({
+    label: account.name,
+    value: account.id,
+    description: formatAccountBalance(account.currentBalance),
+  }))
+))
 const entryTime = ref(formatDateTimeLocal(new Date()))
 const note = ref('')
 const amountInput = ref('0.00')
@@ -86,6 +94,41 @@ const selectedCategory = computed(() => categories.value.find((category) => cate
 const selectedAccount = computed(() => accountOptions.value.find((account) => account.id === accountId.value))
 const isEditing = computed(() => editingTransactionId.value !== null)
 const backTo = computed(() => parseRouteText(route.query.redirect) || '/finance')
+const accountSelectValue = computed<ExpenseInlineSelectValue>({
+  get: () => accountId.value,
+  set: (value) => {
+    if (typeof value === 'number') {
+      accountId.value = value
+      return
+    }
+    if (typeof value === 'string' && value) {
+      const parsed = Number(value)
+      accountId.value = Number.isFinite(parsed) ? parsed : null
+      return
+    }
+    accountId.value = null
+  },
+})
+const transferOutSelectValue = computed<ExpenseInlineSelectValue>({
+  get: () => transferOutAccount.value,
+  set: (value) => {
+    transferOutAccount.value = typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value
+        ? Number(value)
+        : null
+  },
+})
+const transferInSelectValue = computed<ExpenseInlineSelectValue>({
+  get: () => transferInAccount.value,
+  set: (value) => {
+    transferInAccount.value = typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value
+        ? Number(value)
+        : null
+  },
+})
 const canSave = computed(() => (
   entryType.value !== '转账' &&
   !saving.value &&
@@ -176,7 +219,13 @@ async function loadCashAccounts() {
     accountTypeId: cashType.id,
     status: 'active',
   })
-  accountId.value = accountOptions.value[0]?.id ?? null
+  const nextAccountId = accountOptions.value[0]?.id ?? null
+  const nextTransferOutAccountId = accountOptions.value[0]?.id ?? null
+  const nextTransferInAccountId = accountOptions.value[1]?.id ?? accountOptions.value[0]?.id ?? null
+
+  accountId.value = nextAccountId
+  transferOutAccount.value = nextTransferOutAccountId
+  transferInAccount.value = nextTransferInAccountId
 }
 
 async function loadCategories() {
@@ -296,6 +345,17 @@ function displayIcon(icon: string) {
   }
 
   return icon
+}
+
+function formatAccountBalance(value: number) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) {
+    return '0.00'
+  }
+  return new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)
 }
 
 function applyRouteEntryType() {
@@ -433,13 +493,14 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
 
       <div class="expense-info-row">
         <span>账户</span>
-        <label class="expense-inline-control">
-          <select v-model.number="accountId" aria-label="选择账户">
-            <option v-for="account in accountOptions" :key="account.id" :value="account.id">
-              {{ account.name }}
-            </option>
-          </select>
-        </label>
+        <ExpenseInlineSelect
+          class="expense-inline-select--wide"
+          v-model="accountSelectValue"
+          label="账户"
+          placeholder="请选择账户"
+          :options="accountSelectOptions"
+          :disabled="loading || accountSelectOptions.length === 0"
+        />
       </div>
       <div class="expense-divider"></div>
       <div class="expense-info-row">
@@ -453,24 +514,26 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
     <section v-else class="expense-detail-card transfer-detail-card" aria-label="转账详情">
       <div class="expense-info-row transfer-row">
         <span>转出账户</span>
-        <label class="expense-inline-control">
-          <select v-model="transferOutAccount" aria-label="选择转出账户">
-            <option v-for="account in transferOutOptions" :key="account" :value="account">
-              {{ account }}
-            </option>
-          </select>
-        </label>
+        <ExpenseInlineSelect
+          class="expense-inline-select--wide"
+          v-model="transferOutSelectValue"
+          label="转出账户"
+          placeholder="请选择账户"
+          :options="accountSelectOptions"
+          :disabled="loading || accountSelectOptions.length === 0"
+        />
       </div>
       <div class="expense-divider"></div>
       <div class="expense-info-row transfer-row">
         <span>转入账户</span>
-        <label class="expense-inline-control">
-          <select v-model="transferInAccount" aria-label="选择转入账户">
-            <option v-for="account in transferInOptions" :key="account" :value="account">
-              {{ account }}
-            </option>
-          </select>
-        </label>
+        <ExpenseInlineSelect
+          class="expense-inline-select--wide"
+          v-model="transferInSelectValue"
+          label="转入账户"
+          placeholder="请选择账户"
+          :options="accountSelectOptions"
+          :disabled="loading || accountSelectOptions.length === 0"
+        />
       </div>
     </section>
 

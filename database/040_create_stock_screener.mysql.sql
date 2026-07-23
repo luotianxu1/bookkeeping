@@ -54,10 +54,15 @@ CREATE TABLE IF NOT EXISTS stock_screen_snapshots (
   signal_low DECIMAL(18,4) NOT NULL COMMENT '反包阳线最低价',
   previous_volume BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '前一阴线成交量',
   signal_volume BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '反包阳线成交量',
+  yin_yang_double_bear_matched TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否命中阴阳双熊规则',
+  yin_yang_penetration_pct DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '阳线收盘进入阴线实体的深度百分比',
+  yin_yang_type VARCHAR(16) NULL COMMENT '相交型/上吞型/深吞型',
+  yin_yang_score SMALLINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '阴阳双熊信号评分',
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   PRIMARY KEY (id),
   UNIQUE KEY uk_stock_screen_snapshot_run_code (run_id, stock_code),
   KEY idx_stock_screen_snapshot_run_match (run_id, default_matched, signal_score),
   KEY idx_stock_screen_snapshot_run_market (run_id, market),
+  KEY idx_stock_screen_snapshot_yin_yang (run_id, yin_yang_double_bear_matched, yin_yang_score),
   CONSTRAINT fk_stock_screen_snapshot_run FOREIGN KEY (run_id) REFERENCES stock_screen_runs (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='A股选股日线指标快照';

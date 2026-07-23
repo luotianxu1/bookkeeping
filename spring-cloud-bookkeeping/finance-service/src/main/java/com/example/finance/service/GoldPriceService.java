@@ -162,21 +162,19 @@ public class GoldPriceService {
             && usdCny != null && usdCny.compareTo(BigDecimal.ZERO) > 0) {
             domesticPrice = usdOzToCnyGram(londonPrice, usdCny);
             domesticChange = londonChange == null ? null : usdOzToCnyGram(londonChange, usdCny);
+            domesticChangePercent = domesticChangePercent == null ? londonChangePercent : domesticChangePercent;
         }
         if (domesticPrice == null || domesticPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("人民币金价数据缺少价格字段");
         }
 
+        QuoteDelta domesticDelta = resolveQuoteDelta(domesticPrice, domesticChange, domesticChangePercent, domesticOpen);
+        domesticChange = domesticDelta.change();
+        domesticChangePercent = domesticDelta.changePercent();
         if (domesticOpen == null || domesticOpen.compareTo(BigDecimal.ZERO) <= 0) {
             domesticOpen = domesticChange == null
                 ? domesticPrice.subtract(defaultSpotDelta(domesticPrice))
                 : domesticPrice.subtract(domesticChange);
-        }
-        // 页面涨跌额和涨跌幅统一以今日开盘价为基准，不沿用行情源可能基于昨收的字段。
-        domesticChange = domesticPrice.subtract(domesticOpen);
-        if (domesticOpen.compareTo(BigDecimal.ZERO) > 0) {
-            domesticChangePercent = domesticChange.divide(domesticOpen, 6, RoundingMode.HALF_UP)
-                .multiply(new BigDecimal("100"));
         }
         if (domesticHigh == null) {
             domesticHigh = domesticPrice.max(domesticOpen).add(defaultSpotDelta(domesticPrice));
@@ -191,15 +189,14 @@ public class GoldPriceService {
             domesticSell = domesticPrice.subtract(new BigDecimal("0.15"));
         }
 
-        if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0
-            && (londonOpen == null || londonOpen.compareTo(BigDecimal.ZERO) <= 0)) {
-            londonOpen = londonPrice.subtract(defaultLondonDelta(londonPrice));
-        }
         if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0) {
-            londonChange = londonPrice.subtract(londonOpen);
-            if (londonOpen.compareTo(BigDecimal.ZERO) > 0) {
-                londonChangePercent = londonChange.divide(londonOpen, 6, RoundingMode.HALF_UP)
-                    .multiply(new BigDecimal("100"));
+            QuoteDelta londonDelta = resolveQuoteDelta(londonPrice, londonChange, londonChangePercent, londonOpen);
+            londonChange = londonDelta.change();
+            londonChangePercent = londonDelta.changePercent();
+            if (londonOpen == null || londonOpen.compareTo(BigDecimal.ZERO) <= 0) {
+                londonOpen = londonChange == null
+                    ? londonPrice.subtract(defaultLondonDelta(londonPrice))
+                    : londonPrice.subtract(londonChange);
             }
         }
         if (londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0 && londonHigh == null) {
@@ -287,6 +284,39 @@ public class GoldPriceService {
         quote.setChangePercent(changePercent);
         quote.setUpdatedAt(updatedAt);
         return quote;
+    }
+
+    private QuoteDelta resolveQuoteDelta(
+        BigDecimal price,
+        BigDecimal change,
+        BigDecimal changePercent,
+        BigDecimal fallbackOpen
+    ) {
+        if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+            return new QuoteDelta(BigDecimal.ZERO, BigDecimal.ZERO);
+        }
+
+        if (change != null) {
+            BigDecimal percent = changePercent;
+            if (percent == null) {
+                BigDecimal referencePrice = price.subtract(change);
+                if (referencePrice.compareTo(BigDecimal.ZERO) > 0) {
+                    percent = change.divide(referencePrice, 6, RoundingMode.HALF_UP)
+                        .multiply(new BigDecimal("100"));
+                }
+            }
+            return new QuoteDelta(change, percent == null ? BigDecimal.ZERO : percent);
+        }
+
+        if (fallbackOpen != null && fallbackOpen.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal resolvedChange = price.subtract(fallbackOpen);
+            BigDecimal percent = changePercent == null
+                ? resolvedChange.divide(fallbackOpen, 6, RoundingMode.HALF_UP).multiply(new BigDecimal("100"))
+                : changePercent;
+            return new QuoteDelta(resolvedChange, percent);
+        }
+
+        return new QuoteDelta(BigDecimal.ZERO, changePercent == null ? BigDecimal.ZERO : changePercent);
     }
 
     private GoldPriceResponse.GoldMarketStats stats(
@@ -611,6 +641,9 @@ public class GoldPriceService {
     }
 
     private record JewelryQuoteCode(String brandName, String code) {
+    }
+
+    private record QuoteDelta(BigDecimal change, BigDecimal changePercent) {
     }
 
     private record CachedGoldPrice(GoldPriceResponse response, long cachedAt) {

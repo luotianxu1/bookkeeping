@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ECharts } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
+import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   getLimitUpDownStatistics,
@@ -42,6 +43,19 @@ const screeningRules: ScreeningRule[] = [
       '最后3日连续收阴，次日阳线实体反包且缩量',
     ],
   },
+  {
+    key: 'yin-yang-double-bear',
+    label: '阴阳双熊',
+    title: '阴阳双熊',
+    description: '上涨趋势中先出现放量阴线，次日低开后以缩量阳线收回阴线实体但不完全反包。',
+    points: [
+      '5日均线连续向上，且排除短期连续4个涨停后的形态',
+      '阴线与阳线实体至少一根达到 5%，实体最大不超过 15%',
+      '阳线相对阴线收盘低开至少 1.5%，收盘进入阴线实体但不完全反包',
+      '阴线实体不超过阳线实体 2 倍，阳线上影线不长于自身实体',
+      '阴线相对前5日均量放量 1.5～4 倍，阳线较阴线缩量',
+    ],
+  },
 ]
 
 const activeRuleKey = ref<string>(screeningRules[0].key)
@@ -66,6 +80,8 @@ const isMarketStatusLoading = ref(false)
 const isLoadingMore = ref(false)
 const isSubmittingScan = ref(false)
 const isStoppingScan = ref(false)
+const scanProgressOpen = ref(false)
+const scanProgressError = ref('')
 const pageError = ref('')
 const limitStatisticsError = ref('')
 const marketStatusError = ref('')
@@ -98,6 +114,41 @@ const STATUS_POLL_INTERVAL = 2000
 const cardKey = (item: StockScreenItem) => `${item.signalDate}-${item.stockCode}`
 
 const scanIsRunning = computed(() => latestRun.value?.status === 'running')
+const scanProcessedStocks = computed(() => Math.max(0, latestRun.value?.processedStocks || 0))
+const scanTotalStocks = computed(() => Math.max(0, latestRun.value?.totalStocks || 0))
+const scanFailedStocks = computed(() => Math.max(0, latestRun.value?.failedStocks || 0))
+const scanProgressIsIndeterminate = computed(() => (
+  isSubmittingScan.value || (scanIsRunning.value && scanTotalStocks.value === 0)
+))
+const scanProgressPercent = computed(() => {
+  if (scanProgressError.value) {
+    return 0
+  }
+  if (latestRun.value?.status === 'success') {
+    return 100
+  }
+  if (scanTotalStocks.value <= 0) {
+    return 0
+  }
+  const percent = Math.round((scanProcessedStocks.value / scanTotalStocks.value) * 100)
+  return Math.min(scanIsRunning.value ? 99 : 100, Math.max(0, percent))
+})
+const scanProgressStatus = computed(() => {
+  if (scanProgressError.value) return scanProgressError.value
+  if (isSubmittingScan.value) return '正在提交全市场扫描任务…'
+  if (scanIsRunning.value) {
+    return scanTotalStocks.value > 0
+      ? `正在读取第 ${scanProcessedStocks.value} / ${scanTotalStocks.value} 只股票的日K数据`
+      : '正在获取全市场股票列表…'
+  }
+  if (latestRun.value?.status === 'success') return actionMessage.value || '全市场扫描完成，最新结果已刷新'
+  if (latestRun.value?.status === 'canceled') return '扫描已停止，页面继续显示上一次成功结果'
+  if (latestRun.value?.status === 'failed') return latestRun.value.errorMessage || '扫描失败，请稍后重试'
+  return actionMessage.value || '准备刷新全市场选股数据'
+})
+const scanProgressLabel = computed(() => (
+  scanProgressIsIndeterminate.value ? '扫描准备中' : `扫描进度 ${scanProgressPercent.value}%`
+))
 const resultTotal = computed(() => screenPage.value?.total || 0)
 const activeLimitStocks = computed(() => (
   activeLimitTab.value === 'up'
@@ -116,6 +167,14 @@ const ruleOptions = computed(() => (
 ))
 const hasMore = computed(() => results.value.length < resultTotal.value)
 const dataTradeDate = computed(() => screenPage.value?.run?.tradeDate || latestRun.value?.tradeDate || '')
+
+watch(activeRuleKey, () => {
+  disposeAllKlineCharts()
+  expandedKey.value = ''
+  screenPage.value = null
+  results.value = []
+  void applyRules()
+})
 
 onMounted(() => {
   window.addEventListener('focus', handlePageFocus)
@@ -227,6 +286,8 @@ async function startFullMarketScan() {
     return
   }
   isSubmittingScan.value = true
+  scanProgressOpen.value = true
+  scanProgressError.value = ''
   pageError.value = ''
   actionMessage.value = ''
   try {
@@ -245,7 +306,9 @@ async function startFullMarketScan() {
     latestRun.value = createOptimisticRunningState(latestRun.value)
     scheduleStatusPolling(0)
   } catch (error) {
-    pageError.value = toErrorMessage(error, '全市场扫描提交失败')
+    const message = toErrorMessage(error, '全市场扫描提交失败')
+    pageError.value = message
+    scanProgressError.value = message
   } finally {
     isSubmittingScan.value = false
   }
@@ -256,6 +319,7 @@ async function stopFullMarketScan() {
     return
   }
   isStoppingScan.value = true
+  scanProgressError.value = ''
   pageError.value = ''
   actionMessage.value = ''
   try {
@@ -269,15 +333,18 @@ async function stopFullMarketScan() {
     latestRun.value = await getStockScreenStatus()
   } catch (error) {
     isStoppingScan.value = false
-    pageError.value = toErrorMessage(error, '停止扫描失败，请稍后重试')
+    const message = toErrorMessage(error, '停止扫描失败，请稍后重试')
+    pageError.value = message
+    scanProgressError.value = message
   }
 }
 
 function handleHeaderScanAction() {
   if (scanIsRunning.value) {
-    void stopFullMarketScan()
+    scanProgressOpen.value = true
     return
   }
+  scanProgressOpen.value = true
   void startFullMarketScan()
 }
 
@@ -379,6 +446,7 @@ function createOptimisticRunningState(current: StockScreenRun | null): StockScre
 
 function buildQuery(page: number) {
   return {
+    ruleKey: activeRuleKey.value,
     minBearishCount: clampNumber(criteria.minBearishCount, 1, 6, 4),
     minThreeDayDecline: clampNumber(criteria.minThreeDayDecline, 0, 50, 9),
     minLastDayDecline: clampNumber(criteria.minLastDayDecline, 0, 50, 3),
@@ -411,6 +479,11 @@ function formatSignedPercent(value?: number | null) {
   const normalized = Number(value)
   if (!Number.isFinite(normalized)) return '--'
   return `${normalized > 0 ? '+' : ''}${normalized.toFixed(2)}%`
+}
+
+function formatPercent(value?: number | null) {
+  const normalized = Number(value)
+  return Number.isFinite(normalized) ? `${normalized.toFixed(0)}%` : '--'
 }
 
 function formatIndexValue(value?: number | null) {
@@ -684,12 +757,11 @@ function toErrorMessage(error: unknown, fallback: string) {
       <template #right>
         <button
           v-if="scanIsRunning"
-          class="header-scan-button danger"
+          class="header-scan-button"
           type="button"
-          :disabled="isStoppingScan"
           @click="handleHeaderScanAction"
         >
-          {{ isStoppingScan ? '停止中' : '停止扫描' }}
+          {{ scanProgressIsIndeterminate ? '扫描中' : `${scanProgressPercent}%` }}
         </button>
         <CommonHeaderRefreshButton
           v-else
@@ -699,6 +771,77 @@ function toErrorMessage(error: unknown, fallback: string) {
         />
       </template>
     </PageHeader>
+
+    <CommonModal
+      v-model="scanProgressOpen"
+      title="刷新选股数据"
+      size="compact"
+    >
+      <div class="scan-progress-content" aria-live="polite">
+        <div class="scan-progress-heading">
+          <span>{{ scanProgressLabel }}</span>
+          <strong v-if="!scanProgressIsIndeterminate">{{ scanProgressPercent }}%</strong>
+        </div>
+
+        <div
+          :class="['scan-progress-track', { indeterminate: scanProgressIsIndeterminate }]"
+          role="progressbar"
+          aria-label="全市场扫描进度"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-valuenow="scanProgressIsIndeterminate ? undefined : scanProgressPercent"
+        >
+          <span :style="scanProgressIsIndeterminate ? undefined : { width: `${scanProgressPercent}%` }"></span>
+        </div>
+
+        <p :class="{ error: Boolean(scanProgressError) || latestRun?.status === 'failed' }">
+          {{ scanProgressStatus }}
+        </p>
+
+        <div class="scan-progress-metrics" aria-label="扫描统计">
+          <div>
+            <span>已处理</span>
+            <strong>{{ scanProcessedStocks }}</strong>
+          </div>
+          <div>
+            <span>总股票</span>
+            <strong>{{ scanTotalStocks || '--' }}</strong>
+          </div>
+          <div>
+            <span>失败</span>
+            <strong>{{ scanFailedStocks }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <button
+          v-if="scanIsRunning"
+          class="scan-progress-action danger"
+          type="button"
+          :disabled="isStoppingScan"
+          @click="stopFullMarketScan"
+        >
+          {{ isStoppingScan ? '正在停止…' : '停止扫描' }}
+        </button>
+        <button
+          v-else-if="isSubmittingScan"
+          class="scan-progress-action"
+          type="button"
+          disabled
+        >
+          正在提交…
+        </button>
+        <button
+          v-else
+          class="scan-progress-action"
+          type="button"
+          @click="scanProgressOpen = false"
+        >
+          关闭
+        </button>
+      </template>
+    </CommonModal>
 
     <section v-if="marketStatus" class="market-status-card" aria-label="大盘状态">
       <header class="market-status-heading">
@@ -890,7 +1033,12 @@ function toErrorMessage(error: unknown, fallback: string) {
             <span class="market-badge">{{ marketLabel(item.market) }}</span>
             <div>
               <h3>{{ item.stockName }}</h3>
-              <p>{{ item.stockCode }}</p>
+              <p>
+                {{ item.stockCode }}
+                <template v-if="activeRuleKey === 'yin-yang-double-bear' && item.yinYangType">
+                  · {{ item.yinYangType }} · 回升 {{ formatPercent(item.yinYangPenetrationPct) }}
+                </template>
+              </p>
             </div>
           </div>
           <div class="stock-card-trailing">
@@ -925,7 +1073,7 @@ function toErrorMessage(error: unknown, fallback: string) {
           <path d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 19h18" />
         </svg>
         <strong>{{ screenPage?.run ? '暂无符合当前规则的股票' : '还没有可用的扫描数据' }}</strong>
-        <p>{{ screenPage?.run ? '可以适当降低跌幅阈值或取消优选条件' : '点击右上角刷新按钮启动首次全市场扫描' }}</p>
+        <p>{{ screenPage?.run ? '当前交易日没有股票同时满足全部形态条件' : '点击右上角刷新按钮启动首次全市场扫描' }}</p>
       </div>
 
       <button v-if="hasMore" class="load-more-button" type="button" :disabled="isLoadingMore" @click="loadMore">

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
   status ENUM('active', 'disabled', 'locked') NOT NULL DEFAULT 'active' COMMENT '用户状态',
   default_login_provider ENUM('password', 'sms_code', 'wechat') NOT NULL DEFAULT 'password' COMMENT '默认登录方式',
   role_name VARCHAR(64) NOT NULL DEFAULT 'user' COMMENT '当前先用角色名支撑后台列表；后续可拆为 roles/user_roles',
+  family_id BIGINT UNSIGNED NULL COMMENT '当前所属家庭ID',
   timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Shanghai' COMMENT '用户时区',
   locale VARCHAR(16) NOT NULL DEFAULT 'zh-CN' COMMENT '用户语言',
   last_login_at DATETIME(3) NULL COMMENT '最近登录时间',
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uk_users_email (email),
   KEY idx_users_status (status),
   KEY idx_users_role_name (role_name),
+  KEY idx_users_family_id (family_id),
   CONSTRAINT chk_users_login_identifier
     CHECK (username <> '' OR phone IS NOT NULL OR email IS NOT NULL),
   CONSTRAINT chk_users_password_for_password_login

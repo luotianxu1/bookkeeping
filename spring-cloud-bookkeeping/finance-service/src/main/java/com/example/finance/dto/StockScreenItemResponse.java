@@ -30,4 +30,8 @@ public class StockScreenItemResponse {
     private BigDecimal signalClose;
     private Long previousVolume;
     private Long signalVolume;
+    private Boolean yinYangDoubleBearMatched;
+    private BigDecimal yinYangPenetrationPct;
+    private String yinYangType;
+    private Integer yinYangScore;
 }

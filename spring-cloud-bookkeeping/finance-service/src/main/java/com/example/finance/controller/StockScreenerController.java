@@ -35,23 +35,25 @@ public class StockScreenerController {
     }
 
     @GetMapping("/results")
-    @Operation(summary = "按跌势反包规则筛选最近一次全市场快照")
+    @Operation(summary = "按所选规则筛选最近一次全市场快照")
     public Result<StockScreenPageResponse> results(
         @RequestParam(name = "market", required = false, defaultValue = "ALL") String market,
         @RequestParam(name = "keyword", required = false) String keyword,
+        @RequestParam(name = "ruleKey", required = false, defaultValue = "sunrise-rise") String ruleKey,
         @RequestParam(name = "minBearishCount", required = false, defaultValue = "4") Integer minBearishCount,
         @RequestParam(name = "minThreeDayDecline", required = false, defaultValue = "9") BigDecimal minThreeDayDecline,
         @RequestParam(name = "minLastDayDecline", required = false, defaultValue = "3") BigDecimal minLastDayDecline,
         @RequestParam(name = "requireVolumeUp", required = false, defaultValue = "false") Boolean requireVolumeUp,
         @RequestParam(name = "requireNoLowerShadow", required = false, defaultValue = "false") Boolean requireNoLowerShadow,
         @RequestParam(name = "includeChiNext", required = false, defaultValue = "false") Boolean includeChiNext,
-        @RequestParam(name = "includeStarMarket", required = false, defaultValue = "false") Boolean includeStarMarket,
+        @RequestParam(name = "includeStar", required = false, defaultValue = "false") Boolean includeStarMarket,
         @RequestParam(name = "page", required = false, defaultValue = "1") Integer page,
         @RequestParam(name = "pageSize", required = false, defaultValue = "20") Integer pageSize
     ) {
         return Result.ok(stockScreenerService.screen(
             market,
             keyword,
+            ruleKey,
             minBearishCount,
             minThreeDayDecline,
             minLastDayDecline,

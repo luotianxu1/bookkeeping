@@ -9,12 +9,18 @@ import { getGoldPrices, type GoldPrice, type GoldPriceRange } from '@/api/module
 import { useTheme } from '@/utils/theme'
 
 type TrendKey = '1日' | '7日' | '30日' | '3个月' | '1年' | '3年'
+type DeltaTone = 'positive' | 'negative' | 'neutral'
+type DeltaDisplay = {
+  text: string
+  tone: DeltaTone
+}
 type ChartExtremum = {
   index: number
   label: string
   price: number
 }
 const PRICE_REFRESH_INTERVAL_MS = 60_000
+const EMPTY_DELTA: DeltaDisplay = { text: '--', tone: 'neutral' }
 
 const activeTrend = ref<TrendKey>('1日')
 const trendOptions: TrendKey[] = ['1日', '7日', '30日', '3个月', '1年', '3年']
@@ -91,16 +97,16 @@ const showPriceFallback = computed(() => (
   !isLoadingGoldPrice.value && !hasSpotGold.value && !hasLondonGold.value
 ))
 
-const spotDeltaText = computed(() => (
+const spotDelta = computed(() => (
   hasSpotGold.value
     ? formatDelta(currentGoldPrice.value?.spotGold?.change, currentGoldPrice.value?.spotGold?.changePercent)
-    : '--'
+    : EMPTY_DELTA
 ))
 
-const londonDeltaText = computed(() => (
+const londonDelta = computed(() => (
   hasLondonGold.value
     ? formatDelta(currentGoldPrice.value?.londonGold?.change, currentGoldPrice.value?.londonGold?.changePercent)
-    : '--'
+    : EMPTY_DELTA
 ))
 
 const marketFootText = computed(() => {
@@ -127,18 +133,40 @@ function formatDelta(change?: number | null, changePercent?: number | null) {
   const normalizedChange = Number(change)
   const normalizedPercent = Number(changePercent)
   if (!Number.isFinite(normalizedChange) || !Number.isFinite(normalizedPercent)) {
-    return '--'
+    return EMPTY_DELTA
   }
 
-  const sign = normalizedChange >= 0 ? '+' : ''
-  return `${sign}${formatSignedMoney(normalizedChange)} (${sign}${formatSignedMoney(normalizedPercent, 2)}%)`
+  const displayChange = normalizeDisplayNumber(normalizedChange)
+  const displayPercent = normalizeDisplayNumber(normalizedPercent)
+  const toneSource = displayPercent !== 0 ? displayPercent : displayChange
+
+  return {
+    text: `${formatSignedNumber(displayChange)} (${formatSignedNumber(displayPercent)}%)`,
+    tone: getDeltaTone(toneSource),
+  }
 }
 
-function formatSignedMoney(value: number, fractionDigits = 2) {
+function normalizeDisplayNumber(value: number, fractionDigits = 2) {
+  const rounded = Number(value.toFixed(fractionDigits))
+  return Object.is(rounded, -0) ? 0 : rounded
+}
+
+function formatSignedNumber(value: number, fractionDigits = 2) {
+  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+  return `${sign}${formatUnsignedNumber(Math.abs(value), fractionDigits)}`
+}
+
+function formatUnsignedNumber(value: number, fractionDigits = 2) {
   return value.toLocaleString('zh-CN', {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   })
+}
+
+function getDeltaTone(value: number): DeltaTone {
+  if (value > 0) return 'positive'
+  if (value < 0) return 'negative'
+  return 'neutral'
 }
 
 const jewelryRows = computed(() => (
@@ -518,12 +546,12 @@ onBeforeUnmount(() => {
         <article class="market-item">
           <p class="market-label">现货金 (CNY/g)</p>
           <AmountText tag="strong" :value="formatMoney(currentGoldPrice?.spotGold?.price)" />
-          <AmountText tag="em" :value="spotDeltaText" />
+          <AmountText tag="em" :value="spotDelta.text" :tone="spotDelta.tone" />
         </article>
         <article class="market-item">
           <p class="market-label">伦敦金 (USD/oz)</p>
           <AmountText tag="strong" :value="formatMoney(currentGoldPrice?.londonGold?.price)" />
-          <AmountText tag="em" :value="londonDeltaText" />
+          <AmountText tag="em" :value="londonDelta.text" :tone="londonDelta.tone" />
         </article>
       </div>
       <p class="market-foot">{{ marketFootText }}</p>

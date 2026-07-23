@@ -69,6 +69,14 @@ public class StockScreenSnapshotEntity {
     private Long previousVolume;
     @TableField("signal_volume")
     private Long signalVolume;
+    @TableField("yin_yang_double_bear_matched")
+    private Boolean yinYangDoubleBearMatched;
+    @TableField("yin_yang_penetration_pct")
+    private BigDecimal yinYangPenetrationPct;
+    @TableField("yin_yang_type")
+    private String yinYangType;
+    @TableField("yin_yang_score")
+    private Integer yinYangScore;
     @TableField("created_at")
     private LocalDateTime createdAt;
 }
