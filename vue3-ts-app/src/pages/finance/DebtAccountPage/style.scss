@@ -9,6 +9,12 @@
   background: var(--color-bg-page);
 }
 
+.debt-account-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .debt-page-message {
   min-height: 88px;
   display: grid;
@@ -85,7 +91,7 @@
 
 .debt-summary-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -105,9 +111,14 @@
 }
 
 .debt-summary-metric strong {
+  min-width: 0;
+  max-width: 100%;
   color: var(--color-finance-metric-value);
   font-size: var(--font-size-14);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .debt-account-list {
@@ -140,8 +151,7 @@
   cursor: default;
 }
 
-.debt-account-card-top,
-.debt-account-card-bottom {
+.debt-account-card-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -206,9 +216,7 @@
   font-weight: 700;
 }
 
-.debt-account-card-phone,
-.debt-account-card-text p,
-.debt-account-card-bottom span {
+.debt-account-card-text p {
   color: var(--color-text-secondary);
   font-size: var(--font-size-12);
   font-weight: 500;
@@ -260,12 +268,6 @@
 .debt-account-card-arrow {
   color: var(--color-text-subtle);
   font-size: var(--font-size-16);
-  font-weight: 700;
-}
-
-.debt-account-card-link {
-  color: var(--color-brand);
-  font-size: var(--font-size-12);
   font-weight: 700;
 }
 

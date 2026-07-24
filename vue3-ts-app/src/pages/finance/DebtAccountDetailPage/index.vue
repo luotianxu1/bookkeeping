@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
@@ -12,7 +12,6 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import {
   createDebtRecord,
-  deleteAccount,
   deleteDebtRecord,
   getAccount,
   getAccounts,
@@ -38,7 +37,6 @@ const RECORD_KIND_OPTIONS = [
 ]
 
 const route = useRoute()
-const router = useRouter()
 
 const account = ref<Account | null>(null)
 const contacts = ref<Contact[]>([])
@@ -58,13 +56,10 @@ const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const showRecordModal = ref(false)
 const showDeleteModal = ref(false)
-const showAccountDeleteModal = ref(false)
 const isSavingRecord = ref(false)
 const isDeleting = ref(false)
-const isDeletingAccount = ref(false)
 const recordFormError = ref('')
 const deleteError = ref('')
-const accountDeleteError = ref('')
 const editingRecord = ref<DebtRecord | null>(null)
 const deletingRecord = ref<DebtRecord | null>(null)
 const offsetSourceRecord = ref<DebtRecord | null>(null)
@@ -271,22 +266,6 @@ function closeDeleteModal(force = false) {
   deleteError.value = ''
 }
 
-function openAccountDeleteModal() {
-  if (!account.value || isDeletingAccount.value) {
-    return
-  }
-  accountDeleteError.value = ''
-  showAccountDeleteModal.value = true
-}
-
-function closeAccountDeleteModal(force = false) {
-  if (isDeletingAccount.value && !force) {
-    return
-  }
-  showAccountDeleteModal.value = false
-  accountDeleteError.value = ''
-}
-
 async function saveRecord() {
   const currentUser = getStoredCurrentUser()
   const fundingAccountId = Number(recordFundingAccountId.value)
@@ -360,31 +339,6 @@ async function confirmDelete() {
     showFeedback(message, 'error')
   } finally {
     isDeleting.value = false
-  }
-}
-
-async function confirmDeleteAccount() {
-  const currentUser = getStoredCurrentUser()
-  const currentAccount = account.value
-  if (!currentUser || !currentAccount) {
-    accountDeleteError.value = '债务账户不存在'
-    return
-  }
-
-  isDeletingAccount.value = true
-  accountDeleteError.value = ''
-
-  try {
-    await deleteAccount(currentAccount.id)
-    closeAccountDeleteModal(true)
-    showFeedback('债务账户已删除', 'success')
-    await router.push('/finance/accounts/debt')
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
-    accountDeleteError.value = message
-    showFeedback(message, 'error')
-  } finally {
-    isDeletingAccount.value = false
   }
 }
 
@@ -515,18 +469,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     />
 
     <header class="debt-detail-header">
-      <PageHeader title="债务详情" back-to="/finance/accounts/debt" back-label="返回债务账户">
-        <template #right>
-          <button
-            type="button"
-            class="debt-detail-delete-button"
-            :disabled="isDeletingAccount || !account"
-            @click="openAccountDeleteModal"
-          >
-            删除账户
-          </button>
-        </template>
-      </PageHeader>
+      <PageHeader title="债务详情" back-to="/finance/accounts/debt" back-label="返回债务账户" />
     </header>
 
     <p v-if="pageError" class="debt-detail-message debt-detail-message-error">
@@ -673,32 +616,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
           </CommonButton>
           <CommonButton variant="primary" :disabled="isSavingRecord" @click="saveRecord">
             {{ recordSubmitLabel }}
-          </CommonButton>
-        </div>
-      </template>
-    </CommonModal>
-
-    <CommonModal
-      v-model="showAccountDeleteModal"
-      title="删除债务账户"
-      size="compact"
-      :show-close="false"
-      :close-on-overlay="false"
-    >
-      <p class="debt-record-delete-message">
-        删除后该联系人的债务记录会一并移除，确认继续吗？
-      </p>
-      <p v-if="accountDeleteError" class="debt-record-delete-error">
-        {{ accountDeleteError }}
-      </p>
-
-      <template #footer>
-        <div class="debt-record-modal-actions">
-          <CommonButton variant="secondary" :disabled="isDeletingAccount" @click="closeAccountDeleteModal()">
-            取消
-          </CommonButton>
-          <CommonButton variant="primary" :disabled="isDeletingAccount" @click="confirmDeleteAccount">
-            {{ isDeletingAccount ? '删除中...' : '确认删除' }}
           </CommonButton>
         </div>
       </template>

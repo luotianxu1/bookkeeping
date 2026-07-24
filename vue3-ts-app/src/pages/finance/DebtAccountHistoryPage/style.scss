@@ -1,0 +1,210 @@
+.debt-history-page {
+  display: grid;
+  gap: var(--space-6);
+  padding-bottom: var(--space-72);
+  --page-header-bg: var(--color-bg-page);
+}
+
+.debt-history-header {
+  background: var(--color-bg-page);
+}
+
+.debt-history-message,
+.debt-history-empty {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+  text-align: center;
+}
+
+.debt-history-message-error {
+  color: var(--color-danger);
+}
+
+.debt-history-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-blue);
+  border-radius: var(--radius-14);
+  background: var(--color-bg-blue-soft);
+}
+
+.debt-history-summary strong {
+  color: var(--color-finance-title);
+  font-size: var(--font-size-14);
+}
+
+.debt-history-summary span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.debt-history-list {
+  display: grid;
+  gap: var(--space-10);
+}
+
+.debt-history-card {
+  display: grid;
+  gap: var(--space-8);
+  padding: 14px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+  box-shadow: var(--color-shadow-soft);
+}
+
+.debt-history-card-head,
+.debt-history-record-top,
+.debt-history-record {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.debt-history-person {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.debt-history-person strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-16);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debt-history-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.debt-history-avatar-0 {
+  background: var(--color-bg-brand-tint);
+  color: var(--color-brand);
+}
+
+.debt-history-avatar-1 {
+  background: var(--color-bg-green-grad-1);
+  color: var(--color-success-strong);
+}
+
+.debt-history-avatar-2 {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+}
+
+.debt-history-avatar-3 {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.debt-history-settled-badge,
+.debt-history-record-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.debt-history-settled-badge {
+  flex: 0 0 auto;
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+}
+
+.debt-history-records {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.debt-history-record {
+  align-items: flex-start;
+  padding: 4px 0;
+}
+
+.debt-history-record-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.debt-history-record-top {
+  justify-content: flex-start;
+}
+
+.debt-history-record-action {
+  flex: 0 0 auto;
+  background: var(--color-bg-blue-soft);
+  color: var(--color-brand);
+}
+
+.debt-history-record-action.is-collect {
+  background: #ecfeff;
+  color: #0f766e;
+}
+
+.debt-history-record-action.is-lend {
+  background: var(--color-bg-blue-soft);
+  color: var(--color-brand);
+}
+
+.debt-history-record-date {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  white-space: nowrap;
+}
+
+.debt-history-record-remark {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debt-history-record-remark-label {
+  font-weight: 700;
+}
+
+.debt-history-record-amount {
+  flex: 0 0 auto;
+  color: var(--color-success-strong);
+  font-size: var(--font-size-14);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.debt-history-record-amount.is-negative {
+  color: var(--color-warning-strong);
+}

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
+import CommonHeaderLinkButton from '@/components/common/CommonHeaderLinkButton/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
@@ -32,13 +33,11 @@ type DebtCardView = {
   displayName: string
   avatarText: string
   avatarClass: string
-  secondaryText: string
   noteText: string
   netAmount: number
   netAmountText: string
   netTagText: string
   netTagClass: 'is-positive' | 'is-negative' | 'is-settled'
-  latestRecordText: string
 }
 
 type DeleteTarget = {
@@ -118,22 +117,19 @@ const debtCards = computed<DebtCardView[]>(() =>
     const contact = account.contactId ? contactMap.value.get(account.contactId) ?? null : null
     const records = recordsByAccountId.value.get(account.id) ?? []
     const netAmount = sumDebtBalance(records)
-    const latestRecord = records[0]
 
     return {
       account,
       displayName: contact?.name?.trim() || account.name,
       avatarText: (contact?.name?.trim() || account.name || '债').slice(0, 1),
       avatarClass: `debt-avatar-${index % 4}`,
-      secondaryText: contact?.phone?.trim() ? `手机号 ${contact.phone.trim()}` : '未填写联系人手机号',
       noteText: contact?.remark?.trim() || account.remark?.trim() || '',
       netAmount,
       netAmountText: formatSignedCurrency(netAmount),
       netTagText: formatDebtStatusText(netAmount),
       netTagClass: formatDebtStatusClass(netAmount),
-      latestRecordText: latestRecord ? `最近一笔 ${formatDate(latestRecord.occurredAt)}` : '暂无债务记录',
     }
-  }),
+  }).filter((card) => Math.round(card.netAmount * 100) !== 0),
 )
 
 const summaryAmountText = computed(() => formatSignedCurrency(summary.value.netAmount))
@@ -363,14 +359,6 @@ function formatSignedCurrency(value: number) {
   return `${sign}${formatCurrency(value)}`
 }
 
-function formatDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
-}
-
 function showFeedback(message: string, type: 'success' | 'error') {
   feedbackMessage.value = message
   feedbackType.value = type
@@ -389,18 +377,26 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <header class="debt-account-header">
       <PageHeader title="债务账户" back-to="/finance/accounts" back-label="返回账户管理">
         <template #right>
-          <CommonHeaderActionButton
-            :label="isManageMode ? '完成管理' : '管理债务账户'"
-            @click="toggleManageMode"
-          >
-            <svg v-if="isManageMode" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z" stroke="currentColor" stroke-width="1.8" />
-              <path d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </CommonHeaderActionButton>
+          <div class="debt-account-header-actions">
+            <CommonHeaderLinkButton to="/finance/accounts/debt/history" label="明细">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M7 4.5H17C18.1 4.5 19 5.4 19 6.5V17.5C19 18.6 18.1 19.5 17 19.5H7C5.9 19.5 5 18.6 5 17.5V6.5C5 5.4 5.9 4.5 7 4.5Z" stroke="currentColor" stroke-width="1.8" />
+                <path d="M8.5 9H15.5M8.5 12H15.5M8.5 15H13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </CommonHeaderLinkButton>
+            <CommonHeaderActionButton
+              :label="isManageMode ? '完成管理' : '管理债务账户'"
+              @click="toggleManageMode"
+            >
+              <svg v-if="isManageMode" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z" stroke="currentColor" stroke-width="1.8" />
+                <path d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </CommonHeaderActionButton>
+          </div>
         </template>
       </PageHeader>
     </header>
@@ -430,10 +426,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <span>待还</span>
             <strong>{{ formatCurrency(summary.payableTotal) }}</strong>
           </div>
-          <div class="debt-summary-metric">
-            <span>记录数</span>
-            <strong>{{ summary.recordCount }} 条</strong>
-          </div>
         </div>
       </section>
 
@@ -459,7 +451,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <div class="debt-account-card-text">
                 <div class="debt-account-card-name-row">
                   <strong>{{ card.displayName }}</strong>
-                  <span class="debt-account-card-phone">{{ card.secondaryText }}</span>
                 </div>
                 <p v-if="card.noteText">{{ card.noteText }}</p>
               </div>
@@ -468,20 +459,15 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <div class="debt-account-card-side">
               <AmountText tag="strong" class="debt-account-card-amount" :value="card.netAmountText" tone="inherit" />
               <span class="debt-account-card-tag" :class="card.netTagClass">{{ card.netTagText }}</span>
+              <div v-if="isManageMode" class="debt-account-card-actions">
+                <button type="button" class="debt-card-action" @click.stop="openEditAccountModal(card.account)">
+                  编辑
+                </button>
+                <button type="button" class="debt-card-action is-danger" @click.stop="openDeleteModal(card.account)">
+                  删除
+                </button>
+              </div>
             </div>
-          </div>
-
-          <div class="debt-account-card-bottom">
-            <span>{{ card.latestRecordText }}</span>
-            <div v-if="isManageMode" class="debt-account-card-actions">
-              <button type="button" class="debt-card-action" @click.stop="openEditAccountModal(card.account)">
-                编辑
-              </button>
-              <button type="button" class="debt-card-action is-danger" @click.stop="openDeleteModal(card.account)">
-                删除
-              </button>
-            </div>
-            <span v-else class="debt-account-card-link">查看明细</span>
           </div>
         </article>
       </section>
