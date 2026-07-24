@@ -58,10 +58,10 @@
 }
 
 .cash-list-row {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
+  display: grid;
+  border-radius: var(--radius-14);
+  background: var(--color-bg-card);
+  overflow: hidden;
 }
 
 .cash-list-item {
@@ -73,20 +73,34 @@
   gap: var(--space-6);
   padding: 0 12px;
   border: 0;
-  border-radius: var(--radius-14);
-  background: var(--color-bg-card);
-  flex: 1;
+  background: transparent;
+  width: 100%;
   text-align: left;
 }
 
-.cash-list-item.manage-shifted {
-  flex: 0 1 calc(100% - 88px);
-  min-width: 0;
+.cash-list-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-8);
+  padding: 0 12px 12px;
 }
 
-.cash-list-actions {
-  flex: 0 0 80px;
-  height: var(--space-60);
+.cash-list-action {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-blue-soft);
+  color: var(--color-brand);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.cash-list-action.is-danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .cash-item-left {

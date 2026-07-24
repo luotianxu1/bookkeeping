@@ -451,7 +451,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
           <div v-if="isManageMode" class="human-relation-account-card-actions">
             <button type="button" class="human-relation-card-action" @click.stop="openEditAccountModal(card.account)">
-              编辑
+              修改
             </button>
             <button type="button" class="human-relation-card-action is-danger" @click.stop="openDeleteModal(card.account)">
               删除

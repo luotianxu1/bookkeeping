@@ -493,23 +493,23 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 />
               </div>
             </div>
-            <div v-if="isManageMode" class="investment-account-list-card-actions">
-              <button
-                type="button"
-                class="investment-card-action"
-                @click.stop="openEditAccountModal(card.account)"
-              >
-                编辑
-              </button>
-              <button
-                type="button"
-                class="investment-card-action is-danger"
-                @click.stop="openDeleteModal(card.account)"
-              >
-                删除
-              </button>
-            </div>
-            <span v-else class="investment-account-list-card-arrow">&gt;</span>
+          </div>
+
+          <div v-if="isManageMode" class="investment-account-list-card-actions">
+            <button
+              type="button"
+              class="investment-card-action"
+              @click.stop="openEditAccountModal(card.account)"
+            >
+              修改
+            </button>
+            <button
+              type="button"
+              class="investment-card-action is-danger"
+              @click.stop="openDeleteModal(card.account)"
+            >
+              删除
+            </button>
           </div>
         </article>
       </section>

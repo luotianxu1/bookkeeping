@@ -607,28 +607,8 @@ function formatSignedAmount(value: number | null | undefined) {
             class="gold-account-row"
           >
             <button
-              v-if="isManageMode"
               type="button"
-              class="gold-remove-trigger"
-              :aria-label="`删除${row.name}`"
-              @click="openDeleteConfirmModal(row.account)"
-            >
-              <span class="gold-remove-dash"></span>
-            </button>
-
-            <button
-              v-if="isManageMode"
-              type="button"
-              class="gold-edit-trigger"
-              :aria-label="`修改${row.name}`"
-              @click="openEditModal(row.account)"
-            >
-              ✎
-            </button>
-
-            <button
-              type="button"
-              :class="['gold-holding-card', { 'manage-shifted': isManageMode }]"
+              class="gold-holding-card"
               @click="handleAccountClick(row.id)"
             >
               <span class="price-tag">
@@ -650,6 +630,25 @@ function formatSignedAmount(value: number | null | undefined) {
                 <span>{{ formatCreatedDate(row.createdAt) }}</span>
               </div>
             </button>
+
+            <div v-if="isManageMode" class="gold-account-card-actions">
+              <button
+                type="button"
+                class="gold-account-action"
+                :aria-label="`修改${row.name}`"
+                @click="openEditModal(row.account)"
+              >
+                修改
+              </button>
+              <button
+                type="button"
+                class="gold-account-action is-danger"
+                :aria-label="`删除${row.name}`"
+                @click="openDeleteConfirmModal(row.account)"
+              >
+                删除
+              </button>
+            </div>
           </article>
         </template>
 

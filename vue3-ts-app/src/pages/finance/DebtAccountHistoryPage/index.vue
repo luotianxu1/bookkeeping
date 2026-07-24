@@ -138,7 +138,7 @@ function formatDate(value: string) {
 <template>
   <section class="debt-history-page" aria-label="已结清债务明细">
     <header class="debt-history-header">
-      <PageHeader title="已结清明细" back-to="/finance/accounts/debt" back-label="返回债务账户" :prefer-back-to="true" />
+      <PageHeader title="已结清明细" back-to="/finance/accounts/debt" back-label="返回债务账户" />
     </header>
 
     <p v-if="pageError" class="debt-history-message debt-history-message-error">

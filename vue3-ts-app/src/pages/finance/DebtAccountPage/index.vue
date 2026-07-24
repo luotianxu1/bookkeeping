@@ -408,13 +408,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
     <template v-else>
       <section class="debt-summary-card" aria-label="债务汇总">
-        <div class="debt-summary-top">
-          <div class="debt-summary-title">
-            <span>债务往来净额</span>
-          </div>
-          <span class="debt-summary-badge">{{ summary.accountCount }} 个账户</span>
-        </div>
-
         <AmountText tag="strong" class="debt-summary-amount" :value="summaryAmountText" tone="inherit" />
 
         <div class="debt-summary-metrics">
@@ -434,39 +427,50 @@ function showFeedback(message: string, type: 'success' | 'error') {
           请先在账户管理中新增债务账户
         </p>
 
-        <article
-          v-for="card in debtCards"
-          v-else
-          :key="card.account.id"
-          :class="['debt-account-card', { 'is-manage-mode': isManageMode }]"
-          :role="isManageMode ? undefined : 'button'"
-          :tabindex="isManageMode ? -1 : 0"
-          @click="openDebtDetail(card.account.id)"
-        >
-          <div class="debt-account-card-top">
-            <div class="debt-account-card-person">
-              <span class="debt-account-avatar" :class="card.avatarClass">
-                {{ card.avatarText }}
-              </span>
-              <div class="debt-account-card-text">
-                <div class="debt-account-card-name-row">
-                  <strong>{{ card.displayName }}</strong>
+        <article v-for="card in debtCards" v-else :key="card.account.id" class="debt-account-row">
+          <div
+            :class="['debt-account-card', { 'is-expanded': isManageMode }]"
+            :role="isManageMode ? undefined : 'button'"
+            :tabindex="isManageMode ? -1 : 0"
+            @click="openDebtDetail(card.account.id)"
+          >
+            <div class="debt-account-card-top">
+              <div class="debt-account-card-person">
+                <span class="debt-account-avatar" :class="card.avatarClass">
+                  {{ card.avatarText }}
+                </span>
+                <div class="debt-account-card-text">
+                  <div class="debt-account-card-name-row">
+                    <strong>{{ card.displayName }}</strong>
+                  </div>
+                  <p v-if="card.noteText">{{ card.noteText }}</p>
                 </div>
-                <p v-if="card.noteText">{{ card.noteText }}</p>
+              </div>
+
+              <div class="debt-account-card-side">
+                <AmountText tag="strong" class="debt-account-card-amount" :value="card.netAmountText" tone="inherit" />
+                <span class="debt-account-card-tag" :class="card.netTagClass">{{ card.netTagText }}</span>
               </div>
             </div>
 
-            <div class="debt-account-card-side">
-              <AmountText tag="strong" class="debt-account-card-amount" :value="card.netAmountText" tone="inherit" />
-              <span class="debt-account-card-tag" :class="card.netTagClass">{{ card.netTagText }}</span>
-              <div v-if="isManageMode" class="debt-account-card-actions">
-                <button type="button" class="debt-card-action" @click.stop="openEditAccountModal(card.account)">
-                  编辑
-                </button>
-                <button type="button" class="debt-card-action is-danger" @click.stop="openDeleteModal(card.account)">
-                  删除
-                </button>
-              </div>
+            <div v-if="isManageMode" class="debt-account-actions">
+              <button
+                type="button"
+                class="debt-account-action"
+                :aria-label="`修改${card.displayName}`"
+                @click.stop="openEditAccountModal(card.account)"
+              >
+                修改
+              </button>
+              <button
+                type="button"
+                class="debt-account-action is-danger"
+                :disabled="isDeleting && deletingTarget?.id === card.account.id"
+                :aria-label="`删除${card.displayName}`"
+                @click.stop="openDeleteModal(card.account)"
+              >
+                {{ isDeleting && deletingTarget?.id === card.account.id ? '删除中' : '删除' }}
+              </button>
             </div>
           </div>
         </article>

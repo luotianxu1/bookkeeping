@@ -44,44 +44,6 @@
   box-shadow: var(--color-finance-card-shadow);
 }
 
-.debt-summary-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-10);
-}
-
-.debt-summary-title {
-  display: grid;
-  gap: 4px;
-}
-
-.debt-summary-title span {
-  color: var(--color-finance-subtitle);
-  font-size: var(--font-size-12);
-  font-weight: 600;
-}
-
-.debt-summary-title p {
-  margin: 0;
-  color: var(--color-text-subtle);
-  font-size: var(--font-size-12);
-  font-weight: 500;
-}
-
-.debt-summary-badge {
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  padding: 0 12px;
-  border: 1px solid var(--color-fund-profit-pill-border);
-  border-radius: 999px;
-  background: var(--color-fund-profit-pill-bg);
-  color: var(--color-brand);
-  font-size: var(--font-size-12);
-  font-weight: 700;
-}
-
 .debt-summary-amount {
   color: var(--color-finance-title);
   font-size: 34px;
@@ -126,6 +88,11 @@
   gap: var(--space-6);
 }
 
+.debt-account-row {
+  display: grid;
+  gap: var(--space-6);
+}
+
 .debt-empty {
   min-height: 96px;
   display: grid;
@@ -137,6 +104,7 @@
 }
 
 .debt-account-card {
+  min-width: 0;
   display: grid;
   gap: var(--space-10);
   padding: 14px;
@@ -147,8 +115,30 @@
   cursor: pointer;
 }
 
-.debt-account-card.is-manage-mode {
+.debt-account-card.is-expanded {
   cursor: default;
+  border-color: var(--color-border-blue);
+}
+
+.debt-account-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.debt-account-action {
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-blue-soft);
+  color: var(--color-brand);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.debt-account-action.is-danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .debt-account-card-top {
@@ -269,28 +259,6 @@
   color: var(--color-text-subtle);
   font-size: var(--font-size-16);
   font-weight: 700;
-}
-
-.debt-account-card-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.debt-card-action {
-  min-height: 28px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--radius-12);
-  background: var(--color-bg-blue-soft);
-  color: var(--color-brand);
-  font-size: var(--font-size-12);
-  font-weight: 700;
-}
-
-.debt-card-action.is-danger {
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
 }
 
 .debt-form {

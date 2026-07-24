@@ -221,8 +221,7 @@
 }
 
 .investment-account-list-card-side span,
-.investment-account-list-card-metrics span,
-.investment-account-list-card-arrow {
+.investment-account-list-card-metrics span {
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-12);
@@ -289,31 +288,27 @@
 }
 
 .investment-account-list-card-actions {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
 }
 
 .investment-card-action {
-  min-height: 28px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border-soft);
-  border-radius: 999px;
-  background: var(--color-bg-card);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-blue-soft);
   color: var(--color-brand);
-  font-size: var(--font-size-12);
+  font-size: var(--font-size-14);
   font-weight: 700;
 }
 
 .investment-card-action.is-danger {
+  background: var(--color-danger-soft);
   color: var(--color-danger);
-}
-
-.investment-account-list-card-arrow {
-  color: var(--color-brand);
-  font-size: var(--font-size-16);
-  font-weight: 700;
 }
 
 .investment-account-form {

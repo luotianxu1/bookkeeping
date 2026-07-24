@@ -11,7 +11,6 @@ import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
-import SwipeActionGroup from '@/components/common/SwipeActionGroup/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import { createAccount, deleteAccount, getAccounts, getAccountTypes, updateAccount, type Account, type AccountType } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -189,7 +188,9 @@ function confirmDeleteAccount() {
 }
 
 function handleAccountClick(account: Account) {
-  if (isManageMode.value) return
+  if (isManageMode.value) {
+    return
+  }
 
   openDetail(toAccountItem(account).path)
 }
@@ -323,7 +324,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
       <template v-else>
       <article v-for="account in accountItems" :key="account.id" class="cash-list-row">
         <button
-          :class="['cash-list-item', { 'manage-shifted': isManageMode }]"
+          :class="['cash-list-item', { 'is-expanded': isManageMode }]"
           type="button"
           @click="handleAccountClick(account)"
         >
@@ -361,16 +362,25 @@ function showFeedback(message: string, type: 'success' | 'error') {
         </span>
         </button>
 
-        <SwipeActionGroup
-          v-if="isManageMode"
-          class="cash-list-actions"
-          show-edit
-          :deleting="isDeletingAccount && deletingAccount?.id === account.id"
-          :edit-label="`修改${account.name}`"
-          :delete-label="`删除${account.name}`"
-          @edit="openEditModal(account)"
-          @delete="openDeleteConfirmModal(account)"
-        />
+        <div v-if="isManageMode" class="cash-list-actions">
+          <button
+            type="button"
+            class="cash-list-action"
+            :aria-label="`修改${account.name}`"
+            @click="openEditModal(account)"
+          >
+            修改
+          </button>
+          <button
+            type="button"
+            class="cash-list-action is-danger"
+            :disabled="isDeletingAccount && deletingAccount?.id === account.id"
+            :aria-label="`删除${account.name}`"
+            @click="openDeleteConfirmModal(account)"
+          >
+            {{ isDeletingAccount && deletingAccount?.id === account.id ? '删除中' : '删除' }}
+          </button>
+        </div>
       </article>
       </template>
     </section>
