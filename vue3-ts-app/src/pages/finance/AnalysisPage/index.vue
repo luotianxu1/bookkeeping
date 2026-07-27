@@ -34,12 +34,15 @@ type CalendarCell = {
 const period = ref<PeriodLabel>('月')
 const periodOptions: PeriodLabel[] = ['月', '年']
 const DETAIL_PAGE_SIZE = 10
+const BREAKDOWN_DETAIL_PAGE_SIZE = 10
 const summaryTab = ref<SummaryTab>('支出')
 const activeMonth = ref(buildMonthKey(new Date()))
 const activeYear = ref(new Date().getFullYear())
 const selectedDayKey = ref('')
 const selectedYearMonthKey = ref('')
 const detailCurrentPage = ref(1)
+const expandedBreakdownKey = ref('')
+const breakdownDetailCurrentPage = ref(1)
 const analysis = ref<TransactionAnalysis | null>(null)
 const isLoading = ref(false)
 const pageError = ref('')
@@ -107,6 +110,32 @@ const breakdownItems = computed<TransactionAnalysisCategoryBreakdownItem[]>(() =
   return []
 })
 const periodSummaries = computed(() => analysis.value?.periodSummaries ?? [])
+const periodTransactions = computed(() => (
+  periodSummaries.value
+    .flatMap((item) => item.transactions)
+    .filter((transaction) => transaction.type === activeMetric.value)
+    .sort(compareTransactionsDesc)
+))
+const expandedBreakdownItem = computed(() => (
+  breakdownItems.value.find((item) => getBreakdownItemKey(item) === expandedBreakdownKey.value) ?? null
+))
+const expandedBreakdownTransactions = computed(() => {
+  const item = expandedBreakdownItem.value
+  if (!item) return []
+  return periodTransactions.value.filter((transaction) => isTransactionInBreakdown(transaction, item))
+})
+const breakdownDetailTotalItems = computed(() => expandedBreakdownTransactions.value.length)
+const breakdownDetailTotalPages = computed(() => Math.max(1, Math.ceil(breakdownDetailTotalItems.value / BREAKDOWN_DETAIL_PAGE_SIZE)))
+const breakdownDetailPagedTransactions = computed(() => {
+  const startIndex = (breakdownDetailCurrentPage.value - 1) * BREAKDOWN_DETAIL_PAGE_SIZE
+  return expandedBreakdownTransactions.value.slice(startIndex, startIndex + BREAKDOWN_DETAIL_PAGE_SIZE)
+})
+const hasBreakdownDetailPagination = computed(() => breakdownDetailTotalPages.value > 1)
+const breakdownDetailPaginationSummary = computed(() => (
+  `第 ${breakdownDetailCurrentPage.value} / ${breakdownDetailTotalPages.value} 页，共 ${breakdownDetailTotalItems.value} 条`
+))
+const canGoPrevBreakdownDetailPage = computed(() => breakdownDetailCurrentPage.value > 1)
+const canGoNextBreakdownDetailPage = computed(() => breakdownDetailCurrentPage.value < breakdownDetailTotalPages.value)
 const familyViewHint = computed(() => {
   if (!isReadOnlyFamilyView.value) {
     return ''
@@ -272,9 +301,30 @@ watch([summaryTab, selectedDayKey, selectedYearMonthKey, analysisPeriod], () => 
   detailCurrentPage.value = 1
 })
 
+watch([summaryTab, requestKey], () => {
+  expandedBreakdownKey.value = ''
+  breakdownDetailCurrentPage.value = 1
+})
+
+watch(expandedBreakdownKey, () => {
+  breakdownDetailCurrentPage.value = 1
+})
+
 watch(detailTotalPages, (totalPages) => {
   if (detailCurrentPage.value > totalPages) {
     detailCurrentPage.value = totalPages
+  }
+})
+
+watch(breakdownItems, () => {
+  if (expandedBreakdownKey.value && !expandedBreakdownItem.value) {
+    expandedBreakdownKey.value = ''
+  }
+}, { deep: true })
+
+watch(breakdownDetailTotalPages, (totalPages) => {
+  if (breakdownDetailCurrentPage.value > totalPages) {
+    breakdownDetailCurrentPage.value = totalPages
   }
 })
 
@@ -551,6 +601,40 @@ function goToPrevDetailPage() {
 function goToNextDetailPage() {
   if (!canGoNextDetailPage.value) return
   detailCurrentPage.value += 1
+}
+
+function getBreakdownItemKey(item: TransactionAnalysisCategoryBreakdownItem) {
+  return item.categoryId == null ? `name:${item.categoryName}` : `id:${item.categoryId}`
+}
+
+function isBreakdownExpanded(item: TransactionAnalysisCategoryBreakdownItem) {
+  return expandedBreakdownKey.value === getBreakdownItemKey(item)
+}
+
+function toggleBreakdownItem(item: TransactionAnalysisCategoryBreakdownItem) {
+  const key = getBreakdownItemKey(item)
+  expandedBreakdownKey.value = expandedBreakdownKey.value === key ? '' : key
+}
+
+function getBreakdownDetailRows(item: TransactionAnalysisCategoryBreakdownItem) {
+  return isBreakdownExpanded(item) ? breakdownDetailPagedTransactions.value : []
+}
+
+function isTransactionInBreakdown(transaction: Transaction, item: TransactionAnalysisCategoryBreakdownItem) {
+  if (item.categoryId != null) {
+    return transaction.categoryId === item.categoryId
+  }
+  return (transaction.categoryName || (transaction.type === 'income' ? '收入' : '支出')) === item.categoryName
+}
+
+function goToPrevBreakdownDetailPage() {
+  if (!canGoPrevBreakdownDetailPage.value) return
+  breakdownDetailCurrentPage.value -= 1
+}
+
+function goToNextBreakdownDetailPage() {
+  if (!canGoNextBreakdownDetailPage.value) return
+  breakdownDetailCurrentPage.value += 1
 }
 
 function buildMetricAmount(summaryItem: TransactionAnalysisPeriodSummary) {
@@ -832,6 +916,13 @@ function detailMetaText(transaction: Transaction) {
     .join(' · ')
 }
 
+function breakdownDetailMetaText(transaction: Transaction) {
+  const category = transaction.categoryName || (transaction.type === 'income' ? '收入' : '支出')
+  return [transaction.accountName, category, formatDateTime(transaction.occurredAt)]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 function detailAmountText(transaction: Transaction) {
   return transaction.type === 'income'
     ? `+${formatAmount(transaction.amount)}`
@@ -844,6 +935,17 @@ function formatTime(value: string) {
     return value
   }
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return [
+    `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+    `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`,
+  ].join(' ')
 }
 </script>
 
@@ -897,19 +999,62 @@ function formatTime(value: string) {
         </header>
         <div ref="pieRef" class="pie-chart"></div>
         <div class="breakdown-list">
-          <article v-for="item in breakdownItems" :key="`${item.categoryId ?? item.categoryName}`" class="breakdown-item">
-            <div class="breakdown-head">
-              <div class="breakdown-left" :style="{ color: item.categoryColor || '#475569' }">
+          <article
+            v-for="item in breakdownItems"
+            :key="getBreakdownItemKey(item)"
+            :class="['breakdown-item', { expanded: isBreakdownExpanded(item) }]"
+          >
+            <button
+              type="button"
+              class="breakdown-head"
+              :aria-expanded="isBreakdownExpanded(item)"
+              @click="toggleBreakdownItem(item)"
+            >
+              <span class="breakdown-left" :style="{ color: item.categoryColor || '#475569' }">
                 <strong>{{ item.categoryName }}</strong>
-              </div>
-              <span class="breakdown-right" :style="{ color: item.categoryColor || '#475569' }">
-                {{ item.percent.toFixed(2) }}%&nbsp;
-                <AmountText tag="span" :value="formatAmount(item.amount)" />
-                &nbsp;{{ item.transactionCount }}笔
               </span>
-            </div>
+              <span class="breakdown-right" :style="{ color: item.categoryColor || '#475569' }">
+                <span class="breakdown-summary">
+                  {{ item.percent.toFixed(2) }}%&nbsp;
+                  <AmountText tag="span" :value="formatAmount(item.amount)" />
+                  &nbsp;{{ item.transactionCount }}笔
+                </span>
+                <span class="breakdown-toggle" aria-hidden="true">{{ isBreakdownExpanded(item) ? '收起' : '展开' }}</span>
+              </span>
+            </button>
             <div class="breakdown-track">
               <span :style="{ width: `${item.percent}%`, background: item.categoryColor || '#CBD5E1' }"></span>
+            </div>
+            <div v-if="isBreakdownExpanded(item)" class="breakdown-detail" aria-label="分类收支明细">
+              <p v-if="expandedBreakdownTransactions.length === 0" class="card-empty">当前分类暂无对应记录</p>
+              <article v-for="row in getBreakdownDetailRows(item)" :key="row.id" class="day-detail-row breakdown-detail-row">
+                <div>
+                  <strong>{{ row.title }}</strong>
+                  <span>{{ breakdownDetailMetaText(row) }}</span>
+                </div>
+                <AmountText tag="strong" class="expense" :value="detailAmountText(row)" />
+              </article>
+              <div v-if="hasBreakdownDetailPagination" class="detail-pagination breakdown-pagination" aria-label="分类明细分页">
+                <button
+                  class="detail-pagination-button prev"
+                  type="button"
+                  aria-label="上一页"
+                  :disabled="!canGoPrevBreakdownDetailPage"
+                  @click="goToPrevBreakdownDetailPage"
+                >
+                  <span aria-hidden="true"></span>
+                </button>
+                <span class="detail-pagination-summary">{{ breakdownDetailPaginationSummary }}</span>
+                <button
+                  class="detail-pagination-button next"
+                  type="button"
+                  aria-label="下一页"
+                  :disabled="!canGoNextBreakdownDetailPage"
+                  @click="goToNextBreakdownDetailPage"
+                >
+                  <span aria-hidden="true"></span>
+                </button>
+              </div>
             </div>
           </article>
           <p v-if="breakdownItems.length === 0" class="card-empty">当前周期暂无{{ summaryTab }}记录</p>
@@ -970,21 +1115,23 @@ function formatTime(value: string) {
           </article>
           <div v-if="hasDetailPagination" class="detail-pagination" aria-label="明细分页">
             <button
-              class="detail-pagination-button"
+              class="detail-pagination-button prev"
               type="button"
+              aria-label="上一页"
               :disabled="!canGoPrevDetailPage"
               @click="goToPrevDetailPage"
             >
-              上一页
+              <span aria-hidden="true"></span>
             </button>
             <span class="detail-pagination-summary">{{ detailPaginationSummary }}</span>
             <button
-              class="detail-pagination-button"
+              class="detail-pagination-button next"
               type="button"
+              aria-label="下一页"
               :disabled="!canGoNextDetailPage"
               @click="goToNextDetailPage"
             >
-              下一页
+              <span aria-hidden="true"></span>
             </button>
           </div>
         </div>
@@ -1029,21 +1176,23 @@ function formatTime(value: string) {
           </article>
           <div v-if="hasDetailPagination" class="detail-pagination" aria-label="明细分页">
             <button
-              class="detail-pagination-button"
+              class="detail-pagination-button prev"
               type="button"
+              aria-label="上一页"
               :disabled="!canGoPrevDetailPage"
               @click="goToPrevDetailPage"
             >
-              上一页
+              <span aria-hidden="true"></span>
             </button>
             <span class="detail-pagination-summary">{{ detailPaginationSummary }}</span>
             <button
-              class="detail-pagination-button"
+              class="detail-pagination-button next"
               type="button"
+              aria-label="下一页"
               :disabled="!canGoNextDetailPage"
               @click="goToNextDetailPage"
             >
-              下一页
+              <span aria-hidden="true"></span>
             </button>
           </div>
         </div>
