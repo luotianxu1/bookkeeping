@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import { getFundProfitForecast, type FundProfitForecast, type FundProfitForecastAccount, type FundProfitForecastHolding } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
@@ -35,10 +36,12 @@ const accountOptions = computed(() => {
   }
   return options
 })
-const selectedAccountLabel = computed(() =>
-  accountOptions.value.find((option) => option.value === selectedAccountId.value)?.label ?? '全部账户',
+const accountSelectOptions = computed<CommonSelectOption[]>(() =>
+  accountOptions.value.map((option) => ({
+    label: option.label,
+    value: option.value,
+  })),
 )
-
 const selectedAccount = computed<FundProfitForecastAccount | null>(() => {
   if (selectedAccountId.value === 'all') {
     return null
@@ -186,14 +189,13 @@ function formatDateTime(value: string | null | undefined) {
       <section class="summary-card" aria-label="收益预测汇总">
         <div class="summary-top">
           <p class="summary-title">{{ summaryTitle }}</p>
-          <label class="summary-account-pill">
-            <span class="summary-account-pill-text">{{ selectedAccountLabel }}</span>
-            <select v-model="selectedAccountId" class="summary-account-pill-select" aria-label="查看账户">
-              <option v-for="option in accountOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-          </label>
+          <div class="summary-account-pill">
+            <CommonSelect
+              v-model="selectedAccountId"
+              label="查看账户"
+              :options="accountSelectOptions"
+            />
+          </div>
         </div>
         <div class="summary-row">
           <AmountText

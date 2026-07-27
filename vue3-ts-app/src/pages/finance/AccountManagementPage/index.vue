@@ -8,7 +8,7 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
-import CommonSelect from '@/components/common/CommonSelect/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import {
   createAccount,
@@ -127,6 +127,12 @@ const familyViewOptions = computed<FamilyViewOption[]>(() => {
 
   return options
 })
+const familyViewSelectOptions = computed<CommonSelectOption[]>(() =>
+  familyViewOptions.value.map((option) => ({
+    label: option.label,
+    value: option.value,
+  })),
+)
 const selectedFamilyView = computed<FamilyViewOption>(() =>
   familyViewOptions.value.find((option) => option.value === familyView.value)
   ?? familyViewOptions.value[0]
@@ -706,17 +712,13 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
 
     <PageHeader title="账户管理" back-to="/finance" back-label="返回财务首页">
       <template #right>
-        <label v-if="canSwitchFamilyView" class="account-family-switch">
-          <select v-model="familyView" class="account-family-switch-select" aria-label="切换家庭成员账户视角">
-            <option
-              v-for="option in familyViewOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
+        <div v-if="canSwitchFamilyView" class="account-family-switch">
+          <CommonSelect
+            v-model="familyView"
+            label="切换家庭成员账户视角"
+            :options="familyViewSelectOptions"
+          />
+        </div>
       </template>
     </PageHeader>
 

@@ -9,43 +9,33 @@
   width: fit-content;
   max-width: min(46vw, 168px);
   min-height: 32px;
-  padding: 0 30px 0 10px;
   display: inline-flex;
   align-items: center;
+}
+
+.transaction-family-switch :deep(.common-field) {
+  display: inline-flex;
+  gap: 0;
+}
+
+.transaction-family-switch :deep(.common-field > span) {
+  display: none;
+}
+
+.transaction-family-switch :deep(.common-select-control) {
+  min-height: 32px;
+  padding: 0 30px 0 10px;
   border: 1px solid rgba(29, 78, 216, 0.12);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.86);
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
   color: var(--color-brand);
-}
-
-.transaction-family-switch::after {
-  content: '';
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: translateY(-65%) rotate(45deg);
-  pointer-events: none;
-}
-
-.transaction-family-switch-select {
-  max-width: 100%;
-  border: 0;
-  background: transparent;
-  color: inherit;
   font-size: var(--font-size-12);
   font-weight: 700;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  appearance: none;
-  -webkit-appearance: none;
-  outline: none;
-  cursor: pointer;
+}
+
+.transaction-family-switch :deep(.common-select-arrow) {
+  right: 12px;
 }
 
 .transaction-view-hint {

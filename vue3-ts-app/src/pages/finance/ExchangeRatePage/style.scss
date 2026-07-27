@@ -35,15 +35,33 @@
   gap: var(--space-6);
 }
 
-.currency-row select {
+.currency-select {
+  width: fit-content;
+  min-width: 100px;
+  flex: 0 0 auto;
+}
+
+.currency-select :deep(.common-field) {
+  gap: 0;
+}
+
+.currency-select :deep(.common-field > span) {
+  display: none;
+}
+
+.currency-select :deep(.common-select-control) {
   min-height: 34px;
-  padding: 0 10px;
+  padding: 0 30px 0 10px;
   border: 0;
   border-radius: var(--radius-12);
   background: var(--color-bg-brand-soft);
   color: var(--color-brand);
   font-size: var(--font-size-12);
   font-weight: 700;
+}
+
+.currency-select :deep(.common-select-arrow) {
+  right: 12px;
 }
 
 .currency-row input {

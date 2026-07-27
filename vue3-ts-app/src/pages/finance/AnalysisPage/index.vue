@@ -6,6 +6,7 @@ import AmountText from '@/components/common/AmountText/index.vue'
 import MonthPicker from '@/components/common/MonthPicker/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import YearPicker from '@/components/common/YearPicker/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { useTheme } from '@/utils/theme'
@@ -145,6 +146,12 @@ const familyViewHint = computed(() => {
     ? '当前为家庭总计视角，可查看全家收支分析。'
     : `当前查看 ${selectedFamilyView.value.label} 的收支分析。`
 })
+const familyViewSelectOptions = computed<CommonSelectOption[]>(() =>
+  familyViewOptions.value.map((option) => ({
+    label: option.label,
+    value: option.value,
+  })),
+)
 const calendarRows = computed<CalendarCell[][]>(() => {
   if (analysisPeriod.value !== 'month' || !analysis.value?.month) {
     return []
@@ -953,17 +960,13 @@ function formatDateTime(value: string) {
   <section class="analysis-page" aria-label="收支分析">
     <PageHeader title="收支分析" back-to="/finance" back-label="返回财务首页">
       <template #right>
-        <label v-if="canSwitchFamilyView" class="analysis-family-switch">
-          <select v-model="familyView" class="analysis-family-switch-select" aria-label="切换家庭成员收支分析视角">
-            <option
-              v-for="option in familyViewOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
+        <div v-if="canSwitchFamilyView" class="analysis-family-switch">
+          <CommonSelect
+            v-model="familyView"
+            label="切换家庭成员收支分析视角"
+            :options="familyViewSelectOptions"
+          />
+        </div>
       </template>
     </PageHeader>
 

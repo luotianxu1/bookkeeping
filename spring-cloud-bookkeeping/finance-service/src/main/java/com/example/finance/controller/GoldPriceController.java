@@ -24,8 +24,10 @@ public class GoldPriceController {
 
     @GetMapping("/realtime")
     @Operation(summary = "查询实时金价")
-    public Result<GoldRealtimePriceResponse> realtime() {
-        return Result.ok(goldPriceService.getRealtimePrice());
+    public Result<GoldRealtimePriceResponse> realtime(
+        @RequestParam(name = "forceRefreshCurrent", required = false, defaultValue = "false") boolean forceRefreshCurrent
+    ) throws Exception {
+        return Result.ok(goldPriceService.getRealtimePrice(forceRefreshCurrent));
     }
 
     @GetMapping

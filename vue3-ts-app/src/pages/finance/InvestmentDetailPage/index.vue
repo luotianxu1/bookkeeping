@@ -7,6 +7,7 @@ import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
@@ -232,13 +233,21 @@ const selectedTradeFundFeeOption = computed<InvestmentFundRedeemFeeOption | null
   const index = Number(tradeFundFeeMode.value.replace('manual-', ''))
   return Number.isInteger(index) && index >= 0 ? fundRedeemFeeOptions.value[index] ?? null : null
 })
-const tradeFundFeeSelectOptions = computed(() => [
+const tradeFundFeeSelectOptions = computed<CommonSelectOption[]>(() => [
   { label: '自动计算（推荐）', value: 'auto' as const },
   ...fundRedeemFeeOptions.value.map((option, index) => ({
     label: `${option.label}（${formatPercentValue(Number(option.feeRate))}）`,
-    value: `manual-${index}` as TradeFundFeeMode,
+    value: `manual-${index}`,
   })),
 ])
+const tradeFundFeeSelectValue = computed({
+  get: () => tradeFundFeeMode.value,
+  set: (value: string) => {
+    tradeFundFeeMode.value = value === 'auto' || value.startsWith('manual-')
+      ? value as TradeFundFeeMode
+      : 'auto'
+  },
+})
 const editFundCostAmountPreview = computed(() => {
   const quantity = Number(editHoldingQuantity.value)
   const costPrice = Number(editCostPrice.value)
@@ -265,6 +274,16 @@ const tradePrimaryPlaceholder = computed(() => {
     return tradeInputMode.value === 'amount' ? '请输入金额' : '请输入份额'
   }
   return '请输入金额'
+})
+const fundingAccountOptions = computed<CommonSelectOption[]>(() => {
+  if (!fundingAccounts.value.length) {
+    return [{ label: '暂无可用现金账户', value: '', disabled: true }]
+  }
+
+  return fundingAccounts.value.map((account) => ({
+    label: `${account.name}（余额 ${formatCurrency(Number(account.currentBalance ?? 0))}）`,
+    value: String(account.id),
+  }))
 })
 const tradeModeOptions = ['按金额', '按份额和净值']
 const tradeQuantityQuickFillPresets = [
@@ -2486,15 +2505,11 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           </label>
         </div>
 
-        <label class="investment-detail-modal-field">
-          <span>{{ tradeAccountLabel }}</span>
-          <select v-model="tradeFundingAccountId" class="investment-detail-field-control">
-            <option value="" disabled>请选择账户</option>
-            <option v-for="account in fundingAccounts" :key="account.id" :value="String(account.id)">
-              {{ account.name }}（余额 {{ formatCurrency(Number(account.currentBalance)) }}）
-            </option>
-          </select>
-        </label>
+        <CommonSelect
+          v-model="tradeFundingAccountId"
+          :label="tradeAccountLabel"
+          :options="fundingAccountOptions"
+        />
 
         <label class="investment-detail-modal-field">
           <span>交易日期</span>
@@ -2524,14 +2539,12 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           />
         </label>
 
-        <label v-if="showFundRedeemFeeSelector" class="investment-detail-modal-field">
-          <span>手续费档位</span>
-          <select v-model="tradeFundFeeMode" class="investment-detail-field-control">
-            <option v-for="option in tradeFundFeeSelectOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
+        <CommonSelect
+          v-if="showFundRedeemFeeSelector"
+          v-model="tradeFundFeeSelectValue"
+          label="手续费档位"
+          :options="tradeFundFeeSelectOptions"
+        />
 
         <label v-if="showFundRedeemFeeSelector" class="investment-detail-modal-field">
           <span>预计手续费</span>
@@ -2587,15 +2600,11 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           />
         </label>
 
-        <label class="investment-detail-modal-field">
-          <span>扣款账户</span>
-          <select v-model="autoInvestFundingAccountId" class="investment-detail-field-control">
-            <option value="" disabled>请选择资金账户</option>
-            <option v-for="account in fundingAccounts" :key="account.id" :value="String(account.id)">
-              {{ account.name }}（余额 {{ formatCurrency(Number(account.currentBalance)) }}）
-            </option>
-          </select>
-        </label>
+        <CommonSelect
+          v-model="autoInvestFundingAccountId"
+          label="扣款账户"
+          :options="fundingAccountOptions"
+        />
 
         <label class="investment-detail-modal-field">
           <span>定投周期</span>

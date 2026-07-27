@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   createFoodDish,
@@ -52,6 +53,19 @@ const steps = ref<string[]>([
 ])
 
 const selectedCategory = computed(() => categories.value.find((item) => item.id === categoryId.value) ?? null)
+const categoryOptions = computed<CommonSelectOption[]>(() =>
+  categories.value.map((category) => ({
+    label: category.name,
+    value: String(category.id),
+  })),
+)
+const categorySelectValue = computed({
+  get: () => categoryId.value == null ? '' : String(categoryId.value),
+  set: (value: string) => {
+    const parsed = Number(value)
+    categoryId.value = Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  },
+})
 
 onMounted(() => {
   void loadCategories()
@@ -177,14 +191,13 @@ function showFeedback(message: string, type: 'success' | 'error') {
         </label>
 
         <div class="field-grid">
-          <label class="field-block">
-            <span>分类</span>
-            <select v-model="categoryId">
-              <option v-for="category in categories" :key="category.id" :value="category.id">
-                {{ category.name }}
-              </option>
-            </select>
-          </label>
+          <div class="field-block">
+            <CommonSelect
+              v-model="categorySelectValue"
+              label="分类"
+              :options="categoryOptions"
+            />
+          </div>
 
           <label class="field-block">
             <span>口味标签</span>

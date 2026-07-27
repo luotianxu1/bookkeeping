@@ -7,6 +7,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
@@ -77,12 +78,13 @@ const selectedAddAssetResultId = ref('')
 const productLookupMessage = ref('')
 let isFillingProduct = false
 let refreshVisibilityTimer: number | null = null
-const fundingAccountOptions = computed(() =>
-  fundingAccounts.value.map((account) => ({
+const fundingAccountOptions = computed<CommonSelectOption[]>(() => [
+  { label: '不选择', value: '' },
+  ...fundingAccounts.value.map((account) => ({
     label: `${account.name}（余额 ${formatAmount(account.currentBalance)}）`,
     value: String(account.id),
   })),
-)
+])
 
 const subscriptionTimeSlotOptions = [
   { label: '15点前', value: 'before_1500' },
@@ -1110,15 +1112,11 @@ function showFeedback(message: string, type: 'success' | 'error') {
           />
         </label>
 
-        <label class="investment-add-modal-field">
-          <span>资金账户（选填）</span>
-          <select v-model="addAssetFundingAccount" class="investment-field-control">
-            <option value="">不选择</option>
-            <option v-for="option in fundingAccountOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
+        <CommonSelect
+          v-model="addAssetFundingAccount"
+          label="资金账户（选填）"
+          :options="fundingAccountOptions"
+        />
 
         <label v-if="isQuantityBasedDraft" class="investment-add-modal-field">
           <span>持仓份数</span>

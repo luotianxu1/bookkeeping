@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { getExchangeRate } from '@/api/modules/finance'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 
 const currencyOptions = [
@@ -28,6 +29,12 @@ let requestId = 0
 
 const fromCode = computed(() => fromCurrency.value)
 const toCode = computed(() => toCurrency.value)
+const currencySelectOptions = computed<CommonSelectOption[]>(() =>
+  currencyOptions.map((option) => ({
+    label: option.label,
+    value: option.code,
+  })),
+)
 
 const parsedAmount = computed(() => {
   const numeric = Number(fromAmount.value)
@@ -103,11 +110,13 @@ async function loadExchangeRate() {
       <section class="currency-card">
         <p>支付币种</p>
         <div class="currency-row">
-          <select v-model="fromCurrency" aria-label="支付币种">
-            <option v-for="option in currencyOptions" :key="option.code" :value="option.code">
-              {{ option.label }}
-            </option>
-          </select>
+          <div class="currency-select">
+            <CommonSelect
+              v-model="fromCurrency"
+              label="支付币种"
+              :options="currencySelectOptions"
+            />
+          </div>
           <input v-model="fromAmount" type="text" inputmode="decimal" aria-label="支付金额" />
         </div>
       </section>
@@ -120,11 +129,13 @@ async function loadExchangeRate() {
       <section class="currency-card">
         <p>到账币种</p>
         <div class="currency-row">
-          <select v-model="toCurrency" aria-label="到账币种">
-            <option v-for="option in currencyOptions" :key="option.code" :value="option.code">
-              {{ option.label }}
-            </option>
-          </select>
+          <div class="currency-select">
+            <CommonSelect
+              v-model="toCurrency"
+              label="到账币种"
+              :options="currencySelectOptions"
+            />
+          </div>
           <strong>{{ convertedAmount }}</strong>
         </div>
       </section>

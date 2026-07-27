@@ -679,6 +679,16 @@
   padding: 0 12px;
 }
 
+.investment-detail-modal-form .investment-detail-field-control,
+.investment-detail-modal-form .investment-detail-textarea-control {
+  border-color: var(--color-border-soft-2);
+}
+
+.investment-detail-modal-form .investment-detail-field-control:not(:read-only):not(:disabled),
+.investment-detail-modal-form .investment-detail-textarea-control:not(:read-only):not(:disabled) {
+  background: var(--color-bg-card);
+}
+
 .investment-detail-textarea-control {
   resize: none;
   padding: 10px 12px;

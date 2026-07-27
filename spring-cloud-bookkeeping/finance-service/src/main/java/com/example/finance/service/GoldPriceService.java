@@ -85,6 +85,13 @@ public class GoldPriceService {
             : toRealtimePrice(copyResponseWithoutChart(cachedCurrentPrice.response()));
     }
 
+    public synchronized GoldRealtimePriceResponse getRealtimePrice(boolean forceRefreshCurrent) throws Exception {
+        if (forceRefreshCurrent) {
+            refreshCache();
+        }
+        return getRealtimePrice();
+    }
+
     public synchronized BigDecimal getCachedSpotPrice() {
         if (cachedCurrentPrice == null) {
             return null;

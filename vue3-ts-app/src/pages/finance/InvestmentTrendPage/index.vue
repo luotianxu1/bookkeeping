@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
@@ -105,6 +106,12 @@ const familyViewHint = computed(() => {
     ? '当前为家庭总计视角，可查看全家资产趋势。'
     : `当前查看 ${selectedFamilyView.value.label} 的资产趋势。`
 })
+const familyViewSelectOptions = computed<CommonSelectOption[]>(() =>
+  familyViewOptions.value.map((option) => ({
+    label: option.label,
+    value: option.value,
+  })),
+)
 const requestKey = computed(() => (
   `${showFamilySwitch.value ? selectedFamilyView.value.value : 'self'}:${accountId.value ?? 'all'}:${activeRange.value}`
 ))
@@ -799,17 +806,13 @@ function getTrendYAxisBounds(values: number[]) {
   <section class="investment-trend-page" aria-label="资产趋势">
     <PageHeader title="资产趋势" :back-to="backTo" :back-label="backLabel">
       <template #right>
-        <label v-if="showFamilySwitch" class="trend-family-switch">
-          <select v-model="familyView" class="trend-family-switch-select" aria-label="切换家庭成员资产趋势视角">
-            <option
-              v-for="option in familyViewOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
+        <div v-if="showFamilySwitch" class="trend-family-switch">
+          <CommonSelect
+            v-model="familyView"
+            label="切换家庭成员资产趋势视角"
+            :options="familyViewSelectOptions"
+          />
+        </div>
       </template>
     </PageHeader>
 

@@ -226,7 +226,7 @@ async function refreshGoldData() {
   isRefreshingGold.value = true
 
   try {
-    await refreshGoldPriceCache()
+    await refreshGoldPriceCache({ forceRemote: true })
     showFeedback('黄金信息已刷新', 'success')
   } catch (error) {
     const message = error instanceof Error ? error.message : '黄金信息刷新失败'

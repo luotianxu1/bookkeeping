@@ -1508,8 +1508,10 @@ export function getGoldPrices(
   })
 }
 
-export function getRealtimeGoldPrice() {
-  return requestGet<GoldRealtimePrice>(financeRequest, '/api/finance/gold-prices/realtime')
+export function getRealtimeGoldPrice(forceRefreshCurrent = false) {
+  return requestGet<GoldRealtimePrice>(financeRequest, '/api/finance/gold-prices/realtime', {
+    params: { forceRefreshCurrent },
+  })
 }
 
 export function getExchangeRate(from: string, to: string) {

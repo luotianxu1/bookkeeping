@@ -30,9 +30,10 @@ async function requestGoldPrice(
   options: {
     markLoading?: boolean
     force?: boolean
+    forceRemote?: boolean
   } = {},
 ) {
-  const { markLoading = false, force = false } = options
+  const { markLoading = false, force = false, forceRemote = false } = options
 
   if (!force && pendingRequest) {
     return pendingRequest
@@ -47,7 +48,7 @@ async function requestGoldPrice(
 
   const task = (async () => {
     try {
-      const data = await getRealtimeGoldPrice()
+      const data = await getRealtimeGoldPrice(forceRemote)
       state.price = data
       state.lastError = ''
       return data
@@ -92,8 +93,12 @@ export async function ensureGoldPriceCache() {
   return requestGoldPrice()
 }
 
-export async function refreshGoldPriceCache() {
-  return requestGoldPrice({ force: true, markLoading: true })
+export async function refreshGoldPriceCache(options: { forceRemote?: boolean } = {}) {
+  return requestGoldPrice({
+    force: true,
+    forceRemote: options.forceRemote ?? false,
+    markLoading: true,
+  })
 }
 
 export function useGoldPriceCache() {

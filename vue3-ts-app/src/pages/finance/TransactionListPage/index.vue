@@ -16,6 +16,7 @@ import CommonConfirmSheet from '@/components/common/CommonConfirmSheet/index.vue
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonOptionSheet from '@/components/common/CommonOptionSheet/index.vue'
+import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -105,6 +106,12 @@ const familyViewHint = computed(() => {
     ? '当前为家庭总计视角，可查看全家收支记录。'
     : `当前查看 ${selectedFamilyView.value.label} 的收支记录。`
 })
+const familyViewSelectOptions = computed<CommonSelectOption[]>(() =>
+  familyViewOptions.value.map((option) => ({
+    label: option.label,
+    value: option.value,
+  })),
+)
 const hasPagination = computed(() => totalPages.value > 1)
 const paginationSummary = computed(() => `第 ${currentPage.value} / ${totalPages.value} 页，共 ${totalItems.value} 条`)
 const canGoPrevPage = computed(() => currentPage.value > 1)
@@ -471,17 +478,13 @@ function accountLabel(account: Account) {
 
     <PageHeader title="收支列表" back-to="/finance" back-label="返回财务首页">
       <template #right>
-        <label v-if="canSwitchFamilyView" class="transaction-family-switch">
-          <select v-model="familyView" class="transaction-family-switch-select" aria-label="切换家庭成员收支视角">
-            <option
-              v-for="option in familyViewOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
+        <div v-if="canSwitchFamilyView" class="transaction-family-switch">
+          <CommonSelect
+            v-model="familyView"
+            label="切换家庭成员收支视角"
+            :options="familyViewSelectOptions"
+          />
+        </div>
       </template>
     </PageHeader>
 
