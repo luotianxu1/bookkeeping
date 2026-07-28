@@ -18,6 +18,11 @@
   gap: var(--space-8);
 }
 
+.investment-view-toggle.is-active {
+  background: var(--color-brand);
+  color: var(--color-white);
+}
+
 .investment-add-modal-form {
   width: 100%;
   min-width: 0;
@@ -387,6 +392,128 @@
 .investment-holdings {
   display: grid;
   gap: var(--space-6);
+}
+
+.investment-holding-list {
+  --holding-list-columns: minmax(0, 1fr) 68px 68px;
+  display: grid;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-18);
+  background: var(--color-bg-card);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+  overflow: hidden;
+}
+
+.holding-list-header,
+.holding-list-row {
+  display: grid;
+  grid-template-columns: var(--holding-list-columns);
+  align-items: center;
+  gap: 8px;
+}
+
+.holding-list-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-bg-card-soft);
+}
+
+.holding-list-header > span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.holding-list-header > span:not(:first-child) {
+  text-align: right;
+}
+
+.holding-list-row {
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.holding-list-row + .holding-list-row {
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.holding-list-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.holding-list-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holding-list-amount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.holding-list-amount > span {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.holding-list-amount :deep(.amount-text) {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+  line-height: 1.2;
+  font-family: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.holding-list-metric {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+}
+
+.holding-list-metric :deep(.holding-pnl-value) {
+  font-size: var(--font-size-12);
+}
+
+.holding-list-metric :deep(.holding-pnl-value.amount-text--positive),
+.holding-list-metric :deep(.holding-pnl-rate.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.holding-list-metric :deep(.holding-pnl-rate.amount-text--positive) {
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.holding-list-metric :deep(.holding-pnl-value.amount-text--negative),
+.holding-list-metric :deep(.holding-pnl-rate.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.holding-list-metric :deep(.holding-pnl-rate.amount-text--negative) {
+  background: var(--color-bg-success-soft);
+}
+
+.holding-list-metric :deep(.holding-pnl-value.amount-text--neutral),
+.holding-list-metric :deep(.holding-pnl-rate.amount-text--neutral) {
+  color: var(--color-text-primary);
+}
+
+.holding-list-metric :deep(.holding-pnl-rate.amount-text--neutral) {
+  background: var(--color-bg-neutral-soft);
 }
 
 .investment-holding-card {
@@ -789,9 +916,27 @@
   color: #cbd5e1;
 }
 
-:global(:root[data-theme='dark']) .investment-holding-card {
+:global(:root[data-theme='dark']) .investment-holding-card,
+:global(:root[data-theme='dark']) .investment-holding-list {
   background: #121a2b;
   box-shadow: 0 8px 20px rgba(2, 6, 23, 0.3);
+}
+
+:global(:root[data-theme='dark']) .holding-list-amount > span {
+  color: #94a3b8;
+}
+
+:global(:root[data-theme='dark']) .holding-list-header {
+  background: #182233;
+}
+
+:global(:root[data-theme='dark']) .holding-list-metric :deep(.holding-pnl-rate.amount-text--positive) {
+  background: rgba(220, 38, 38, 0.18);
+}
+
+:global(:root[data-theme='dark']) .holding-list-metric :deep(.holding-pnl-rate.amount-text--neutral) {
+  background: #182233;
+  color: #cbd5e1;
 }
 
 :global(:root[data-theme='dark']) .holding-card-right-top > span,

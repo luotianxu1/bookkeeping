@@ -35,7 +35,10 @@ const router = useRouter()
 const route = useRoute()
 
 const investmentTabs = ['A股', '基金']
+const HOLDING_VIEW_MODE_STORAGE_KEY = 'bookkeeping_investment_holding_view_mode'
+type HoldingViewMode = 'card' | 'list'
 const activeTab = ref('A股')
+const holdingViewMode = ref<HoldingViewMode>('card')
 const showAddModal = ref(false)
 const isLoading = ref(false)
 const isSaving = ref(false)
@@ -156,6 +159,7 @@ const summaryMetrics = computed(() => [
 ])
 
 onMounted(() => {
+  restoreHoldingViewMode()
   void loadInvestmentData()
   currentTime.value = new Date()
   refreshVisibilityTimer = window.setInterval(() => {
@@ -189,6 +193,27 @@ watch(addAssetKeyword, (nextKeyword) => {
   selectedAddAssetResultId.value = ''
   clearProductFields()
 })
+
+watch(holdingViewMode, (nextMode) => {
+  if (typeof window === 'undefined') {
+    return
+  }
+  window.localStorage.setItem(HOLDING_VIEW_MODE_STORAGE_KEY, nextMode)
+})
+
+function restoreHoldingViewMode() {
+  if (typeof window === 'undefined') {
+    return
+  }
+  const stored = window.localStorage.getItem(HOLDING_VIEW_MODE_STORAGE_KEY)
+  if (stored === 'card' || stored === 'list') {
+    holdingViewMode.value = stored
+  }
+}
+
+function toggleHoldingViewMode() {
+  holdingViewMode.value = holdingViewMode.value === 'list' ? 'card' : 'list'
+}
 
 function parseAccountId(value: unknown) {
   const raw = Array.isArray(value) ? value[0] : value
@@ -772,6 +797,29 @@ function getHoldingActionTone(position: InvestmentPosition) {
   return dayProfit > 0 ? 'positive' as const : 'negative' as const
 }
 
+function getHoldingDayProfitText(position: InvestmentPosition) {
+  if (isPendingSubscription(position) || position.dayProfit === null || position.dayProfit === undefined) {
+    return '--'
+  }
+  return formatCurrency(position.dayProfit)
+}
+
+function getHoldingDayProfitRateText(position: InvestmentPosition) {
+  if (isPendingSubscription(position)) {
+    return '待确认'
+  }
+  return position.dayProfitRate === null || position.dayProfitRate === undefined
+    ? '--'
+    : `${formatAmount(position.dayProfitRate)}%`
+}
+
+function getHoldingDayProfitTone(position: InvestmentPosition) {
+  if (isPendingSubscription(position)) {
+    return 'neutral' as const
+  }
+  return getHoldingActionTone(position)
+}
+
 function getHoldingPrimaryLabel(position: InvestmentPosition) {
   if (isPendingSubscription(position)) {
     return '确认净值'
@@ -922,6 +970,23 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <PageHeader title="投资详情" back-to="/finance/accounts/investment" back-label="返回投资账户">
       <template #right>
         <div class="investment-header-actions">
+          <CommonHeaderActionButton
+            class="investment-view-toggle"
+            :class="{ 'is-active': holdingViewMode === 'list' }"
+            :label="holdingViewMode === 'list' ? '切换为卡片样式' : '切换为列表样式'"
+            :aria-pressed="holdingViewMode === 'list'"
+            @click="toggleHoldingViewMode"
+          >
+            <svg v-if="holdingViewMode === 'list'" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3.5" y="4.5" width="17" height="15" rx="2" stroke="currentColor" stroke-width="1.8" />
+              <path d="M3.5 9.5H20.5" stroke="currentColor" stroke-width="1.8" />
+              <path d="M3.5 14.5H20.5" stroke="currentColor" stroke-width="1.8" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3.5" y="4.5" width="17" height="6" rx="2" stroke="currentColor" stroke-width="1.8" />
+              <rect x="3.5" y="13.5" width="17" height="6" rx="2" stroke="currentColor" stroke-width="1.8" />
+            </svg>
+          </CommonHeaderActionButton>
           <CommonHeaderActionButton label="清仓明细" @click="openLiquidationList">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M8 6H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
@@ -980,7 +1045,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
         label="投资分类筛选"
       />
 
-      <section class="investment-holdings" aria-label="持仓列表">
+      <section v-if="holdings.length > 0 && holdingViewMode === 'card'" class="investment-holdings" aria-label="持仓列表">
         <article
           v-for="holding in holdings"
           :key="holding.id"
@@ -1083,11 +1148,54 @@ function showFeedback(message: string, type: 'success' | 'error') {
             </div>
           </div>
         </article>
-
-        <p v-if="holdings.length === 0" class="investment-message">
-          暂无持仓
-        </p>
       </section>
+
+      <section v-else-if="holdings.length > 0" class="investment-holding-list" aria-label="持仓列表">
+        <header class="holding-list-header">
+          <span>名称</span>
+          <span>当日收益</span>
+          <span>持有收益</span>
+        </header>
+
+        <article
+          v-for="holding in holdings"
+          :key="holding.id"
+          class="holding-list-row"
+          @click="openInvestmentDetail(holding.id)"
+        >
+          <div class="holding-list-main">
+            <strong class="holding-list-name">{{ holding.productName }}</strong>
+            <div class="holding-list-amount">
+              <span>{{ getHoldingMarketValueLabel(holding) }}</span>
+              <AmountText tag="strong" tone="inherit" :value="getHoldingMarketValue(holding)" />
+            </div>
+          </div>
+
+          <div class="holding-list-metric">
+            <AmountText
+              tag="strong"
+              class="holding-pnl-value"
+              :tone="getHoldingDayProfitTone(holding)"
+              :value="getHoldingDayProfitText(holding)"
+            />
+            <AmountText
+              tag="span"
+              class="holding-pnl-rate"
+              :tone="getHoldingDayProfitTone(holding)"
+              :value="getHoldingDayProfitRateText(holding)"
+            />
+          </div>
+
+          <div class="holding-list-metric">
+            <AmountText tag="strong" class="holding-pnl-value" :value="getHoldingProfitValue(holding)" />
+            <AmountText tag="span" class="holding-pnl-rate" :value="getHoldingProfitRate(holding)" />
+          </div>
+        </article>
+      </section>
+
+      <p v-if="holdings.length === 0" class="investment-message">
+        暂无持仓
+      </p>
     </template>
 
     <FloatingAddButton aria-label="新增投资资产" storage-key="investment-account" @click="openAddModal" />
