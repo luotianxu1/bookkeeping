@@ -12,6 +12,12 @@
   background: var(--color-bg-page);
 }
 
+.gold-position-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
 .gold-position-page :deep(.page-header h1) {
   font-size: 15px;
   font-weight: 600;
@@ -115,13 +121,6 @@
   font-weight: 500;
 }
 
-
-.liquidation-link {
-  color: var(--color-text-subtle);
-  font-size: 11px;
-  font-weight: 500;
-  text-decoration: none;
-}
 
 .summary-grid {
   display: grid;

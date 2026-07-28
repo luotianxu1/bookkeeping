@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // 黄金账户持仓页：对接黄金聚合查询接口，并补充持仓新增、修改、删除能力。
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -33,6 +34,7 @@ import { refreshGoldPriceCache, useGoldPriceCache } from '@/utils/gold-price-cac
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const route = useRoute()
+const router = useRouter()
 
 const isLoading = ref(false)
 const isSavingPosition = ref(false)
@@ -234,6 +236,18 @@ async function refreshGoldData() {
   } finally {
     isRefreshingGold.value = false
   }
+}
+
+function openLiquidationList() {
+  if (selectedAccountId.value) {
+    router.push({
+      path: '/finance/accounts/gold/liquidation',
+      query: { accountId: String(selectedAccountId.value) },
+    })
+    return
+  }
+
+  router.push('/finance/accounts/gold/liquidation')
 }
 
 function openCreateModal() {
@@ -764,11 +778,23 @@ function toApiDateTime(date: Date) {
 
     <PageHeader title="黄金账户持仓" back-to="/finance/accounts/gold" back-label="返回黄金账户">
       <template #right>
-        <CommonHeaderRefreshButton
-          label="刷新黄金信息"
-          :loading="isRefreshingGold"
-          @click="refreshGoldData"
-        />
+        <div class="gold-position-header-actions">
+          <CommonHeaderActionButton label="清仓明细" @click="openLiquidationList">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M8 6H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M8 12H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M8 18H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M3.5 6H4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M3.5 12H4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M3.5 18H4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+          </CommonHeaderActionButton>
+          <CommonHeaderRefreshButton
+            label="刷新黄金信息"
+            :loading="isRefreshingGold"
+            @click="refreshGoldData"
+          />
+        </div>
       </template>
     </PageHeader>
 
@@ -784,14 +810,6 @@ function toApiDateTime(date: Date) {
             <span class="summary-weight-label">总重量(克)</span>
             <div class="summary-main">
               <strong class="summary-weight-value">{{ formatSummaryWeight(visibleSummary.totalWeight) }}</strong>
-              <RouterLink
-                class="liquidation-link"
-                :to="selectedAccountId
-                  ? { path: '/finance/accounts/gold/liquidation', query: { accountId: String(selectedAccountId) } }
-                  : '/finance/accounts/gold/liquidation'"
-              >
-                清仓记录
-              </RouterLink>
             </div>
           </div>
           <div class="gold-price-chip" aria-label="当前实时金价">

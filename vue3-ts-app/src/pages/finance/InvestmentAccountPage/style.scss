@@ -12,6 +12,12 @@
   background: var(--color-bg-page);
 }
 
+.investment-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
 .investment-add-modal-form {
   width: 100%;
   min-width: 0;

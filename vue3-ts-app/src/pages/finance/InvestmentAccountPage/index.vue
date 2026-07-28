@@ -2,6 +2,7 @@
 // 投资账户详情页：展示单个投资账户的汇总、持仓列表和新增持仓。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
@@ -582,6 +583,13 @@ function openInvestmentDetail(positionId: number) {
   router.push({ path: '/finance/accounts/investment/detail', query: { positionId } })
 }
 
+function openLiquidationList() {
+  if (!selectedAccountId.value) {
+    return
+  }
+  router.push(`/finance/accounts/investment/${selectedAccountId.value}/liquidations`)
+}
+
 function formatCurrency(value: number, digits = 2) {
   const numeric = Number(value)
   const sign = numeric < 0 ? '-' : ''
@@ -913,12 +921,24 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
     <PageHeader title="投资详情" back-to="/finance/accounts/investment" back-label="返回投资账户">
       <template #right>
-        <CommonHeaderRefreshButton
-          v-if="shouldShowQuoteRefreshButton"
-          label="刷新投资持仓数据"
-          :loading="isRefreshingQuotes"
-          @click="refreshQuoteData"
-        />
+        <div class="investment-header-actions">
+          <CommonHeaderActionButton label="清仓明细" @click="openLiquidationList">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M8 6H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M8 12H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M8 18H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M3.5 6H4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M3.5 12H4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M3.5 18H4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+          </CommonHeaderActionButton>
+          <CommonHeaderRefreshButton
+            v-if="shouldShowQuoteRefreshButton"
+            label="刷新投资持仓数据"
+            :loading="isRefreshingQuotes"
+            @click="refreshQuoteData"
+          />
+        </div>
       </template>
     </PageHeader>
 

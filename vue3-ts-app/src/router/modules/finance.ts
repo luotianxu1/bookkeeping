@@ -34,6 +34,7 @@ import HumanRelationAccountPage from '@/pages/finance/HumanRelationAccountPage/i
 import HumanRelationAccountDetailPage from '@/pages/finance/HumanRelationAccountDetailPage/index.vue'
 import InvestmentAccountListPage from '@/pages/finance/InvestmentAccountListPage/index.vue'
 import InvestmentAccountPage from '@/pages/finance/InvestmentAccountPage/index.vue'
+import InvestmentLiquidationPage from '@/pages/finance/InvestmentLiquidationPage/index.vue'
 import InvestmentDetailPage from '@/pages/finance/InvestmentDetailPage/index.vue'
 import SalaryHomePage from '@/pages/finance/SalaryHomePage/index.vue'
 import SalarySettingsPage from '@/pages/finance/SalarySettingsPage/index.vue'
@@ -382,6 +383,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '投资账户',
+    },
+  },
+  {
+    path: '/finance/accounts/investment/:accountId/liquidations',
+    name: 'finance-accounts-investment-liquidations',
+    component: InvestmentLiquidationPage,
+    meta: {
+      section: 'finance',
+      title: '清仓明细',
     },
   },
   {

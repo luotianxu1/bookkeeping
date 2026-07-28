@@ -334,6 +334,12 @@ function formatCurrency(value: number | string | null | undefined) {
   })}`
 }
 
+function formatYAxisAmount(value: number) {
+  return `¥${(value / 1000).toLocaleString('zh-CN', {
+    maximumFractionDigits: 1,
+  })}k`
+}
+
 function formatDateLabel(value: string | null | undefined) {
   if (!value) return ''
   const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
@@ -451,7 +457,7 @@ function renderLineChart() {
   const incomeColor = rootStyle.getPropertyValue('--color-danger').trim()
 
   const option: EChartsCoreOption = {
-    grid: { left: 28, right: 18, top: 28, bottom: 28, containLabel: true },
+    grid: { left: 0, right: 18, top: 28, bottom: 28, containLabel: true },
     tooltip: {
       trigger: 'axis',
       backgroundColor: tooltipBg,
@@ -469,7 +475,11 @@ function renderLineChart() {
       type: 'category',
       data: labels,
       axisLine: { lineStyle: { color: chartSplit } },
-      axisLabel: { color: chartAxis, fontSize: 11 },
+      axisLabel: {
+        color: chartAxis,
+        fontSize: 11,
+        interval: viewMode.value === 'month' ? 0 : 'auto',
+      },
     },
     yAxis: [
       {
@@ -479,7 +489,7 @@ function renderLineChart() {
         axisLabel: {
           color: chartAxis,
           fontSize: 11,
-          formatter: (value: number) => `¥${value}`,
+          formatter: formatYAxisAmount,
         },
       },
     ],

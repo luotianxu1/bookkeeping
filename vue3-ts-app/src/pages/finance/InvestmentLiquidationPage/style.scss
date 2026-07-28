@@ -1,0 +1,196 @@
+.investment-liquidation-page {
+  display: grid;
+  gap: var(--space-8);
+  padding-bottom: var(--space-24);
+}
+
+.investment-liquidation-message {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.investment-liquidation-message-error {
+  color: var(--color-danger);
+}
+
+.investment-liquidation-summary {
+  min-height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-14);
+  border: 1px solid var(--color-border-blue);
+  border-radius: var(--radius-20);
+  background: var(--color-top-card-gradient);
+  box-shadow: var(--color-finance-card-shadow);
+}
+
+.liquidation-summary-main,
+.liquidation-summary-side {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-6);
+}
+
+.liquidation-summary-main {
+  flex: 1;
+}
+
+.liquidation-summary-main span,
+.liquidation-summary-side span {
+  color: var(--color-finance-subtitle);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.liquidation-summary-main strong {
+  color: var(--color-finance-title);
+  font-size: var(--font-size-28);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.liquidation-summary-main em {
+  color: var(--color-finance-subtitle);
+  font-size: var(--font-size-12);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.liquidation-summary-side {
+  flex: 0 0 auto;
+  justify-items: end;
+  text-align: right;
+}
+
+.liquidation-summary-side strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.liquidation-summary-main :deep(.liquidation-summary-profit.amount-text--positive),
+.liquidation-summary-side :deep(.liquidation-summary-rate.amount-text--positive),
+.liquidation-profit :deep(.liquidation-profit-value.amount-text--positive) {
+  color: var(--color-danger);
+}
+
+.liquidation-summary-main :deep(.liquidation-summary-profit.amount-text--negative),
+.liquidation-summary-side :deep(.liquidation-summary-rate.amount-text--negative),
+.liquidation-profit :deep(.liquidation-profit-value.amount-text--negative) {
+  color: var(--color-success);
+}
+
+.liquidation-summary-main :deep(.liquidation-summary-profit.amount-text--neutral),
+.liquidation-summary-side :deep(.liquidation-summary-rate.amount-text--neutral),
+.liquidation-profit :deep(.liquidation-profit-value.amount-text--neutral) {
+  color: var(--color-text-primary);
+}
+
+.investment-liquidation-list {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.investment-liquidation-card {
+  display: grid;
+  gap: var(--space-8);
+  padding: 12px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-18);
+  background: var(--color-bg-card);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+  cursor: pointer;
+}
+
+.liquidation-card-top,
+.liquidation-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.liquidation-product-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.liquidation-product-main strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-14);
+  font-weight: 700;
+}
+
+.liquidation-product-main span,
+.liquidation-profit span,
+.liquidation-detail-grid span,
+.liquidation-card-bottom span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.liquidation-profit {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: var(--space-3);
+}
+
+.liquidation-profit strong {
+  font-size: var(--font-size-16);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.liquidation-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-10);
+  padding: var(--space-8) 0;
+  border-top: 1px solid var(--color-border-soft);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.liquidation-detail-grid div {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.liquidation-detail-grid strong,
+.liquidation-card-bottom strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.investment-liquidation-empty {
+  margin: 0;
+  padding: var(--space-12) 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-13);
+  text-align: center;
+}
