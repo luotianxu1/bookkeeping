@@ -217,6 +217,13 @@ public class InvestmentService {
     private static final String STOCK_QUOTE_SOURCE = "TENCENT_STOCK_LATEST";
     private static final String FUND_DIVIDEND_PLAN_SOURCE = "EASTMONEY_FUND_FHSP";
     private static final String STOCK_DIVIDEND_HISTORY_SOURCE = "EASTMONEY_STOCK_BONUS";
+    private static final Pattern FUND_DIVIDEND_BATCH_PATTERN = Pattern.compile(
+        "(?:每\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*份[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*元"
+    );
+    private static final Pattern FUND_DIVIDEND_SINGLE_UNIT_PATTERN = Pattern.compile(
+        "每\\s*份[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*元"
+    );
+    private static final Pattern DECIMAL_NUMBER_PATTERN = Pattern.compile("([0-9]+(?:\\.[0-9]+)?)");
     private static final String SUBSCRIPTION_STATUS_CONFIRMED = "confirmed";
     private static final String SUBSCRIPTION_STATUS_PENDING = "pending";
     private static final String SETTLEMENT_STATUS_CONFIRMED = "confirmed";
@@ -5043,11 +5050,35 @@ public class InvestmentService {
         if (!StringUtils.hasText(value)) {
             return null;
         }
-        Matcher matcher = Pattern.compile("([0-9]+(?:\\.[0-9]+)?)").matcher(value.replace(",", ""));
-        if (!matcher.find()) {
+
+        String normalizedValue = value.replace(",", "").replace("，", "").trim();
+        Matcher batchMatcher = FUND_DIVIDEND_BATCH_PATTERN.matcher(normalizedValue);
+        if (batchMatcher.find()) {
+            BigDecimal unitCount = safeDecimal(batchMatcher.group(1));
+            BigDecimal batchDividendAmount = safeDecimal(batchMatcher.group(2));
+            if (unitCount == null || unitCount.compareTo(BigDecimal.ZERO) <= 0
+                || batchDividendAmount == null || batchDividendAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                return null;
+            }
+            return batchDividendAmount.divide(unitCount, 12, RoundingMode.HALF_UP);
+        }
+
+        Matcher singleUnitMatcher = FUND_DIVIDEND_SINGLE_UNIT_PATTERN.matcher(normalizedValue);
+        if (singleUnitMatcher.find()) {
+            BigDecimal dividendAmount = safeDecimal(singleUnitMatcher.group(1));
+            return dividendAmount != null && dividendAmount.compareTo(BigDecimal.ZERO) > 0 ? dividendAmount : null;
+        }
+
+        if (normalizedValue.contains("份")) {
             return null;
         }
-        return safeDecimal(matcher.group(1));
+
+        Matcher numberMatcher = DECIMAL_NUMBER_PATTERN.matcher(normalizedValue);
+        if (!numberMatcher.find()) {
+            return null;
+        }
+        BigDecimal dividendAmount = safeDecimal(numberMatcher.group(1));
+        return dividendAmount != null && dividendAmount.compareTo(BigDecimal.ZERO) > 0 ? dividendAmount : null;
     }
 
     private String resolveDividendPlanStatus(LocalDate payDate) {
