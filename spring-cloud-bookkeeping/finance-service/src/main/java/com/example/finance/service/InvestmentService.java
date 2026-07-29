@@ -217,6 +217,7 @@ public class InvestmentService {
     private static final String STOCK_QUOTE_SOURCE = "TENCENT_STOCK_LATEST";
     private static final String FUND_DIVIDEND_PLAN_SOURCE = "EASTMONEY_FUND_FHSP";
     private static final String STOCK_DIVIDEND_HISTORY_SOURCE = "EASTMONEY_STOCK_BONUS";
+    private static final BigDecimal SUSPICIOUS_FUND_ANNUAL_DIVIDEND_PER_UNIT = new BigDecimal("1.000000");
     private static final Pattern FUND_DIVIDEND_BATCH_PATTERN = Pattern.compile(
         "(?:每\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*份[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*元"
     );
@@ -6007,14 +6008,28 @@ public class InvestmentService {
         if (product == null || !supportsDividendProfile(product)) {
             return;
         }
-        if (product.getDividendEvaluatedAt() != null
-            && product.getDividendEvaluatedAt().toLocalDate().isEqual(LocalDate.now())) {
+        if (isDividendProfileFresh(product)) {
             return;
         }
         evaluateDividendProfile(product);
         if (product.getId() != null) {
             productMapper.updateById(product);
         }
+    }
+
+    private boolean isDividendProfileFresh(InvestmentProductEntity product) {
+        if (product.getDividendEvaluatedAt() == null
+            || !product.getDividendEvaluatedAt().toLocalDate().isEqual(LocalDate.now())) {
+            return false;
+        }
+        return !isSuspiciousFundDividendProfile(product);
+    }
+
+    private boolean isSuspiciousFundDividendProfile(InvestmentProductEntity product) {
+        return FUND_PRODUCT_TYPE.equals(product.getProductType())
+            && FUND_DIVIDEND_PLAN_SOURCE.equals(product.getDividendDataSource())
+            && defaultZero(product.getPredictedAnnualDividendPerUnit())
+                .compareTo(SUSPICIOUS_FUND_ANNUAL_DIVIDEND_PER_UNIT) >= 0;
     }
 
     private boolean supportsDividendProfile(InvestmentProductEntity product) {
