@@ -34,4 +34,12 @@ public class StockScreenItemResponse {
     private BigDecimal yinYangPenetrationPct;
     private String yinYangType;
     private Integer yinYangScore;
+    private Boolean firstBoardHighBearMatched;
+    private String firstBoardBuyPoint;
+    private Integer firstBoardScore;
+    private LocalDate firstBoardDate;
+    private BigDecimal firstBoardLow;
+    private LocalDate highBearDate;
+    private BigDecimal highBearHigh;
+    private BigDecimal highBearVolumeRatio;
 }

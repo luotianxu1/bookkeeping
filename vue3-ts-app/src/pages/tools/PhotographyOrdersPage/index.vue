@@ -13,6 +13,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import { getAccounts, type Account } from '@/api/modules/finance'
 import {
+  cancelPhotographyOrder,
   collectPhotographyOrderFinal,
   createPhotographyOrder,
   deletePhotographyOrder,
@@ -59,6 +60,7 @@ const isLoading = ref(false)
 const isSaving = ref(false)
 const isCollecting = ref(false)
 const isDeleting = ref(false)
+const isCancelling = ref(false)
 const pageError = ref('')
 const createFormError = ref('')
 const collectFormError = ref('')
@@ -66,6 +68,7 @@ const collectFormError = ref('')
 const showCreateModal = ref(false)
 const showCollectModal = ref(false)
 const showDeleteModal = ref(false)
+const showCancelModal = ref(false)
 const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
@@ -83,7 +86,7 @@ const formRemark = ref('')
 
 const collectFinalAccountId = ref('')
 
-const isBusy = computed(() => isLoading.value || isSaving.value || isCollecting.value || isDeleting.value)
+const isBusy = computed(() => isLoading.value || isSaving.value || isCollecting.value || isDeleting.value || isCancelling.value)
 const selectedMonthOrders = computed(() => {
   const [yearText = '', monthText = ''] = selectedMonth.value.split('-')
   const targetYear = Number(yearText)
@@ -95,12 +98,14 @@ const selectedMonthOrders = computed(() => {
   })
 })
 
+const activeMonthOrders = computed(() => selectedMonthOrders.value.filter((order) => !isCancelled(order)))
+
 const filteredOrders = computed(() => {
   const targetStatus = activeTab.value
   const now = Date.now()
   const source = targetStatus === 'all'
     ? selectedMonthOrders.value
-    : selectedMonthOrders.value.filter((order) => isShotByTime(order, now) === (targetStatus === 'shot'))
+    : activeMonthOrders.value.filter((order) => isShotByTime(order, now) === (targetStatus === 'shot'))
 
   return [...source].sort((left, right) => {
     const leftTime = new Date(left.shootAt).getTime()
@@ -124,13 +129,13 @@ const summary = computed(() => {
     }
     return total
   }, 0)
-  const finalPending = selectedMonthOrders.value.reduce((sum, order) => {
+  const finalPending = activeMonthOrders.value.reduce((sum, order) => {
     if (order.finalReceivedAt) {
       return sum
     }
     return sum + Number(order.finalAmount ?? 0)
   }, 0)
-  const totalAmount = selectedMonthOrders.value.reduce((sum, order) => {
+  const totalAmount = activeMonthOrders.value.reduce((sum, order) => {
     return sum + Number(order.depositAmount ?? 0) + Number(order.finalAmount ?? 0)
   }, 0)
   const typeCounts = typeOptions
@@ -386,6 +391,46 @@ function closeDeleteModal() {
   selectedOrder.value = null
 }
 
+function openCancelModal(order: PhotographyOrder) {
+  selectedOrder.value = order
+  showCancelModal.value = true
+}
+
+function closeCancelModal() {
+  if (isCancelling.value) {
+    return
+  }
+  showCancelModal.value = false
+  selectedOrder.value = null
+}
+
+async function confirmCancelOrder() {
+  if (isCancelling.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  const order = selectedOrder.value
+  if (!currentUser || !order) {
+    return
+  }
+
+  isCancelling.value = true
+
+  try {
+    await cancelPhotographyOrder(order.id, currentUser.id)
+    showCancelModal.value = false
+    selectedOrder.value = null
+    expandedOrderId.value = null
+    showFeedback('拍摄已取消，订金已保留', 'success')
+    await loadPage()
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : '取消拍摄失败', 'error')
+  } finally {
+    isCancelling.value = false
+  }
+}
+
 async function confirmDeleteOrder() {
   if (isDeleting.value) {
     return
@@ -418,6 +463,9 @@ function getNextSortOrder() {
 }
 
 function isShotByTime(order: PhotographyOrder, now = Date.now()) {
+  if (isCancelled(order)) {
+    return false
+  }
   const shootAt = new Date(order.shootAt).getTime()
   return Number.isFinite(shootAt) && shootAt <= now
 }
@@ -493,6 +541,9 @@ function depositStatusClass(order: PhotographyOrder) {
 }
 
 function finalStatusLabel(order: PhotographyOrder) {
+  if (isCancelled(order)) {
+    return '已取消'
+  }
   if (Number(order.finalAmount ?? 0) <= 0) {
     return '无尾款'
   }
@@ -501,6 +552,9 @@ function finalStatusLabel(order: PhotographyOrder) {
 }
 
 function finalStatusClass(order: PhotographyOrder) {
+  if (isCancelled(order)) {
+    return 'order-card-final--cancelled'
+  }
   if (Number(order.finalAmount ?? 0) <= 0) {
     return 'order-card-final--empty'
   }
@@ -514,6 +568,10 @@ function amountTextClass(value: number | string | null | undefined) {
 
 function isFinalPaid(order: PhotographyOrder) {
   return Boolean(order.finalReceivedAt)
+}
+
+function isCancelled(order: PhotographyOrder) {
+  return order.status === 'cancelled'
 }
 
 function openOverview() {
@@ -604,13 +662,21 @@ function buildCurrentMonth() {
         </div>
 
         <div v-if="expandedOrderId === order.id" class="order-card-actions" @click.stop>
+          <button
+            class="order-card-action order-card-action-cancel"
+            type="button"
+            :disabled="isCancelled(order)"
+            @click="openCancelModal(order)"
+          >
+            {{ isCancelled(order) ? '已取消' : '取消' }}
+          </button>
           <button class="order-card-action order-card-action-delete" type="button" @click="openDeleteModal(order)">
             删除
           </button>
           <button
             class="order-card-action order-card-action-primary"
             type="button"
-            :disabled="isFinalPaid(order)"
+            :disabled="isFinalPaid(order) || isCancelled(order)"
             @click="openCollectModal(order)"
           >
             {{ isFinalPaid(order) ? '已收尾款' : '收尾款' }}
@@ -693,6 +759,22 @@ function buildCurrentMonth() {
           <CommonButton variant="secondary" :disabled="isDeleting" @click="closeDeleteModal">取消</CommonButton>
           <CommonButton class="orders-modal-danger" :disabled="isDeleting" @click="confirmDeleteOrder">
             {{ isDeleting ? '删除中...' : '确认删除' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+
+    <CommonModal v-model="showCancelModal" title="取消拍摄" size="compact">
+      <div class="delete-modal">
+        <p class="delete-modal-title">是否确认取消这次拍摄？</p>
+        <p class="delete-modal-tip">订单会标记为已取消，订金收款记录会保留，不会再计入待收尾款。</p>
+      </div>
+
+      <template #footer>
+        <div class="orders-modal-actions">
+          <CommonButton variant="secondary" :disabled="isCancelling" @click="closeCancelModal">取消</CommonButton>
+          <CommonButton class="orders-modal-danger" :disabled="isCancelling" @click="confirmCancelOrder">
+            {{ isCancelling ? '取消中...' : '确认取消' }}
           </CommonButton>
         </div>
       </template>

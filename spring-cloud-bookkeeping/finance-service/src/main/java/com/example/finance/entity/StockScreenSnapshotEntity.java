@@ -77,6 +77,22 @@ public class StockScreenSnapshotEntity {
     private String yinYangType;
     @TableField("yin_yang_score")
     private Integer yinYangScore;
+    @TableField("first_board_high_bear_matched")
+    private Boolean firstBoardHighBearMatched;
+    @TableField("first_board_buy_point")
+    private String firstBoardBuyPoint;
+    @TableField("first_board_score")
+    private Integer firstBoardScore;
+    @TableField("first_board_date")
+    private LocalDate firstBoardDate;
+    @TableField("first_board_low")
+    private BigDecimal firstBoardLow;
+    @TableField("high_bear_date")
+    private LocalDate highBearDate;
+    @TableField("high_bear_high")
+    private BigDecimal highBearHigh;
+    @TableField("high_bear_volume_ratio")
+    private BigDecimal highBearVolumeRatio;
     @TableField("created_at")
     private LocalDateTime createdAt;
 }

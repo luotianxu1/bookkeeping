@@ -78,6 +78,15 @@ public class PhotographyOrderController {
         return Result.ok(photographyOrderService.collectFinal(id, request));
     }
 
+    @PostMapping("/{id}/cancel")
+    @Operation(summary = "取消摄影订单拍摄")
+    public Result<PhotographyOrderResponse> cancel(
+        @PathVariable("id") @NotNull Long id,
+        @RequestParam("userId") @NotNull Long userId
+    ) {
+        return Result.ok(photographyOrderService.cancel(id, userId));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "删除摄影订单")
     public Result<Void> delete(

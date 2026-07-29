@@ -25,7 +25,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -112,5 +114,60 @@ class PhotographyOrderServiceTest {
         assertThat(orderCaptor.getValue().getDepositReceivedAt()).isEqualTo(transactionCaptor.getValue().getOccurredAt());
         assertThat(response.getDepositReceivedAt()).isEqualTo(transactionCaptor.getValue().getOccurredAt());
         assertThat(response.getShootAt()).isEqualTo(shootAt);
+    }
+
+    @Test
+    void cancelShouldKeepDepositAndVoidFinalPayment() {
+        PhotographyOrderEntity order = new PhotographyOrderEntity();
+        order.setId(201L);
+        order.setUserId(1L);
+        order.setOrderNo("PHOTO202606180001");
+        order.setOrderType("wedding");
+        order.setStatus("pending");
+        order.setShootAt(LocalDateTime.of(2026, 6, 18, 14, 30));
+        order.setTotalAmount(new BigDecimal("1000.00"));
+        order.setDepositAmount(new BigDecimal("200.00"));
+        order.setFinalAmount(new BigDecimal("800.00"));
+        order.setDepositAccountId(11L);
+        order.setDepositTransactionId(101L);
+        order.setDepositReceivedAt(LocalDateTime.of(2026, 6, 1, 10, 0));
+        order.setFinalAccountId(11L);
+        order.setFinalTransactionId(102L);
+        order.setFinalReceivedAt(LocalDateTime.of(2026, 6, 18, 16, 0));
+
+        AccountEntity account = new AccountEntity();
+        account.setId(11L);
+        account.setUserId(1L);
+        account.setCurrentBalance(new BigDecimal("1000.00"));
+
+        TransactionEntity finalTransaction = new TransactionEntity();
+        finalTransaction.setId(102L);
+        finalTransaction.setUserId(1L);
+        finalTransaction.setAccountId(11L);
+        finalTransaction.setAmount(new BigDecimal("800.00"));
+        finalTransaction.setStatus("normal");
+
+        when(photographyOrderMapper.selectById(201L)).thenReturn(order);
+        when(transactionMapper.selectById(102L)).thenReturn(finalTransaction);
+        when(accountMapper.selectById(11L)).thenReturn(account);
+        when(accountMapper.selectByIds(any())).thenReturn(List.of(account));
+
+        doAnswer(invocation -> {
+            order.setStatus("cancelled");
+            order.setFinalAccountId(null);
+            order.setFinalTransactionId(null);
+            order.setFinalReceivedAt(null);
+            return 1;
+        }).when(photographyOrderMapper).update(any(), any());
+
+        PhotographyOrderResponse response = photographyOrderService.cancel(201L, 1L);
+
+        assertThat(response.getStatus()).isEqualTo("cancelled");
+        assertThat(response.getDepositTransactionId()).isEqualTo(101L);
+        assertThat(response.getDepositReceivedAt()).isNotNull();
+        assertThat(response.getFinalTransactionId()).isNull();
+        assertThat(account.getCurrentBalance()).isEqualByComparingTo("200.00");
+        assertThat(finalTransaction.getStatus()).isEqualTo("voided");
+        verify(transactionMapper, never()).selectById(101L);
     }
 }

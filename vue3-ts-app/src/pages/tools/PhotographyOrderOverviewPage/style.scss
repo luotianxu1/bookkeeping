@@ -382,6 +382,11 @@
   background: var(--color-warning-soft);
 }
 
+.overview-order-tag--cancelled {
+  color: var(--color-text-muted);
+  background: var(--color-bg-soft);
+}
+
 .overview-order-metrics {
   align-items: stretch;
 }

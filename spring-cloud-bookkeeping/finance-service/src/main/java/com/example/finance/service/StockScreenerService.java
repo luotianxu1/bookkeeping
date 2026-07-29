@@ -51,11 +51,12 @@ public class StockScreenerService {
     private static final String STATUS_CANCELED = "canceled";
     private static final String RULE_SUNRISE_RISE = "sunrise-rise";
     private static final String RULE_YIN_YANG_DOUBLE_BEAR = "yin-yang-double-bear";
+    private static final String RULE_FIRST_BOARD_HIGH_BEAR = "first-board-high-bear";
     private static final String DATA_SOURCE = "东方财富股票列表 / 新浪日K";
-    private static final String CURRENT_RULE_VERSION = "downtrend-engulf-v3";
+    private static final String CURRENT_RULE_VERSION = "downtrend-engulf-v4";
     private static final LocalTime MARKET_DATA_READY_TIME = LocalTime.of(16, 0);
     private static final int UNIVERSE_PAGE_SIZE = 100;
-    private static final int K_LINE_COUNT = 12;
+    private static final int K_LINE_COUNT = 32;
     private static final BigDecimal DEFAULT_THREE_DAY_DECLINE = new BigDecimal("9");
     private static final BigDecimal DEFAULT_LAST_DAY_DECLINE = new BigDecimal("3");
     private static final BigDecimal NO_LOWER_SHADOW_TOLERANCE = new BigDecimal("0.15");
@@ -65,6 +66,9 @@ public class StockScreenerService {
     private static final BigDecimal DOUBLE_BEAR_MIN_VOLUME_RATIO = new BigDecimal("1.5");
     private static final BigDecimal DOUBLE_BEAR_MAX_VOLUME_RATIO = new BigDecimal("4");
     private static final BigDecimal LIMIT_UP_THRESHOLD_PCT = new BigDecimal("9.5");
+    private static final BigDecimal FIRST_BOARD_MAX_HIGH_BEAR_BODY_PCT = new BigDecimal("5");
+    private static final BigDecimal FIRST_BOARD_MAX_HIGH_BEAR_PULLBACK_PCT = new BigDecimal("5");
+    private static final BigDecimal FIRST_BOARD_LOW_NEAR_PCT = new BigDecimal("3");
 
     private final StockScreenRunMapper runMapper;
     private final StockScreenSnapshotMapper snapshotMapper;
@@ -244,7 +248,10 @@ public class StockScreenerService {
             Boolean.TRUE.equals(requireVolumeUp), Boolean.TRUE.equals(requireNoLowerShadow),
             Boolean.TRUE.equals(includeChiNext), Boolean.TRUE.equals(includeStar), normalizedRuleKey
         );
-        if (RULE_YIN_YANG_DOUBLE_BEAR.equals(normalizedRuleKey)) {
+        if (RULE_FIRST_BOARD_HIGH_BEAR.equals(normalizedRuleKey)) {
+            pageQuery.orderByDesc(StockScreenSnapshotEntity::getFirstBoardScore)
+                .orderByDesc(StockScreenSnapshotEntity::getHighBearVolumeRatio);
+        } else if (RULE_YIN_YANG_DOUBLE_BEAR.equals(normalizedRuleKey)) {
             pageQuery.orderByDesc(StockScreenSnapshotEntity::getYinYangScore)
                 .orderByDesc(StockScreenSnapshotEntity::getYinYangPenetrationPct);
         } else {
@@ -492,6 +499,7 @@ public class StockScreenerService {
             && bullishEngulfing
             && volumeShrinking;
         YinYangSignal yinYangSignal = analyzeYinYangDoubleBear(bars);
+        FirstBoardHighBearSignal firstBoardSignal = analyzeFirstBoardHighBear(bars);
 
         int score = 0;
         if (bearishCount >= 4) score += 8;
@@ -537,6 +545,14 @@ public class StockScreenerService {
         snapshot.setYinYangPenetrationPct(yinYangSignal.penetrationPct());
         snapshot.setYinYangType(yinYangSignal.type());
         snapshot.setYinYangScore(yinYangSignal.score());
+        snapshot.setFirstBoardHighBearMatched(firstBoardSignal.matched());
+        snapshot.setFirstBoardBuyPoint(firstBoardSignal.buyPoint());
+        snapshot.setFirstBoardScore(firstBoardSignal.score());
+        snapshot.setFirstBoardDate(firstBoardSignal.firstBoardDate());
+        snapshot.setFirstBoardLow(firstBoardSignal.firstBoardLow());
+        snapshot.setHighBearDate(firstBoardSignal.highBearDate());
+        snapshot.setHighBearHigh(firstBoardSignal.highBearHigh());
+        snapshot.setHighBearVolumeRatio(firstBoardSignal.highBearVolumeRatio());
         return snapshot;
     }
 
@@ -612,6 +628,158 @@ public class StockScreenerService {
         return new YinYangSignal(matched, penetrationPct.setScale(4, RoundingMode.HALF_UP), type, Math.min(100, score));
     }
 
+    private FirstBoardHighBearSignal analyzeFirstBoardHighBear(List<DailyBar> bars) {
+        int signalIndex = bars.size() - 1;
+        if (signalIndex < 7) {
+            return FirstBoardHighBearSignal.empty();
+        }
+
+        FirstBoardHighBearSignal bestSignal = FirstBoardHighBearSignal.empty();
+        int startIndex = Math.max(5, signalIndex - 10);
+        for (int firstBoardIndex = startIndex; firstBoardIndex <= signalIndex - 2; firstBoardIndex++) {
+            DailyBar firstBoard = bars.get(firstBoardIndex);
+            DailyBar highBear = bars.get(firstBoardIndex + 1);
+            DailyBar signal = bars.get(signalIndex);
+            if (!isFirstBoardSetup(bars, firstBoardIndex) || !isHighBearAfterFirstBoard(firstBoard, highBear)) {
+                continue;
+            }
+            if (hasBrokenFirstBoardLow(bars, firstBoardIndex + 1, signalIndex, firstBoard.low())) {
+                continue;
+            }
+
+            String buyPoint = resolveFirstBoardBuyPoint(bars, firstBoardIndex, signalIndex);
+            if (buyPoint == null) {
+                continue;
+            }
+
+            BigDecimal highBearVolumeRatio = volumeRatio(highBear.volume(), firstBoard.volume());
+            int score = 45;
+            score += bonusScore(highBearVolumeRatio, BigDecimal.ONE, new BigDecimal("8"), 16);
+            if (signal.volume() > highBear.volume()) score += 12;
+            if ("反包高阴".equals(buyPoint)) score += 15;
+            if ("突破高阴".equals(buyPoint)) score += 18;
+            if ("地量低吸".equals(buyPoint)) score += 12;
+
+            FirstBoardHighBearSignal candidate = new FirstBoardHighBearSignal(
+                true,
+                buyPoint,
+                Math.min(100, score),
+                firstBoard.date(),
+                firstBoard.low(),
+                highBear.date(),
+                highBear.high(),
+                highBearVolumeRatio
+            );
+            if (candidate.score() > bestSignal.score()) {
+                bestSignal = candidate;
+            }
+        }
+        return bestSignal;
+    }
+
+    private boolean isFirstBoardSetup(List<DailyBar> bars, int index) {
+        if (index < 5) {
+            return false;
+        }
+        DailyBar previous = bars.get(index - 1);
+        DailyBar firstBoard = bars.get(index);
+        if (!isLimitUp(firstBoard, previous) || !isBullish(firstBoard)) {
+            return false;
+        }
+        if (hasRecentLimitUp(bars, Math.max(1, index - 22), index - 1)) {
+            return false;
+        }
+
+        BigDecimal bodyPct = percent(firstBoard.close().subtract(firstBoard.open()).max(BigDecimal.ZERO), firstBoard.open());
+        BigDecimal previousAverageVolume = averageVolume(bars, index - 5, index);
+        BigDecimal firstBoardVolumeRatio = previousAverageVolume.signum() <= 0
+            ? BigDecimal.ZERO
+            : BigDecimal.valueOf(firstBoard.volume()).divide(previousAverageVolume, 4, RoundingMode.HALF_UP);
+        BigDecimal ma3 = averageClose(bars, index - 2, index + 1);
+        BigDecimal previousHighestClose = highestClose(bars, Math.max(0, index - 10), index);
+        boolean crossesThreeDayAverage = firstBoard.low().compareTo(ma3) <= 0 && firstBoard.close().compareTo(ma3) > 0;
+        boolean lowArea = previousHighestClose.signum() <= 0
+            || firstBoard.open().compareTo(previousHighestClose.multiply(new BigDecimal("1.08"))) <= 0;
+
+        return bodyPct.compareTo(new BigDecimal("5")) >= 0
+            && firstBoardVolumeRatio.compareTo(new BigDecimal("1.3")) >= 0
+            && firstBoardVolumeRatio.compareTo(new BigDecimal("6")) <= 0
+            && crossesThreeDayAverage
+            && lowArea;
+    }
+
+    private boolean isHighBearAfterFirstBoard(DailyBar firstBoard, DailyBar highBear) {
+        if (!isBearish(highBear)) {
+            return false;
+        }
+        BigDecimal highOpenPct = percent(highBear.open().subtract(firstBoard.close()), firstBoard.close());
+        BigDecimal bodyPct = percent(highBear.open().subtract(highBear.close()).max(BigDecimal.ZERO), highBear.open());
+        BigDecimal pullbackPct = percent(highBear.high().subtract(highBear.close()).max(BigDecimal.ZERO), highBear.high());
+        BigDecimal highBearVolumeRatio = volumeRatio(highBear.volume(), firstBoard.volume());
+        return highOpenPct.compareTo(BigDecimal.ZERO) >= 0
+            && bodyPct.compareTo(FIRST_BOARD_MAX_HIGH_BEAR_BODY_PCT) <= 0
+            && pullbackPct.compareTo(FIRST_BOARD_MAX_HIGH_BEAR_PULLBACK_PCT) <= 0
+            && highBear.low().compareTo(firstBoard.low()) >= 0
+            && highBearVolumeRatio.compareTo(BigDecimal.ONE) >= 0
+            && highBearVolumeRatio.compareTo(new BigDecimal("5")) <= 0;
+    }
+
+    private String resolveFirstBoardBuyPoint(List<DailyBar> bars, int firstBoardIndex, int signalIndex) {
+        DailyBar firstBoard = bars.get(firstBoardIndex);
+        DailyBar highBear = bars.get(firstBoardIndex + 1);
+        DailyBar previous = bars.get(signalIndex - 1);
+        DailyBar signal = bars.get(signalIndex);
+
+        if (signalIndex <= firstBoardIndex + 3
+            && holdsFiveDayAverage(bars, firstBoardIndex + 2, signalIndex)
+            && isBullish(signal)
+            && signal.close().compareTo(highBear.open()) > 0
+            && signal.volume() > highBear.volume()) {
+            return "反包高阴";
+        }
+
+        if (signal.close().compareTo(highBear.high()) > 0
+            && signal.volume() > firstBoard.volume()
+            && signal.volume() > previous.volume()) {
+            return "突破高阴";
+        }
+
+        BigDecimal lowDistancePct = percent(signal.low().subtract(firstBoard.low()).abs(), firstBoard.low());
+        BigDecimal recentAverageVolume = averageVolume(bars, Math.max(firstBoardIndex + 1, signalIndex - 3), signalIndex);
+        boolean nearFirstBoardLow = lowDistancePct.compareTo(FIRST_BOARD_LOW_NEAR_PCT) <= 0;
+        boolean groundVolume = signal.volume() < previous.volume()
+            && BigDecimal.valueOf(signal.volume()).compareTo(recentAverageVolume.multiply(new BigDecimal("0.75"))) <= 0;
+        boolean turningUp = isBullish(signal) || signal.close().compareTo(previous.close()) > 0;
+        if (nearFirstBoardLow && groundVolume && turningUp) {
+            return "地量低吸";
+        }
+
+        return null;
+    }
+
+    private boolean holdsFiveDayAverage(List<DailyBar> bars, int fromIndex, int toIndex) {
+        for (int index = fromIndex; index <= toIndex; index++) {
+            if (index < 4) {
+                return false;
+            }
+            BigDecimal ma5 = averageClose(bars, index - 4, index + 1);
+            if (bars.get(index).low().compareTo(ma5) < 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean hasBrokenFirstBoardLow(List<DailyBar> bars, int fromIndex, int toIndex, BigDecimal firstBoardLow) {
+        BigDecimal toleratedLow = firstBoardLow.multiply(new BigDecimal("0.98"));
+        for (int index = fromIndex; index <= toIndex; index++) {
+            if (bars.get(index).low().compareTo(toleratedLow) < 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean isFiveDayAverageRising(List<DailyBar> bars, int endIndex) {
         if (endIndex < 6) {
             return false;
@@ -645,6 +813,14 @@ public class StockScreenerService {
             total = total.add(bars.get(index).close());
         }
         return total.divide(BigDecimal.valueOf(toExclusive - fromInclusive), 6, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal highestClose(List<DailyBar> bars, int fromInclusive, int toExclusive) {
+        BigDecimal highest = BigDecimal.ZERO;
+        for (int index = fromInclusive; index < toExclusive; index++) {
+            highest = highest.max(bars.get(index).close());
+        }
+        return highest;
     }
 
     private BigDecimal averageVolume(List<DailyBar> bars, int fromInclusive, int toExclusive) {
@@ -684,7 +860,9 @@ public class StockScreenerService {
     ) {
         LambdaQueryWrapper<StockScreenSnapshotEntity> query = new LambdaQueryWrapper<StockScreenSnapshotEntity>()
             .eq(StockScreenSnapshotEntity::getRunId, runId);
-        if (RULE_YIN_YANG_DOUBLE_BEAR.equals(ruleKey)) {
+        if (RULE_FIRST_BOARD_HIGH_BEAR.equals(ruleKey)) {
+            query.eq(StockScreenSnapshotEntity::getFirstBoardHighBearMatched, true);
+        } else if (RULE_YIN_YANG_DOUBLE_BEAR.equals(ruleKey)) {
             query.eq(StockScreenSnapshotEntity::getYinYangDoubleBearMatched, true);
         } else {
             query.ge(StockScreenSnapshotEntity::getBearishCount6, minBearishCount)
@@ -723,9 +901,14 @@ public class StockScreenerService {
     }
 
     private String normalizeRuleKey(String ruleKey) {
-        return RULE_YIN_YANG_DOUBLE_BEAR.equals(ruleKey == null ? null : ruleKey.trim())
-            ? RULE_YIN_YANG_DOUBLE_BEAR
-            : RULE_SUNRISE_RISE;
+        String normalized = ruleKey == null ? null : ruleKey.trim();
+        if (RULE_YIN_YANG_DOUBLE_BEAR.equals(normalized)) {
+            return RULE_YIN_YANG_DOUBLE_BEAR;
+        }
+        if (RULE_FIRST_BOARD_HIGH_BEAR.equals(normalized)) {
+            return RULE_FIRST_BOARD_HIGH_BEAR;
+        }
+        return RULE_SUNRISE_RISE;
     }
 
     private StockScreenRunEntity latestSuccessfulRun() {
@@ -847,11 +1030,34 @@ public class StockScreenerService {
         return bar.close().compareTo(bar.open()) > 0;
     }
 
+    private boolean isLimitUp(DailyBar current, DailyBar previous) {
+        BigDecimal changePct = percent(current.close().subtract(previous.close()), previous.close());
+        BigDecimal closeToHighPct = percent(current.high().subtract(current.close()).max(BigDecimal.ZERO), current.high());
+        return changePct.compareTo(LIMIT_UP_THRESHOLD_PCT) >= 0
+            && closeToHighPct.compareTo(new BigDecimal("0.6")) <= 0;
+    }
+
+    private boolean hasRecentLimitUp(List<DailyBar> bars, int fromIndex, int toIndex) {
+        for (int index = fromIndex; index <= toIndex; index++) {
+            if (isLimitUp(bars.get(index), bars.get(index - 1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private BigDecimal percent(BigDecimal numerator, BigDecimal denominator) {
         if (denominator == null || denominator.signum() == 0) {
             return BigDecimal.ZERO;
         }
         return numerator.multiply(BigDecimal.valueOf(100)).divide(denominator, 4, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal volumeRatio(long currentVolume, long previousVolume) {
+        if (previousVolume <= 0) {
+            return BigDecimal.ZERO;
+        }
+        return BigDecimal.valueOf(currentVolume).divide(BigDecimal.valueOf(previousVolume), 4, RoundingMode.HALF_UP);
     }
 
     private BigDecimal normalizePercent(BigDecimal value, BigDecimal fallback) {
@@ -941,6 +1147,14 @@ public class StockScreenerService {
         response.setYinYangPenetrationPct(entity.getYinYangPenetrationPct());
         response.setYinYangType(entity.getYinYangType());
         response.setYinYangScore(entity.getYinYangScore());
+        response.setFirstBoardHighBearMatched(entity.getFirstBoardHighBearMatched());
+        response.setFirstBoardBuyPoint(entity.getFirstBoardBuyPoint());
+        response.setFirstBoardScore(entity.getFirstBoardScore());
+        response.setFirstBoardDate(entity.getFirstBoardDate());
+        response.setFirstBoardLow(entity.getFirstBoardLow());
+        response.setHighBearDate(entity.getHighBearDate());
+        response.setHighBearHigh(entity.getHighBearHigh());
+        response.setHighBearVolumeRatio(entity.getHighBearVolumeRatio());
         return response;
     }
 
@@ -1015,6 +1229,21 @@ public class StockScreenerService {
     ) {
         private static YinYangSignal empty() {
             return new YinYangSignal(false, BigDecimal.ZERO, null, 0);
+        }
+    }
+
+    private record FirstBoardHighBearSignal(
+        boolean matched,
+        String buyPoint,
+        int score,
+        LocalDate firstBoardDate,
+        BigDecimal firstBoardLow,
+        LocalDate highBearDate,
+        BigDecimal highBearHigh,
+        BigDecimal highBearVolumeRatio
+    ) {
+        private static FirstBoardHighBearSignal empty() {
+            return new FirstBoardHighBearSignal(false, null, 0, null, null, null, null, BigDecimal.ZERO);
         }
     }
 }

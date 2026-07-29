@@ -294,6 +294,14 @@ export interface StockScreenItem {
   yinYangPenetrationPct: number
   yinYangType?: string | null
   yinYangScore: number
+  firstBoardHighBearMatched: boolean
+  firstBoardBuyPoint?: string | null
+  firstBoardScore: number
+  firstBoardDate?: string | null
+  firstBoardLow?: number | null
+  highBearDate?: string | null
+  highBearHigh?: number | null
+  highBearVolumeRatio: number
 }
 
 export interface StockScreenPage {

@@ -143,7 +143,7 @@ export interface CalendarOverviewQuery {
   selectedDate?: string | null
 }
 
-export type PhotographyOrderStatus = 'pending' | 'shot'
+export type PhotographyOrderStatus = 'pending' | 'shot' | 'cancelled'
 export type PhotographyOrderType =
   | 'first_birthday'
   | 'hundred_days'
@@ -535,6 +535,12 @@ export function collectPhotographyOrderFinal(id: number, params: CollectPhotogra
     `/api/tools/photography-orders/${id}/collect-final`,
     params,
   )
+}
+
+export function cancelPhotographyOrder(id: number, userId: number) {
+  return requestPost<PhotographyOrder>(toolRequest, `/api/tools/photography-orders/${id}/cancel`, undefined, {
+    params: { userId },
+  })
 }
 
 export function deletePhotographyOrder(id: number, userId: number) {

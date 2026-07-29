@@ -375,6 +375,10 @@ function receivedAmount(order: PhotographyOrder) {
 }
 
 function statusLabel(order: PhotographyOrder) {
+  if (isCancelled(order)) {
+    return '已取消'
+  }
+
   if (isShotByTime(order)) {
     return '已拍摄'
   }
@@ -383,7 +387,15 @@ function statusLabel(order: PhotographyOrder) {
 }
 
 function statusClass(order: PhotographyOrder) {
+  if (isCancelled(order)) {
+    return 'overview-order-tag--cancelled'
+  }
+
   return isShotByTime(order) ? 'overview-order-tag--shot' : 'overview-order-tag--pending'
+}
+
+function isCancelled(order: PhotographyOrder) {
+  return order.status === 'cancelled'
 }
 
 function isShotByTime(order: PhotographyOrder, now = Date.now()) {

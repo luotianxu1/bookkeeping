@@ -1,6 +1,7 @@
 package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.example.tool.dto.PhotographyOrderCollectFinalRequest;
 import com.example.tool.dto.PhotographyOrderOverviewBucketResponse;
 import com.example.tool.dto.PhotographyOrderOverviewResponse;
@@ -50,6 +51,7 @@ public class PhotographyOrderService {
 
     private static final String STATUS_PENDING = "pending";
     private static final String STATUS_SHOT = "shot";
+    private static final String STATUS_CANCELLED = "cancelled";
     private static final String STATUS_ALL = "all";
     private static final String OVERVIEW_VIEW_CALENDAR = "calendar";
     private static final String OVERVIEW_VIEW_MONTH = "month";
@@ -183,6 +185,9 @@ public class PhotographyOrderService {
     @Transactional
     public PhotographyOrderResponse collectFinal(Long id, PhotographyOrderCollectFinalRequest request) {
         PhotographyOrderEntity entity = requireOrder(id, request.getUserId());
+        if (STATUS_CANCELLED.equals(entity.getStatus())) {
+            throw new IllegalArgumentException("该订单已取消拍摄");
+        }
         if (entity.getFinalTransactionId() != null || entity.getFinalReceivedAt() != null) {
             throw new IllegalArgumentException("该订单尾款已收取");
         }
@@ -221,6 +226,23 @@ public class PhotographyOrderService {
     }
 
     @Transactional
+    public PhotographyOrderResponse cancel(Long id, Long userId) {
+        PhotographyOrderEntity entity = requireOrder(id, userId);
+        if (STATUS_CANCELLED.equals(entity.getStatus())) {
+            throw new IllegalArgumentException("该订单已取消拍摄");
+        }
+
+        rollbackLinkedTransaction(entity.getFinalTransactionId(), userId);
+        photographyOrderMapper.update(null, new UpdateWrapper<PhotographyOrderEntity>()
+            .eq("id", entity.getId())
+            .set("status", STATUS_CANCELLED)
+            .set("final_account_id", null)
+            .set("final_transaction_id", null)
+            .set("final_received_at", null));
+        return toResponses(List.of(photographyOrderMapper.selectById(entity.getId()))).get(0);
+    }
+
+    @Transactional
     public boolean delete(Long id, Long userId) {
         PhotographyOrderEntity entity = photographyOrderMapper.selectById(id);
         if (entity == null || !userId.equals(entity.getUserId())) {
@@ -255,7 +277,10 @@ public class PhotographyOrderService {
             return null;
         }
         String normalized = status.trim().toLowerCase();
-        if (!STATUS_ALL.equals(normalized) && !STATUS_PENDING.equals(normalized) && !STATUS_SHOT.equals(normalized)) {
+        if (!STATUS_ALL.equals(normalized)
+            && !STATUS_PENDING.equals(normalized)
+            && !STATUS_SHOT.equals(normalized)
+            && !STATUS_CANCELLED.equals(normalized)) {
             throw new IllegalArgumentException("订单状态不正确");
         }
         return normalized;
@@ -541,13 +566,14 @@ public class PhotographyOrderService {
 
     private PhotographyOrderOverviewSummaryResponse buildSummary(List<PhotographyOrderEntity> entities) {
         PhotographyOrderOverviewSummaryResponse response = new PhotographyOrderOverviewSummaryResponse();
-        BigDecimal totalContractAmount = sumAmount(entities, PhotographyOrderEntity::getTotalAmount);
+        List<PhotographyOrderEntity> activeEntities = activeOrders(entities);
+        BigDecimal totalContractAmount = sumAmount(activeEntities, PhotographyOrderEntity::getTotalAmount);
         BigDecimal totalDepositAmount = sumAmount(entities, PhotographyOrderEntity::getDepositAmount);
-        BigDecimal totalFinalAmount = sumAmount(entities, PhotographyOrderEntity::getFinalAmount);
+        BigDecimal totalFinalAmount = sumAmount(activeEntities, PhotographyOrderEntity::getFinalAmount);
         BigDecimal depositIncome = sumReceivedDeposit(entities);
-        BigDecimal finalIncome = sumReceivedFinal(entities);
+        BigDecimal finalIncome = sumReceivedFinal(activeEntities);
         BigDecimal totalReceivedAmount = depositIncome.add(finalIncome).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal pendingFinalAmount = sumPendingFinal(entities);
+        BigDecimal pendingFinalAmount = sumPendingFinal(activeEntities);
 
         response.setTotalOrders(entities.size());
         response.setShotOrders((int) entities.stream().filter(entity -> STATUS_SHOT.equals(entity.getStatus())).count());
@@ -559,9 +585,9 @@ public class PhotographyOrderService {
         response.setDepositIncome(depositIncome);
         response.setFinalIncome(finalIncome);
         response.setPendingFinalAmount(pendingFinalAmount);
-        response.setAverageContractAmount(entities.isEmpty()
+        response.setAverageContractAmount(activeEntities.isEmpty()
             ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-            : totalContractAmount.divide(BigDecimal.valueOf(entities.size()), 2, RoundingMode.HALF_UP));
+            : totalContractAmount.divide(BigDecimal.valueOf(activeEntities.size()), 2, RoundingMode.HALF_UP));
         return response;
     }
 
@@ -612,13 +638,14 @@ public class PhotographyOrderService {
         List<PhotographyOrderEntity> entities
     ) {
         PhotographyOrderOverviewTrendPointResponse response = new PhotographyOrderOverviewTrendPointResponse();
+        List<PhotographyOrderEntity> activeEntities = activeOrders(entities);
         response.setKey(key);
         response.setLabel(label);
         response.setOrderCount(entities.size());
         response.setShotCount((int) entities.stream().filter(entity -> STATUS_SHOT.equals(entity.getStatus())).count());
         response.setPendingCount((int) entities.stream().filter(entity -> STATUS_PENDING.equals(entity.getStatus())).count());
         response.setTotalIncome(sumReceivedAmount(entities));
-        response.setContractAmount(sumAmount(entities, PhotographyOrderEntity::getTotalAmount));
+        response.setContractAmount(sumAmount(activeEntities, PhotographyOrderEntity::getTotalAmount));
         return response;
     }
 
@@ -636,7 +663,7 @@ public class PhotographyOrderService {
                 response.setLabel(toOrderTypeLabel(orderType));
                 response.setOrderCount(typeOrders.size());
                 response.setTotalIncome(sumReceivedAmount(typeOrders));
-                response.setContractAmount(sumAmount(typeOrders, PhotographyOrderEntity::getTotalAmount));
+                response.setContractAmount(sumAmount(activeOrders(typeOrders), PhotographyOrderEntity::getTotalAmount));
                 return response;
             })
             .filter(item -> item != null)
@@ -722,6 +749,7 @@ public class PhotographyOrderService {
         boolean currentScope
     ) {
         PhotographyOrderOverviewBucketResponse response = new PhotographyOrderOverviewBucketResponse();
+        List<PhotographyOrderEntity> activeEntities = activeOrders(entities);
         response.setKey(key);
         response.setLabel(label);
         response.setSubLabel(subLabel);
@@ -729,10 +757,16 @@ public class PhotographyOrderService {
         response.setShotCount((int) entities.stream().filter(entity -> STATUS_SHOT.equals(entity.getStatus())).count());
         response.setPendingCount((int) entities.stream().filter(entity -> STATUS_PENDING.equals(entity.getStatus())).count());
         response.setTotalIncome(sumReceivedAmount(entities));
-        response.setContractAmount(sumAmount(entities, PhotographyOrderEntity::getTotalAmount));
+        response.setContractAmount(sumAmount(activeEntities, PhotographyOrderEntity::getTotalAmount));
         response.setSelected(selected);
         response.setCurrentScope(currentScope);
         return response;
+    }
+
+    private List<PhotographyOrderEntity> activeOrders(List<PhotographyOrderEntity> entities) {
+        return entities.stream()
+            .filter(entity -> !STATUS_CANCELLED.equals(entity.getStatus()))
+            .toList();
     }
 
     private BigDecimal sumAmount(List<PhotographyOrderEntity> entities, Function<PhotographyOrderEntity, BigDecimal> getter) {

@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS photography_orders (
   contact_info VARCHAR(120) NULL COMMENT '联系方式',
   order_type ENUM('first_birthday', 'hundred_days', 'engagement', 'thanks_banquet', 'wedding', 'graduation') NOT NULL COMMENT '订单类型',
   shoot_at DATETIME(3) NOT NULL COMMENT '拍摄时间',
-  status ENUM('pending', 'shot') NOT NULL DEFAULT 'pending' COMMENT '订单状态：pending未拍摄，shot已拍摄',
+  status ENUM('pending', 'shot', 'cancelled') NOT NULL DEFAULT 'pending' COMMENT '订单状态：pending未拍摄，shot已拍摄，cancelled已取消',
   total_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '总金额',
   deposit_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '订金金额',
   final_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '尾款金额',
