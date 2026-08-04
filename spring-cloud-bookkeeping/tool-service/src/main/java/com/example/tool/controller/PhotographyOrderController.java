@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -67,6 +68,17 @@ public class PhotographyOrderController {
     @Operation(summary = "新增摄影订单")
     public Result<PhotographyOrderResponse> create(@Valid @RequestBody PhotographyOrderRequest request) {
         return Result.ok(photographyOrderService.create(request));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "修改摄影订单")
+    public Result<PhotographyOrderResponse> update(
+        @PathVariable("id") @NotNull Long id,
+        @Valid @RequestBody PhotographyOrderRequest request
+    ) {
+        return photographyOrderService.update(id, request)
+            .map(Result::ok)
+            .orElseGet(() -> Result.<PhotographyOrderResponse>fail().code(404).message("摄影订单不存在"));
     }
 
     @PostMapping("/{id}/collect-final")

@@ -18,6 +18,7 @@ import {
   createPhotographyOrder,
   deletePhotographyOrder,
   getPhotographyOrders,
+  updatePhotographyOrder,
   type PhotographyOrder,
   type PhotographyOrderType,
 } from '@/api/modules/tool'
@@ -58,14 +59,15 @@ const expandedOrderId = ref<number | null>(null)
 
 const isLoading = ref(false)
 const isSaving = ref(false)
+const isUpdating = ref(false)
 const isCollecting = ref(false)
 const isDeleting = ref(false)
 const isCancelling = ref(false)
 const pageError = ref('')
-const createFormError = ref('')
+const orderFormError = ref('')
 const collectFormError = ref('')
 
-const showCreateModal = ref(false)
+const showOrderModal = ref(false)
 const showCollectModal = ref(false)
 const showDeleteModal = ref(false)
 const showCancelModal = ref(false)
@@ -74,6 +76,7 @@ const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 
 const selectedOrder = ref<PhotographyOrder | null>(null)
+const editingOrder = ref<PhotographyOrder | null>(null)
 
 const formOrderType = ref<PhotographyOrderType>('first_birthday')
 const formShootAt = ref('')
@@ -86,7 +89,14 @@ const formRemark = ref('')
 
 const collectFinalAccountId = ref('')
 
-const isBusy = computed(() => isLoading.value || isSaving.value || isCollecting.value || isDeleting.value || isCancelling.value)
+const isBusy = computed(() =>
+  isLoading.value
+  || isSaving.value
+  || isUpdating.value
+  || isCollecting.value
+  || isDeleting.value
+  || isCancelling.value,
+)
 const selectedMonthOrders = computed(() => {
   const [yearText = '', monthText = ''] = selectedMonth.value.split('-')
   const targetYear = Number(yearText)
@@ -227,16 +237,33 @@ function hydrateDefaultAccounts() {
 }
 
 function openCreateModal() {
+  editingOrder.value = null
   resetCreateForm()
-  createFormError.value = ''
-  showCreateModal.value = true
+  orderFormError.value = ''
+  showOrderModal.value = true
 }
 
-function closeCreateModal() {
-  if (isSaving.value) {
+function openEditModal(order: PhotographyOrder) {
+  editingOrder.value = order
+  formOrderType.value = order.orderType as PhotographyOrderType
+  formShootAt.value = normalizeDateTimeInput(order.shootAt)
+  formContactInfo.value = order.contactInfo ?? ''
+  formDepositAmount.value = String(order.depositAmount ?? 0)
+  formFinalAmount.value = String(order.finalAmount ?? 0)
+  formDepositAccountId.value = String(order.depositAccountId ?? cashAccounts.value[0]?.id ?? '')
+  formAddress.value = order.address ?? ''
+  formRemark.value = order.remark ?? ''
+  orderFormError.value = ''
+  expandedOrderId.value = order.id
+  showOrderModal.value = true
+}
+
+function closeOrderModal() {
+  if (isSaving.value || isUpdating.value) {
     return
   }
-  showCreateModal.value = false
+  showOrderModal.value = false
+  editingOrder.value = null
 }
 
 function resetCreateForm() {
@@ -251,13 +278,13 @@ function resetCreateForm() {
 }
 
 async function saveOrder() {
-  if (isSaving.value) {
+  if (isSaving.value || isUpdating.value) {
     return
   }
 
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
-    createFormError.value = '请先登录后再新增订单'
+    orderFormError.value = `请先登录后再${editingOrder.value ? '修改' : '新增'}订单`
     return
   }
 
@@ -266,27 +293,32 @@ async function saveOrder() {
   const totalAmount = roundAmount(depositAmount + finalAmount)
 
   if (!formShootAt.value) {
-    createFormError.value = '请选择拍摄时间'
+    orderFormError.value = '请选择拍摄时间'
     return
   }
   if (totalAmount <= 0) {
-    createFormError.value = '总金额必须大于0'
+    orderFormError.value = '总金额必须大于0'
     return
   }
   if (depositAmount < 0 || finalAmount < 0) {
-    createFormError.value = '金额不能小于0'
+    orderFormError.value = '金额不能小于0'
     return
   }
   if (depositAmount > 0 && !formDepositAccountId.value) {
-    createFormError.value = '请选择订金收款账户'
+    orderFormError.value = '请选择订金收款账户'
     return
   }
 
-  isSaving.value = true
-  createFormError.value = ''
+  const isEditing = Boolean(editingOrder.value)
+  if (isEditing) {
+    isUpdating.value = true
+  } else {
+    isSaving.value = true
+  }
+  orderFormError.value = ''
 
   try {
-    await createPhotographyOrder({
+    const params = {
       userId: currentUser.id,
       contactInfo: nullableText(formContactInfo.value),
       orderType: formOrderType.value,
@@ -297,18 +329,37 @@ async function saveOrder() {
       depositAccountId: depositAmount > 0 && formDepositAccountId.value ? Number(formDepositAccountId.value) : null,
       address: nullableText(formAddress.value),
       remark: nullableText(formRemark.value),
-      sortOrder: getNextSortOrder(),
-    })
+      sortOrder: editingOrder.value?.sortOrder ?? getNextSortOrder(),
+    }
 
-    showCreateModal.value = false
-    showFeedback('新增摄影订单成功', 'success')
+    if (editingOrder.value) {
+      await updatePhotographyOrder(editingOrder.value.id, params)
+    } else {
+      await createPhotographyOrder(params)
+    }
+
+    showOrderModal.value = false
+    editingOrder.value = null
+    expandedOrderId.value = null
+    showFeedback(isEditing ? '摄影订单修改成功' : '新增摄影订单成功', 'success')
     await loadPage()
   } catch (error) {
-    createFormError.value = error instanceof Error ? error.message : '新增订单失败'
-    showFeedback(createFormError.value, 'error')
+    orderFormError.value = error instanceof Error
+      ? error.message
+      : `${isEditing ? '修改' : '新增'}订单失败`
+    showFeedback(orderFormError.value, 'error')
   } finally {
     isSaving.value = false
+    isUpdating.value = false
   }
+}
+
+function isDepositLocked() {
+  return Boolean(editingOrder.value?.depositTransactionId || editingOrder.value?.depositReceivedAt)
+}
+
+function isFinalAmountLocked() {
+  return Boolean(editingOrder.value?.finalTransactionId || editingOrder.value?.finalReceivedAt)
 }
 
 function toggleOrder(orderId: number) {
@@ -497,6 +548,10 @@ function normalizeDateTimeLocal(value: string) {
   return value.length === 16 ? `${value}:00` : value
 }
 
+function normalizeDateTimeInput(value: string) {
+  return value.replace(' ', 'T').slice(0, 16)
+}
+
 function buildDefaultDateTimeLocal() {
   const now = new Date()
   const year = now.getFullYear()
@@ -670,6 +725,9 @@ function buildCurrentMonth() {
           >
             {{ isCancelled(order) ? '已取消' : '取消' }}
           </button>
+          <button class="order-card-action order-card-action-edit" type="button" @click="openEditModal(order)">
+            修改
+          </button>
           <button class="order-card-action order-card-action-delete" type="button" @click="openDeleteModal(order)">
             删除
           </button>
@@ -687,18 +745,41 @@ function buildCurrentMonth() {
 
     <FloatingAddButton aria-label="新增摄影订单" storage-key="photography-order" @click="openCreateModal" />
 
-    <CommonModal v-model="showCreateModal" title="新增摄影订单" size="compact" @close="createFormError = ''">
+    <CommonModal
+      v-model="showOrderModal"
+      :title="editingOrder ? '修改摄影订单' : '新增摄影订单'"
+      size="compact"
+      :show-close="!isSaving && !isUpdating"
+      @close="orderFormError = ''"
+    >
       <div class="order-form">
         <CommonSelect v-model="formOrderType" label="订单类型" :options="typeOptions" />
         <CommonInput v-model="formShootAt" label="拍摄时间" input-type="datetime-local" />
         <CommonInput v-model="formContactInfo" label="联系方式" placeholder="138****2001 / 微信同号" />
 
         <div class="order-form-split">
-          <CommonInput v-model="formDepositAmount" label="订金" placeholder="¥ 100" input-mode="decimal" />
-          <CommonInput v-model="formFinalAmount" label="尾款" placeholder="¥ 299" input-mode="decimal" />
+          <CommonInput
+            v-model="formDepositAmount"
+            label="订金"
+            placeholder="¥ 100"
+            input-mode="decimal"
+            :disabled="isDepositLocked()"
+          />
+          <CommonInput
+            v-model="formFinalAmount"
+            label="尾款"
+            placeholder="¥ 299"
+            input-mode="decimal"
+            :disabled="isFinalAmountLocked()"
+          />
         </div>
 
-        <CommonSelect v-model="formDepositAccountId" label="收款账户" :options="cashAccountOptions" />
+        <CommonSelect
+          v-model="formDepositAccountId"
+          label="收款账户"
+          :options="cashAccountOptions"
+          :disabled="isDepositLocked()"
+        />
         <CommonInput v-model="formAddress" label="地址" placeholder="请输入拍摄地址" />
 
         <label class="order-form-field">
@@ -706,14 +787,17 @@ function buildCurrentMonth() {
           <textarea v-model="formRemark" placeholder="服装两套，外景在公园，需提前沟通天气"></textarea>
         </label>
 
-        <p v-if="createFormError" class="order-form-error">{{ createFormError }}</p>
+        <p v-if="orderFormError" class="order-form-error">{{ orderFormError }}</p>
+        <p v-if="editingOrder && (isDepositLocked() || isFinalAmountLocked())" class="order-form-tip">
+          已入账的金额和账户不可修改，其他订单信息仍可调整。
+        </p>
       </div>
 
       <template #footer>
         <div class="orders-modal-actions">
-          <CommonButton variant="secondary" :disabled="isSaving" @click="closeCreateModal">取消</CommonButton>
-          <CommonButton :disabled="isSaving" @click="saveOrder">
-            {{ isSaving ? '保存中...' : '保存订单' }}
+          <CommonButton variant="secondary" :disabled="isSaving || isUpdating" @click="closeOrderModal">取消</CommonButton>
+          <CommonButton :disabled="isSaving || isUpdating" @click="saveOrder">
+            {{ isSaving || isUpdating ? '保存中...' : '保存订单' }}
           </CommonButton>
         </div>
       </template>

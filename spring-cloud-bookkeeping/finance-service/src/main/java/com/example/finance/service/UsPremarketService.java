@@ -10,17 +10,32 @@ import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class UsPremarketService {
 
     private static final ZoneId MARKET_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId NEW_YORK_ZONE = ZoneId.of("America/New_York");
     private static final long CACHE_MILLIS = 30_000L;
+    private static final DateTimeFormatter NASDAQ_DATE_TIME_FORMATTER =
+        DateTimeFormatter.ofPattern("MMM d, uuuu hh:mm a", Locale.ENGLISH);
+    private static final DateTimeFormatter NASDAQ_DATE_FORMATTER =
+        DateTimeFormatter.ofPattern("MMM d, uuuu", Locale.ENGLISH);
+    private static final Pattern EXTENDED_QUOTE_PATTERN = Pattern.compile(
+        "^\\$?([\\d,]+(?:\\.\\d+)?)\\s+([+-]?[\\d,]+(?:\\.\\d+)?)\\s+\\(([+-]?[\\d,]+(?:\\.\\d+)?)%\\)$"
+    );
     private static final List<IndexProxy> INDEX_PROXIES = List.of(
         new IndexProxy("SPX", "标普500", "SPY", "SPDR标普500 ETF"),
         new IndexProxy("NDX100", "纳斯达克100", "QQQ", "Invesco QQQ ETF")
@@ -79,10 +94,19 @@ public class UsPremarketService {
             .filter(value -> value != null && !value.isBlank())
             .findFirst()
             .orElse("Unknown");
+        String currentSessionStatus = results.stream()
+            .map(IndexResult::currentSessionStatus)
+            .filter(value -> value != null && !value.isBlank())
+            .findFirst()
+            .orElse("Unknown");
         UsPremarketResponse response = new UsPremarketResponse();
         response.setSessionStatus(sessionStatus);
-        response.setSessionLabel(resolveSessionLabel(sessionStatus));
-        response.setUpdatedAt(LocalDateTime.now(MARKET_ZONE));
+        response.setSessionLabel(resolveSessionLabel(sessionStatus, currentSessionStatus));
+        response.setUpdatedAt(results.stream()
+            .map(IndexResult::updatedAt)
+            .filter(value -> value != null)
+            .max(LocalDateTime::compareTo)
+            .orElseGet(() -> LocalDateTime.now(MARKET_ZONE)));
         response.setSource(resolveSourceLabel(sessionStatus));
         response.setIndices(results.stream().map(IndexResult::quote).toList());
         return response;
@@ -92,12 +116,12 @@ public class UsPremarketService {
         String url = quoteInfoApiUrl + "/" + proxy.proxySymbol() + "/info?assetclass=etf";
         JsonNode data = requestJson(url).path("data");
         JsonNode primary = data.path("primaryData");
-        JsonNode secondary = data.path("secondaryData");
         if (primary.isMissingNode() || primary.isNull()) {
             return null;
         }
-        String sessionStatus = normalizeSessionStatus(data.path("marketStatus").asText("Unknown"));
-        JsonNode activeQuote = selectActiveQuote(primary, secondary, sessionStatus);
+        String currentSessionStatus = normalizeSessionStatus(data.path("marketStatus").asText("Unknown"));
+        ExtendedQuote extendedQuote = selectExtendedQuote(proxy.proxySymbol(), currentSessionStatus);
+        JsonNode activeQuote = extendedQuote.quote();
         UsPremarketResponse.IndexQuote quote = new UsPremarketResponse.IndexQuote();
         quote.setIndexCode(proxy.indexCode());
         quote.setIndexName(proxy.indexName());
@@ -113,7 +137,64 @@ public class UsPremarketService {
         if (quote.getPrice() == null) {
             return null;
         }
-        return new IndexResult(sessionStatus, quote);
+        return new IndexResult(
+            extendedQuote.sessionStatus(),
+            currentSessionStatus,
+            quote,
+            extendedQuote.updatedAt()
+        );
+    }
+
+    private ExtendedQuote selectExtendedQuote(String symbol, String currentSessionStatus) {
+        if ("Pre-Market".equals(currentSessionStatus) || "After-Hours".equals(currentSessionStatus)) {
+            return fetchExtendedQuote(symbol, currentSessionStatus);
+        }
+
+        ExtendedQuote premarket = tryFetchExtendedQuote(symbol, "Pre-Market");
+        ExtendedQuote afterHours = tryFetchExtendedQuote(symbol, "After-Hours");
+        if (premarket == null && afterHours == null) {
+            throw new IllegalStateException("Nasdaq盘前盘后行情暂无可用数据");
+        }
+        if (premarket == null) {
+            return afterHours;
+        }
+        if (afterHours == null) {
+            return premarket;
+        }
+        return afterHours.updatedAt().isAfter(premarket.updatedAt()) ? afterHours : premarket;
+    }
+
+    private ExtendedQuote tryFetchExtendedQuote(String symbol, String sessionStatus) {
+        try {
+            return fetchExtendedQuote(symbol, sessionStatus);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private ExtendedQuote fetchExtendedQuote(String symbol, String sessionStatus) {
+        String marketType = "Pre-Market".equals(sessionStatus) ? "pre" : "post";
+        String url = quoteInfoApiUrl + "/" + symbol
+            + "/extended-trading?assetclass=etf&markettype=" + marketType;
+        JsonNode data = requestJson(url).path("data");
+        JsonNode summary = data.path("infoTable").path("rows").path(0);
+        Matcher matcher = EXTENDED_QUOTE_PATTERN.matcher(summary.path("consolidated").asText("").trim());
+        if (!matcher.matches()) {
+            throw new IllegalStateException("Nasdaq扩展时段行情格式异常");
+        }
+
+        var quote = objectMapper.createObjectNode();
+        quote.put("lastSalePrice", matcher.group(1));
+        quote.put("netChange", matcher.group(2));
+        quote.put("percentageChange", matcher.group(3));
+        quote.put("volume", summary.path("volume").asText(""));
+        String lastTradeTime = data.path("lastUpdateInfo").path(0).asText("");
+        quote.put("lastTradeTimestamp", lastTradeTime);
+        LocalDateTime updatedAt = parseNasdaqTime(lastTradeTime);
+        if (updatedAt == null) {
+            throw new IllegalStateException("Nasdaq扩展时段行情时间格式异常");
+        }
+        return new ExtendedQuote(sessionStatus, quote, updatedAt);
     }
 
     private JsonNode requestJson(String url) {
@@ -160,21 +241,6 @@ public class UsPremarketService {
         return value == null ? null : value.longValue();
     }
 
-    private JsonNode selectActiveQuote(JsonNode primary, JsonNode secondary, String status) {
-        if (isExtendedSession(status) && hasPrice(secondary)) {
-            return secondary;
-        }
-        return primary;
-    }
-
-    private boolean isExtendedSession(String status) {
-        return "Pre-Market".equals(status) || "After-Hours".equals(status);
-    }
-
-    private boolean hasPrice(JsonNode node) {
-        return decimal(node.path("lastSalePrice")) != null;
-    }
-
     private JsonNode firstField(JsonNode preferred, JsonNode fallback, String fieldName) {
         JsonNode preferredValue = preferred.path(fieldName);
         if (!isBlankValue(preferredValue)) {
@@ -196,6 +262,31 @@ public class UsPremarketService {
         return value.isEmpty() || "N/A".equalsIgnoreCase(value);
     }
 
+    private LocalDateTime parseNasdaqTime(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim()
+            .replaceFirst("^Data last updated\\s+", "")
+            .replaceFirst("\\.?\\s+ET\\.?$", "")
+            .replaceFirst("\\.$", "")
+            .trim();
+        try {
+            LocalDateTime newYorkTime = LocalDateTime.parse(normalized, NASDAQ_DATE_TIME_FORMATTER);
+            return newYorkTime.atZone(NEW_YORK_ZONE).withZoneSameInstant(MARKET_ZONE).toLocalDateTime();
+        } catch (DateTimeParseException ignored) {
+            try {
+                LocalDate marketDate = LocalDate.parse(normalized, NASDAQ_DATE_FORMATTER);
+                return marketDate.atTime(LocalTime.of(16, 0))
+                    .atZone(NEW_YORK_ZONE)
+                    .withZoneSameInstant(MARKET_ZONE)
+                    .toLocalDateTime();
+            } catch (DateTimeParseException invalidDate) {
+                return null;
+            }
+        }
+    }
+
     private String normalizeSessionStatus(String status) {
         return switch (status) {
             case "Open", "Market Open" -> "Market Open";
@@ -206,13 +297,18 @@ public class UsPremarketService {
         };
     }
 
-    private String resolveSessionLabel(String status) {
+    private String resolveSessionLabel(String status, String currentStatus) {
+        if (!status.equals(currentStatus)) {
+            return switch (status) {
+                case "Pre-Market" -> "最近盘前";
+                case "After-Hours" -> "最近盘后";
+                default -> "最近扩展行情";
+            };
+        }
         return switch (status) {
             case "Pre-Market" -> "盘前交易中";
-            case "Market Open" -> "常规交易中";
             case "After-Hours" -> "盘后交易中";
-            case "Market Closed" -> "已收盘";
-            default -> "最近行情";
+            default -> "最近扩展行情";
         };
     }
 
@@ -228,7 +324,15 @@ public class UsPremarketService {
     private record IndexProxy(String indexCode, String indexName, String proxySymbol, String proxyName) {
     }
 
-    private record IndexResult(String sessionStatus, UsPremarketResponse.IndexQuote quote) {
+    private record IndexResult(
+        String sessionStatus,
+        String currentSessionStatus,
+        UsPremarketResponse.IndexQuote quote,
+        LocalDateTime updatedAt
+    ) {
+    }
+
+    private record ExtendedQuote(String sessionStatus, JsonNode quote, LocalDateTime updatedAt) {
     }
 
     private record CachedPremarket(UsPremarketResponse response, long cachedAt) {

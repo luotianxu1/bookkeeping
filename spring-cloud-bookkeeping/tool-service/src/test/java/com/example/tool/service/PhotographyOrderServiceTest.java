@@ -170,4 +170,56 @@ class PhotographyOrderServiceTest {
         assertThat(finalTransaction.getStatus()).isEqualTo("voided");
         verify(transactionMapper, never()).selectById(101L);
     }
+
+    @Test
+    void updateShouldModifyUnrecordedOrder() {
+        PhotographyOrderEntity order = new PhotographyOrderEntity();
+        order.setId(201L);
+        order.setUserId(1L);
+        order.setOrderNo("PHOTO202606180001");
+        order.setOrderType("wedding");
+        order.setStatus("pending");
+        order.setShootAt(LocalDateTime.of(2026, 6, 18, 14, 30));
+        order.setTotalAmount(new BigDecimal("1000.00"));
+        order.setDepositAmount(BigDecimal.ZERO.setScale(2));
+        order.setFinalAmount(new BigDecimal("1000.00"));
+        order.setSortOrder(10);
+
+        PhotographyOrderRequest request = new PhotographyOrderRequest();
+        request.setUserId(1L);
+        request.setOrderType("graduation");
+        request.setShootAt(LocalDateTime.of(2026, 6, 20, 10, 0));
+        request.setTotalAmount(new BigDecimal("1200.00"));
+        request.setDepositAmount(BigDecimal.ZERO);
+        request.setFinalAmount(new BigDecimal("1200.00"));
+        request.setContactInfo("微信同号");
+        request.setAddress("新地址");
+        request.setRemark("改期后拍摄");
+        request.setSortOrder(20);
+
+        when(photographyOrderMapper.selectById(201L)).thenReturn(order);
+        doAnswer(invocation -> {
+            PhotographyOrderEntity updated = invocation.getArgument(0);
+            order.setOrderType(updated.getOrderType());
+            order.setCustomerName(updated.getCustomerName());
+            order.setShootAt(updated.getShootAt());
+            order.setTotalAmount(updated.getTotalAmount());
+            order.setDepositAmount(updated.getDepositAmount());
+            order.setFinalAmount(updated.getFinalAmount());
+            order.setContactInfo(updated.getContactInfo());
+            order.setAddress(updated.getAddress());
+            order.setRemark(updated.getRemark());
+            order.setSortOrder(updated.getSortOrder());
+            return 1;
+        }).when(photographyOrderMapper).updateById(any(PhotographyOrderEntity.class));
+
+        PhotographyOrderResponse response = photographyOrderService.update(201L, request).orElseThrow();
+
+        assertThat(response.getOrderType()).isEqualTo("graduation");
+        assertThat(response.getShootAt()).isEqualTo(request.getShootAt());
+        assertThat(response.getTotalAmount()).isEqualByComparingTo("1200.00");
+        assertThat(response.getFinalAmount()).isEqualByComparingTo("1200.00");
+        assertThat(response.getAddress()).isEqualTo("新地址");
+        verify(transactionMapper, never()).insert(any(TransactionEntity.class));
+    }
 }

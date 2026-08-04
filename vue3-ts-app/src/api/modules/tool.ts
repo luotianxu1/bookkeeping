@@ -529,6 +529,10 @@ export function createPhotographyOrder(params: SavePhotographyOrderParams) {
   return requestPost<PhotographyOrder, SavePhotographyOrderParams>(toolRequest, '/api/tools/photography-orders', params)
 }
 
+export function updatePhotographyOrder(id: number, params: SavePhotographyOrderParams) {
+  return requestPut<PhotographyOrder, SavePhotographyOrderParams>(toolRequest, `/api/tools/photography-orders/${id}`, params)
+}
+
 export function collectPhotographyOrderFinal(id: number, params: CollectPhotographyOrderFinalParams) {
   return requestPost<PhotographyOrder, CollectPhotographyOrderFinalParams>(
     toolRequest,

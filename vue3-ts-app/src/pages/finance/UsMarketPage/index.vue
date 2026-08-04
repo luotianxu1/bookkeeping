@@ -64,8 +64,6 @@ const cards = reactive<IndexCard[]>(
 )
 
 const isRefreshing = ref(false)
-const hasLoadedOnce = ref(false)
-const updatedAtText = ref('')
 const premarketData = ref<UsPremarketData | null>(null)
 const premarketLoading = ref(false)
 const premarketError = ref('')
@@ -85,20 +83,6 @@ const sessionTitle = computed(() => {
       return '最近行情'
     default:
       return 'ETF代理行情'
-  }
-})
-
-const proxyLabel = computed(() => {
-  switch (premarketData.value?.sessionStatus) {
-    case 'Pre-Market':
-      return '盘前代理'
-    case 'Market Open':
-    case 'Open':
-      return '实时代理'
-    case 'After-Hours':
-      return '盘后代理'
-    default:
-      return 'ETF代理'
   }
 })
 
@@ -159,13 +143,6 @@ const chartInstances = new Map<string, ECharts>()
 let echartsLib: (typeof import('echarts')) | null = null
 let refreshTimer: number | null = null
 
-const statusText = computed(() => {
-  if (isRefreshing.value || !hasLoadedOnce.value) {
-    return '加载中…'
-  }
-  return updatedAtText.value ? `更新于 ${updatedAtText.value}` : '暂无行情'
-})
-
 function isUp(card: IndexCard) {
   return (card.change ?? 0) >= 0
 }
@@ -208,19 +185,6 @@ function premarketTone(index: UsPremarketIndex) {
     return ''
   }
   return index.changePercent >= 0 ? 'up' : 'down'
-}
-
-function formatVolume(value?: number | null) {
-  if (value == null || !Number.isFinite(value)) {
-    return '--'
-  }
-  if (value >= 100_000_000) {
-    return `${(value / 100_000_000).toFixed(2)}亿`
-  }
-  if (value >= 10_000) {
-    return `${(value / 10_000).toFixed(1)}万`
-  }
-  return Math.round(value).toLocaleString('zh-CN')
 }
 
 function formatPremarketTime(value?: string | null) {
@@ -373,9 +337,7 @@ async function refresh() {
       ...cards.map((card) => loadOne(card)),
       loadPremarket(),
     ])
-    updatedAtText.value = new Date().toLocaleTimeString('zh-CN')
   } finally {
-    hasLoadedOnce.value = true
     isRefreshing.value = false
   }
 }
@@ -529,8 +491,6 @@ onBeforeUnmount(() => {
       </PageHeader>
     </header>
 
-    <p class="us-market-status">{{ statusText }}</p>
-
     <section v-if="premarketData && showProxyMarketCard" class="premarket-card" aria-label="美股ETF代理行情">
       <header class="premarket-heading">
         <div>
@@ -548,16 +508,11 @@ onBeforeUnmount(() => {
         >
           <header>
             <div>
-              <strong>{{ index.indexName }}</strong>
-              <span>{{ proxyLabel }} {{ index.proxySymbol }}</span>
+              <strong>{{ index.proxySymbol }} · {{ index.indexName }}代理</strong>
             </div>
             <span class="premarket-change">{{ formatPremarketChange(index) }}</span>
           </header>
           <p class="premarket-price">{{ formatNumber(index.price) }}</p>
-          <div class="premarket-index-detail">
-            <span>成交量 {{ formatVolume(index.volume) }}</span>
-            <span>买 {{ formatNumber(index.bidPrice) }} · 卖 {{ formatNumber(index.askPrice) }}</span>
-          </div>
         </article>
       </div>
 

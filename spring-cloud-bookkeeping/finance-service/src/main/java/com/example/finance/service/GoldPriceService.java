@@ -64,7 +64,8 @@ public class GoldPriceService {
         GoldPriceResponse response;
         if (forceRefreshCurrent) {
             try {
-                response = fetchCurrentPrice();
+                refreshCache();
+                response = copyResponseWithoutChart(cachedCurrentPrice.response());
             } catch (Exception ex) {
                 response = cachedCurrentPrice == null
                     ? emptyGoldPriceResponse()

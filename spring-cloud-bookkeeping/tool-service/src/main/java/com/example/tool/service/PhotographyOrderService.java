@@ -39,6 +39,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -180,6 +181,73 @@ public class PhotographyOrderService {
 
         photographyOrderMapper.insert(entity);
         return toResponses(List.of(photographyOrderMapper.selectById(entity.getId()))).get(0);
+    }
+
+    @Transactional
+    public Optional<PhotographyOrderResponse> update(Long id, PhotographyOrderRequest request) {
+        PhotographyOrderEntity entity = photographyOrderMapper.selectById(id);
+        if (entity == null || !request.getUserId().equals(entity.getUserId())) {
+            return Optional.empty();
+        }
+
+        String orderType = normalizeOrderType(request.getOrderType());
+        BigDecimal totalAmount = normalizeAmount(request.getTotalAmount(), "总金额");
+        BigDecimal depositAmount = normalizeAmount(request.getDepositAmount(), "订金");
+        BigDecimal finalAmount = normalizeAmount(request.getFinalAmount(), "尾款");
+        validateAmountRelation(totalAmount, depositAmount, finalAmount);
+
+        boolean depositRecorded = entity.getDepositTransactionId() != null || entity.getDepositReceivedAt() != null;
+        if (depositRecorded) {
+            if (entity.getDepositAmount().compareTo(depositAmount) != 0
+                || !Objects.equals(entity.getDepositAccountId(), request.getDepositAccountId())) {
+                throw new IllegalArgumentException("已入账订金不可修改");
+            }
+        } else if (depositAmount.compareTo(BigDecimal.ZERO) > 0) {
+            AccountEntity depositAccount = requireCashAccount(request.getUserId(), request.getDepositAccountId());
+            CategoryEntity incomeCategory = requirePhotographyIncomeCategory(request.getUserId());
+            LocalDateTime depositReceivedAt = LocalDateTime.now();
+            TransactionEntity depositTransaction = createIncomeTransaction(
+                request.getUserId(),
+                depositAccount,
+                incomeCategory,
+                depositAmount,
+                depositReceivedAt,
+                buildTransactionTitle(orderType, "订金"),
+                buildTransactionRemark(orderType, request.getAddress(), request.getRemark())
+            );
+            entity.setDepositAmount(depositAmount);
+            entity.setDepositAccountId(depositAccount.getId());
+            entity.setDepositTransactionId(depositTransaction.getId());
+            entity.setDepositReceivedAt(depositReceivedAt);
+        } else {
+            entity.setDepositAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            entity.setDepositAccountId(null);
+            entity.setDepositTransactionId(null);
+            entity.setDepositReceivedAt(null);
+        }
+
+        boolean finalRecorded = entity.getFinalTransactionId() != null || entity.getFinalReceivedAt() != null;
+        if (finalRecorded && entity.getFinalAmount().compareTo(finalAmount) != 0) {
+            throw new IllegalArgumentException("已入账尾款不可修改");
+        }
+
+        entity.setCustomerName(buildOrderDisplayName(orderType));
+        entity.setContactInfo(trimNullable(request.getContactInfo()));
+        entity.setOrderType(orderType);
+        entity.setShootAt(request.getShootAt());
+        entity.setTotalAmount(totalAmount);
+        if (!depositRecorded) {
+            entity.setDepositAmount(depositAmount);
+        }
+        entity.setFinalAmount(finalAmount);
+        entity.setAddress(trimNullable(request.getAddress()));
+        entity.setRemark(trimNullable(request.getRemark()));
+        if (request.getSortOrder() != null) {
+            entity.setSortOrder(request.getSortOrder());
+        }
+
+        photographyOrderMapper.updateById(entity);
+        return toResponses(List.of(photographyOrderMapper.selectById(entity.getId()))).stream().findFirst();
     }
 
     @Transactional

@@ -254,7 +254,7 @@
 
 .order-card-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-8);
 }
 
@@ -270,6 +270,12 @@
   border: 1px solid var(--color-danger-soft);
   color: var(--color-danger);
   background: var(--color-bg-card);
+}
+
+.order-card-action-edit {
+  border: 1px solid var(--color-border-blue);
+  color: var(--color-brand);
+  background: var(--color-bg-brand-soft);
 }
 
 .order-card-action-cancel {
@@ -339,6 +345,13 @@
   margin: 0;
   color: var(--color-danger);
   font-size: var(--font-size-12);
+}
+
+.order-form-tip {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  line-height: 1.5;
 }
 
 .collect-amount-card {
