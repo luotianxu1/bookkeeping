@@ -5,6 +5,7 @@ import { getCurrentUser, login } from '@/api/modules/auth'
 import { ApiError } from '@/api/request'
 import { clearStoredToken, setStoredToken } from '@/utils/auth-token'
 import { clearStoredCurrentUser, setStoredCurrentUser } from '@/utils/current-user'
+import { initializeGoldPriceCache } from '@/utils/gold-price-cache'
 
 const router = useRouter()
 const route = useRoute()
@@ -51,6 +52,7 @@ async function submitLogin() {
     })
     const currentUser = await getCurrentUser()
     setStoredCurrentUser(currentUser)
+    await initializeGoldPriceCache()
     await router.push('/')
   } catch (error) {
     clearStoredToken()

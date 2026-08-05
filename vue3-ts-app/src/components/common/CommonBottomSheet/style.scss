@@ -81,6 +81,37 @@
   background: var(--color-bg-card);
 }
 
+.common-bottom-sheet-panel-compact {
+  max-height: 100dvh;
+}
+
+.common-bottom-sheet-panel-compact .common-bottom-sheet-header {
+  gap: var(--space-6);
+  padding: 6px 14px 8px;
+}
+
+.common-bottom-sheet-panel-compact .common-bottom-sheet-title-row {
+  min-height: 30px;
+}
+
+.common-bottom-sheet-panel-compact .common-bottom-sheet-close {
+  width: 30px;
+  height: 30px;
+}
+
+.common-bottom-sheet-panel-compact .common-bottom-sheet-body {
+  padding: 8px 14px;
+  scrollbar-width: none;
+}
+
+.common-bottom-sheet-panel-compact .common-bottom-sheet-body::-webkit-scrollbar {
+  display: none;
+}
+
+.common-bottom-sheet-panel-compact .common-bottom-sheet-footer {
+  padding: 8px 14px calc(10px + env(safe-area-inset-bottom));
+}
+
 .bottom-sheet-fade-enter-active,
 .bottom-sheet-fade-leave-active {
   transition: opacity 200ms ease;

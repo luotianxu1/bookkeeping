@@ -228,7 +228,7 @@ const rangeDetailPoints = computed<RangeDetailPoint[]>(() => {
       value: matchedPoint ? Number(matchedPoint.value ?? 0) : null,
       changeAmount: matchedPoint ? getRangeDetailChangeAmount(matchedPoint, previousPoint) : null,
     }
-  }).reverse()
+  }).filter((item) => item.value !== null).reverse()
 })
 
 const chartOption = computed<EChartsCoreOption>(() => {

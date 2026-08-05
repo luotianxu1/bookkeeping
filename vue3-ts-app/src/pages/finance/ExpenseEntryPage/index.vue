@@ -3,6 +3,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonDateTimePicker from '@/components/common/CommonDateTimePicker/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
@@ -505,9 +506,11 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
       <div class="expense-divider"></div>
       <div class="expense-info-row">
         <span>时间</span>
-        <label class="expense-inline-control">
-          <input v-model="entryTime" type="datetime-local" aria-label="选择时间" />
-        </label>
+        <CommonDateTimePicker
+          v-model="entryTime"
+          class="expense-time-control"
+          label="选择时间"
+        />
       </div>
     </section>
 

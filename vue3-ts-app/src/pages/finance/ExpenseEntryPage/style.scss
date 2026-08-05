@@ -109,19 +109,21 @@
   justify-content: flex-end;
 }
 
-.expense-inline-control input {
-  width: 176px;
-  min-height: 24px;
-  margin: 0;
+.expense-time-control {
+  flex: 0 1 212px;
+  min-width: 0;
+  max-width: 212px;
+}
+
+.expense-time-control :deep(.common-date-time-picker-trigger) {
+  width: 100%;
+  min-height: 32px;
   padding: 0;
   border: 0;
   background: transparent;
-  text-align: right;
+  justify-content: flex-end;
   color: var(--color-text-secondary);
   font-size: var(--font-size-13);
-  font-weight: 500;
-  outline: none;
-  box-sizing: border-box;
 }
 
 .expense-divider {

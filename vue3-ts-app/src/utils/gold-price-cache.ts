@@ -81,9 +81,18 @@ export function startGoldPriceAutoRefresh() {
   }
 
   state.hasStarted = true
-  void requestGoldPrice({ force: true }).catch(() => undefined)
   refreshTimer = window.setInterval(refreshVisiblePrimaryPrice, AUTO_REFRESH_INTERVAL_MS)
   document.addEventListener('visibilitychange', refreshVisiblePrimaryPrice)
+}
+
+export async function initializeGoldPriceCache() {
+  startGoldPriceAutoRefresh()
+
+  try {
+    return await requestGoldPrice({ force: true, forceRemote: true })
+  } catch {
+    return null
+  }
 }
 
 export async function ensureGoldPriceCache() {

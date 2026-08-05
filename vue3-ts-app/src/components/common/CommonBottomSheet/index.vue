@@ -9,9 +9,11 @@ const props = withDefaults(defineProps<{
   title: string
   closeOnOverlay?: boolean
   showClose?: boolean
+  compact?: boolean
 }>(), {
   closeOnOverlay: true,
   showClose: true,
+  compact: false,
 })
 
 const emit = defineEmits<{
@@ -92,7 +94,13 @@ function unlockBodyScroll() {
         ></button>
 
         <Transition name="bottom-sheet-slide">
-          <section v-if="isOpen" class="common-bottom-sheet-panel">
+          <section
+            v-if="isOpen"
+            :class="[
+              'common-bottom-sheet-panel',
+              { 'common-bottom-sheet-panel-compact': compact },
+            ]"
+          >
             <header class="common-bottom-sheet-header">
               <span class="common-bottom-sheet-handle" aria-hidden="true"></span>
               <div class="common-bottom-sheet-title-row">
