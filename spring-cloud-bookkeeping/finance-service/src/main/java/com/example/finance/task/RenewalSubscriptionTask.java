@@ -32,7 +32,7 @@ public class RenewalSubscriptionTask {
         scheduledTaskRunService.run("renewal-auto-deduct", "scheduled-08:00", () -> {
             LocalDate today = LocalDate.now(SHANGHAI_ZONE_ID);
             var subscriptionIds = renewalSubscriptionService.listDueSubscriptionIds(today);
-            log.info("续费自动扣费任务开始：trigger=scheduled-08:00, dueCount={}", subscriptionIds.size());
+            log.info("固定支出自动扣款任务开始：trigger=scheduled-08:00, dueCount={}", subscriptionIds.size());
             int successCount = 0;
             int failedCount = 0;
             for (Long subscriptionId : subscriptionIds) {
@@ -40,12 +40,12 @@ public class RenewalSubscriptionTask {
                     renewalSubscriptionService.processDueSubscription(subscriptionId);
                     successCount++;
                 } catch (Exception exception) {
-                    // 单个订阅失败已整体回滚，不影响其余订阅当天扣费
+                    // 单个固定支出失败已整体回滚，不影响其余项目当天扣款
                     failedCount++;
-                    log.error("续费自动扣费失败：subscriptionId={}, reason={}", subscriptionId, exception.getMessage(), exception);
+                    log.error("固定支出自动扣款失败：subscriptionId={}, reason={}", subscriptionId, exception.getMessage(), exception);
                 }
             }
-            log.info("续费自动扣费任务完成：trigger=scheduled-08:00, dueCount={}, successCount={}, failedCount={}",
+            log.info("固定支出自动扣款任务完成：trigger=scheduled-08:00, dueCount={}, successCount={}, failedCount={}",
                 subscriptionIds.size(), successCount, failedCount);
             return "dueCount=" + subscriptionIds.size() + ", successCount=" + successCount + ", failedCount=" + failedCount;
         });

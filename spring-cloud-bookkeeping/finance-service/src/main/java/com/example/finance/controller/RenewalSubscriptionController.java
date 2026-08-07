@@ -25,7 +25,7 @@ import java.util.List;
 @Validated
 @RestController
 @RequestMapping("/api/finance/renewal-subscriptions")
-@Tag(name = "续费管理", description = "续费订阅管理与自动扣费接口")
+@Tag(name = "固定支出", description = "固定支出管理与自动扣款接口")
 public class RenewalSubscriptionController {
 
     private final RenewalSubscriptionService renewalSubscriptionService;
@@ -35,7 +35,7 @@ public class RenewalSubscriptionController {
     }
 
     @GetMapping
-    @Operation(summary = "查询续费订阅列表")
+    @Operation(summary = "查询固定支出列表")
     public Result<List<RenewalSubscriptionResponse>> list(
         @RequestParam(name = "userId") @NotNull Long userId,
         @RequestParam(name = "status", required = false) String status
@@ -44,7 +44,7 @@ public class RenewalSubscriptionController {
     }
 
     @GetMapping("/summary")
-    @Operation(summary = "查询续费订阅汇总")
+    @Operation(summary = "查询固定支出汇总")
     public Result<RenewalSubscriptionSummaryResponse> summary(
         @RequestParam(name = "userId") @NotNull Long userId
     ) {
@@ -52,52 +52,52 @@ public class RenewalSubscriptionController {
     }
 
     @PostMapping
-    @Operation(summary = "新增续费订阅")
+    @Operation(summary = "新增固定支出")
     public Result<RenewalSubscriptionResponse> create(@Valid @RequestBody RenewalSubscriptionRequest request) {
         return Result.ok(renewalSubscriptionService.create(request));
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "修改续费订阅")
+    @Operation(summary = "修改固定支出")
     public Result<RenewalSubscriptionResponse> update(
         @PathVariable("id") @NotNull Long id,
         @Valid @RequestBody RenewalSubscriptionRequest request
     ) {
         return renewalSubscriptionService.update(id, request)
             .map(Result::ok)
-            .orElseGet(() -> Result.<RenewalSubscriptionResponse>fail().code(404).message("续费订阅不存在"));
+            .orElseGet(() -> Result.<RenewalSubscriptionResponse>fail().code(404).message("固定支出不存在"));
     }
 
     @PostMapping("/{id}/pause")
-    @Operation(summary = "暂停续费订阅")
+    @Operation(summary = "暂停固定支出")
     public Result<RenewalSubscriptionResponse> pause(
         @PathVariable("id") @NotNull Long id,
         @RequestParam(name = "userId") @NotNull Long userId
     ) {
         return renewalSubscriptionService.pause(id, userId)
             .map(Result::ok)
-            .orElseGet(() -> Result.<RenewalSubscriptionResponse>fail().code(404).message("续费订阅不存在"));
+            .orElseGet(() -> Result.<RenewalSubscriptionResponse>fail().code(404).message("固定支出不存在"));
     }
 
     @PostMapping("/{id}/resume")
-    @Operation(summary = "恢复续费订阅")
+    @Operation(summary = "恢复固定支出")
     public Result<RenewalSubscriptionResponse> resume(
         @PathVariable("id") @NotNull Long id,
         @RequestParam(name = "userId") @NotNull Long userId
     ) {
         return renewalSubscriptionService.resume(id, userId)
             .map(Result::ok)
-            .orElseGet(() -> Result.<RenewalSubscriptionResponse>fail().code(404).message("续费订阅不存在"));
+            .orElseGet(() -> Result.<RenewalSubscriptionResponse>fail().code(404).message("固定支出不存在"));
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除续费订阅")
+    @Operation(summary = "删除固定支出")
     public Result<Void> delete(
         @PathVariable("id") @NotNull Long id,
         @RequestParam(name = "userId") @NotNull Long userId
     ) {
         if (!renewalSubscriptionService.delete(id, userId)) {
-            return Result.<Void>fail().code(404).message("续费订阅不存在");
+            return Result.<Void>fail().code(404).message("固定支出不存在");
         }
         return Result.ok();
     }

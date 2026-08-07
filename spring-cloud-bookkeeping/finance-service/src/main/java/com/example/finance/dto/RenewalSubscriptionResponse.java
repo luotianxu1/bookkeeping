@@ -17,6 +17,10 @@ public class RenewalSubscriptionResponse {
     private String currencyCode;
     private Long fundingAccountId;
     private String fundingAccountName;
+    private Long categoryId;
+    private String categoryName;
+    private String categoryIcon;
+    private String categoryColor;
     private Integer billingDay;
     private String billingCycle;
     private LocalDate nextBillingDate;

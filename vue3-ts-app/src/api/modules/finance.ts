@@ -548,6 +548,10 @@ export interface RenewalSubscription {
   currencyCode: string
   fundingAccountId: number
   fundingAccountName?: string | null
+  categoryId?: number | null
+  categoryName?: string | null
+  categoryIcon?: string | null
+  categoryColor?: string | null
   billingDay: number
   billingCycle: RenewalBillingCycle
   nextBillingDate: string
@@ -581,6 +585,7 @@ export interface SaveRenewalSubscriptionParams {
   amount: number
   currencyCode?: string
   fundingAccountId: number
+  categoryId: number
   billingDay: number
   billingCycle: RenewalBillingCycle
   nextBillingDate?: string

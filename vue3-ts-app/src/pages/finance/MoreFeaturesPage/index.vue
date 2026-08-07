@@ -26,7 +26,7 @@ const featureGroups: FeatureGroup[] = [
       { icon: '🗓', label: '基金收益', to: '/finance/fund-profit' },
       { icon: '🪙', label: '攒股收息', to: '/finance/dividend-income' },
       { icon: '💰', label: '预算管理', to: '/finance/budgets' },
-      { icon: '🔁', label: '续费管理', to: '/finance/renewals' },
+      { icon: '🔁', label: '固定支出', to: '/finance/renewals' },
     ],
   },
   {

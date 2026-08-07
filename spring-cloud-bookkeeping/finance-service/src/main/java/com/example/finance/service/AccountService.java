@@ -276,7 +276,7 @@ public class AccountService {
                 || (autoInvestFundingReferenceCount != null && autoInvestFundingReferenceCount > 0)
                 || (investmentFundingReferenceCount != null && investmentFundingReferenceCount > 0)
                 || photographyReferenceCount > 0) {
-                throw new IllegalArgumentException("该现金账户已关联投资记录、定投计划、往来记录、续费计划或工具订单，暂时不能删除");
+                throw new IllegalArgumentException("该现金账户已关联投资记录、定投计划、往来记录、固定支出或工具订单，暂时不能删除");
             }
         }
 

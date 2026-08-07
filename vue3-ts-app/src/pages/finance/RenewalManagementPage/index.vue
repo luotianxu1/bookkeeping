@@ -5,20 +5,23 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
-import AmountText from '@/components/common/AmountText/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
+import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import {
   createRenewalSubscription,
   deleteRenewalSubscription,
   getAccounts,
+  getCategories,
   getRenewalSubscriptions,
   getRenewalSubscriptionSummary,
   pauseRenewalSubscription,
   resumeRenewalSubscription,
   updateRenewalSubscription,
   type Account,
+  type Category,
   type RenewalBillingCycle,
   type RenewalSubscription,
   type RenewalSubscriptionSummary,
@@ -36,6 +39,8 @@ type RenewalCardView = {
   statusText: string
   statusClass: string
   noteText: string
+  accountText: string
+  categoryText: string
   amountText: string
   cycleText: string
   footNote: string
@@ -46,6 +51,8 @@ type RenewalCardView = {
 
 const subscriptions = ref<RenewalSubscription[]>([])
 const fundingAccounts = ref<Account[]>([])
+const expenseCategories = ref<Category[]>([])
+const isManageMode = ref(false)
 const summary = ref<RenewalSubscriptionSummary>({
   activeCount: 0,
   pausedCount: 0,
@@ -67,10 +74,11 @@ const showSubscriptionModal = ref(false)
 const showDeleteModal = ref(false)
 const editingSubscription = ref<RenewalSubscription | null>(null)
 const deletingSubscription = ref<RenewalSubscription | null>(null)
-const selectedFilter = ref<FilterKey>('all')
+const selectedFilter = ref('all')
 const formName = ref('')
 const formAmount = ref('')
 const formFundingAccountId = ref('')
+const formCategoryId = ref('')
 const formBillingDay = ref('1')
 const formBillingCycle = ref<RenewalBillingCycle>('monthly')
 const formNextBillingDate = ref('')
@@ -84,8 +92,8 @@ const filterOptions: Array<{ key: FilterKey; label: string }> = [
 ]
 
 const statusOptions: CommonSelectOption[] = [
-  { label: '正常扣费', value: 'active' },
-  { label: '暂停扣费', value: 'paused' },
+  { label: '正常支出', value: 'active' },
+  { label: '暂停支出', value: 'paused' },
 ]
 
 const billingCycleOptions: CommonSelectOption[] = [
@@ -112,9 +120,22 @@ const fundingAccountOptions = computed<CommonSelectOption[]>(() => {
   }))
 })
 
-const modalTitle = computed(() => editingSubscription.value ? '修改续费计划' : '新增续费计划')
-const submitLabel = computed(() => editingSubscription.value ? '保存修改' : '新增计划')
-const billingDayLabel = computed(() => formBillingCycle.value === 'monthly' ? '扣费日' : '每期扣费日')
+const categoryOptions = computed<CommonSelectOption[]>(() => {
+  const leafCategories = expenseCategories.value.filter(isLeafCategory)
+
+  if (!leafCategories.length) {
+    return [{ label: '暂无可用支出分类', value: '', disabled: true }]
+  }
+
+  return leafCategories.map((category) => ({
+    label: buildCategoryOptionLabel(category),
+    value: String(category.id),
+  }))
+})
+
+const modalTitle = computed(() => editingSubscription.value ? '修改固定支出' : '新增固定支出')
+const submitLabel = computed(() => editingSubscription.value ? '保存修改' : '新增固定支出')
+const billingDayLabel = computed(() => formBillingCycle.value === 'monthly' ? '支出日' : '每期支出日')
 
 const activeSubscriptions = computed(() => subscriptions.value.filter((item) => item.status === 'active'))
 
@@ -128,25 +149,17 @@ const filteredSubscriptions = computed(() => {
   return subscriptions.value
 })
 
-const todayDueSubscriptions = computed(() =>
-  activeSubscriptions.value.filter((item) => isDueToday(item.nextBillingDate)),
-)
-
-const weekDueSubscriptions = computed(() =>
-  activeSubscriptions.value.filter((item) => {
-    const days = getDaysUntilDue(item.nextBillingDate)
-    return days >= 0 && days <= 7
-  }),
-)
-
-const chargedThisMonthAmount = computed(() =>
-  subscriptions.value.reduce((total, item) => {
-    if (!didChargeThisMonth(item.lastChargedAt)) {
+const annualFixedExpenseAmount = computed(() =>
+  activeSubscriptions.value.reduce((total, item) => {
+    const amount = Number(item.amount ?? 0)
+    if (!Number.isFinite(amount)) {
       return total
     }
-    return total + Number(item.amount ?? 0)
+    return total + amount * getAnnualCycleMultiplier(item.billingCycle)
   }, 0),
 )
+
+const monthlyAverageAmount = computed(() => annualFixedExpenseAmount.value / 12)
 
 const renewalCards = computed<RenewalCardView[]>(() =>
   filteredSubscriptions.value.map((subscription, index) => {
@@ -155,18 +168,18 @@ const renewalCards = computed<RenewalCardView[]>(() =>
     const statusText = isPaused
       ? '已暂停'
       : dueDays === 0
-        ? '今日扣费'
+        ? '今日支出'
         : dueDays > 0 && dueDays <= 7
           ? `${dueDays} 天后`
-          : '自动扣费'
+          : ''
 
     const footNote = subscription.lastChargeStatus === 'failed' && subscription.lastChargeMessage
       ? subscription.lastChargeMessage
       : subscription.lastChargedAt
-        ? `上次扣费 ${formatDotDate(subscription.lastChargedAt)} 成功`
+        ? `上次扣款 ${formatDotDate(subscription.lastChargedAt)} 成功`
         : isPaused
-          ? '暂停后不再自动扣费'
-          : `下次扣费 ${formatDotDate(subscription.nextBillingDate)}`
+          ? '暂停后不再自动扣款'
+          : `下次支出 ${formatDotDate(subscription.nextBillingDate)}`
 
     return {
       id: subscription.id,
@@ -181,12 +194,14 @@ const renewalCards = computed<RenewalCardView[]>(() =>
           : dueDays > 0 && dueDays <= 7
             ? 'renewal-card-status-soon'
             : 'renewal-card-status-active',
-      noteText: `${formatBillingSchedule(subscription.billingDay, subscription.billingCycle)}自动续费 · 扣款账户 ${subscription.fundingAccountName || '--'}`,
+      noteText: formatBillingSchedule(subscription.billingDay, subscription.billingCycle),
+      accountText: `扣款账户 ${subscription.fundingAccountName || '--'}`,
+      categoryText: subscription.categoryName || '未设置分类',
       amountText: `${formatCurrencyPlain(Number(subscription.amount ?? 0))}/${getBillingCycleUnit(subscription.billingCycle)}`,
       cycleText: isPaused ? '手动恢复' : getBillingCycleLabel(subscription.billingCycle),
       footNote,
       primaryActionText: isPaused ? '恢复' : '暂停',
-      primaryActionClass: isPaused ? 'is-success' : 'is-danger',
+      primaryActionClass: isPaused ? 'is-success' : 'is-warning',
       raw: subscription,
     }
   }),
@@ -196,10 +211,14 @@ onMounted(() => {
   void loadPage()
 })
 
+function toggleManageMode() {
+  isManageMode.value = !isManageMode.value
+}
+
 async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
-    pageError.value = '请先登录后查看续费管理'
+    pageError.value = '请先登录后查看固定支出'
     return
   }
 
@@ -207,19 +226,24 @@ async function loadPage() {
   pageError.value = ''
 
   try {
-    const [subscriptionList, summaryData, accountList] = await Promise.all([
+    const [subscriptionList, summaryData, accountList, categoryList] = await Promise.all([
       getRenewalSubscriptions({ userId: currentUser.id }),
       getRenewalSubscriptionSummary(currentUser.id),
       getAccounts({ userId: currentUser.id, status: 'active' }),
+      getCategories({ userId: currentUser.id, type: 'expense', status: 'active' }),
     ])
     subscriptions.value = subscriptionList
     summary.value = summaryData
     fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
+    expenseCategories.value = categoryList
     if (!formFundingAccountId.value && fundingAccounts.value.length > 0) {
       formFundingAccountId.value = String(fundingAccounts.value[0].id)
     }
+    if (!formCategoryId.value) {
+      formCategoryId.value = resolveDefaultCategoryId()
+    }
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '续费计划加载失败'
+    pageError.value = error instanceof Error ? error.message : '固定支出加载失败'
   } finally {
     isLoading.value = false
   }
@@ -229,6 +253,7 @@ function openCreateModal() {
   editingSubscription.value = null
   resetForm()
   formFundingAccountId.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
+  formCategoryId.value = resolveDefaultCategoryId()
   formBillingDay.value = String(new Date().getDate())
   formBillingCycle.value = 'monthly'
   formNextBillingDate.value = ''
@@ -240,6 +265,7 @@ function openEditModal(subscription: RenewalSubscription) {
   formName.value = subscription.name
   formAmount.value = String(Number(subscription.amount ?? 0))
   formFundingAccountId.value = String(subscription.fundingAccountId)
+  formCategoryId.value = subscription.categoryId ? String(subscription.categoryId) : resolveDefaultCategoryId()
   formBillingDay.value = String(subscription.billingDay)
   formBillingCycle.value = subscription.billingCycle || 'monthly'
   formNextBillingDate.value = subscription.nextBillingDate
@@ -262,6 +288,7 @@ function resetForm() {
   formName.value = ''
   formAmount.value = ''
   formFundingAccountId.value = ''
+  formCategoryId.value = ''
   formBillingDay.value = '1'
   formBillingCycle.value = 'monthly'
   formNextBillingDate.value = ''
@@ -297,28 +324,33 @@ async function saveSubscription() {
 
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
-    formError.value = '请先登录后再保存续费计划'
+    formError.value = '请先登录后再保存固定支出'
     return
   }
 
   const amount = Number(formAmount.value)
   const fundingAccountId = Number(formFundingAccountId.value)
+  const categoryId = Number(formCategoryId.value)
   const billingDay = Number(formBillingDay.value)
 
   if (!formName.value.trim()) {
-    formError.value = '请输入续费名称'
+    formError.value = '请输入固定支出名称'
     return
   }
   if (!Number.isFinite(amount) || amount <= 0) {
-    formError.value = '请输入大于0的续费金额'
+    formError.value = '请输入大于0的固定支出金额'
     return
   }
   if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
-    formError.value = '请选择扣费账户'
+    formError.value = '请选择扣款账户'
+    return
+  }
+  if (!Number.isFinite(categoryId) || categoryId <= 0) {
+    formError.value = '请选择扣款分类'
     return
   }
   if (!Number.isInteger(billingDay) || billingDay < 1 || billingDay > 31) {
-    formError.value = '扣费日必须在1到31之间'
+    formError.value = '支出日必须在1到31之间'
     return
   }
 
@@ -333,6 +365,7 @@ async function saveSubscription() {
       amount,
       currencyCode: 'CNY',
       fundingAccountId,
+      categoryId,
       billingDay,
       billingCycle: formBillingCycle.value,
       nextBillingDate: formNextBillingDate.value || undefined,
@@ -342,16 +375,16 @@ async function saveSubscription() {
 
     if (editingSubscription.value) {
       await updateRenewalSubscription(editingSubscription.value.id, payload)
-      showFeedback('续费计划已更新', 'success')
+      showFeedback('固定支出已更新', 'success')
     } else {
       await createRenewalSubscription(payload)
-      showFeedback('续费计划已新增', 'success')
+      showFeedback('固定支出已新增', 'success')
     }
 
     closeSubscriptionModal(true)
     await loadPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '续费计划保存失败'
+    const message = error instanceof Error ? error.message : '固定支出保存失败'
     formError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -369,14 +402,14 @@ async function toggleSubscriptionStatus(subscription: RenewalSubscription) {
   try {
     if (subscription.status === 'paused') {
       await resumeRenewalSubscription(subscription.id, currentUser.id)
-      showFeedback('续费计划已恢复', 'success')
+      showFeedback('固定支出已恢复', 'success')
     } else {
       await pauseRenewalSubscription(subscription.id, currentUser.id)
-      showFeedback('续费计划已暂停', 'success')
+      showFeedback('固定支出已暂停', 'success')
     }
     await loadPage()
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '续费状态更新失败', 'error')
+    showFeedback(error instanceof Error ? error.message : '固定支出状态更新失败', 'error')
   } finally {
     isUpdatingStatus.value = false
   }
@@ -395,10 +428,10 @@ async function confirmDeleteSubscription() {
     await deleteRenewalSubscription(deletingSubscription.value.id, currentUser.id)
     showDeleteModal.value = false
     deletingSubscription.value = null
-    showFeedback('续费计划已删除', 'success')
+    showFeedback('固定支出已删除', 'success')
     await loadPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '续费计划删除失败'
+    const message = error instanceof Error ? error.message : '固定支出删除失败'
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -415,10 +448,6 @@ function isDueThisMonth(nextBillingDate: string) {
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
 }
 
-function isDueToday(nextBillingDate: string) {
-  return getDaysUntilDue(nextBillingDate) === 0
-}
-
 function getDaysUntilDue(nextBillingDate: string) {
   const target = new Date(nextBillingDate)
   if (Number.isNaN(target.getTime())) {
@@ -428,18 +457,6 @@ function getDaysUntilDue(nextBillingDate: string) {
   const current = new Date(today.getFullYear(), today.getMonth(), today.getDate())
   const due = new Date(target.getFullYear(), target.getMonth(), target.getDate())
   return Math.round((due.getTime() - current.getTime()) / 86400000)
-}
-
-function didChargeThisMonth(value?: string | null) {
-  if (!value) {
-    return false
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return false
-  }
-  const now = new Date()
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()
 }
 
 function formatDotDate(value?: string | null) {
@@ -456,14 +473,14 @@ function formatDotDate(value?: string | null) {
 }
 
 function formatBillingSchedule(day: number, cycle?: RenewalBillingCycle | string | null) {
-  const displayDay = String(day).padStart(2, '0')
+  const displayDay = String(Number(day))
   if (cycle === 'quarterly') {
-    return `每季 ${displayDay} 日`
+    return `每季度 ${displayDay} 号扣款`
   }
   if (cycle === 'yearly') {
-    return `每年 ${displayDay} 日`
+    return `每年 ${displayDay} 号扣款`
   }
-  return `每月 ${displayDay} 日`
+  return `每月 ${displayDay} 号扣款`
 }
 
 function formatNumber(value: number) {
@@ -505,6 +522,16 @@ function getBillingCycleUnit(cycle?: RenewalBillingCycle | string | null) {
   return '月'
 }
 
+function getAnnualCycleMultiplier(cycle?: RenewalBillingCycle | string | null) {
+  if (cycle === 'quarterly') {
+    return 4
+  }
+  if (cycle === 'yearly') {
+    return 1
+  }
+  return 12
+}
+
 function resolveAvatarText(subscription: RenewalSubscription) {
   const source = (subscription.name || '续').trim()
   return source.slice(0, 1)
@@ -512,6 +539,29 @@ function resolveAvatarText(subscription: RenewalSubscription) {
 
 function resolveCardTitle(subscription: RenewalSubscription) {
   return subscription.name.trim()
+}
+
+function buildCategoryOptionLabel(category: Category) {
+  if (!category.parentId) {
+    return category.name
+  }
+  const parent = expenseCategories.value.find((item) => item.id === category.parentId)
+  return parent ? `${parent.name} / ${category.name}` : category.name
+}
+
+function isLeafCategory(category: Category) {
+  return !expenseCategories.value.some((item) => item.parentId === category.id)
+}
+
+function resolveDefaultCategoryId() {
+  const renewalCategory = expenseCategories.value.find((category) => (
+    (category.name === '固定支出' || category.name === '会员续费') && isLeafCategory(category)
+  ))
+  if (renewalCategory) {
+    return String(renewalCategory.id)
+  }
+  const firstCategory = expenseCategories.value.find(isLeafCategory)
+  return firstCategory ? String(firstCategory.id) : ''
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {
@@ -522,7 +572,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 </script>
 
 <template>
-  <section class="renewal-management-page" aria-label="续费管理">
+  <section class="renewal-management-page" aria-label="固定支出">
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -533,45 +583,50 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <CommonLoading v-else-if="isLoading" />
 
     <template v-else>
-      <PageHeader title="续费管理" back-to="/finance/more-features" back-label="返回更多功能" />
+      <PageHeader title="固定支出" back-to="/finance/more-features" back-label="返回更多功能">
+        <template #right>
+          <div class="renewal-header-actions">
+            <CommonHeaderActionButton
+              :label="isManageMode ? '完成管理' : '管理固定支出'"
+              @click="toggleManageMode"
+            >
+              <svg v-if="isManageMode" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M20 6L9 17L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z" stroke="currentColor" stroke-width="1.8" />
+                <path d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </CommonHeaderActionButton>
+          </div>
+        </template>
+      </PageHeader>
 
-      <section class="renewal-summary-card" aria-label="续费总览">
-        <AmountText
-          tag="strong"
-          class="renewal-summary-amount"
-          :value="formatCurrency(summary.monthlyAmount)"
-          tone="inherit"
-        />
-
+      <section class="renewal-summary-card" aria-label="固定支出总览">
         <div class="renewal-summary-stats">
           <article class="renewal-summary-metric">
-            <span>今日待扣</span>
-            <strong>{{ todayDueSubscriptions.length }} 项</strong>
+            <span>本月总额</span>
+            <strong>{{ formatCurrency(summary.dueThisMonthAmount) }}</strong>
           </article>
           <article class="renewal-summary-metric">
-            <span>本周待扣</span>
-            <strong>{{ weekDueSubscriptions.length }} 项</strong>
+            <span>月平均</span>
+            <strong>{{ formatCurrency(monthlyAverageAmount) }}</strong>
           </article>
           <article class="renewal-summary-metric">
-            <span>已扣金额</span>
-            <strong>{{ formatCurrency(chargedThisMonthAmount) }}</strong>
+            <span>年度总额</span>
+            <strong>{{ formatCurrency(annualFixedExpenseAmount) }}</strong>
           </article>
         </div>
       </section>
 
-      <nav class="renewal-filters" aria-label="续费筛选">
-        <button
-          v-for="item in filterOptions"
-          :key="item.key"
-          type="button"
-          :class="['renewal-filter-chip', { 'renewal-filter-chip-active': selectedFilter === item.key }]"
-          @click="selectedFilter = item.key"
-        >
-          {{ item.label }}
-        </button>
-      </nav>
+      <SegmentedControl
+        v-model="selectedFilter"
+        class="renewal-filter-tabs"
+        :options="filterOptions.map((item) => ({ label: item.label, value: item.key }))"
+        label="固定支出筛选"
+      />
 
-      <section class="renewal-list-section" aria-label="续费列表">
+      <section class="renewal-list-section" aria-label="固定支出列表">
         <div v-if="renewalCards.length" class="renewal-list">
           <article
             v-for="card in renewalCards"
@@ -584,15 +639,19 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 <div class="renewal-card-text-wrap">
                   <div class="renewal-card-title-row">
                     <h3>{{ card.title }}</h3>
-                    <span :class="['renewal-card-status', card.statusClass]">{{ card.statusText }}</span>
+                    <span v-if="card.statusText" :class="['renewal-card-status', card.statusClass]">
+                      {{ card.statusText }}
+                    </span>
                   </div>
                   <p>{{ card.noteText }}</p>
+                  <p>{{ card.accountText }}</p>
                 </div>
               </div>
 
               <div class="renewal-card-side">
                 <strong class="renewal-card-amount">{{ card.amountText }}</strong>
                 <span class="renewal-card-cycle">{{ card.cycleText }}</span>
+                <span class="renewal-card-category">{{ card.categoryText }}</span>
               </div>
             </div>
 
@@ -600,29 +659,45 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <p :class="['renewal-card-foot-note', { 'renewal-card-hint-error': card.raw.lastChargeStatus === 'failed' }]">
                 {{ card.footNote }}
               </p>
-              <div class="renewal-card-actions">
-                <button type="button" class="renewal-card-action is-edit" @click="openEditModal(card.raw)">
-                  编辑
-                </button>
-                <button type="button" class="renewal-card-action is-danger" @click="openDeleteModal(card.raw)">
-                  删除
-                </button>
-                <button
-                  type="button"
-                  :class="['renewal-card-action', card.primaryActionClass]"
-                  @click="toggleSubscriptionStatus(card.raw)"
-                >
-                  {{ card.primaryActionText }}
-                </button>
-              </div>
+            </div>
+
+            <div v-if="isManageMode" class="renewal-card-actions">
+              <CommonButton
+                class="renewal-card-action"
+                variant="secondary"
+                size="sm"
+                :aria-label="`修改${card.title}`"
+                @click="openEditModal(card.raw)"
+              >
+                修改
+              </CommonButton>
+              <CommonButton
+                class="renewal-card-action is-danger"
+                variant="secondary"
+                size="sm"
+                :aria-label="`删除${card.title}`"
+                @click="openDeleteModal(card.raw)"
+              >
+                删除
+              </CommonButton>
+              <CommonButton
+                :class="['renewal-card-action', card.primaryActionClass]"
+                variant="secondary"
+                size="sm"
+                :aria-label="`${card.primaryActionText}${card.title}`"
+                :disabled="isUpdatingStatus"
+                @click="toggleSubscriptionStatus(card.raw)"
+              >
+                {{ card.primaryActionText }}
+              </CommonButton>
             </div>
           </article>
         </div>
 
         <div v-else class="renewal-empty-state">
-          <strong>还没有续费计划</strong>
-          <p>新增一个每月自动续费项目后，会在到期日自动生成支出并扣减现金账户余额。</p>
-          <CommonButton @click="openCreateModal">新增续费计划</CommonButton>
+          <strong>还没有固定支出</strong>
+          <p>新增房租、会员、保险等周期性支出后，会在到期日自动生成支出并扣减现金账户余额。</p>
+          <CommonButton @click="openCreateModal">新增固定支出</CommonButton>
         </div>
       </section>
     </template>
@@ -633,24 +708,25 @@ function showFeedback(message: string, type: 'success' | 'error') {
       @close="closeSubscriptionModal(true)"
     >
       <div class="renewal-form">
-        <CommonInput v-model="formName" label="续费名称" placeholder="例如：腾讯视频会员" />
+        <CommonInput v-model="formName" label="支出名称" placeholder="例如：房租、会员、保险" />
         <CommonInput
           v-model="formAmount"
           label="每期金额"
-          placeholder="请输入续费金额"
+          placeholder="请输入固定支出金额"
           input-type="number"
           input-mode="decimal"
         />
-        <CommonSelect v-model="formBillingCycle" label="扣费周期" :options="billingCycleOptions" />
-        <CommonSelect v-model="formFundingAccountId" label="扣费账户" :options="fundingAccountOptions" />
+        <CommonSelect v-model="formBillingCycle" label="支出周期" :options="billingCycleOptions" />
+        <CommonSelect v-model="formFundingAccountId" label="扣款账户" :options="fundingAccountOptions" />
+        <CommonSelect v-model="formCategoryId" label="扣款分类" :options="categoryOptions" />
         <CommonSelect v-model="formBillingDay" :label="billingDayLabel" :options="billingDayOptions" />
         <CommonInput
           v-model="formNextBillingDate"
-          label="首次或下次扣费日"
+          label="首次或下次支出日"
           input-type="date"
         />
-        <CommonSelect v-model="formStatus" label="计划状态" :options="statusOptions" />
-        <CommonInput v-model="formRemark" label="备注" placeholder="可记录会员权益、家庭共享等信息" />
+        <CommonSelect v-model="formStatus" label="支出状态" :options="statusOptions" />
+        <CommonInput v-model="formRemark" label="备注" placeholder="可记录房租、会员、保费等固定支出信息" />
         <p v-if="formError" class="renewal-form-error">{{ formError }}</p>
       </div>
 
@@ -673,7 +749,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
       :show-close="false"
     >
       <p class="renewal-delete-text">
-        确认删除“{{ deletingSubscription?.name ?? '当前续费计划' }}”吗？删除后无法恢复。
+        确认删除“{{ deletingSubscription?.name ?? '当前固定支出' }}”吗？删除后无法恢复。
       </p>
       <p v-if="deleteError" class="renewal-form-error">{{ deleteError }}</p>
 
@@ -690,7 +766,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     </CommonModal>
 
     <FloatingAddButton
-      aria-label="新增续费计划"
+      aria-label="新增固定支出"
       storage-key="finance-renewals"
       @click="openCreateModal"
     />

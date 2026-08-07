@@ -184,7 +184,7 @@ export const financeRoutes: RouteRecordRaw[] = [
     component: RenewalManagementPage,
     meta: {
       section: 'finance',
-      title: '续费管理',
+      title: '固定支出',
     },
   },
   {

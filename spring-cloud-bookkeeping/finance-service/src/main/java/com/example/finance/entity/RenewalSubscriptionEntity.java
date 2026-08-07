@@ -33,6 +33,9 @@ public class RenewalSubscriptionEntity {
     @TableField("funding_account_id")
     private Long fundingAccountId;
 
+    @TableField("category_id")
+    private Long categoryId;
+
     @TableField("billing_day")
     private Integer billingDay;
 
