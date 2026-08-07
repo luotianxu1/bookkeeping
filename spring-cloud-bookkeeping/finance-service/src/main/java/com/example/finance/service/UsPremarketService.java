@@ -188,13 +188,26 @@ public class UsPremarketService {
         quote.put("netChange", matcher.group(2));
         quote.put("percentageChange", matcher.group(3));
         quote.put("volume", summary.path("volume").asText(""));
-        String lastTradeTime = data.path("lastUpdateInfo").path(0).asText("");
+        String lastTradeTime = findNasdaqLastUpdateTime(data.path("lastUpdateInfo"));
         quote.put("lastTradeTimestamp", lastTradeTime);
         LocalDateTime updatedAt = parseNasdaqTime(lastTradeTime);
         if (updatedAt == null) {
             throw new IllegalStateException("Nasdaq扩展时段行情时间格式异常");
         }
         return new ExtendedQuote(sessionStatus, quote, updatedAt);
+    }
+
+    private String findNasdaqLastUpdateTime(JsonNode lastUpdateInfo) {
+        if (lastUpdateInfo == null || !lastUpdateInfo.isArray()) {
+            return "";
+        }
+        for (JsonNode item : lastUpdateInfo) {
+            String value = item.asText("").trim();
+            if (value.startsWith("Data last updated")) {
+                return value;
+            }
+        }
+        return "";
     }
 
     private JsonNode requestJson(String url) {
