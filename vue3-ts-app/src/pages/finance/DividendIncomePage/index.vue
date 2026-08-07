@@ -12,14 +12,23 @@ import {
   deleteInvestmentFixedExpense,
   getInvestmentFixedExpenses,
   getInvestmentDividendIncome,
+  getRenewalSubscriptions,
   type InvestmentFixedExpense,
   type InvestmentDividendIncomeItem,
   type InvestmentDividendIncomePage,
+  type RenewalBillingCycle,
+  type RenewalSubscription,
   updateInvestmentFixedExpense,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
-type FixedExpenseItem = InvestmentFixedExpense
+type FixedExpenseSource = 'investment' | 'renewal'
+
+type FixedExpenseItem = InvestmentFixedExpense & {
+  itemKey: string
+  source: FixedExpenseSource
+  editable: boolean
+}
 
 type ExpenseCoverageItem = FixedExpenseItem & {
   coveredAmount: number
@@ -33,7 +42,8 @@ const pageError = ref('')
 const expenseSaving = ref(false)
 const pageData = ref<InvestmentDividendIncomePage | null>(null)
 const currentUserId = ref<number | null>(null)
-const expenseItems = ref<FixedExpenseItem[]>([])
+const investmentExpenseItems = ref<FixedExpenseItem[]>([])
+const renewalExpenseItems = ref<FixedExpenseItem[]>([])
 const isExpenseEditing = ref(false)
 const showExpenseModal = ref(false)
 const editingExpenseId = ref<number | null>(null)
@@ -56,6 +66,10 @@ const updateText = computed(() => {
 })
 const estimatedMonthlyIncome = computed(() => summary.value.estimatedDividendAmount / 12)
 const expenseModalTitle = computed(() => editingExpenseId.value ? '修改固定支出' : '新增固定支出')
+const expenseItems = computed<FixedExpenseItem[]>(() => [
+  ...investmentExpenseItems.value,
+  ...renewalExpenseItems.value,
+])
 const expenseCoverageItems = computed<ExpenseCoverageItem[]>(() => {
   let remaining = estimatedMonthlyIncome.value
   return expenseItems.value.map((item) => {
@@ -91,8 +105,13 @@ async function loadPageData() {
   isLoading.value = true
   pageError.value = ''
   try {
-    pageData.value = await getInvestmentDividendIncome(currentUser.id)
-    expenseItems.value = normalizeExpenseItems(pageData.value.fixedExpenses)
+    const [dividendIncomeData, renewalSubscriptions] = await Promise.all([
+      getInvestmentDividendIncome(currentUser.id),
+      getRenewalSubscriptions({ userId: currentUser.id, status: 'active' }),
+    ])
+    pageData.value = dividendIncomeData
+    investmentExpenseItems.value = normalizeInvestmentExpenseItems(dividendIncomeData.fixedExpenses)
+    renewalExpenseItems.value = normalizeRenewalExpenseItems(renewalSubscriptions, currentUser.id)
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : '攒股收息加载失败'
   } finally {
@@ -102,10 +121,16 @@ async function loadPageData() {
 
 async function refreshExpenseItems() {
   if (!currentUserId.value) {
-    expenseItems.value = []
+    investmentExpenseItems.value = []
+    renewalExpenseItems.value = []
     return
   }
-  expenseItems.value = normalizeExpenseItems(await getInvestmentFixedExpenses(currentUserId.value))
+  const [investmentExpenses, renewalSubscriptions] = await Promise.all([
+    getInvestmentFixedExpenses(currentUserId.value),
+    getRenewalSubscriptions({ userId: currentUserId.value, status: 'active' }),
+  ])
+  investmentExpenseItems.value = normalizeInvestmentExpenseItems(investmentExpenses)
+  renewalExpenseItems.value = normalizeRenewalExpenseItems(renewalSubscriptions, currentUserId.value)
 }
 
 function amountTone(value: number) {
@@ -183,21 +208,60 @@ function openHoldingDetail(item: InvestmentDividendIncomeItem) {
   router.push({ path: '/finance/accounts/investment/detail', query: { positionId: item.positionId } })
 }
 
-function normalizeExpenseItems(items?: InvestmentFixedExpense[] | null) {
+function normalizeInvestmentExpenseItems(items?: InvestmentFixedExpense[] | null) {
   if (!Array.isArray(items)) {
     return []
   }
   return items
-    .map((item) => ({
+    .map((item): FixedExpenseItem => ({
       ...item,
       id: Number(item.id),
       userId: Number(item.userId),
       name: String(item.name ?? '').trim(),
       amount: Number(item.amount ?? 0),
       sortOrder: Number(item.sortOrder ?? 0),
+      itemKey: `investment-${item.id}`,
+      source: 'investment',
+      editable: true,
     }))
     .filter((item) => Number.isFinite(item.id) && item.id > 0 && item.name && Number.isFinite(item.amount) && item.amount > 0)
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id)
+}
+
+function normalizeRenewalExpenseItems(items: RenewalSubscription[] | null | undefined, userId: number) {
+  if (!Array.isArray(items)) {
+    return []
+  }
+  return items
+    .map((item, index): FixedExpenseItem => ({
+      id: Number(item.id),
+      userId,
+      name: String(item.name ?? '').trim(),
+      amount: toMonthlyRenewalAmount(Number(item.amount ?? 0), item.billingCycle),
+      currencyCode: item.currencyCode || 'CNY',
+      sortOrder: 10000 + index,
+      status: item.status,
+      remark: item.remark ?? null,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      itemKey: `renewal-${item.id}`,
+      source: 'renewal',
+      editable: false,
+    }))
+    .filter((item) => Number.isFinite(item.id) && item.id > 0 && item.name && Number.isFinite(item.amount) && item.amount > 0)
+}
+
+function toMonthlyRenewalAmount(amount: number, billingCycle: RenewalBillingCycle) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0
+  }
+  if (billingCycle === 'quarterly') {
+    return amount / 3
+  }
+  if (billingCycle === 'yearly') {
+    return amount / 12
+  }
+  return amount
 }
 
 function openCreateExpenseModal() {
@@ -209,6 +273,9 @@ function openCreateExpenseModal() {
 }
 
 function openEditExpenseModal(item: FixedExpenseItem) {
+  if (!item.editable) {
+    return
+  }
   editingExpenseId.value = item.id
   expenseName.value = item.name
   expenseAmount.value = String(item.amount)
@@ -251,7 +318,7 @@ async function submitExpenseItem() {
   expenseError.value = ''
   try {
     if (editingExpenseId.value) {
-      const currentItem = expenseItems.value.find((item) => item.id === editingExpenseId.value)
+      const currentItem = investmentExpenseItems.value.find((item) => item.id === editingExpenseId.value)
       await updateInvestmentFixedExpense(editingExpenseId.value, {
         userId: currentUserId.value,
         name,
@@ -355,7 +422,7 @@ async function removeExpenseItem(id: number) {
       <div v-else class="expense-coverage-list">
         <article
           v-for="item in expenseCoverageItems"
-          :key="item.id"
+          :key="item.itemKey"
           :class="['expense-coverage-item', `is-${item.status}`, getCoverageLevelClass(item), { 'is-editing': isExpenseEditing }]"
         >
           <div class="expense-coverage-main">
@@ -366,7 +433,7 @@ async function removeExpenseItem(id: number) {
             <p class="expense-coverage-note">
               {{ getCoveragePercentText(item) }}
             </p>
-            <div v-if="isExpenseEditing" class="expense-coverage-actions">
+            <div v-if="isExpenseEditing && item.editable" class="expense-coverage-actions">
               <button type="button" class="expense-action-icon" aria-label="修改" @click="openEditExpenseModal(item)">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path
