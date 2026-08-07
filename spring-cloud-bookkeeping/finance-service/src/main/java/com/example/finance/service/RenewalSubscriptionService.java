@@ -52,7 +52,6 @@ public class RenewalSubscriptionService {
     private static final String TRANSACTION_STATUS = "normal";
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String ACTIVE_CATEGORY_STATUS = "active";
-    private static final String FIXED_EXPENSE_CATEGORY_NAME = "固定支出";
     private static final String FIXED_EXPENSE_TRANSACTION_TITLE_SUFFIX = "支出";
     private static final int MAX_CHARGE_MESSAGE_LENGTH = 255;
     private static final ZoneId SHANGHAI_ZONE_ID = ZoneId.of("Asia/Shanghai");
@@ -384,9 +383,6 @@ public class RenewalSubscriptionService {
     }
 
     private CategoryEntity requireChargeCategory(RenewalSubscriptionEntity entity) {
-        if (entity.getCategoryId() == null) {
-            return requireFixedExpenseCategory();
-        }
         return requireExpenseLeafCategory(entity.getUserId(), entity.getCategoryId());
     }
 
@@ -411,19 +407,6 @@ public class RenewalSubscriptionService {
             .eq(CategoryEntity::getParentId, category.getId())
             .eq(CategoryEntity::getStatus, ACTIVE_CATEGORY_STATUS)) > 0) {
             throw new IllegalArgumentException("请选择可直接记账的扣款分类");
-        }
-        return category;
-    }
-
-    private CategoryEntity requireFixedExpenseCategory() {
-        CategoryEntity category = categoryMapper.selectOne(new LambdaQueryWrapper<CategoryEntity>()
-            .eq(CategoryEntity::getName, FIXED_EXPENSE_CATEGORY_NAME)
-            .eq(CategoryEntity::getType, EXPENSE_TYPE)
-            .eq(CategoryEntity::getStatus, ACTIVE_CATEGORY_STATUS)
-            .isNull(CategoryEntity::getUserId)
-            .last("LIMIT 1"));
-        if (category == null) {
-            throw new IllegalArgumentException("未找到“固定支出”支出分类，请先执行最新数据库脚本");
         }
         return category;
     }

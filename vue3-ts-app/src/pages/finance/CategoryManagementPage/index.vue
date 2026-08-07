@@ -164,10 +164,11 @@ async function loadCategories() {
   categoryListError.value = ''
 
   try {
-    categories.value = await getCategories({
+    const nextCategories = await getCategories({
       userId: currentUser.id,
       status: 'active',
     })
+    categories.value = nextCategories.filter((category) => !isHiddenFixedExpenseCategory(category))
   } catch (error) {
     categoryListError.value = error instanceof Error ? error.message : '分类列表加载失败'
   } finally {
@@ -309,6 +310,10 @@ function getCategoryIconStyle(category: Category) {
 
 function canDeleteCategory(category: Category) {
   return !categories.value.some((item) => item.parentId === category.id)
+}
+
+function isHiddenFixedExpenseCategory(category: Category) {
+  return category.system && category.type === 'expense' && category.name === '固定支出'
 }
 </script>
 

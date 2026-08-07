@@ -2092,6 +2092,13 @@ export interface SaveSalaryInitialBalanceParams {
   note?: string | null
 }
 
+export interface SaveSalaryAccountBalanceParams {
+  userId: number
+  amount: number
+  year?: number
+  note?: string | null
+}
+
 export interface SaveSalaryAccountRecordParams {
   userId: number
   amount: number
@@ -2181,6 +2188,14 @@ export function saveSalaryInitialBalance(accountType: string, params: SaveSalary
   return requestPut<SalaryAccountPage, SaveSalaryInitialBalanceParams>(
     financeRequest,
     `/api/finance/salary/accounts/${accountType}/initial-balance`,
+    params,
+  )
+}
+
+export function saveSalaryAccountBalance(accountType: string, params: SaveSalaryAccountBalanceParams) {
+  return requestPut<SalaryAccountPage, SaveSalaryAccountBalanceParams>(
+    financeRequest,
+    `/api/finance/salary/accounts/${accountType}/balance`,
     params,
   )
 }

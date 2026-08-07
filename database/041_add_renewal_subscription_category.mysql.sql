@@ -6,25 +6,6 @@ USE bookkeeping_app;
 
 SET NAMES utf8mb4;
 
-INSERT INTO categories (
-  user_id,
-  name,
-  type,
-  icon,
-  color,
-  is_system,
-  sort_order,
-  remark
-) VALUES
-  (NULL, '固定支出', 'expense', 'fixed-expense', '#0F766E', 1, 95, '房租、会员、保险等周期性固定支出')
-ON DUPLICATE KEY UPDATE
-  icon = VALUES(icon),
-  color = VALUES(color),
-  is_system = VALUES(is_system),
-  sort_order = VALUES(sort_order),
-  status = 'active',
-  remark = VALUES(remark);
-
 DROP PROCEDURE IF EXISTS migrate_renewal_subscription_category;
 
 DELIMITER //
@@ -71,23 +52,8 @@ BEGIN
   ALTER TABLE renewal_subscriptions
     COMMENT = '固定支出表：记录房租、会员、保险等周期性自动扣款项目';
 
-  UPDATE renewal_subscriptions renewal_main
-  JOIN categories category_main
-    ON category_main.name = '固定支出'
-    AND category_main.type = 'expense'
-    AND category_main.user_id IS NULL
-  LEFT JOIN categories old_category
-    ON old_category.id = renewal_main.category_id
-  SET renewal_main.category_id = category_main.id
-  WHERE renewal_main.category_id IS NULL
-    OR (
-      old_category.name = '会员续费'
-      AND old_category.type = 'expense'
-      AND old_category.user_id IS NULL
-    );
-
   ALTER TABLE renewal_subscriptions
-    MODIFY COLUMN category_id BIGINT UNSIGNED NOT NULL COMMENT '扣款时使用的支出分类ID';
+    MODIFY COLUMN category_id BIGINT UNSIGNED NULL COMMENT '扣款时使用的支出分类ID，新增和修改时必填';
 
   IF NOT EXISTS (
     SELECT 1

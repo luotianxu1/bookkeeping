@@ -121,7 +121,9 @@ const fundingAccountOptions = computed<CommonSelectOption[]>(() => {
 })
 
 const categoryOptions = computed<CommonSelectOption[]>(() => {
-  const leafCategories = expenseCategories.value.filter(isLeafCategory)
+  const leafCategories = expenseCategories.value.filter((category) => (
+    !isHiddenFixedExpenseCategory(category) && isLeafCategory(category)
+  ))
 
   if (!leafCategories.length) {
     return [{ label: '暂无可用支出分类', value: '', disabled: true }]
@@ -235,12 +237,9 @@ async function loadPage() {
     subscriptions.value = subscriptionList
     summary.value = summaryData
     fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
-    expenseCategories.value = categoryList
+    expenseCategories.value = categoryList.filter((category) => !isHiddenFixedExpenseCategory(category))
     if (!formFundingAccountId.value && fundingAccounts.value.length > 0) {
       formFundingAccountId.value = String(fundingAccounts.value[0].id)
-    }
-    if (!formCategoryId.value) {
-      formCategoryId.value = resolveDefaultCategoryId()
     }
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : '固定支出加载失败'
@@ -253,7 +252,6 @@ function openCreateModal() {
   editingSubscription.value = null
   resetForm()
   formFundingAccountId.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
-  formCategoryId.value = resolveDefaultCategoryId()
   formBillingDay.value = String(new Date().getDate())
   formBillingCycle.value = 'monthly'
   formNextBillingDate.value = ''
@@ -265,7 +263,7 @@ function openEditModal(subscription: RenewalSubscription) {
   formName.value = subscription.name
   formAmount.value = String(Number(subscription.amount ?? 0))
   formFundingAccountId.value = String(subscription.fundingAccountId)
-  formCategoryId.value = subscription.categoryId ? String(subscription.categoryId) : resolveDefaultCategoryId()
+  formCategoryId.value = resolveEditableCategoryId(subscription.categoryId)
   formBillingDay.value = String(subscription.billingDay)
   formBillingCycle.value = subscription.billingCycle || 'monthly'
   formNextBillingDate.value = subscription.nextBillingDate
@@ -553,15 +551,16 @@ function isLeafCategory(category: Category) {
   return !expenseCategories.value.some((item) => item.parentId === category.id)
 }
 
-function resolveDefaultCategoryId() {
-  const renewalCategory = expenseCategories.value.find((category) => (
-    (category.name === '固定支出' || category.name === '会员续费') && isLeafCategory(category)
-  ))
-  if (renewalCategory) {
-    return String(renewalCategory.id)
+function resolveEditableCategoryId(categoryId?: number | null) {
+  if (!categoryId) {
+    return ''
   }
-  const firstCategory = expenseCategories.value.find(isLeafCategory)
-  return firstCategory ? String(firstCategory.id) : ''
+  const category = expenseCategories.value.find((item) => item.id === categoryId)
+  return category && !isHiddenFixedExpenseCategory(category) && isLeafCategory(category) ? String(category.id) : ''
+}
+
+function isHiddenFixedExpenseCategory(category: Category) {
+  return category.system && category.type === 'expense' && category.name === '固定支出'
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {
@@ -718,7 +717,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
         />
         <CommonSelect v-model="formBillingCycle" label="支出周期" :options="billingCycleOptions" />
         <CommonSelect v-model="formFundingAccountId" label="扣款账户" :options="fundingAccountOptions" />
-        <CommonSelect v-model="formCategoryId" label="扣款分类" :options="categoryOptions" />
+        <CommonSelect v-model="formCategoryId" label="扣款分类（必填）" :options="categoryOptions" />
         <CommonSelect v-model="formBillingDay" :label="billingDayLabel" :options="billingDayOptions" />
         <CommonInput
           v-model="formNextBillingDate"

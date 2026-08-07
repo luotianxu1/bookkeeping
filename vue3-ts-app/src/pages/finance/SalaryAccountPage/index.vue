@@ -5,6 +5,7 @@ import {
   createSalaryAccountRecord,
   deleteSalaryAccountRecord,
   getSalaryAccountPage,
+  saveSalaryAccountBalance,
   saveSalaryInitialBalance,
   updateSalaryAccountRecord,
   type SalaryAccountPage,
@@ -12,6 +13,7 @@ import {
 } from '@/api/modules/finance'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
@@ -37,6 +39,7 @@ const formError = ref('')
 const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
+const showBalanceModal = ref(false)
 const showInitialModal = ref(false)
 const showRecordModal = ref(false)
 const editingRecord = ref<SalaryAccountRecordItem | null>(null)
@@ -45,6 +48,11 @@ const selectedYear = ref(String(new Date().getFullYear()))
 const initialForm = reactive({
   amount: '',
   recordMonth: `${new Date().getFullYear()}-01`,
+  note: '',
+})
+
+const balanceForm = reactive({
+  amount: '',
   note: '',
 })
 
@@ -62,8 +70,14 @@ const impactModeOptions = [
 ]
 
 const routeAccountType = computed(() => String(route.params.accountType || 'social-security'))
+const isCompactSummaryPage = computed(() =>
+  ['social-security', 'medical', 'housing-fund'].includes(routeAccountType.value)
+)
 const pageTitle = computed(() => salaryAccountDisplayName(routeAccountType.value))
 const canDeleteRecord = computed(() => recordCanDelete(editingRecord.value))
+const visibleMetrics = computed(() =>
+  pageData.value?.metrics.filter((metric) => metric.label !== '初始值') ?? []
+)
 
 onMounted(() => {
   void loadPage()
@@ -110,6 +124,16 @@ function openInitialBalanceModal(record?: SalaryAccountRecordItem) {
   showInitialModal.value = true
 }
 
+function openBalanceModal() {
+  if (!pageData.value) {
+    return
+  }
+  balanceForm.amount = String(pageData.value?.currentBalance ?? 0)
+  balanceForm.note = ''
+  formError.value = ''
+  showBalanceModal.value = true
+}
+
 function openRecordModal(record?: SalaryAccountRecordItem) {
   editingRecord.value = record ?? null
   recordForm.amount = record ? String(record.amountValue) : ''
@@ -126,6 +150,14 @@ function closeInitialModal() {
   }
   showInitialModal.value = false
   editingRecord.value = null
+  formError.value = ''
+}
+
+function closeBalanceModal() {
+  if (isSaving.value) {
+    return
+  }
+  showBalanceModal.value = false
   formError.value = ''
 }
 
@@ -168,6 +200,37 @@ async function submitInitialBalance() {
     openFeedback('初始值已保存', 'success')
   } catch (error) {
     formError.value = error instanceof Error ? error.message : '初始值保存失败'
+  } finally {
+    isSaving.value = false
+  }
+}
+
+async function submitBalance() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    formError.value = '请先登录后保存账户总额'
+    return
+  }
+
+  const amount = Number(balanceForm.amount)
+  if (!Number.isFinite(amount) || amount < 0) {
+    formError.value = '请输入正确的账户总额'
+    return
+  }
+
+  isSaving.value = true
+  formError.value = ''
+  try {
+    pageData.value = await saveSalaryAccountBalance(routeAccountType.value, {
+      userId: currentUser.id,
+      amount,
+      year: Number(selectedYear.value),
+      note: balanceForm.note.trim(),
+    })
+    showBalanceModal.value = false
+    openFeedback('账户总额已更新', 'success')
+  } catch (error) {
+    formError.value = error instanceof Error ? error.message : '账户总额保存失败'
   } finally {
     isSaving.value = false
   }
@@ -260,7 +323,19 @@ function formatInterestSettlementDate(value?: string | null) {
 <template>
   <section class="salary-page" :aria-label="pageTitle">
     <PageHeader :title="pageTitle" back-to="/finance/salary" :prefer-back-to="true">
+      <CommonHeaderActionButton
+        v-if="isCompactSummaryPage"
+        label="修改账户总额"
+        :disabled="isLoading || !pageData"
+        @click="openBalanceModal"
+      >
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z" stroke="currentColor" stroke-width="1.8" />
+          <path d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </CommonHeaderActionButton>
       <CommonSelect
+        v-if="!isCompactSummaryPage"
         class="salary-year-select"
         label=""
         :model-value="selectedYear"
@@ -278,13 +353,21 @@ function formatInterestSettlementDate(value?: string | null) {
     <template v-else-if="pageData">
       <section class="salary-summary-card">
         <div class="salary-summary-head">
-          <p class="salary-summary-eyebrow">{{ pageData.title }}</p>
+          <p v-if="!isCompactSummaryPage" class="salary-summary-eyebrow">{{ pageData.title }}</p>
           <div class="salary-summary-main">
             <div class="salary-summary-main-top">
               <strong>{{ formatSalaryCurrency(pageData.currentBalance) }}</strong>
-              <span class="salary-pill">{{ pageData.year }} 年</span>
+              <CommonSelect
+                v-if="isCompactSummaryPage"
+                class="salary-year-select salary-summary-year-select"
+                label=""
+                :model-value="selectedYear"
+                :options="yearOptions"
+                @update:model-value="changeYear"
+              />
+              <span v-if="!isCompactSummaryPage" class="salary-pill">{{ pageData.year }} 年</span>
             </div>
-            <div class="salary-summary-sub">
+            <div v-if="!isCompactSummaryPage" class="salary-summary-sub">
               <span>{{ pageData.subtitle }}</span>
               <span class="highlight">{{ pageData.badgeText }}</span>
             </div>
@@ -292,7 +375,7 @@ function formatInterestSettlementDate(value?: string | null) {
         </div>
 
         <div class="salary-metric-grid">
-          <article v-for="metric in pageData.metrics" :key="metric.label" class="salary-metric-card">
+          <article v-for="metric in visibleMetrics" :key="metric.label" class="salary-metric-card">
             <span>{{ metric.label }}</span>
             <strong>{{ formatSalaryCurrency(metric.value) }}</strong>
           </article>
@@ -316,7 +399,7 @@ function formatInterestSettlementDate(value?: string | null) {
         </div>
       </section>
 
-      <section class="salary-card">
+      <section v-if="!isCompactSummaryPage" class="salary-card">
         <div class="salary-card-head">
           <strong>账户维护</strong>
         </div>
@@ -405,6 +488,21 @@ function formatInterestSettlementDate(value?: string | null) {
         </div>
       </section>
     </template>
+
+    <CommonModal v-model="showBalanceModal" title="修改账户总额" :close-on-overlay="!isSaving">
+      <div class="salary-form-grid">
+        <p class="salary-modal-note">保存后会按当前总额与目标总额的差额生成一条调账记录。</p>
+        <CommonInput v-model="balanceForm.amount" label="账户总额" input-type="number" input-mode="decimal" />
+        <CommonInput v-model="balanceForm.note" label="备注说明" placeholder="例如：手动校准账户总额" />
+        <p v-if="formError" class="salary-error-text">{{ formError }}</p>
+      </div>
+      <template #footer>
+        <div class="salary-modal-footer salary-balance-modal-footer">
+          <CommonButton variant="secondary" :disabled="isSaving" @click="closeBalanceModal">取消</CommonButton>
+          <CommonButton :disabled="isSaving" @click="submitBalance">{{ isSaving ? '保存中...' : '确认修改' }}</CommonButton>
+        </div>
+      </template>
+    </CommonModal>
 
     <CommonModal v-model="showInitialModal" title="设置初始值" :close-on-overlay="!isSaving">
       <div class="salary-form-grid">

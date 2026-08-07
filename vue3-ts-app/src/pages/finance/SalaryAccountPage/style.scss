@@ -23,6 +23,24 @@
   line-height: 1;
 }
 
+.salary-summary-year-select {
+  flex: 0 0 auto;
+}
+
+.salary-metric-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.salary-balance-modal-footer {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .salary-danger-action {
   color: var(--color-danger);
+}
+
+@media (max-width: 420px) {
+  .salary-balance-modal-footer {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

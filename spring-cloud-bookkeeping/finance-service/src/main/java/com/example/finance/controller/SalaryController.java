@@ -1,6 +1,7 @@
 package com.example.finance.controller;
 
 import com.example.common.result.Result;
+import com.example.finance.dto.SalaryAccountBalanceRequest;
 import com.example.finance.dto.SalaryAccountPageResponse;
 import com.example.finance.dto.SalaryAccountRecordRequest;
 import com.example.finance.dto.SalaryInitialBalanceRequest;
@@ -112,6 +113,15 @@ public class SalaryController {
         @Valid @RequestBody SalaryInitialBalanceRequest request
     ) {
         return Result.ok(salaryService.saveInitialBalance(accountType, request));
+    }
+
+    @PutMapping("/accounts/{accountType}/balance")
+    @Operation(summary = "设置工资账户总额")
+    public Result<SalaryAccountPageResponse> saveAccountBalance(
+        @PathVariable("accountType") String accountType,
+        @Valid @RequestBody SalaryAccountBalanceRequest request
+    ) {
+        return Result.ok(salaryService.saveAccountBalance(accountType, request));
     }
 
     @PostMapping("/accounts/{accountType}/records")

@@ -1,6 +1,7 @@
 package com.example.finance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.finance.dto.SalaryAccountBalanceRequest;
 import com.example.finance.dto.SalaryAccountPageResponse;
 import com.example.finance.dto.SalaryAccountRecordRequest;
 import com.example.finance.dto.SalaryInitialBalanceRequest;
@@ -276,6 +277,40 @@ public class SalaryService {
     }
 
     @Transactional
+    public SalaryAccountPageResponse saveAccountBalance(String accountType, SalaryAccountBalanceRequest request) {
+        String normalizedAccountType = normalizeAccountType(accountType);
+        SalaryProfileEntity profile = ensureProfile(request.getUserId());
+        LocalDate recordMonth = LocalDate.now(SHANGHAI_ZONE).withDayOfMonth(1);
+        int responseYear = request.getYear() == null ? recordMonth.getYear() : request.getYear();
+
+        ensureYearData(request.getUserId(), profile, recordMonth.getYear());
+        if (responseYear != recordMonth.getYear()) {
+            ensureYearData(request.getUserId(), profile, responseYear);
+        }
+        recalculateBalances(request.getUserId(), normalizedAccountType);
+
+        BigDecimal targetBalance = scale(request.getAmount());
+        BigDecimal currentBalance = resolveCurrentBalance(request.getUserId(), normalizedAccountType);
+        BigDecimal adjustmentAmount = targetBalance.subtract(currentBalance).setScale(2, RoundingMode.HALF_UP);
+        if (adjustmentAmount.compareTo(BigDecimal.ZERO) != 0) {
+            SalaryAccountRecordEntity entity = new SalaryAccountRecordEntity();
+            entity.setUserId(request.getUserId());
+            entity.setAccountType(normalizedAccountType);
+            entity.setRecordType(RECORD_MANUAL);
+            entity.setRecordMonth(recordMonth);
+            entity.setAmount(adjustmentAmount);
+            entity.setPersonalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            entity.setCompanyAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            entity.setSyncToCurrent(true);
+            entity.setNote(StringUtils.hasText(request.getNote()) ? request.getNote().trim() : "手动修改账户总额");
+            salaryAccountRecordMapper.insert(entity);
+            recalculateBalances(request.getUserId(), normalizedAccountType);
+        }
+
+        return buildAccountPage(request.getUserId(), normalizedAccountType, responseYear, profile);
+    }
+
+    @Transactional
     public SalaryAccountPageResponse createAccountRecord(String accountType, SalaryAccountRecordRequest request) {
         String normalizedAccountType = normalizeAccountType(accountType);
         SalaryProfileEntity profile = ensureProfile(request.getUserId());
@@ -442,7 +477,6 @@ public class SalaryService {
         response.setEstimatedAnnualGrossIncome(estimatedAnnualGrossIncome);
         response.setMetrics(List.of(
             salaryMonthMetric("默认月薪", defaultMonthlyGrossSalary),
-            salaryMonthMetric("已补录税前", recordedGrossIncome),
             salaryMonthMetric("全年预计", estimatedAnnualGrossIncome)
         ));
         response.setRecords(records.stream()
@@ -513,8 +547,7 @@ public class SalaryService {
         response.setYearlyIncrease(scale(yearlyIncrease));
         response.setMetrics(List.of(
             metricItem("个人缴存", displayedMonthlyPersonal),
-            metricItem("单位缴存", displayedMonthlyCompany),
-            metricItem("初始值", initialBalance)
+            metricItem("单位缴存", displayedMonthlyCompany)
         ));
         response.setDetails(buildAccountDetails(accountType, computation, currentBalance, initialBalance));
         response.setRecords(buildAccountRecords(yearRecords));
@@ -903,6 +936,14 @@ public class SalaryService {
                 salaryAccountRecordMapper.updateById(record);
             }
         }
+    }
+
+    private BigDecimal resolveCurrentBalance(Long userId, String accountType) {
+        List<SalaryAccountRecordEntity> records = loadRecords(userId, accountType);
+        if (records.isEmpty()) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return scale(records.get(records.size() - 1).getBalanceAfter());
     }
 
     private List<SalaryAccountRecordEntity> loadRecords(Long userId, String accountType) {

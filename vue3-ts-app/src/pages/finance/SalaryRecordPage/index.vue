@@ -38,6 +38,9 @@ const recordForm = reactive({
 
 const yearOptions = createRecentYearOptions(5)
 const canDeleteRecord = computed(() => Boolean(editingRecord.value))
+const visibleMetrics = computed(() =>
+  pageData.value?.metrics.filter((metric) => metric.label !== '已补录税前') ?? []
+)
 
 onMounted(() => {
   void loadPage()
@@ -175,13 +178,12 @@ function openFeedback(message: string, type: 'success' | 'error') {
           <div class="salary-summary-main">
             <div class="salary-summary-main-top">
               <strong>{{ formatSalaryCurrency(pageData.recordedGrossIncome) }}</strong>
-              <span class="salary-pill">已补录 {{ pageData.recordedMonths }} 个月</span>
             </div>
           </div>
         </div>
 
         <div class="salary-metric-grid">
-          <article v-for="metric in pageData.metrics" :key="metric.label" class="salary-metric-card">
+          <article v-for="metric in visibleMetrics" :key="metric.label" class="salary-metric-card">
             <span>{{ metric.label }}</span>
             <strong>{{ formatSalaryCurrency(metric.value) }}</strong>
           </article>
@@ -211,7 +213,6 @@ function openFeedback(message: string, type: 'success' | 'error') {
       <section class="salary-card">
         <div class="salary-card-head">
           <strong>工资记录</strong>
-          <span class="salary-pill">按月份维护</span>
         </div>
         <div class="salary-record-list">
           <article
