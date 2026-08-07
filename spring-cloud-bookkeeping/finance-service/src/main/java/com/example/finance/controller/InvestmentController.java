@@ -38,6 +38,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Validated
@@ -114,13 +115,13 @@ public class InvestmentController {
         @RequestParam(name = "accountId", required = false) Long accountId
     ) {
         investmentService.runInvestmentSyncCycleAsync("manual-api", userId, accountId);
-        return Result.ok(Map.of(
-            "status", "accepted",
-            "message", "投资行情同步任务已提交，请稍后刷新页面",
-            "userId", userId,
-            "accountId", accountId,
-            "submittedAt", java.time.LocalDateTime.now()
-        ));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "accepted");
+        response.put("message", "投资行情同步任务已提交，请稍后刷新页面");
+        response.put("userId", userId);
+        response.put("accountId", accountId);
+        response.put("submittedAt", java.time.LocalDateTime.now());
+        return Result.ok(response);
     }
 
     @GetMapping("/positions")

@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AmountText from '@/components/common/AmountText/index.vue'
+import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
+import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import {
   getFundProfitPage,
+  runInvestmentQuoteSyncTask,
   type FundProfitCalendarCell,
   type FundProfitDetail,
   type FundProfitPage,
@@ -45,9 +48,16 @@ const pageData = ref<FundProfitPage | null>(null)
 const isLoading = ref(false)
 const isDetailLoading = ref(false)
 const isCalendarLoading = ref(false)
+const isRefreshingPositions = ref(false)
+const showFeedbackModal = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
 const pageError = ref('')
+const currentTime = ref(new Date())
+let refreshVisibilityTimer: number | null = null
 
 const isDayView = computed(() => selectedView.value === 'day')
+const shouldShowPositionRefreshButton = computed(() => isAfterQuoteRefreshTime(currentTime.value))
 
 const selectedAccountLabel = computed(() =>
   pageData.value?.accounts.find((account) => String(account.accountId) === selectedAccountId.value)?.accountName ?? '全部账户',
@@ -294,6 +304,16 @@ const viewModel = computed({
 
 onMounted(() => {
   void loadPage()
+  currentTime.value = new Date()
+  refreshVisibilityTimer = window.setInterval(() => {
+    currentTime.value = new Date()
+  }, 30 * 1000)
+})
+
+onBeforeUnmount(() => {
+  if (refreshVisibilityTimer !== null) {
+    window.clearInterval(refreshVisibilityTimer)
+  }
 })
 
 async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean }) {
@@ -343,6 +363,34 @@ async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean
     } else {
       isLoading.value = false
     }
+  }
+}
+
+async function refreshPositionData() {
+  if (!shouldShowPositionRefreshButton.value || isRefreshingPositions.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    showFeedback('请先登录后刷新持仓数据', 'error')
+    return
+  }
+
+  isRefreshingPositions.value = true
+  try {
+    await runInvestmentQuoteSyncTask({
+      userId: currentUser.id,
+      accountId: selectedAccountId.value === 'all' ? undefined : Number(selectedAccountId.value),
+    })
+    showFeedback('已提交刷新任务，正在更新基金收益', 'success')
+    await wait(2000)
+    await loadPage()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '基金持仓刷新失败'
+    showFeedback(message, 'error')
+  } finally {
+    isRefreshingPositions.value = false
   }
 }
 
@@ -443,6 +491,18 @@ function sortSummaryShortcuts(items: FundProfitPageSummaryMetric[]) {
     const leftOrder = summaryShortcutOrder[left.key] ?? 99
     const rightOrder = summaryShortcutOrder[right.key] ?? 99
     return leftOrder - rightOrder
+  })
+}
+
+function isAfterQuoteRefreshTime(date: Date) {
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  return hours > 21 || (hours === 21 && minutes >= 30)
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms)
   })
 }
 
@@ -605,11 +665,30 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
 function getDetailAccumulatedProfit(item: FundProfitDetail) {
   return item.holdingAmount - item.costAmount
 }
+
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  showFeedbackModal.value = true
+}
 </script>
 
 <template>
   <section class="fund-profit-page" aria-label="基金收益">
-    <PageHeader title="基金收益" back-to="/finance/more-features" back-label="返回更多功能" />
+    <CommonFeedback
+      v-model="showFeedbackModal"
+      :message="feedbackMessage"
+      :type="feedbackType"
+    />
+
+    <PageHeader title="基金收益" back-to="/finance/more-features" back-label="返回更多功能">
+      <CommonHeaderRefreshButton
+        v-if="shouldShowPositionRefreshButton"
+        label="刷新持仓数据"
+        :loading="isRefreshingPositions"
+        @click="refreshPositionData"
+      />
+    </PageHeader>
 
     <p v-if="pageError" class="fund-profit-message fund-profit-message-error">
       {{ pageError }}

@@ -33,11 +33,21 @@ public class RenewalSubscriptionTask {
             LocalDate today = LocalDate.now(SHANGHAI_ZONE_ID);
             var subscriptionIds = renewalSubscriptionService.listDueSubscriptionIds(today);
             log.info("续费自动扣费任务开始：trigger=scheduled-08:00, dueCount={}", subscriptionIds.size());
+            int successCount = 0;
+            int failedCount = 0;
             for (Long subscriptionId : subscriptionIds) {
-                renewalSubscriptionService.processDueSubscription(subscriptionId);
+                try {
+                    renewalSubscriptionService.processDueSubscription(subscriptionId);
+                    successCount++;
+                } catch (Exception exception) {
+                    // 单个订阅失败已整体回滚，不影响其余订阅当天扣费
+                    failedCount++;
+                    log.error("续费自动扣费失败：subscriptionId={}, reason={}", subscriptionId, exception.getMessage(), exception);
+                }
             }
-            log.info("续费自动扣费任务完成：trigger=scheduled-08:00, processedCount={}", subscriptionIds.size());
-            return "processedCount=" + subscriptionIds.size();
+            log.info("续费自动扣费任务完成：trigger=scheduled-08:00, dueCount={}, successCount={}, failedCount={}",
+                subscriptionIds.size(), successCount, failedCount);
+            return "dueCount=" + subscriptionIds.size() + ", successCount=" + successCount + ", failedCount=" + failedCount;
         });
     }
 }

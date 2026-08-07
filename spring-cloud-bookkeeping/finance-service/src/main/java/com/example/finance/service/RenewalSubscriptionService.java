@@ -220,11 +220,15 @@ public class RenewalSubscriptionService {
             return;
         }
 
+        boolean hasWritten = false;
         try {
+            // 校验阶段：只做读取与校验，不产生任何写入，保证失败时无需回滚
             AccountEntity fundingAccount = requireCashAccount(entity.getUserId(), entity.getFundingAccountId());
             CategoryEntity category = requireRenewalCategory();
             BigDecimal amount = normalizeAmount(entity.getAmount());
+            BigDecimal nextBalance = resolveNextFundingAccountBalance(fundingAccount, amount);
 
+            // 写入阶段：此后不再抛出 IllegalArgumentException，避免流水与余额不一致
             TransactionEntity transaction = new TransactionEntity();
             transaction.setTransactionNo(generateTransactionNo());
             transaction.setUserId(entity.getUserId());
@@ -237,9 +241,10 @@ public class RenewalSubscriptionService {
             transaction.setRemark(entity.getRemark());
             transaction.setOccurredAt(entity.getNextBillingDate().atTime(8, 0));
             transaction.setStatus(TRANSACTION_STATUS);
+            hasWritten = true;
             transactionMapper.insert(transaction);
 
-            updateFundingAccountBalance(fundingAccount, amount);
+            applyFundingAccountBalance(fundingAccount, nextBalance);
 
             entity.setLastChargedAt(LocalDateTime.now(SHANGHAI_ZONE_ID));
             entity.setLastTransactionId(transaction.getId());
@@ -247,6 +252,10 @@ public class RenewalSubscriptionService {
             entity.setLastChargeMessage("自动扣费成功");
             entity.setNextBillingDate(resolveNextCycleBillingDate(entity.getNextBillingDate(), entity.getBillingDay(), entity.getBillingCycle()));
         } catch (IllegalArgumentException exception) {
+            if (hasWritten) {
+                // 已经写入流水后才失败，只能整体回滚，否则会留下未真正扣款的流水
+                throw exception;
+            }
             entity.setLastChargeStatus(CHARGE_STATUS_FAILED);
             entity.setLastChargeMessage(trimMessage(exception.getMessage()));
         }
@@ -358,13 +367,17 @@ public class RenewalSubscriptionService {
         return category;
     }
 
-    private void updateFundingAccountBalance(AccountEntity fundingAccount, BigDecimal amount) {
+    private BigDecimal resolveNextFundingAccountBalance(AccountEntity fundingAccount, BigDecimal amount) {
         BigDecimal currentBalance = fundingAccount.getCurrentBalance() == null ? BigDecimal.ZERO : fundingAccount.getCurrentBalance();
         BigDecimal nextBalance = currentBalance.subtract(amount);
         if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("扣费账户余额不足");
         }
-        fundingAccount.setCurrentBalance(nextBalance.setScale(2, RoundingMode.HALF_UP));
+        return nextBalance.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private void applyFundingAccountBalance(AccountEntity fundingAccount, BigDecimal nextBalance) {
+        fundingAccount.setCurrentBalance(nextBalance);
         accountMapper.updateById(fundingAccount);
     }
 
