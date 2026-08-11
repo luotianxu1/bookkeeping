@@ -13,7 +13,7 @@ spring:
 app:
   jwt:
     # 需要与 auth-service 保持一致，用于校验登录令牌
-    secret: "change-this-to-a-long-secret-key-at-least-32-bytes"
+    secret: "${JWT_SECRET:change-this-to-a-long-secret-key-at-least-32-bytes}"
 
 knife4j:
   enable: true
