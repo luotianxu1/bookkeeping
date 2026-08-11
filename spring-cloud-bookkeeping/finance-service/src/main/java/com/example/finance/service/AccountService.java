@@ -7,7 +7,6 @@ import com.example.finance.dto.AccountSortOrderRequest;
 import com.example.finance.dto.FinanceOverviewResponse;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
-import com.example.finance.entity.AssetDailySnapshotEntity;
 import com.example.finance.entity.DebtRecordEntity;
 import com.example.finance.entity.HumanRelationRecordEntity;
 import com.example.finance.entity.InvestmentAutoInvestPlanEntity;
@@ -19,7 +18,6 @@ import com.example.finance.entity.RenewalSubscriptionEntity;
 import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
-import com.example.finance.mapper.AssetDailySnapshotMapper;
 import com.example.finance.mapper.DebtRecordMapper;
 import com.example.finance.mapper.HumanRelationRecordMapper;
 import com.example.finance.mapper.InvestmentAutoInvestPlanMapper;
@@ -75,7 +73,6 @@ public class AccountService {
 
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
-    private final AssetDailySnapshotMapper assetDailySnapshotMapper;
     private final DebtRecordMapper debtRecordMapper;
     private final LiabilityRecordMapper liabilityRecordMapper;
     private final HumanRelationRecordMapper humanRelationRecordMapper;
@@ -91,7 +88,6 @@ public class AccountService {
     public AccountService(
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
-        AssetDailySnapshotMapper assetDailySnapshotMapper,
         DebtRecordMapper debtRecordMapper,
         LiabilityRecordMapper liabilityRecordMapper,
         HumanRelationRecordMapper humanRelationRecordMapper,
@@ -106,7 +102,6 @@ public class AccountService {
     ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
-        this.assetDailySnapshotMapper = assetDailySnapshotMapper;
         this.debtRecordMapper = debtRecordMapper;
         this.liabilityRecordMapper = liabilityRecordMapper;
         this.humanRelationRecordMapper = humanRelationRecordMapper;
@@ -202,75 +197,6 @@ public class AccountService {
         return currentBalance.setScale(2, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal resolveStoredSignedBalance(AccountEntity account, AccountTypeEntity accountType) {
-        BigDecimal currentBalance = account == null || account.getCurrentBalance() == null
-            ? BigDecimal.ZERO
-            : account.getCurrentBalance();
-        if (accountType != null && "credit".equals(accountType.getBalanceDirection())) {
-            return currentBalance.negate().setScale(2, RoundingMode.HALF_UP);
-        }
-        return currentBalance.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private boolean shouldAdjustSnapshotBaselineForManualBalanceUpdate(
-        AccountEntity entity,
-        AccountRequest request,
-        AccountTypeEntity originalAccountType,
-        AccountTypeEntity accountType
-    ) {
-        if (entity == null || request == null || originalAccountType == null || accountType == null) {
-            return false;
-        }
-        if (!entity.getAccountTypeId().equals(request.getAccountTypeId())) {
-            return false;
-        }
-        if (!Boolean.TRUE.equals(entity.getIncludeInNetWorth()) || !Boolean.TRUE.equals(request.getIncludeInNetWorth())) {
-            return false;
-        }
-        if (request.getCurrentBalance() == null || entity.getCurrentBalance() == null) {
-            return false;
-        }
-        if (request.getCurrentBalance().setScale(2, RoundingMode.HALF_UP)
-            .compareTo(entity.getCurrentBalance().setScale(2, RoundingMode.HALF_UP)) == 0) {
-            return false;
-        }
-        return isStoredBalanceAccountType(originalAccountType) && isStoredBalanceAccountType(accountType);
-    }
-
-    private boolean isStoredBalanceAccountType(AccountTypeEntity accountType) {
-        if (accountType == null || !StringUtils.hasText(accountType.getCode())) {
-            return false;
-        }
-        return !POSITION_BALANCE_ACCOUNT_TYPES.contains(accountType.getCode())
-            && !CONTACT_LINKED_ACCOUNT_TYPE_CODES.contains(accountType.getCode())
-            && !LIABILITY_ACCOUNT_TYPE_CODE.equals(accountType.getCode());
-    }
-
-    private void adjustLatestSnapshotBaseline(Long userId, Long accountId, BigDecimal signedDelta) {
-        if (userId == null || accountId == null || signedDelta == null || signedDelta.compareTo(BigDecimal.ZERO) == 0) {
-            return;
-        }
-        LocalDate snapshotDate = LocalDate.now().minusDays(1);
-        adjustSnapshotRow(userId, accountId, snapshotDate, signedDelta);
-        adjustSnapshotRow(userId, 0L, snapshotDate, signedDelta);
-    }
-
-    private void adjustSnapshotRow(Long userId, Long accountId, LocalDate snapshotDate, BigDecimal signedDelta) {
-        AssetDailySnapshotEntity snapshot = assetDailySnapshotMapper.selectOne(new LambdaQueryWrapper<AssetDailySnapshotEntity>()
-            .eq(AssetDailySnapshotEntity::getUserId, userId)
-            .eq(AssetDailySnapshotEntity::getAccountId, accountId)
-            .eq(AssetDailySnapshotEntity::getSnapshotDate, snapshotDate)
-            .last("LIMIT 1"));
-        if (snapshot == null) {
-            return;
-        }
-        BigDecimal totalAssets = snapshot.getTotalAssets() == null
-            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-            : snapshot.getTotalAssets();
-        snapshot.setTotalAssets(totalAssets.add(signedDelta).setScale(2, RoundingMode.HALF_UP));
-        assetDailySnapshotMapper.updateById(snapshot);
-    }
-
     BigDecimal resolveSignedNetWorthBalance(AccountResponse account) {
         if (account == null) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -300,23 +226,11 @@ public class AccountService {
         }
 
         AccountTypeEntity accountType = requireAccountType(request.getAccountTypeId());
-        AccountTypeEntity originalAccountType = loadAccountType(entity.getAccountTypeId());
-        BigDecimal originalSignedBalance = resolveStoredSignedBalance(entity, originalAccountType);
-        boolean shouldAdjustSnapshotBaseline = shouldAdjustSnapshotBaselineForManualBalanceUpdate(
-            entity,
-            request,
-            originalAccountType,
-            accountType
-        );
         validateContactRequired(accountType, request.getContactId());
         validateDebtAccountContactUnique(accountType, request.getUserId(), request.getContactId(), id);
         validateNameUnique(request.getUserId(), request.getAccountTypeId(), request.getName(), id);
         fillEntity(entity, request, accountType);
         accountMapper.updateById(entity);
-        if (shouldAdjustSnapshotBaseline) {
-            BigDecimal signedDelta = resolveStoredSignedBalance(entity, accountType).subtract(originalSignedBalance);
-            adjustLatestSnapshotBaseline(entity.getUserId(), entity.getId(), signedDelta);
-        }
 
         return Optional.of(toResponse(accountMapper.selectById(id), accountType));
     }

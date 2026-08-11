@@ -7,19 +7,14 @@ import com.example.finance.dto.AssetAccountSnapshotResponse;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.AssetDailySnapshotEntity;
-import com.example.finance.entity.InvestmentTransactionEntity;
-import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
 import com.example.finance.mapper.AssetDailySnapshotMapper;
-import com.example.finance.mapper.InvestmentTransactionMapper;
-import com.example.finance.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Collections;
@@ -34,34 +29,21 @@ import java.util.stream.Collectors;
 public class AssetSnapshotService {
 
     private static final String ACTIVE_STATUS = "active";
-    private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
-    private static final String NORMAL_STATUS = "normal";
-    private static final String TYPE_INCOME = "income";
-    private static final String TYPE_EXPENSE = "expense";
-    private static final String INVESTMENT_TRADE_TYPE_BUY = "buy";
-    private static final String INVESTMENT_TRADE_TYPE_SELL = "sell";
-    private static final String SETTLEMENT_STATUS_CONFIRMED = "confirmed";
 
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
     private final AssetDailySnapshotMapper assetDailySnapshotMapper;
-    private final TransactionMapper transactionMapper;
-    private final InvestmentTransactionMapper investmentTransactionMapper;
     private final AccountService accountService;
 
     public AssetSnapshotService(
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         AssetDailySnapshotMapper assetDailySnapshotMapper,
-        TransactionMapper transactionMapper,
-        InvestmentTransactionMapper investmentTransactionMapper,
         AccountService accountService
     ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.assetDailySnapshotMapper = assetDailySnapshotMapper;
-        this.transactionMapper = transactionMapper;
-        this.investmentTransactionMapper = investmentTransactionMapper;
         this.accountService = accountService;
     }
 
@@ -179,7 +161,6 @@ public class AssetSnapshotService {
             ? Collections.emptyMap()
             : accountTypeMapper.selectByIds(accountTypeIds).stream()
                 .collect(Collectors.toMap(AccountTypeEntity::getId, item -> item));
-        Map<Long, BigDecimal> expectedTodayBalanceChanges = loadExpectedTodayCashBalanceChanges(userId, accountById, accountTypes);
 
         List<AssetAccountSnapshotItemResponse> accounts = accountIds.stream()
             .sorted(Comparator
@@ -209,10 +190,6 @@ public class AssetSnapshotService {
                 BigDecimal rawAssets = snapshotAssets;
                 BigDecimal currentAssets = currentAssetsByAccountId.getOrDefault(accountId, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
                 BigDecimal changeAmount = currentAssets.subtract(snapshotAssets).setScale(2, RoundingMode.HALF_UP);
-                if (shouldNormalizeManualCashBalanceAdjustment(currentAccount, snapshot, accountType)) {
-                    BigDecimal expectedChange = expectedTodayBalanceChanges.getOrDefault(accountId, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-                    changeAmount = expectedChange;
-                }
                 snapshotItem.setTotalAssets(snapshotAssets);
                 snapshotItem.setRawAssets(rawAssets);
                 snapshotItem.setCurrentAssets(currentAssets);
@@ -228,15 +205,10 @@ public class AssetSnapshotService {
                     .toList()
             )
             : defaultZero(totalSnapshot.getTotalAssets());
-        BigDecimal changeAmount = accountService.calculateTotalAssetsFromSignedBalances(
-            accounts.stream()
-                .map(AssetAccountSnapshotItemResponse::getChangeAmount)
-                .toList()
-        );
 
         response.setTotalAssets(rawSnapshotTotalAssets);
         response.setRawTotalAssets(rawSnapshotTotalAssets);
-        response.setChangeAmount(changeAmount);
+        response.setChangeAmount(currentTotalAssets.subtract(rawSnapshotTotalAssets).setScale(2, RoundingMode.HALF_UP));
         response.setAccounts(accounts);
         return response;
     }
@@ -292,86 +264,5 @@ public class AssetSnapshotService {
 
     private BigDecimal defaultZero(BigDecimal value) {
         return value == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : value.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private boolean shouldNormalizeManualCashBalanceAdjustment(
-        AccountResponse currentAccount,
-        AssetDailySnapshotEntity snapshot,
-        AccountTypeEntity accountType
-    ) {
-        return currentAccount != null
-            && snapshot != null
-            && accountType != null
-            && CASH_ACCOUNT_TYPE_CODE.equals(accountType.getCode());
-    }
-
-    private Map<Long, BigDecimal> loadExpectedTodayCashBalanceChanges(
-        Long userId,
-        Map<Long, AccountEntity> accountById,
-        Map<Long, AccountTypeEntity> accountTypes
-    ) {
-        if (userId == null || accountById.isEmpty() || accountTypes.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        List<Long> cashAccountIds = accountById.values().stream()
-            .filter(account -> account != null && accountTypes.containsKey(account.getAccountTypeId()))
-            .filter(account -> CASH_ACCOUNT_TYPE_CODE.equals(accountTypes.get(account.getAccountTypeId()).getCode()))
-            .map(AccountEntity::getId)
-            .toList();
-        if (cashAccountIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        LocalDate today = LocalDate.now();
-        LocalDateTime startAt = today.atStartOfDay();
-        LocalDateTime endAt = today.plusDays(1).atStartOfDay();
-        Map<Long, BigDecimal> changes = new LinkedHashMap<>();
-
-        transactionMapper.selectList(new LambdaQueryWrapper<TransactionEntity>()
-                .eq(TransactionEntity::getUserId, userId)
-                .in(TransactionEntity::getAccountId, cashAccountIds)
-                .eq(TransactionEntity::getStatus, NORMAL_STATUS)
-                .ge(TransactionEntity::getOccurredAt, startAt)
-                .lt(TransactionEntity::getOccurredAt, endAt))
-            .forEach(transaction -> {
-                BigDecimal amount = defaultZero(transaction.getAmount());
-                BigDecimal delta = TYPE_INCOME.equals(transaction.getType()) ? amount : amount.negate();
-                mergeBalanceChange(changes, transaction.getAccountId(), delta);
-            });
-
-        investmentTransactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
-                .eq(InvestmentTransactionEntity::getUserId, userId)
-                .in(InvestmentTransactionEntity::getFundingAccountId, cashAccountIds)
-                .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
-                .ge(InvestmentTransactionEntity::getTradeAt, startAt)
-                .lt(InvestmentTransactionEntity::getTradeAt, endAt))
-            .forEach(transaction -> {
-                BigDecimal grossAmount = defaultZero(transaction.getAmount())
-                    .add(defaultZero(transaction.getFeeAmount()))
-                    .add(defaultZero(transaction.getTaxAmount()))
-                    .setScale(2, RoundingMode.HALF_UP);
-                if (INVESTMENT_TRADE_TYPE_BUY.equals(transaction.getTradeType())) {
-                    mergeBalanceChange(changes, transaction.getFundingAccountId(), grossAmount.negate());
-                    return;
-                }
-                if (INVESTMENT_TRADE_TYPE_SELL.equals(transaction.getTradeType())
-                    && SETTLEMENT_STATUS_CONFIRMED.equals(transaction.getSettlementStatus())) {
-                    BigDecimal netAmount = defaultZero(transaction.getAmount())
-                        .subtract(defaultZero(transaction.getFeeAmount()))
-                        .subtract(defaultZero(transaction.getTaxAmount()))
-                        .setScale(2, RoundingMode.HALF_UP);
-                    mergeBalanceChange(changes, transaction.getFundingAccountId(), netAmount);
-                }
-            });
-
-        changes.replaceAll((key, value) -> value.setScale(2, RoundingMode.HALF_UP));
-        return changes;
-    }
-
-    private void mergeBalanceChange(Map<Long, BigDecimal> changes, Long accountId, BigDecimal delta) {
-        if (accountId == null || delta == null) {
-            return;
-        }
-        changes.merge(accountId, delta, BigDecimal::add);
     }
 }
