@@ -850,6 +850,7 @@ export interface AssetAccountSnapshotItem {
   accountTypeCode?: string | null
   accountTypeLabel: string
   totalAssets: number
+  rawAssets?: number | null
   currentAssets: number
   changeAmount: number
 }
@@ -858,6 +859,7 @@ export interface AssetAccountSnapshot {
   userId: number
   snapshotDate: string
   totalAssets: number
+  rawTotalAssets?: number | null
   currentTotalAssets: number
   changeAmount: number
   accounts: AssetAccountSnapshotItem[]

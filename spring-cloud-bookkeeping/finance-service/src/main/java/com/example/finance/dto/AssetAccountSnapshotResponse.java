@@ -15,6 +15,8 @@ public class AssetAccountSnapshotResponse {
 
     private BigDecimal totalAssets;
 
+    private BigDecimal rawTotalAssets;
+
     private BigDecimal currentTotalAssets;
 
     private BigDecimal changeAmount;
