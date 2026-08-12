@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
@@ -12,6 +13,7 @@ import {
   deleteInvestmentFixedExpense,
   getInvestmentFixedExpenses,
   getInvestmentDividendIncome,
+  refreshInvestmentDividendIncome,
   getRenewalSubscriptions,
   type InvestmentFixedExpense,
   type InvestmentDividendIncomeItem,
@@ -38,6 +40,7 @@ type ExpenseCoverageItem = FixedExpenseItem & {
 
 const router = useRouter()
 const isLoading = ref(false)
+const isRefreshing = ref(false)
 const pageError = ref('')
 const expenseSaving = ref(false)
 const pageData = ref<InvestmentDividendIncomePage | null>(null)
@@ -116,6 +119,35 @@ async function loadPageData() {
     pageError.value = error instanceof Error ? error.message : '攒股收息加载失败'
   } finally {
     isLoading.value = false
+  }
+}
+
+async function refreshDividendIncomeData() {
+  if (isLoading.value || isRefreshing.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    pageError.value = '请先登录后刷新攒股收息'
+    return
+  }
+
+  currentUserId.value = currentUser.id
+  isRefreshing.value = true
+  pageError.value = ''
+  try {
+    const [dividendIncomeData, renewalSubscriptions] = await Promise.all([
+      refreshInvestmentDividendIncome(currentUser.id),
+      getRenewalSubscriptions({ userId: currentUser.id, status: 'active' }),
+    ])
+    pageData.value = dividendIncomeData
+    investmentExpenseItems.value = normalizeInvestmentExpenseItems(dividendIncomeData.fixedExpenses)
+    renewalExpenseItems.value = normalizeRenewalExpenseItems(renewalSubscriptions, currentUser.id)
+  } catch (error) {
+    pageError.value = error instanceof Error ? error.message : '攒股收息刷新失败'
+  } finally {
+    isRefreshing.value = false
   }
 }
 
@@ -378,7 +410,16 @@ async function removeExpenseItem(id: number) {
 
 <template>
   <section class="dividend-income-page" aria-label="攒股收息">
-    <PageHeader title="攒股收息" back-label="返回更多功能" />
+    <PageHeader title="攒股收息" back-label="返回更多功能">
+      <template #right>
+        <CommonHeaderRefreshButton
+          label="刷新攒股收息"
+          :loading="isRefreshing"
+          :disabled="isLoading"
+          @click="refreshDividendIncomeData"
+        />
+      </template>
+    </PageHeader>
 
     <p v-if="pageError" class="dividend-message dividend-message-error">
       {{ pageError }}

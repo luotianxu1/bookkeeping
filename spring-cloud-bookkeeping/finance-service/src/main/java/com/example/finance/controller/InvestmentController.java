@@ -277,6 +277,14 @@ public class InvestmentController {
         return Result.ok(investmentService.dividendIncome(userId));
     }
 
+    @PostMapping("/dividend-income/refresh")
+    @Operation(summary = "重新判断攒股收息资格并查询页面数据")
+    public Result<InvestmentDividendIncomePageResponse> refreshDividendIncome(
+        @RequestParam(name = "userId") @NotNull Long userId
+    ) {
+        return Result.ok(investmentService.refreshDividendIncome(userId));
+    }
+
     @PostMapping("/dividend-forecast")
     @Operation(summary = "查询收息预测")
     public Result<InvestmentDividendForecastResponse> dividendForecast(

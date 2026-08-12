@@ -202,6 +202,12 @@ public class InvestmentService {
     ) {
     }
 
+    private record DividendHistoryFetchResult(
+        boolean success,
+        List<InvestmentDividendPlanEntity> plans
+    ) {
+    }
+
     private static final Logger log = LoggerFactory.getLogger(InvestmentService.class);
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_UNIT_NAME = "份";
@@ -217,7 +223,6 @@ public class InvestmentService {
     private static final String STOCK_QUOTE_SOURCE = "TENCENT_STOCK_LATEST";
     private static final String FUND_DIVIDEND_PLAN_SOURCE = "EASTMONEY_FUND_FHSP";
     private static final String STOCK_DIVIDEND_HISTORY_SOURCE = "EASTMONEY_STOCK_BONUS";
-    private static final BigDecimal SUSPICIOUS_FUND_ANNUAL_DIVIDEND_PER_UNIT = new BigDecimal("1.000000");
     private static final Pattern FUND_DIVIDEND_BATCH_PATTERN = Pattern.compile(
         "(?:每\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*份[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*元"
     );
@@ -332,7 +337,6 @@ public class InvestmentService {
 
     public InvestmentProductResponse createProduct(InvestmentProductRequest request) {
         InvestmentProductEntity entity = fillProduct(new InvestmentProductEntity(), request);
-        evaluateDividendProfile(entity);
         productMapper.insert(entity);
         return toProductResponse(productMapper.selectById(entity.getId()));
     }
@@ -512,7 +516,6 @@ public class InvestmentService {
         InvestmentProductEntity product = request.getProductId() != null
             ? requireProduct(request.getProductId())
             : createOrLoadProduct(request.getProduct());
-        ensureDividendProfile(product);
 
         if (isFundSubscriptionProduct(product)) {
             return createFundSubscriptionPosition(request, account, fundingAccount, product);
@@ -2026,33 +2029,55 @@ public class InvestmentService {
         return syncedPlans;
     }
 
-    public Map<String, Object> runFundSyncCycle(String trigger) {
-        LocalDateTime startedAt = LocalDateTime.now();
-        int syncedPositions = syncDailyFundProfits();
-        int syncedDividendPlans = syncFundDividendPlans();
-        int settledCount = settlePendingFundTrades();
-        LocalDateTime finishedAt = LocalDateTime.now();
+    public int syncStockDividendProfiles() {
+        List<InvestmentPositionEntity> positions = listActiveStockPositions();
+        if (positions.isEmpty()) {
+            log.info("股票分红画像同步跳过：当前没有股票持仓");
+            return 0;
+        }
 
-        Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("trigger", StringUtils.hasText(trigger) ? trigger : "unknown");
-        summary.put("startedAt", startedAt);
-        summary.put("finishedAt", finishedAt);
-        summary.put("durationMs", Duration.between(startedAt, finishedAt).toMillis());
-        summary.put("syncedPositions", syncedPositions);
-        summary.put("syncedDividendPlans", syncedDividendPlans);
-        summary.put("settledCount", settledCount);
-        return summary;
+        Map<Long, InvestmentProductEntity> products = loadStockProducts(positions);
+        if (products.isEmpty()) {
+            log.info("股票分红画像同步跳过：当前没有可同步的股票产品");
+            return 0;
+        }
+
+        int syncedProducts = 0;
+        for (InvestmentProductEntity product : products.values()) {
+            try {
+                if (!evaluateDividendProfile(product)) {
+                    continue;
+                }
+                productMapper.updateById(product);
+                syncedProducts++;
+            } catch (Exception ex) {
+                log.warn("股票分红画像同步失败，productId={}, symbol={}, reason={}",
+                    product.getId(), product.getSymbol(), ex.getMessage());
+            }
+        }
+        log.info("股票分红画像同步完成：{} 个股票产品已重新评估", syncedProducts);
+        return syncedProducts;
     }
 
-    public Map<String, Object> runInvestmentSyncCycle(String trigger) {
-        return runInvestmentSyncCycle(trigger, null, null);
+    public Map<String, Object> runNightlyInvestmentSyncCycle(String trigger) {
+        return runInvestmentSyncCycle(trigger, null, null, true);
     }
 
     public Map<String, Object> runInvestmentSyncCycle(String trigger, Long userId, Long accountId) {
+        return runInvestmentSyncCycle(trigger, userId, accountId, false);
+    }
+
+    private Map<String, Object> runInvestmentSyncCycle(
+        String trigger,
+        Long userId,
+        Long accountId,
+        boolean evaluateDividendIncomeEligibility
+    ) {
         LocalDateTime startedAt = LocalDateTime.now();
         int syncedFundPositions = syncDailyFundProfits(userId, accountId);
         int syncedStockPositions = syncDailyStockQuotes(userId, accountId);
-        int syncedDividendPlans = (userId == null && accountId == null) ? syncFundDividendPlans() : 0;
+        int syncedDividendPlans = evaluateDividendIncomeEligibility ? syncFundDividendPlans() : 0;
+        int syncedStockDividendProfiles = evaluateDividendIncomeEligibility ? syncStockDividendProfiles() : 0;
         int settledCount = (userId == null && accountId == null) ? settlePendingFundTrades() : 0;
         LocalDateTime finishedAt = LocalDateTime.now();
 
@@ -2067,6 +2092,7 @@ public class InvestmentService {
         summary.put("syncedFundPositions", syncedFundPositions);
         summary.put("syncedStockPositions", syncedStockPositions);
         summary.put("syncedDividendPlans", syncedDividendPlans);
+        summary.put("syncedStockDividendProfiles", syncedStockDividendProfiles);
         summary.put("settledCount", settledCount);
         return summary;
     }
@@ -2526,7 +2552,6 @@ public class InvestmentService {
             .collect(Collectors.toSet());
         Map<Long, InvestmentProductEntity> products = productMapper.selectByIds(productIds).stream()
             .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
-        products.values().forEach(this::ensureDividendProfile);
 
         List<InvestmentPositionEntity> positions = accountFilteredPositions.stream()
             .filter(position -> {
@@ -2540,9 +2565,6 @@ public class InvestmentService {
             return emptyDividendIncomePage(userId);
         }
 
-        Set<Long> filteredProductIds = positions.stream()
-            .map(InvestmentPositionEntity::getProductId)
-            .collect(Collectors.toSet());
         Set<Long> positionIds = positions.stream()
             .map(InvestmentPositionEntity::getId)
             .collect(Collectors.toSet());
@@ -2609,6 +2631,32 @@ public class InvestmentService {
         return response;
     }
 
+    public InvestmentDividendIncomePageResponse refreshDividendIncome(Long userId) {
+        List<InvestmentPositionEntity> sourcePositions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .eq(InvestmentPositionEntity::getUserId, userId)
+            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS));
+        List<InvestmentPositionEntity> positions = filterPositionsByAccountType(sourcePositions, INVESTMENT_ACCOUNT_TYPE_CODE);
+        if (!positions.isEmpty()) {
+            Map<Long, InvestmentProductEntity> products = productMapper.selectByIds(positions.stream()
+                    .map(InvestmentPositionEntity::getProductId)
+                    .collect(Collectors.toSet()))
+                .stream()
+                .filter(this::supportsDividendProfile)
+                .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
+            products.values().forEach(product -> {
+                try {
+                    if (evaluateDividendProfile(product)) {
+                        productMapper.updateById(product);
+                    }
+                } catch (Exception ex) {
+                    log.warn("攒股收息资格刷新失败，productId={}, symbol={}, reason={}",
+                        product.getId(), product.getSymbol(), ex.getMessage());
+                }
+            });
+        }
+        return dividendIncome(userId);
+    }
+
     private InvestmentProductEntity createOrLoadProduct(InvestmentProductRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("投资产品不能为空");
@@ -2619,11 +2667,9 @@ public class InvestmentService {
             .eq(StringUtils.hasText(request.getMarket()), InvestmentProductEntity::getMarket, request.getMarket())
             .last("LIMIT 1"));
         if (exists != null) {
-            ensureDividendProfile(exists);
             return exists;
         }
         InvestmentProductEntity entity = fillProduct(new InvestmentProductEntity(), request);
-        evaluateDividendProfile(entity);
         productMapper.insert(entity);
         return productMapper.selectById(entity.getId());
     }
@@ -3999,7 +4045,11 @@ public class InvestmentService {
     }
 
     private int syncFundDividendPlansForProduct(InvestmentProductEntity product) {
-        List<InvestmentDividendPlanEntity> remotePlans = fetchFundDividendPlans(product);
+        DividendHistoryFetchResult fetchResult = fetchFundDividendPlansResult(product);
+        if (!fetchResult.success()) {
+            throw new IllegalStateException("基金分红历史获取失败");
+        }
+        List<InvestmentDividendPlanEntity> remotePlans = fetchResult.plans();
         int changedCount = 0;
         for (InvestmentDividendPlanEntity remotePlan : remotePlans) {
             InvestmentDividendPlanEntity existing = dividendPlanMapper.selectOne(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
@@ -4020,7 +4070,10 @@ public class InvestmentService {
                 changedCount++;
             }
         }
-        evaluateDividendProfile(product);
+        List<InvestmentDividendPlanEntity> historicalPlans = remotePlans.stream()
+            .filter(plan -> isHistoricalDividendPlan(plan, LocalDate.now()))
+            .toList();
+        applyDividendProfile(product, buildDividendProfile(historicalPlans, FUND_DIVIDEND_PLAN_SOURCE));
         if (product.getId() != null) {
             productMapper.updateById(product);
         }
@@ -4946,8 +4999,12 @@ public class InvestmentService {
     }
 
     private List<InvestmentDividendPlanEntity> fetchFundDividendPlans(InvestmentProductEntity product) {
+        return fetchFundDividendPlansResult(product).plans();
+    }
+
+    private DividendHistoryFetchResult fetchFundDividendPlansResult(InvestmentProductEntity product) {
         if (product == null || !StringUtils.hasText(product.getSymbol())) {
-            return Collections.emptyList();
+            return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
         try {
             HttpRequest request = HttpRequest.newBuilder(URI.create(
@@ -4959,19 +5016,23 @@ public class InvestmentService {
                 .build();
             HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
             if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                return Collections.emptyList();
+                log.warn("基金分红历史获取失败，productId={}, symbol={}, status={}",
+                    product.getId(), product.getSymbol(), httpResponse.statusCode());
+                return new DividendHistoryFetchResult(false, Collections.emptyList());
             }
 
             String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
             return parseFundDividendPlansFromHtml(product, body);
         } catch (Exception ex) {
-            return Collections.emptyList();
+            log.warn("基金分红历史获取失败，productId={}, symbol={}, reason={}",
+                product.getId(), product.getSymbol(), ex.getMessage());
+            return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
     }
 
-    private List<InvestmentDividendPlanEntity> parseFundDividendPlansFromHtml(InvestmentProductEntity product, String body) {
+    private DividendHistoryFetchResult parseFundDividendPlansFromHtml(InvestmentProductEntity product, String body) {
         if (!StringUtils.hasText(body)) {
-            return Collections.emptyList();
+            return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
 
         Pattern tablePattern = Pattern.compile(
@@ -4980,7 +5041,9 @@ public class InvestmentService {
         );
         Matcher tableMatcher = tablePattern.matcher(body);
         if (!tableMatcher.find()) {
-            return Collections.emptyList();
+            log.warn("基金分红历史解析失败，productId={}, symbol={}, reason=未找到分红表格",
+                product.getId(), product.getSymbol());
+            return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
 
         String tableBody = tableMatcher.group(1);
@@ -5015,7 +5078,7 @@ public class InvestmentService {
             plan.setRemark("基金分红计划由每日净值同步任务自动刷新");
             plans.add(plan);
         }
-        return plans;
+        return new DividendHistoryFetchResult(true, plans);
     }
 
     private List<String> extractHtmlTableCells(String rowHtml) {
@@ -6004,52 +6067,28 @@ public class InvestmentService {
         return defaultZero(position == null ? null : position.getMarketValue());
     }
 
-    private void ensureDividendProfile(InvestmentProductEntity product) {
-        if (product == null || !supportsDividendProfile(product)) {
-            return;
-        }
-        if (isDividendProfileFresh(product)) {
-            return;
-        }
-        evaluateDividendProfile(product);
-        if (product.getId() != null) {
-            productMapper.updateById(product);
-        }
-    }
-
-    private boolean isDividendProfileFresh(InvestmentProductEntity product) {
-        if (product.getDividendEvaluatedAt() == null
-            || !product.getDividendEvaluatedAt().toLocalDate().isEqual(LocalDate.now())) {
-            return false;
-        }
-        return !isSuspiciousFundDividendProfile(product);
-    }
-
-    private boolean isSuspiciousFundDividendProfile(InvestmentProductEntity product) {
-        return FUND_PRODUCT_TYPE.equals(product.getProductType())
-            && FUND_DIVIDEND_PLAN_SOURCE.equals(product.getDividendDataSource())
-            && defaultZero(product.getPredictedAnnualDividendPerUnit())
-                .compareTo(SUSPICIOUS_FUND_ANNUAL_DIVIDEND_PER_UNIT) >= 0;
-    }
-
     private boolean supportsDividendProfile(InvestmentProductEntity product) {
         return product != null
             && StringUtils.hasText(product.getSymbol())
             && (FUND_PRODUCT_TYPE.equals(product.getProductType()) || "stock".equals(product.getProductType()));
     }
 
-    private void evaluateDividendProfile(InvestmentProductEntity product) {
+    private boolean evaluateDividendProfile(InvestmentProductEntity product) {
         if (!supportsDividendProfile(product)) {
             applyDividendProfile(product, null);
-            return;
+            return true;
         }
-        List<InvestmentDividendPlanEntity> historicalPlans = FUND_PRODUCT_TYPE.equals(product.getProductType())
-            ? fetchFundHistoricalDividendPlans(product)
-            : fetchStockHistoricalDividendPlans(product);
+        DividendHistoryFetchResult fetchResult = FUND_PRODUCT_TYPE.equals(product.getProductType())
+            ? fetchFundHistoricalDividendPlansResult(product)
+            : fetchStockHistoricalDividendPlansResult(product);
+        if (!fetchResult.success()) {
+            return false;
+        }
         String source = FUND_PRODUCT_TYPE.equals(product.getProductType())
             ? FUND_DIVIDEND_PLAN_SOURCE
             : STOCK_DIVIDEND_HISTORY_SOURCE;
-        applyDividendProfile(product, buildDividendProfile(historicalPlans, source));
+        applyDividendProfile(product, buildDividendProfile(fetchResult.plans(), source));
+        return true;
     }
 
     private void applyDividendProfile(InvestmentProductEntity product, DividendProfile profile) {
@@ -6067,14 +6106,26 @@ public class InvestmentService {
     }
 
     private List<InvestmentDividendPlanEntity> fetchFundHistoricalDividendPlans(InvestmentProductEntity product) {
-        return fetchFundDividendPlans(product).stream()
+        return fetchFundHistoricalDividendPlansResult(product).plans();
+    }
+
+    private DividendHistoryFetchResult fetchFundHistoricalDividendPlansResult(InvestmentProductEntity product) {
+        DividendHistoryFetchResult result = fetchFundDividendPlansResult(product);
+        if (!result.success()) {
+            return result;
+        }
+        return new DividendHistoryFetchResult(true, result.plans().stream()
             .filter(plan -> isHistoricalDividendPlan(plan, LocalDate.now()))
-            .toList();
+            .toList());
     }
 
     private List<InvestmentDividendPlanEntity> fetchStockHistoricalDividendPlans(InvestmentProductEntity product) {
+        return fetchStockHistoricalDividendPlansResult(product).plans();
+    }
+
+    private DividendHistoryFetchResult fetchStockHistoricalDividendPlansResult(InvestmentProductEntity product) {
         if (product == null || !StringUtils.hasText(product.getSymbol())) {
-            return Collections.emptyList();
+            return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
         try {
             String filter = URLEncoder.encode("(SECURITY_CODE=\"" + product.getSymbol() + "\")", StandardCharsets.UTF_8);
@@ -6091,14 +6142,18 @@ public class InvestmentService {
                 .build();
             HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
             if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                return Collections.emptyList();
+                log.warn("股票分红历史获取失败，productId={}, symbol={}, status={}",
+                    product.getId(), product.getSymbol(), httpResponse.statusCode());
+                return new DividendHistoryFetchResult(false, Collections.emptyList());
             }
 
             JsonNode rows = objectMapper.readTree(new String(httpResponse.body(), StandardCharsets.UTF_8))
                 .path("result")
                 .path("data");
             if (!rows.isArray()) {
-                return Collections.emptyList();
+                log.warn("股票分红历史解析失败，productId={}, symbol={}, reason=响应中没有数据数组",
+                    product.getId(), product.getSymbol());
+                return new DividendHistoryFetchResult(false, Collections.emptyList());
             }
 
             List<InvestmentDividendPlanEntity> plans = new ArrayList<>();
@@ -6123,9 +6178,11 @@ public class InvestmentService {
                 plan.setRemark(row.path("IMPL_PLAN_PROFILE").asText(null));
                 plans.add(plan);
             }
-            return plans;
+            return new DividendHistoryFetchResult(true, plans);
         } catch (Exception ex) {
-            return Collections.emptyList();
+            log.warn("股票分红历史获取失败，productId={}, symbol={}, reason={}",
+                product.getId(), product.getSymbol(), ex.getMessage());
+            return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
     }
 

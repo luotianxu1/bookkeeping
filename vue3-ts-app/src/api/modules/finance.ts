@@ -1787,6 +1787,15 @@ export function getInvestmentDividendIncome(userId: number) {
   })
 }
 
+export function refreshInvestmentDividendIncome(userId: number) {
+  return requestPost<InvestmentDividendIncomePage, undefined>(
+    financeRequest,
+    '/api/finance/investments/dividend-income/refresh',
+    undefined,
+    { params: { userId } },
+  )
+}
+
 export function getInvestmentDividendForecast(params: InvestmentDividendForecastRequest) {
   return requestPost<InvestmentDividendForecast, InvestmentDividendForecastRequest>(
     financeRequest,

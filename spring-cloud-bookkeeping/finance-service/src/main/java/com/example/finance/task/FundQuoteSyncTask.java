@@ -24,7 +24,7 @@ public class FundQuoteSyncTask {
     public void syncDailyFundProfits() {
         scheduledTaskRunService.run("investment-night-sync", "scheduled-21:30", () -> {
             log.info("投资夜间同步任务开始：trigger=scheduled-21:30");
-            var summary = investmentService.runInvestmentSyncCycle("scheduled-21:30");
+            var summary = investmentService.runNightlyInvestmentSyncCycle("scheduled-21:30");
             log.info("投资夜间同步任务完成：trigger=scheduled-21:30, summary={}", summary);
             return String.valueOf(summary);
         });
