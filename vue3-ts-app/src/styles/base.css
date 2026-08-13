@@ -110,9 +110,9 @@
   --color-fund-profit-calendar-positive-bg: #fef2f2;
   --color-fund-profit-calendar-negative-bg: #f0fdf4;
   --color-fund-profit-calendar-neutral-bg: var(--color-bg-card-soft);
-  --color-fund-profit-status-day-border: var(--color-bg-green-grad-2);
-  --color-fund-profit-status-day-bg: #f0fdf4;
-  --color-fund-profit-status-day-text: #15803d;
+  --color-fund-profit-status-day-border: #fecaca;
+  --color-fund-profit-status-day-bg: #fef2f2;
+  --color-fund-profit-status-day-text: var(--color-danger);
   --color-fund-profit-status-month-border: #fecaca;
   --color-fund-profit-status-month-bg: #fef2f2;
   --color-fund-profit-status-month-text: var(--color-danger);
@@ -395,9 +395,9 @@
   --color-fund-profit-calendar-positive-bg: rgba(251, 113, 133, 0.12);
   --color-fund-profit-calendar-negative-bg: rgba(34, 197, 94, 0.12);
   --color-fund-profit-calendar-neutral-bg: var(--color-bg-card-soft);
-  --color-fund-profit-status-day-border: rgba(34, 197, 94, 0.22);
-  --color-fund-profit-status-day-bg: rgba(34, 197, 94, 0.12);
-  --color-fund-profit-status-day-text: #86efac;
+  --color-fund-profit-status-day-border: rgba(251, 113, 133, 0.24);
+  --color-fund-profit-status-day-bg: rgba(251, 113, 133, 0.14);
+  --color-fund-profit-status-day-text: #fda4af;
   --color-fund-profit-status-month-border: rgba(251, 113, 133, 0.24);
   --color-fund-profit-status-month-bg: rgba(251, 113, 133, 0.14);
   --color-fund-profit-status-month-text: #fda4af;

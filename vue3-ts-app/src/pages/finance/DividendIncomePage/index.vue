@@ -93,6 +93,14 @@ const expenseCoverageItems = computed<ExpenseCoverageItem[]>(() => {
     }
   })
 })
+const totalMonthlyExpense = computed(() => expenseItems.value.reduce((total, item) => total + item.amount, 0))
+const incomeCoveragePercent = computed(() => {
+  if (totalMonthlyExpense.value <= 0) {
+    return 0
+  }
+  return (estimatedMonthlyIncome.value / totalMonthlyExpense.value) * 100
+})
+const incomeCoverageProgress = computed(() => Math.max(0, Math.min(100, incomeCoveragePercent.value)))
 onMounted(() => {
   void loadPageData()
 })
@@ -386,6 +394,10 @@ function getCoverageLevelClass(item: ExpenseCoverageItem) {
   return `coverage-level-${percent}`
 }
 
+function getIncomeCoveragePercentText() {
+  return `${formatAmount(incomeCoveragePercent.value)}%`
+}
+
 function toggleExpenseEditing() {
   isExpenseEditing.value = !isExpenseEditing.value
 }
@@ -441,8 +453,8 @@ async function removeExpenseItem(id: number) {
         />
       </div>
       <p class="summary-monthly">预估月薪 {{ formatMonthlyIncome(estimatedMonthlyIncome) }}</p>
-      <p v-if="updateText" class="summary-footnote">仅展示历史稳定分红标的，{{ updateText }}</p>
-      <p v-else class="summary-footnote">仅展示历史稳定分红标的</p>
+      <p v-if="updateText" class="summary-footnote">仅展示历史稳定分红且股息率不低于 3% 的标的，{{ updateText }}</p>
+      <p v-else class="summary-footnote">仅展示历史稳定分红且股息率不低于 3% 的标的</p>
     </section>
 
     <section class="expense-card" aria-label="固定支出覆盖">
@@ -493,6 +505,28 @@ async function removeExpenseItem(id: number) {
           </div>
         </article>
       </div>
+
+      <div
+        v-if="expenseCoverageItems.length > 0"
+        class="income-coverage-progress"
+        aria-label="月收息覆盖月支出"
+      >
+        <div class="income-coverage-progress-head">
+          <span>月收息覆盖月支出</span>
+          <strong>{{ getIncomeCoveragePercentText() }}</strong>
+        </div>
+        <div
+          class="income-coverage-progress-track"
+          role="progressbar"
+          aria-label="月收息覆盖月支出进度"
+          :aria-valuenow="incomeCoverageProgress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <span :style="{ transform: `scaleX(${incomeCoverageProgress / 100})` }" />
+        </div>
+        <p>{{ formatMonthlyIncome(estimatedMonthlyIncome) }} / {{ formatMonthlyIncome(totalMonthlyExpense) }}</p>
+      </div>
     </section>
 
     <section class="holding-card" aria-label="持仓分红计划">
@@ -506,7 +540,7 @@ async function removeExpenseItem(id: number) {
       </header>
 
       <p v-if="holdings.length === 0" class="dividend-message">
-        暂无符合条件的稳定分红股票或基金持仓
+        暂无符合条件的稳定分红且股息率不低于 3% 的股票或基金持仓
       </p>
 
       <article

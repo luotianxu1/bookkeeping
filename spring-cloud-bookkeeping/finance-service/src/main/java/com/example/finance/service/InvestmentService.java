@@ -246,6 +246,7 @@ public class InvestmentService {
     private static final int QDII_FUND_CONFIRM_DAYS = 2;
     private static final int DIVIDEND_HISTORY_YEARS = 3;
     private static final int MIN_STABLE_DIVIDEND_YEARS = 2;
+    private static final BigDecimal MIN_DIVIDEND_INCOME_RATE = new BigDecimal("3.00");
     private static final int RECENT_DIVIDEND_PLAN_WINDOW_DAYS = 30;
     private static final LocalTime FUND_SUBSCRIPTION_CUTOFF_TIME = LocalTime.of(15, 0);
     private static final LocalTime FUND_CONFIRM_READY_TIME = LocalTime.of(9, 5);
@@ -2586,6 +2587,7 @@ public class InvestmentService {
                 recordsByProductId.getOrDefault(entry.getKey(), Collections.emptyList())
             ))
             .filter(Objects::nonNull)
+            .filter(item -> defaultZero(item.getEstimatedDividendRate()).compareTo(MIN_DIVIDEND_INCOME_RATE) >= 0)
             .sorted(Comparator
                 .comparing(InvestmentDividendIncomeItemResponse::getEstimatedDividendAmount, Comparator.nullsFirst(BigDecimal::compareTo))
                 .reversed()
