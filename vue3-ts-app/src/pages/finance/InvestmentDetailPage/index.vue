@@ -248,9 +248,15 @@ const cumulativeProfitPoints = computed(() => buildFundCumulativeProfitPoints(fu
 const currentTotalProfit = computed(() =>
   Number(currentPosition.value?.holdingProfit ?? 0) + Number(currentPosition.value?.cumulativeProfit ?? 0),
 )
-const currentTotalProfitTone = computed<'positive' | 'negative' | 'neutral'>(() => toneByNumber(currentTotalProfit.value))
+const currentFundChartProfit = computed(() => {
+  const points = cumulativeProfitPoints.value
+  const latestPoint = points[points.length - 1]
+  const latestValue = Number(latestPoint?.value)
+  return Number.isFinite(latestValue) ? latestValue : currentTotalProfit.value
+})
+const currentTotalProfitTone = computed<'positive' | 'negative' | 'neutral'>(() => toneByNumber(currentFundChartProfit.value))
 const cumulativeProfitChartAriaLabel = computed(() =>
-  `${detail.value?.name || currentPosition.value?.productName || '基金'}累计收益折线图，当前累计收益${formatCurrency(currentTotalProfit.value)}`,
+  `${detail.value?.name || currentPosition.value?.productName || '基金'}累计收益折线图，当前累计收益${formatCurrency(currentFundChartProfit.value)}`,
 )
 const showAutoInvestSection = computed(() => isFundPosition.value && !isPendingSubscription.value)
 const showAutoInvestPlansSection = computed(() => showAutoInvestSection.value && autoInvestPlans.value.length > 0)
@@ -1407,12 +1413,22 @@ function buildFundCumulativeProfitPoints(points: InvestmentChartPoint[]) {
       value: Number(profit.toFixed(2)),
     }]
   })
-  return ensureFundProfitBoundaryPoints(calculatedPoints, tradeEvents)
+  const currentNetValue = Number(position.currentPrice ?? detail.value?.latestPrice ?? 0)
+  const currentProfit = Number.isFinite(currentNetValue) && currentNetValue > 0
+    ? Number((
+        finalState.realizedProfit
+        + realizedProfitOffset
+        + finalState.holdingQuantity * currentNetValue
+        - finalState.costAmount
+      ).toFixed(2))
+    : null
+  return ensureFundProfitBoundaryPoints(calculatedPoints, tradeEvents, currentProfit)
 }
 
 function ensureFundProfitBoundaryPoints(
   points: InvestmentChartPoint[],
   tradeEvents: Array<{ entry: InvestmentTransaction; timestamp: number }>,
+  currentProfitOverride: number | null = null,
 ) {
   const position = currentPosition.value
   if (!position) {
@@ -1448,7 +1464,7 @@ function ensureFundProfitBoundaryPoints(
   const lastSyncedTimestamp = new Date(position.lastSyncedAt || detail.value?.updatedAt || '').getTime()
   const currentTimestamp = Number.isFinite(lastSyncedTimestamp) ? lastSyncedTimestamp : Date.now()
   const currentLabel = formatDate(Math.max(currentTimestamp, Number.isFinite(positionStartTimestamp) ? positionStartTimestamp : 0))
-  const totalProfit = currentTotalProfit.value
+  const totalProfit = currentProfitOverride ?? currentTotalProfit.value
   if (currentLabel && Number.isFinite(totalProfit)) {
     normalizedPoints.set(currentLabel, {
       label: currentLabel,
@@ -2798,7 +2814,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
             <AmountText
               tag="strong"
               :tone="currentTotalProfitTone"
-              :value="formatCurrency(currentTotalProfit)"
+              :value="formatCurrency(currentFundChartProfit)"
             />
           </div>
           <AmountText
@@ -2816,14 +2832,12 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           :options="fundChartViewOptions"
           label="基金走势图表切换"
           class="investment-detail-chart-tabs"
-          variant="brand"
         />
         <SegmentedControl
           v-if="detail.productType === 'fund' && !isFundProfitChartActive"
           v-model="selectedFundTrendRange"
           :options="fundTrendRangeOptions"
           label="基金走势区间切换"
-          class="investment-detail-trend-range"
           variant="surface"
         />
         <template v-if="isFundProfitChartActive">
