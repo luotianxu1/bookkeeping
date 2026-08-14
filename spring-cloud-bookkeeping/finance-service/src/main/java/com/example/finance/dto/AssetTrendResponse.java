@@ -20,6 +20,7 @@ public class AssetTrendResponse {
     private BigDecimal cumulativeProfitRate;
     private BigDecimal periodChangeAmount;
     private BigDecimal periodChangeRate;
+    private BigDecimal previousPeriodValue;
     private LocalDateTime lastSyncedAt;
     private List<AssetTrendPointResponse> trendPoints;
     private List<AssetTrendAllocationResponse> allocations;

@@ -208,7 +208,11 @@ const rangeDetailPoints = computed<RangeDetailPoint[]>(() => {
   const points = latestTrendPoints.value
 
   if (trendRangeKey.value !== 'ytd') {
-    return points.map((item, index) => buildRangeDetailPoint(item, points[index - 1])).reverse()
+    return points.map((item, index) => buildRangeDetailPoint(
+      item,
+      points[index - 1],
+      index === 0 ? trend.value?.previousPeriodValue : null,
+    )).reverse()
   }
 
   const pointMap = new Map<string, AssetTrendPoint>(
@@ -226,7 +230,13 @@ const rangeDetailPoints = computed<RangeDetailPoint[]>(() => {
       key: matchedPoint?.key ?? `ytd-${index + 1}`,
       label,
       value: matchedPoint ? Number(matchedPoint.value ?? 0) : null,
-      changeAmount: matchedPoint ? getRangeDetailChangeAmount(matchedPoint, previousPoint) : null,
+      changeAmount: matchedPoint
+        ? getRangeDetailChangeAmount(
+            matchedPoint,
+            previousPoint,
+            index === 0 ? trend.value?.previousPeriodValue : null,
+          )
+        : null,
     }
   }).filter((item) => item.value !== null).reverse()
 })
@@ -250,16 +260,41 @@ const chartOption = computed<EChartsCoreOption>(() => {
   const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
   const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
   const brandColor = rootStyle.getPropertyValue('--color-brand').trim()
+  const positiveColor = rootStyle.getPropertyValue('--color-danger').trim()
+  const negativeColor = rootStyle.getPropertyValue('--color-success').trim()
 
   return {
     animation: false,
     grid: { left: 4, right: 8, top: 14, bottom: 8, containLabel: true },
     tooltip: {
       trigger: 'axis',
+      confine: true,
       backgroundColor: tooltipBg,
       borderColor: tooltipBorder,
       textStyle: { color: tooltipText },
-      valueFormatter: (value: number | string) => `¥ ${formatCurrency(Number(value ?? 0))}`,
+      formatter: (params: any) => {
+        const items = Array.isArray(params) ? params : [params]
+        const item = items[0]
+        const dataIndex = Number(item?.dataIndex)
+        const point = Number.isInteger(dataIndex) ? points[dataIndex] : undefined
+        if (!point) {
+          return '--'
+        }
+        const changeAmount = getRangeDetailChangeAmount(
+          point,
+          points[dataIndex - 1],
+          dataIndex === 0 ? trend.value?.previousPeriodValue : null,
+        )
+        const dateLabel = item?.axisValueLabel || item?.axisValue || point.label
+        const changeColor = changeAmount === null || changeAmount === 0
+          ? tooltipText
+          : changeAmount > 0 ? positiveColor : negativeColor
+        return [
+          dateLabel,
+          `${item?.marker || ''}总资产 ¥ ${formatCurrency(Number(point.value ?? 0))}`,
+          `${rangeDetailCompareText.value} <span style="color:${changeColor};font-weight:700">${formatSignedCurrency(changeAmount)}</span>`,
+        ].join('<br/>')
+      },
     },
     xAxis: {
       type: 'category',
@@ -564,6 +599,13 @@ function mergeAssetTrendResults(results: AssetTrend[]) {
     }))
     .sort((left, right) => Number(right.contributionAmount ?? 0) - Number(left.contributionAmount ?? 0))
 
+  const hasCompletePreviousPeriodValue = results.every(
+    (result) => result.previousPeriodValue !== null && result.previousPeriodValue !== undefined,
+  )
+  const previousPeriodValue = hasCompletePreviousPeriodValue
+    ? results.reduce((total, result) => total + Number(result.previousPeriodValue), 0)
+    : null
+
   const previousTotal = mergedTrendPoints.length > 1
     ? Number(mergedTrendPoints[mergedTrendPoints.length - 2]?.value ?? 0)
     : 0
@@ -586,6 +628,7 @@ function mergeAssetTrendResults(results: AssetTrend[]) {
     cumulativeProfitRate,
     periodChangeAmount,
     periodChangeRate,
+    previousPeriodValue,
     lastSyncedAt,
     trendPoints: mergedTrendPoints,
     allocations: mergedAllocations,
@@ -634,22 +677,34 @@ function resetYesterdaySnapshots() {
   snapshotError.value = ''
 }
 
-function buildRangeDetailPoint(item: AssetTrendPoint, previous?: AssetTrendPoint) {
+function buildRangeDetailPoint(
+  item: AssetTrendPoint,
+  previous?: AssetTrendPoint,
+  previousPeriodValue?: number | null,
+) {
   return {
     key: item.key,
     label: item.label,
     value: Number(item.value ?? 0),
-    changeAmount: getRangeDetailChangeAmount(item, previous),
+    changeAmount: getRangeDetailChangeAmount(item, previous, previousPeriodValue),
   } satisfies RangeDetailPoint
 }
 
-function getRangeDetailChangeAmount(item: AssetTrendPoint, previous?: AssetTrendPoint) {
-  if (!previous) {
+function getRangeDetailChangeAmount(
+  item: AssetTrendPoint,
+  previous?: AssetTrendPoint,
+  previousPeriodValue?: number | null,
+) {
+  const comparisonValue = previous
+    ? Number(previous.value ?? 0)
+    : previousPeriodValue === null || previousPeriodValue === undefined
+      ? null
+      : Number(previousPeriodValue)
+  if (comparisonValue === null || !Number.isFinite(comparisonValue)) {
     return null
   }
   const currentValue = Number(item.value ?? 0)
-  const previousValue = Number(previous.value ?? 0)
-  return currentValue - previousValue
+  return currentValue - comparisonValue
 }
 
 function pickEarlierDate(current: string, candidate?: string | null) {
@@ -724,6 +779,14 @@ function formatCurrency(value?: number | null) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+}
+
+function formatSignedCurrency(value?: number | null) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return '--'
+  }
+  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
+  return `${sign}¥ ${formatCurrency(Math.abs(value))}`
 }
 
 function formatCompactMoney(value: number) {

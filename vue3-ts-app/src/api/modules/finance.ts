@@ -877,6 +877,7 @@ export interface AssetTrend {
   cumulativeProfitRate?: number | null
   periodChangeAmount: number
   periodChangeRate: number
+  previousPeriodValue?: number | null
   lastSyncedAt?: string | null
   trendPoints: AssetTrendPoint[]
   allocations: AssetTrendAllocation[]

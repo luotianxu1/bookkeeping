@@ -171,6 +171,7 @@ public class AssetTrendService {
         BigDecimal totalAssets = resolveCurrentTotalAssets(userId, accountId, accounts);
         List<LocalDate> bucketDates = buildTrendBucketDates(rangeMeta);
         List<AssetTrendPointResponse> trendPoints = buildTrendPoints(userId, accountId, rangeMeta, bucketDates, totalAssets);
+        BigDecimal previousPeriodValue = resolvePreviousPeriodValue(userId, accountId, rangeMeta);
         TrendRangeMeta allRangeMeta = resolveTrendRange("all", accounts, context, earliestSnapshotDate);
         ProfitSummary cumulativeSummary = buildCumulativeSummary(
             userId,
@@ -201,6 +202,7 @@ public class AssetTrendService {
         response.setCumulativeProfitRate(cumulativeSummary.rate());
         response.setPeriodChangeAmount(periodChangeAmount);
         response.setPeriodChangeRate(periodChangeRate);
+        response.setPreviousPeriodValue(previousPeriodValue);
         response.setLastSyncedAt(context.lastSyncedAt());
         response.setTrendPoints(trendPoints);
         response.setAllocations(buildAllocations(accounts));
@@ -553,6 +555,17 @@ public class AssetTrendService {
             points.add(point);
         }
         return points;
+    }
+
+    private BigDecimal resolvePreviousPeriodValue(Long userId, Long accountId, TrendRangeMeta rangeMeta) {
+        LocalDate previousDate = rangeMeta.startDate().minusDays(1);
+        BigDecimal value = assetSnapshotService.getTotalAssetSnapshots(
+            userId,
+            accountId,
+            previousDate,
+            previousDate
+        ).get(previousDate);
+        return value == null ? null : value.setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal resolveTrendPointValue(
