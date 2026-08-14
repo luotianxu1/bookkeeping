@@ -234,6 +234,21 @@
   font-weight: 500;
 }
 
+.investment-detail-card-head .investment-detail-period-return {
+  flex-shrink: 0;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.investment-detail-card-head .investment-detail-period-return.amount-text--positive {
+  color: var(--color-danger);
+}
+
+.investment-detail-card-head .investment-detail-period-return.amount-text--negative {
+  color: var(--color-success);
+}
+
 .investment-detail-trend-range {
   width: 100%;
 }

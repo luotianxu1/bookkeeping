@@ -46,6 +46,13 @@ type FundTrendValueEntry = {
   cumulative?: number | null
   net?: number | null
 }
+type FundPeriodIncreaseItem = {
+  title?: string | null
+  syl?: string | number | null
+}
+type FundPeriodIncreaseResponse = {
+  Datas?: FundPeriodIncreaseItem[] | null
+}
 type FundProfitState = {
   holdingQuantity: number
   costAmount: number
@@ -103,6 +110,7 @@ const deleteError = ref('')
 const selectedFundTrendRange = ref<FundTrendRange>('3m')
 const selectedFundChartView = ref<FundChartView>('netValue')
 const fullFundChartPoints = ref<InvestmentChartPoint[]>([])
+const fundPeriodReturnMap = ref<Record<string, number | null>>({})
 const fundTrendValueMap = ref<Record<string, FundTrendValueEntry>>({})
 const fundTrendValueMode = ref<FundTrendValueMode>('cumulative')
 const TRANSACTION_PAGE_SIZE = 10
@@ -117,6 +125,22 @@ const TRADE_MARKER_COLORS = {
   buy: '#DC2626',
   sell: '#16A34A',
 } as const
+const FUND_PERIOD_RETURN_FIELDS = [
+  { title: 'Y', label: '近1个月收益率' },
+  { title: '3Y', label: '近3个月收益率' },
+  { title: '6Y', label: '近6个月收益率' },
+  { title: '1N', label: '近1年收益率' },
+  { title: '2N', label: '近2年收益率' },
+  { title: '3N', label: '近3年收益率' },
+  { title: '5N', label: '近5年收益率' },
+] as const
+const FUND_TREND_RANGE_RETURN_TITLES: Record<FundTrendRange, string> = {
+  '1m': 'Y',
+  '3m': '3Y',
+  '6m': '6Y',
+  '1y': '1N',
+  '3y': '3N',
+}
 const currentTransactionPage = ref(1)
 
 const positionId = computed(() => {
@@ -203,6 +227,23 @@ const showFundCumulativeProfitChart = computed(() => {
 const isFundProfitChartActive = computed(() =>
   showFundCumulativeProfitChart.value && selectedFundChartView.value === 'profit',
 )
+const selectedFundPeriodReturn = computed(() =>
+  fundPeriodReturnMap.value[FUND_TREND_RANGE_RETURN_TITLES[selectedFundTrendRange.value]] ?? null,
+)
+const selectedFundPeriodReturnTone = computed<'positive' | 'negative' | 'neutral'>(() => {
+  if (externalStatus.value || selectedFundPeriodReturn.value === null) {
+    return 'neutral'
+  }
+  return toneByNumber(selectedFundPeriodReturn.value)
+})
+const fundTrendPeriodReturnText = computed(() => {
+  if (externalStatus.value) {
+    return externalStatus.value
+  }
+  const rangeLabel = fundTrendRangeOptions.find((item) => item.value === selectedFundTrendRange.value)?.label ?? ''
+  const value = selectedFundPeriodReturn.value
+  return `${rangeLabel}收益率 ${value === null ? '--' : `${formatNumber(value)}%`}`
+})
 const cumulativeProfitPoints = computed(() => buildFundCumulativeProfitPoints(fullFundChartPoints.value))
 const currentTotalProfit = computed(() =>
   Number(currentPosition.value?.holdingProfit ?? 0) + Number(currentPosition.value?.cumulativeProfit ?? 0),
@@ -523,6 +564,7 @@ async function loadDetail() {
   pageError.value = ''
   try {
     fullFundChartPoints.value = []
+    fundPeriodReturnMap.value = {}
     fundTrendValueMap.value = {}
     fundTrendValueMode.value = 'cumulative'
     selectedFundTrendRange.value = '3m'
@@ -709,15 +751,23 @@ async function loadExternalMarketData(baseDetail: InvestmentAssetDetail) {
 }
 
 async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: string) {
-  const [baseResult, trendResult] = await Promise.allSettled([
+  const [baseResult, trendResult, periodIncreaseResult] = await Promise.allSettled([
     jsonpRequest<Record<string, any>>(
       `https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
       ['callback'],
     ),
     fetchFundTrend(fundCode),
+    jsonpRequest<FundPeriodIncreaseResponse>(
+      `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNPeriodIncrease?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
+      ['callback'],
+    ),
   ])
 
   const baseInfo = baseResult.status === 'fulfilled' ? baseResult.value?.Datas ?? {} : {}
+  const periodIncreaseRows = periodIncreaseResult.status === 'fulfilled'
+    ? periodIncreaseResult.value?.Datas ?? []
+    : []
+  const periodReturns = buildFundPeriodReturnMap(periodIncreaseRows)
   const officialPrice = Number(baseInfo.DWJZ)
   const cumulativePrice = Number(baseInfo.LJJZ)
   const latestPrice = officialPrice
@@ -745,6 +795,7 @@ async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: s
         value: Number.isFinite(cumulativePrice) ? cumulativePrice : latestPrice,
       })
   fullFundChartPoints.value = chartPoints
+  fundPeriodReturnMap.value = periodReturns
   fundTrendValueMap.value = trendValueContext.values
   fundTrendValueMode.value = trendValueContext.mode
 
@@ -767,8 +818,34 @@ async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: s
       stat('基金公司', baseInfo.JJGS || '-'),
       stat('申购状态', baseInfo.SGZT || '-'),
       stat('赎回状态', baseInfo.SHZT || '-'),
+      ...buildFundPeriodReturnStats(periodReturns),
     ],
   })
+}
+
+function buildFundPeriodReturnMap(rows: FundPeriodIncreaseItem[]) {
+  return Object.fromEntries(
+    rows.map((item) => [String(item.title ?? '').toUpperCase(), parseFundPeriodReturn(item.syl)]),
+  ) as Record<string, number | null>
+}
+
+function buildFundPeriodReturnStats(returnByPeriod: Record<string, number | null>) {
+  return FUND_PERIOD_RETURN_FIELDS.map(({ title, label }) => {
+    const value = returnByPeriod[title]
+    return stat(
+      label,
+      value !== undefined && value !== null ? `${formatNumber(value)}%` : '--',
+      value !== undefined && value !== null ? toneByNumber(value) : 'neutral',
+    )
+  })
+}
+
+function parseFundPeriodReturn(value: string | number | null | undefined) {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return null
+  }
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 async function loadStockMarketData(baseDetail: InvestmentAssetDetail, stockCode: string) {
@@ -2724,6 +2801,13 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
               :value="formatCurrency(currentTotalProfit)"
             />
           </div>
+          <AmountText
+            v-else-if="isFundPosition"
+            tag="span"
+            class="investment-detail-period-return"
+            :tone="selectedFundPeriodReturnTone"
+            :value="fundTrendPeriodReturnText"
+          />
           <span v-else>{{ externalStatus || detail.source || '行情接口' }}</span>
         </header>
         <SegmentedControl
