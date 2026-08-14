@@ -39,12 +39,19 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 import { useTheme } from '@/utils/theme'
 
 type FundTrendRange = '1m' | '3m' | '6m' | '1y' | '3y'
+type FundChartView = 'netValue' | 'profit'
 type TradeFundFeeMode = 'auto' | `manual-${number}`
 type FundTrendValueMode = 'cumulative' | 'net'
 type FundTrendValueEntry = {
   cumulative?: number | null
   net?: number | null
 }
+type FundProfitState = {
+  holdingQuantity: number
+  costAmount: number
+  realizedProfit: number
+}
+type FundProfitChartDataPoint = [number, number | null]
 
 const route = useRoute()
 const router = useRouter()
@@ -57,6 +64,7 @@ const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
 const fundingAccounts = ref<Account[]>([])
 const externalStatus = ref('')
 const chartRef = ref<HTMLDivElement | null>(null)
+const cumulativeProfitChartRef = ref<HTMLDivElement | null>(null)
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
@@ -93,15 +101,18 @@ const showDeleteModal = ref(false)
 const isDeletingPosition = ref(false)
 const deleteError = ref('')
 const selectedFundTrendRange = ref<FundTrendRange>('3m')
+const selectedFundChartView = ref<FundChartView>('netValue')
 const fullFundChartPoints = ref<InvestmentChartPoint[]>([])
 const fundTrendValueMap = ref<Record<string, FundTrendValueEntry>>({})
 const fundTrendValueMode = ref<FundTrendValueMode>('cumulative')
 const TRANSACTION_PAGE_SIZE = 10
+const FUND_QUANTITY_MATCH_TOLERANCE = 0.01
 const transactionPageItems = ref<InvestmentTransaction[]>([])
 const transactionTotal = ref(0)
 const transactionPageSize = ref(TRANSACTION_PAGE_SIZE)
 const isLoadingTransactionPage = ref(false)
 let chart: ECharts | null = null
+let cumulativeProfitChart: ECharts | null = null
 const TRADE_MARKER_COLORS = {
   buy: '#DC2626',
   sell: '#16A34A',
@@ -182,6 +193,24 @@ const canGoNextTransactionPage = computed(() => currentTransactionPage.value < t
 const currentPosition = computed<InvestmentPosition | null>(() => detail.value?.position ?? null)
 const isPendingSubscription = computed(() => currentPosition.value?.subscriptionStatus === 'pending')
 const isFundPosition = computed(() => (detail.value?.productType || currentPosition.value?.productType) === 'fund')
+const showFundCumulativeProfitChart = computed(() => {
+  const holdingQuantity = Number(currentPosition.value?.holdingQuantity ?? 0)
+  return isFundPosition.value
+    && !isPendingSubscription.value
+    && Number.isFinite(holdingQuantity)
+    && holdingQuantity > 0
+})
+const isFundProfitChartActive = computed(() =>
+  showFundCumulativeProfitChart.value && selectedFundChartView.value === 'profit',
+)
+const cumulativeProfitPoints = computed(() => buildFundCumulativeProfitPoints(fullFundChartPoints.value))
+const currentTotalProfit = computed(() =>
+  Number(currentPosition.value?.holdingProfit ?? 0) + Number(currentPosition.value?.cumulativeProfit ?? 0),
+)
+const currentTotalProfitTone = computed<'positive' | 'negative' | 'neutral'>(() => toneByNumber(currentTotalProfit.value))
+const cumulativeProfitChartAriaLabel = computed(() =>
+  `${detail.value?.name || currentPosition.value?.productName || '基金'}累计收益折线图，当前累计收益${formatCurrency(currentTotalProfit.value)}`,
+)
 const showAutoInvestSection = computed(() => isFundPosition.value && !isPendingSubscription.value)
 const showAutoInvestPlansSection = computed(() => showAutoInvestSection.value && autoInvestPlans.value.length > 0)
 const currentUnitName = computed(() => detail.value?.unitName || detail.value?.position.unitName || '份')
@@ -212,7 +241,7 @@ const chartCostBaseline = computed(() => {
   if (!isFundPosition.value || detail.value?.chartType !== 'line' || fundTrendValueMode.value !== 'cumulative') {
     return costPrice
   }
-  return resolveFundCumulativeChartCostBaseline() ?? costPrice
+  return resolveFundCumulativeChartCostBaseline()
 })
 const tradeModalTitle = computed(() => currentTradeAction.value === 'buy' ? '加仓' : '减仓')
 const tradeAmountLabel = computed(() => {
@@ -306,6 +335,10 @@ const fundTrendRangeOptions = [
   { label: '近6月', value: '6m' },
   { label: '近1年', value: '1y' },
   { label: '近3年', value: '3y' },
+]
+const fundChartViewOptions = [
+  { label: '累计净值', value: 'netValue' },
+  { label: '累计收益', value: 'profit' },
 ]
 const tradeModeValue = computed({
   get: () => tradeInputMode.value === 'quantity' ? '按份额和净值' : '按金额',
@@ -451,18 +484,27 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeChart)
-  disposeChart()
+  disposeCharts()
 })
 
 watch([detail, transactions, isDark], async () => {
   await nextTick()
   requestAnimationFrame(() => {
     renderChart()
+    renderCumulativeProfitChart()
   })
 })
 
 watch(selectedFundTrendRange, () => {
   applyFundTrendRange()
+})
+
+watch(selectedFundChartView, async () => {
+  await nextTick()
+  requestAnimationFrame(() => {
+    renderChart()
+    renderCumulativeProfitChart()
+  })
 })
 
 watch(totalTransactionPages, (totalPages) => {
@@ -514,10 +556,11 @@ async function loadDetail() {
 }
 
 async function renderChart() {
-  if (!chartRef.value || !detail.value) {
+  disposeChart()
+  const chartContainer = chartRef.value
+  if (!chartContainer || !detail.value) {
     return
   }
-  disposeChart()
 
   const points = detail.value.chartPoints ?? []
   if (points.length === 0) {
@@ -525,13 +568,125 @@ async function renderChart() {
   }
 
   const echarts = await import('echarts')
-  chart = echarts.init(chartRef.value)
+  if (chartRef.value !== chartContainer) {
+    return
+  }
+  chart = echarts.init(chartContainer)
   if (detail.value.chartType === 'candlestick') {
     renderStockChart(points)
   } else {
     renderLineChart(points)
   }
   requestAnimationFrame(() => chart?.resize())
+}
+
+async function renderCumulativeProfitChart() {
+  disposeCumulativeProfitChart()
+  const chartContainer = cumulativeProfitChartRef.value
+  if (!chartContainer || !showFundCumulativeProfitChart.value || cumulativeProfitPoints.value.length === 0) {
+    return
+  }
+
+  const points = cumulativeProfitPoints.value
+  const rootStyle = getComputedStyle(document.documentElement)
+  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
+  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
+  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
+  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
+  const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const positiveColor = rootStyle.getPropertyValue('--color-danger').trim()
+  const negativeColor = rootStyle.getPropertyValue('--color-success').trim()
+  const echarts = await import('echarts')
+  const profitSeriesData = buildFundProfitChartSeriesData(points)
+
+  if (cumulativeProfitChartRef.value !== chartContainer) {
+    return
+  }
+  cumulativeProfitChart = echarts.init(chartContainer)
+  cumulativeProfitChart.setOption({
+    animationDuration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240,
+    aria: {
+      enabled: true,
+      description: cumulativeProfitChartAriaLabel.value,
+    },
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
+      textStyle: { color: tooltipText },
+      formatter: (params: any) => {
+        const items = Array.isArray(params) ? params : [params]
+        const item = items.find((entry: any) => {
+          const entryValue = Array.isArray(entry?.value) ? entry.value[1] : entry?.value
+          return entryValue !== null && entryValue !== undefined && Number.isFinite(Number(entryValue))
+        }) ?? items[0]
+        const value = Array.isArray(item?.value) ? item.value[1] : item?.value
+        const timestamp = Array.isArray(item?.value) ? Number(item.value[0]) : Number(item?.axisValue)
+        const dateLabel = Number.isFinite(timestamp)
+          ? formatDate(timestamp)
+          : item?.axisValueLabel || item?.axisValue || '--'
+        return `${dateLabel}<br/>${item?.marker || ''}累计收益 ${formatCurrency(Number(value))}`
+      },
+    },
+    grid: { top: 18, right: 14, bottom: 26, left: 56 },
+    xAxis: {
+      type: 'time',
+      axisLabel: {
+        color: axisText,
+        fontSize: 10,
+        hideOverlap: true,
+        formatter: (value: number) => formatDate(value),
+      },
+      axisLine: { lineStyle: { color: axisLine } },
+    },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLabel: {
+        color: axisText,
+        fontSize: 10,
+        formatter: (value: number) => formatCompactCurrency(value),
+      },
+      splitLine: { lineStyle: { color: splitLine } },
+    },
+    dataZoom: [{ type: 'inside', start: 0, end: 100 }],
+    series: [
+      {
+        name: '累计收益',
+        type: 'line',
+        smooth: false,
+        showSymbol: points.length <= 2,
+        symbol: 'circle',
+        symbolSize: 7,
+        connectNulls: false,
+        itemStyle: { color: positiveColor },
+        lineStyle: { width: 2, color: positiveColor },
+        data: profitSeriesData.positive,
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          label: { show: false },
+          lineStyle: { color: axisLine, type: 'dashed', width: 1 },
+          data: [{ yAxis: 0 }],
+        },
+      },
+      {
+        name: '累计收益',
+        type: 'line',
+        smooth: false,
+        showSymbol: points.length <= 2,
+        symbol: 'circle',
+        symbolSize: 7,
+        connectNulls: false,
+        itemStyle: { color: negativeColor },
+        lineStyle: { width: 2, color: negativeColor },
+        data: profitSeriesData.negative,
+      },
+    ],
+  })
+  requestAnimationFrame(() => cumulativeProfitChart?.resize())
 }
 
 async function loadExternalMarketData(baseDetail: InvestmentAssetDetail) {
@@ -1006,15 +1161,47 @@ function resolveFundCumulativeChartCostBaseline() {
   }
 
   if (holdingQuantity <= 0) {
-    return null
+    return resolveEstimatedFundCumulativeChartCostBaseline()
   }
 
-  const quantityDiff = Math.abs(holdingQuantity - currentHoldingQuantity)
-  if (quantityDiff > Math.max(0.01, currentHoldingQuantity * 0.01)) {
-    return Number(currentPosition.value?.avgCostPrice ?? 0) || null
+  const quantityDiff = Number(Math.abs(holdingQuantity - currentHoldingQuantity).toFixed(6))
+  if (quantityDiff > FUND_QUANTITY_MATCH_TOLERANCE) {
+    return resolveEstimatedFundCumulativeChartCostBaseline()
   }
 
   const baseline = (currentCostAmount + cumulativeOffsetAmount) / currentHoldingQuantity
+  return Number.isFinite(baseline) && baseline > 0
+    ? baseline
+    : resolveEstimatedFundCumulativeChartCostBaseline()
+}
+
+function resolveEstimatedFundCumulativeChartCostBaseline() {
+  const averageCostPrice = Number(currentPosition.value?.avgCostPrice ?? 0)
+  if (!Number.isFinite(averageCostPrice) || averageCostPrice <= 0) {
+    return null
+  }
+
+  const latestCumulativePoint = fullFundChartPoints.value
+    .slice()
+    .reverse()
+    .find((point) => Number.isFinite(Number(point.value)) && Number(point.value) > 0)
+  if (!latestCumulativePoint) {
+    return null
+  }
+
+  const latestCumulativeValue = Number(latestCumulativePoint.value)
+  const latestDateLabel = normalizeDateLabel(latestCumulativePoint.label)
+  const mappedNetValue = Number(fundTrendValueMap.value[latestDateLabel]?.net)
+  const currentNetValue = Number(detail.value?.latestPrice ?? 0)
+  const latestNetValue = Number.isFinite(mappedNetValue) && mappedNetValue > 0
+    ? mappedNetValue
+    : currentNetValue
+  const cumulativeOffset = latestCumulativeValue - latestNetValue
+  if (!Number.isFinite(latestNetValue) || latestNetValue <= 0 || !Number.isFinite(cumulativeOffset) || cumulativeOffset < 0) {
+    return null
+  }
+
+  const baseline = averageCostPrice + cumulativeOffset
   return Number.isFinite(baseline) && baseline > 0 ? baseline : null
 }
 
@@ -1081,6 +1268,247 @@ function resolveFundTradeCumulativeOffset(entry: InvestmentTransaction) {
   return Math.max(cumulativeValue - netValue, 0)
 }
 
+function buildFundCumulativeProfitPoints(points: InvestmentChartPoint[]) {
+  if (!showFundCumulativeProfitChart.value) {
+    return []
+  }
+
+  const position = currentPosition.value
+  if (!position) {
+    return []
+  }
+
+  const tradeEvents = transactions.value
+    .filter((entry) => entry.status === 'normal')
+    .filter((entry) => entry.settlementStatus !== 'pending')
+    .filter((entry) => entry.tradeType === 'buy' || entry.tradeType === 'sell')
+    .map((entry) => ({ entry, timestamp: resolveFundCostTransactionTime(entry) }))
+    .filter((item) => item.timestamp > 0)
+    .sort((left, right) => left.timestamp - right.timestamp || Number(left.entry.id) - Number(right.entry.id))
+
+  if (!hasReliableFundTradeHistory(tradeEvents.map((item) => item.entry), Number(position.holdingQuantity))) {
+    return ensureFundProfitBoundaryPoints(buildFundProfitFallbackPoints(points), tradeEvents)
+  }
+
+  const expectedRealizedProfit = Number(position.cumulativeProfit ?? 0)
+  const finalState = tradeEvents.reduce(
+    (state, item) => applyFundProfitTransaction(state, item.entry),
+    createEmptyFundProfitState(),
+  )
+  const realizedProfitOffset = Number.isFinite(expectedRealizedProfit)
+    ? expectedRealizedProfit - finalState.realizedProfit
+    : 0
+  let state = createEmptyFundProfitState()
+  let transactionIndex = 0
+  let hasStarted = false
+
+  const calculatedPoints = points.flatMap((point) => {
+    const pointDate = parsePointLabelDate(point.label)
+    if (!pointDate) {
+      return []
+    }
+    const pointEndTime = pointDate.getTime() + 24 * 60 * 60 * 1000 - 1
+    while (transactionIndex < tradeEvents.length && tradeEvents[transactionIndex].timestamp <= pointEndTime) {
+      state = applyFundProfitTransaction(state, tradeEvents[transactionIndex].entry)
+      transactionIndex += 1
+      hasStarted = true
+    }
+    if (!hasStarted) {
+      return []
+    }
+
+    const netValue = resolveFundProfitNetValue(point)
+    if (!Number.isFinite(netValue) || netValue <= 0) {
+      return []
+    }
+    const profit = state.realizedProfit
+      + realizedProfitOffset
+      + state.holdingQuantity * netValue
+      - state.costAmount
+    return [{
+      label: point.label,
+      value: Number(profit.toFixed(2)),
+    }]
+  })
+  return ensureFundProfitBoundaryPoints(calculatedPoints, tradeEvents)
+}
+
+function ensureFundProfitBoundaryPoints(
+  points: InvestmentChartPoint[],
+  tradeEvents: Array<{ entry: InvestmentTransaction; timestamp: number }>,
+) {
+  const position = currentPosition.value
+  if (!position) {
+    return points
+  }
+
+  const normalizedPoints = new Map<string, InvestmentChartPoint>()
+  for (const point of points) {
+    const label = normalizeDateLabel(point.label)
+    const value = Number(point.value)
+    if (label && Number.isFinite(value)) {
+      normalizedPoints.set(label, { label, value })
+    }
+  }
+
+  const firstBuyEvent = tradeEvents.find((item) => item.entry.tradeType === 'buy')
+  const positionStartTimestamp = firstBuyEvent?.timestamp
+    ?? parsePointLabelDate(normalizeDateLabel(position.createdAt))?.getTime()
+    ?? NaN
+  const firstPointTimestamp = Array.from(normalizedPoints.values())
+    .map((point) => parsePointLabelDate(point.label)?.getTime() ?? NaN)
+    .filter(Number.isFinite)
+    .sort((left, right) => left - right)[0]
+
+  if (Number.isFinite(positionStartTimestamp)
+    && (!Number.isFinite(firstPointTimestamp) || positionStartTimestamp >= firstPointTimestamp)) {
+    const startLabel = formatDate(positionStartTimestamp)
+    if (!normalizedPoints.has(startLabel)) {
+      normalizedPoints.set(startLabel, { label: startLabel, value: 0 })
+    }
+  }
+
+  const lastSyncedTimestamp = new Date(position.lastSyncedAt || detail.value?.updatedAt || '').getTime()
+  const currentTimestamp = Number.isFinite(lastSyncedTimestamp) ? lastSyncedTimestamp : Date.now()
+  const currentLabel = formatDate(Math.max(currentTimestamp, Number.isFinite(positionStartTimestamp) ? positionStartTimestamp : 0))
+  const totalProfit = currentTotalProfit.value
+  if (currentLabel && Number.isFinite(totalProfit)) {
+    normalizedPoints.set(currentLabel, {
+      label: currentLabel,
+      value: Number(totalProfit.toFixed(2)),
+    })
+  }
+
+  return Array.from(normalizedPoints.values()).sort((left, right) => {
+    const leftTime = parsePointLabelDate(left.label)?.getTime() ?? 0
+    const rightTime = parsePointLabelDate(right.label)?.getTime() ?? 0
+    return leftTime - rightTime
+  })
+}
+
+function createEmptyFundProfitState(): FundProfitState {
+  return {
+    holdingQuantity: 0,
+    costAmount: 0,
+    realizedProfit: 0,
+  }
+}
+
+function applyFundProfitTransaction(state: FundProfitState, entry: InvestmentTransaction): FundProfitState {
+  const quantity = Number(entry.quantity ?? 0)
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return state
+  }
+
+  const amount = Number(entry.amount ?? 0)
+  const feeAmount = Number(entry.feeAmount ?? 0)
+  const taxAmount = Number(entry.taxAmount ?? 0)
+  if (![amount, feeAmount, taxAmount].every(Number.isFinite)) {
+    return state
+  }
+
+  if (entry.tradeType === 'buy') {
+    return {
+      holdingQuantity: state.holdingQuantity + quantity,
+      costAmount: state.costAmount + amount + feeAmount + taxAmount,
+      realizedProfit: state.realizedProfit,
+    }
+  }
+
+  if (entry.tradeType !== 'sell' || state.holdingQuantity <= 0) {
+    return state
+  }
+  const soldQuantity = Math.min(quantity, state.holdingQuantity)
+  const soldCostAmount = state.costAmount / state.holdingQuantity * soldQuantity
+  const proceedsRatio = quantity > 0 ? soldQuantity / quantity : 0
+  const netProceeds = (amount - feeAmount - taxAmount) * proceedsRatio
+  return {
+    holdingQuantity: Math.max(state.holdingQuantity - soldQuantity, 0),
+    costAmount: Math.max(state.costAmount - soldCostAmount, 0),
+    realizedProfit: state.realizedProfit + netProceeds - soldCostAmount,
+  }
+}
+
+function hasReliableFundTradeHistory(entries: InvestmentTransaction[], expectedHoldingQuantity: number) {
+  if (entries.length === 0 || !Number.isFinite(expectedHoldingQuantity) || expectedHoldingQuantity <= 0) {
+    return false
+  }
+  const finalState = entries.reduce(applyFundProfitTransaction, createEmptyFundProfitState())
+  const quantityDifference = Number(Math.abs(finalState.holdingQuantity - expectedHoldingQuantity).toFixed(6))
+  return quantityDifference <= FUND_QUANTITY_MATCH_TOLERANCE
+}
+
+function buildFundProfitFallbackPoints(points: InvestmentChartPoint[]) {
+  const position = currentPosition.value
+  if (!position) {
+    return []
+  }
+  const holdingQuantity = Number(position.holdingQuantity ?? 0)
+  const averageCostPrice = Number(position.avgCostPrice ?? 0)
+  const realizedProfit = Number(position.cumulativeProfit ?? 0)
+  const positionStartTime = parsePointLabelDate(normalizeDateLabel(position.createdAt))?.getTime() ?? NaN
+  if (![holdingQuantity, averageCostPrice, realizedProfit].every(Number.isFinite) || holdingQuantity <= 0) {
+    return []
+  }
+
+  return points.flatMap((point) => {
+    const pointDate = parsePointLabelDate(point.label)
+    if (!pointDate || (Number.isFinite(positionStartTime) && pointDate.getTime() < positionStartTime)) {
+      return []
+    }
+    const netValue = resolveFundProfitNetValue(point)
+    if (!Number.isFinite(netValue) || netValue <= 0) {
+      return []
+    }
+    return [{
+      label: point.label,
+      value: Number((realizedProfit + (netValue - averageCostPrice) * holdingQuantity).toFixed(2)),
+    }]
+  })
+}
+
+function resolveFundProfitNetValue(point: InvestmentChartPoint) {
+  const trendEntry = fundTrendValueMap.value[normalizeDateLabel(point.label)]
+  const netValue = Number(trendEntry?.net)
+  if (Number.isFinite(netValue) && netValue > 0) {
+    return netValue
+  }
+  return Number(point.value)
+}
+
+function buildFundProfitChartSeriesData(points: InvestmentChartPoint[]) {
+  const expandedPoints: Array<{ timestamp: number; value: number }> = []
+  const datedPoints = points.flatMap((point) => {
+    const timestamp = parsePointLabelDate(point.label)?.getTime() ?? NaN
+    const value = Number(point.value)
+    return Number.isFinite(timestamp) && Number.isFinite(value) ? [{ timestamp, value }] : []
+  })
+
+  datedPoints.forEach((point, index) => {
+    const previousPoint = datedPoints[index - 1]
+    if (previousPoint && previousPoint.value * point.value < 0) {
+      const crossingRatio = Math.abs(previousPoint.value)
+        / (Math.abs(previousPoint.value) + Math.abs(point.value))
+      expandedPoints.push({
+        timestamp: Math.round(previousPoint.timestamp + (point.timestamp - previousPoint.timestamp) * crossingRatio),
+        value: 0,
+      })
+    }
+    expandedPoints.push(point)
+  })
+
+  return {
+    positive: expandedPoints.map<FundProfitChartDataPoint>((point) => [
+      point.timestamp,
+      point.value >= 0 ? point.value : null,
+    ]),
+    negative: expandedPoints.map<FundProfitChartDataPoint>((point) => [
+      point.timestamp,
+      point.value <= 0 ? point.value : null,
+    ]),
+  }
+}
+
 function disposeChart() {
   if (chart) {
     chart.dispose()
@@ -1088,8 +1516,21 @@ function disposeChart() {
   }
 }
 
+function disposeCumulativeProfitChart() {
+  if (cumulativeProfitChart) {
+    cumulativeProfitChart.dispose()
+    cumulativeProfitChart = null
+  }
+}
+
+function disposeCharts() {
+  disposeChart()
+  disposeCumulativeProfitChart()
+}
+
 function resizeChart() {
   chart?.resize()
+  cumulativeProfitChart?.resize()
 }
 
 function openTradeModal(action: 'buy' | 'sell') {
@@ -2163,6 +2604,16 @@ function formatCurrency(value: number) {
   return `${sign}¥${formatNumber(Math.abs(value))}`
 }
 
+function formatCompactCurrency(value: number) {
+  if (!Number.isFinite(value)) return '¥--'
+  const sign = value < 0 ? '-' : ''
+  const absoluteValue = Math.abs(value)
+  if (absoluteValue >= 10000) {
+    return `${sign}¥${formatNumber(absoluteValue / 10000, 1)}万`
+  }
+  return `${sign}¥${formatNumber(absoluteValue, 0)}`
+}
+
 function getNetTransactionAmount(entry: InvestmentTransaction) {
   return Number(entry.amount) - Number(entry.feeAmount ?? 0) - Number(entry.taxAmount ?? 0)
 }
@@ -2263,21 +2714,48 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
         <button class="investment-detail-action-button delete" type="button" :disabled="isDeletingPosition" @click="openDeleteModal">删除</button>
       </section>
 
-      <section class="investment-detail-card" aria-label="行情走势">
-        <header class="investment-detail-card-head">
-          <h2>{{ detail.chartType === 'candlestick' ? '股票日K走势' : '累计净值走势' }}</h2>
-          <span>{{ externalStatus || detail.source || '行情接口' }}</span>
+      <section class="investment-detail-card" :aria-label="detail.productType === 'fund' ? '基金走势' : '行情走势'">
+        <header class="investment-detail-card-head" :class="{ 'investment-detail-profit-head': isFundProfitChartActive }">
+          <h2>{{ detail.chartType === 'candlestick' ? '股票日K走势' : isFundProfitChartActive ? '累计收益走势' : '累计净值走势' }}</h2>
+          <div v-if="isFundProfitChartActive" class="investment-detail-profit-summary">
+            <AmountText
+              tag="strong"
+              :tone="currentTotalProfitTone"
+              :value="formatCurrency(currentTotalProfit)"
+            />
+          </div>
+          <span v-else>{{ externalStatus || detail.source || '行情接口' }}</span>
         </header>
         <SegmentedControl
-          v-if="detail.productType === 'fund'"
+          v-if="showFundCumulativeProfitChart"
+          v-model="selectedFundChartView"
+          :options="fundChartViewOptions"
+          label="基金走势图表切换"
+          class="investment-detail-chart-tabs"
+          variant="brand"
+        />
+        <SegmentedControl
+          v-if="detail.productType === 'fund' && !isFundProfitChartActive"
           v-model="selectedFundTrendRange"
           :options="fundTrendRangeOptions"
-          label="基金累计净值区间切换"
+          label="基金走势区间切换"
           class="investment-detail-trend-range"
           variant="surface"
         />
-        <div v-if="detail.chartPoints.length" ref="chartRef" class="investment-detail-chart"></div>
-        <p v-else class="investment-detail-empty">暂无走势数据</p>
+        <template v-if="isFundProfitChartActive">
+          <div
+            v-if="cumulativeProfitPoints.length"
+            ref="cumulativeProfitChartRef"
+            class="investment-detail-chart investment-detail-profit-chart"
+            role="img"
+            :aria-label="cumulativeProfitChartAriaLabel"
+          ></div>
+          <p v-else class="investment-detail-empty">{{ externalStatus || '暂无累计收益走势数据' }}</p>
+        </template>
+        <template v-else>
+          <div v-if="detail.chartPoints.length" ref="chartRef" class="investment-detail-chart"></div>
+          <p v-else class="investment-detail-empty">暂无走势数据</p>
+        </template>
       </section>
 
       <section class="investment-detail-card" aria-label="资产详细数据">

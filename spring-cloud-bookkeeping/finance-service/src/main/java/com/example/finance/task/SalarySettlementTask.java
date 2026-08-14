@@ -21,11 +21,11 @@ public class SalarySettlementTask {
     }
 
     @Scheduled(cron = "${finance.salary.settlement.cron:0 10 8 * * *}", zone = "Asia/Shanghai")
-    public void settleDueSalaryAccounts() {
+    public void settleDueSalaryRecords() {
         scheduledTaskRunService.run("salary-settlement", "scheduled-08:10", () -> {
-            log.info("工资账户发薪入账任务开始：trigger=scheduled-08:10");
-            salaryService.settleDueAccountRecordsForAllUsers();
-            log.info("工资账户发薪入账任务完成：trigger=scheduled-08:10");
+            log.info("工资及关联账户发薪入账任务开始：trigger=scheduled-08:10");
+            salaryService.settleDueRecordsForAllUsers();
+            log.info("工资及关联账户发薪入账任务完成：trigger=scheduled-08:10");
             return "completed";
         });
     }

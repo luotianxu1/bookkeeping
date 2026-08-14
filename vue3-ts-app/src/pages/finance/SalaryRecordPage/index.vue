@@ -198,7 +198,7 @@ function openFeedback(message: string, type: 'success' | 'error') {
           <div class="salary-row">
             <div>
               <p class="salary-row-label">月度工资记录</p>
-              <p class="salary-row-desc">已补录月份优先按实际税前工资参与工资测算。</p>
+              <p class="salary-row-desc">设置月薪后会在发薪日自动入账，已补录月份优先按实际税前工资参与工资测算。</p>
             </div>
             <div class="salary-row-value">
               <strong>{{ pageData.records.length }}</strong>

@@ -238,6 +238,30 @@
   width: 100%;
 }
 
+.investment-detail-chart-tabs {
+  width: 100%;
+}
+
+.investment-detail-chart-tabs :deep(.segmented-control) {
+  padding: 4px;
+  border: 1px solid var(--color-bg-soft-2);
+  border-radius: 14px;
+  background: var(--color-bg-soft-2);
+}
+
+.investment-detail-chart-tabs :deep(.segmented-control-item) {
+  min-height: 44px;
+  font-size: var(--font-size-12);
+}
+
+.investment-detail-chart-tabs :deep(.segmented-control-indicator) {
+  top: 4px;
+  left: 4px;
+  height: calc(100% - 8px);
+  width: calc((100% - 8px) / var(--count));
+  border-radius: 10px;
+}
+
 .investment-detail-trend-range :deep(.segmented-control) {
   padding: 4px;
   border: 1px solid #e2e8f0;
@@ -264,6 +288,28 @@
   min-width: 0;
   min-height: 260px;
   height: 300px;
+}
+
+.investment-detail-profit-head {
+  align-items: flex-start;
+}
+
+.investment-detail-profit-summary {
+  flex-shrink: 0;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.investment-detail-profit-summary :deep(.amount-text) {
+  font-size: var(--font-size-16);
+  font-weight: 700;
+}
+
+.investment-detail-profit-chart {
+  height: 280px;
 }
 
 .investment-detail-empty {

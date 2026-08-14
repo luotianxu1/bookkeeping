@@ -53,6 +53,7 @@ public class SalaryService {
     private static final String RECORD_INITIAL = "initial";
     private static final String RECORD_AUTO = "auto";
     private static final String RECORD_MANUAL = "manual";
+    private static final String AUTO_SALARY_RECORD_NOTE = "系统按发薪日自动入账";
     private static final String AUTO_RECORD_DELETED_NOTE = "系统自动记录已删除";
     private static final DateTimeFormatter MONTH_KEY_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM");
     private static final Set<String> ACCOUNT_TYPES = Set.of(ACCOUNT_SOCIAL, ACCOUNT_HOUSING, ACCOUNT_MEDICAL);
@@ -166,6 +167,7 @@ public class SalaryService {
     public SalaryMonthPageResponse getSalaryMonthPage(Long userId, Integer year) {
         SalaryProfileEntity profile = ensureProfile(userId);
         int resolvedYear = year == null ? LocalDate.now(SHANGHAI_ZONE).getYear() : year;
+        ensureYearData(userId, profile, resolvedYear);
         return buildSalaryMonthPage(userId, resolvedYear, profile);
     }
 
@@ -229,7 +231,7 @@ public class SalaryService {
         return buildAccountPage(userId, normalizedAccountType, resolvedYear, profile);
     }
 
-    public void settleDueAccountRecordsForAllUsers() {
+    public void settleDueRecordsForAllUsers() {
         int currentYear = LocalDate.now(SHANGHAI_ZONE).getYear();
         List<SalaryProfileEntity> profiles = salaryProfileMapper.selectList(new LambdaQueryWrapper<SalaryProfileEntity>()
             .eq(SalaryProfileEntity::getStatus, STATUS_ACTIVE));
@@ -817,6 +819,7 @@ public class SalaryService {
     }
 
     private void ensureYearData(Long userId, SalaryProfileEntity profile, int year) {
+        ensureAutoSalaryMonthRecords(userId, profile, year);
         ensureAutoRecord(userId, profile, ACCOUNT_SOCIAL, year);
         ensureAutoRecord(userId, profile, ACCOUNT_HOUSING, year);
         ensureAutoRecord(userId, profile, ACCOUNT_MEDICAL, year);
@@ -829,12 +832,46 @@ public class SalaryService {
         int dueMonth = shouldMaintainAutoRecordsForYear(year)
             ? resolveCurrentPaidMonths(year, profile.getPayDay())
             : 0;
+        ensureAutoSalaryMonthRecords(userId, profile, year);
         ensureAutoRecord(userId, profile, ACCOUNT_SOCIAL, year, dueMonth);
         ensureAutoRecord(userId, profile, ACCOUNT_HOUSING, year, dueMonth);
         ensureAutoRecord(userId, profile, ACCOUNT_MEDICAL, year, dueMonth);
         recalculateBalances(userId, ACCOUNT_SOCIAL);
         recalculateBalances(userId, ACCOUNT_HOUSING);
         recalculateBalances(userId, ACCOUNT_MEDICAL);
+    }
+
+    private void ensureAutoSalaryMonthRecords(Long userId, SalaryProfileEntity profile, int year) {
+        if (!shouldMaintainAutoRecordsForYear(year)) {
+            return;
+        }
+
+        int endMonth = resolveCurrentPaidMonths(year, profile.getPayDay());
+        BigDecimal grossSalary = scale(profile.getMonthlyGrossSalary());
+        if (endMonth <= 0 || grossSalary.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        Set<Integer> existingMonths = salaryMonthRecordMapper.selectList(new LambdaQueryWrapper<SalaryMonthRecordEntity>()
+                .eq(SalaryMonthRecordEntity::getUserId, userId)
+                .ge(SalaryMonthRecordEntity::getSalaryMonth, LocalDate.of(year, 1, 1))
+                .lt(SalaryMonthRecordEntity::getSalaryMonth, LocalDate.of(year + 1, 1, 1)))
+            .stream()
+            .filter(record -> record.getSalaryMonth() != null)
+            .map(record -> record.getSalaryMonth().getMonthValue())
+            .collect(Collectors.toSet());
+
+        for (int month = 1; month <= endMonth; month++) {
+            if (existingMonths.contains(month)) {
+                continue;
+            }
+            salaryMonthRecordMapper.insertAutoIfAbsent(
+                userId,
+                LocalDate.of(year, month, 1),
+                grossSalary,
+                AUTO_SALARY_RECORD_NOTE
+            );
+        }
     }
 
     private void ensureAutoRecord(Long userId, SalaryProfileEntity profile, String accountType, int year) {
@@ -1477,7 +1514,8 @@ public class SalaryService {
         }
         int currentMonth = today.getMonthValue();
         int resolvedPayDay = payDay == null ? 15 : Math.max(1, Math.min(payDay, 31));
-        if (today.getDayOfMonth() < resolvedPayDay) {
+        int effectivePayDay = Math.min(resolvedPayDay, YearMonth.of(year, currentMonth).lengthOfMonth());
+        if (today.getDayOfMonth() < effectivePayDay) {
             return Math.max(currentMonth - 1, 0);
         }
         return currentMonth;
