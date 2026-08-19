@@ -6,8 +6,8 @@
 
 .investment-detail-summary-card {
   display: grid;
-  gap: var(--space-6);
-  padding: var(--space-16);
+  gap: 8px;
+  padding: 14px;
   border: 1px solid var(--color-border-blue);
   border-radius: var(--radius-20);
   background: var(--color-top-card-gradient);
@@ -15,28 +15,31 @@
 }
 
 .investment-detail-summary-head {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: var(--space-12);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 46%);
+  align-items: center;
+  gap: 12px;
 }
 
 .investment-detail-summary-main {
   min-width: 0;
   flex: 1;
   display: grid;
-  gap: var(--space-6);
+  gap: 4px;
 }
 
 .investment-detail-summary-title {
+  min-width: 0;
   display: grid;
-  gap: var(--space-6);
+  gap: 4px;
 }
 
 .investment-detail-summary-title strong {
+  display: block;
   color: var(--color-brand);
   font-size: var(--font-size-12);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .investment-detail-summary-title span {
@@ -46,18 +49,28 @@
 }
 
 .investment-detail-summary-side {
-  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: center;
-  justify-items: end;
-  gap: var(--space-6);
+  gap: 4px 10px;
+  padding-left: 12px;
+  border-left: 1px solid var(--color-border-blue-soft);
   text-align: right;
 }
 
+.investment-detail-summary-metric-group {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
 .investment-detail-summary-metric {
+  min-width: 0;
   display: grid;
   justify-items: end;
-  gap: 2px;
+  gap: 1px;
 }
 
 .investment-detail-summary-side span {
@@ -67,9 +80,13 @@
 }
 
 .investment-detail-summary-side strong {
+  max-width: 100%;
   color: var(--color-success);
   font-size: var(--font-size-16);
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .investment-detail-summary-side :deep(.amount-text--positive) {
@@ -98,6 +115,34 @@
   color: var(--color-finance-subtitle);
   font-size: var(--font-size-12);
   font-weight: 500;
+}
+
+@media (max-width: 560px) {
+  .investment-detail-summary-head {
+    grid-template-columns: minmax(0, 1fr) minmax(132px, 46%);
+    gap: 8px;
+  }
+
+  .investment-detail-summary-side {
+    gap: 4px 8px;
+    padding-left: 8px;
+  }
+
+  .investment-detail-summary-metric {
+    justify-items: end;
+  }
+
+  .investment-detail-summary-side span {
+    font-size: 10px;
+  }
+
+  .investment-detail-summary-side strong {
+    font-size: var(--font-size-12);
+  }
+
+  .investment-detail-summary-amount {
+    font-size: var(--font-size-24);
+  }
 }
 
 .investment-detail-dividend-reminder {
@@ -258,24 +303,6 @@
   min-width: 0;
   min-height: 260px;
   height: 300px;
-}
-
-.investment-detail-profit-head {
-  align-items: flex-start;
-}
-
-.investment-detail-profit-summary {
-  flex-shrink: 0;
-  display: grid;
-  justify-items: end;
-  gap: 2px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.investment-detail-profit-summary :deep(.amount-text) {
-  font-size: var(--font-size-16);
-  font-weight: 700;
 }
 
 .investment-detail-profit-chart {

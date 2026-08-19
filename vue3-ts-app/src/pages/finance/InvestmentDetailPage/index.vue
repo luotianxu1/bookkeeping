@@ -254,9 +254,24 @@ const currentFundChartProfit = computed(() => {
   const latestValue = Number(latestPoint?.value)
   return Number.isFinite(latestValue) ? latestValue : currentTotalProfit.value
 })
+const currentFundChartProfitRate = computed(() => {
+  const costAmount = Number(currentPosition.value?.costAmount ?? 0)
+  if (!Number.isFinite(costAmount) || costAmount <= 0) {
+    return null
+  }
+  return currentFundChartProfit.value / costAmount * 100
+})
 const currentTotalProfitTone = computed<'positive' | 'negative' | 'neutral'>(() => toneByNumber(currentFundChartProfit.value))
+const currentFundChartProfitRateText = computed(() => {
+  const rate = currentFundChartProfitRate.value
+  return rate === null ? '--' : `${rate > 0 ? '+' : ''}${formatNumber(rate)}%`
+})
+const currentFundChartProfitRateTone = computed<'positive' | 'negative' | 'neutral'>(() => {
+  const rate = currentFundChartProfitRate.value
+  return rate === null ? 'neutral' : toneByNumber(rate)
+})
 const cumulativeProfitChartAriaLabel = computed(() =>
-  `${detail.value?.name || currentPosition.value?.productName || '基金'}累计收益折线图，当前累计收益${formatCurrency(currentFundChartProfit.value)}`,
+  `${detail.value?.name || currentPosition.value?.productName || '基金'}累计收益折线图，当前累计收益${formatCurrency(currentFundChartProfit.value)}，累计收益率${currentFundChartProfitRateText.value}`,
 )
 const showAutoInvestSection = computed(() => isFundPosition.value && !isPendingSubscription.value)
 const showAutoInvestPlansSection = computed(() => showAutoInvestSection.value && autoInvestPlans.value.length > 0)
@@ -2766,23 +2781,40 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
 
     <template v-else-if="detail">
       <section class="investment-detail-summary-card" aria-label="投资详情总览">
+        <div class="investment-detail-summary-title">
+          <strong>
+            {{ detail.name || detail.position.productName }}
+            <span v-if="isFundPosition">{{ detail.symbol || detail.position.productSymbol }}</span>
+          </strong>
+          <span v-if="!isFundPosition">
+            {{ detail.symbol || detail.position.productSymbol }} · {{ detail.productType === 'stock' ? '股票' : '投资资产' }}
+          </span>
+        </div>
         <div class="investment-detail-summary-head">
           <div class="investment-detail-summary-main">
-            <div class="investment-detail-summary-title">
-              <strong>{{ detail.name || detail.position.productName }}</strong>
-              <span>{{ detail.symbol || detail.position.productSymbol }} · {{ detail.productType === 'stock' ? '股票' : detail.productType === 'fund' ? '基金' : '投资资产' }}</span>
-            </div>
             <AmountText tag="p" class="investment-detail-summary-amount" tone="inherit" :value="summaryAmount" />
             <p class="investment-detail-summary-updated">{{ displayUpdatedAt }}</p>
           </div>
-          <div v-if="showTodayMetrics" class="investment-detail-summary-side">
-            <div class="investment-detail-summary-metric">
-              <span>当日盈亏</span>
-              <AmountText tag="strong" :tone="todayProfitTone" :value="todayProfitValue" />
+          <div v-if="showTodayMetrics || showFundCumulativeProfitChart" class="investment-detail-summary-side">
+            <div v-if="showFundCumulativeProfitChart" class="investment-detail-summary-metric-group">
+              <div class="investment-detail-summary-metric">
+                <span>累计收益</span>
+                <AmountText tag="strong" :tone="currentTotalProfitTone" :value="formatCurrency(currentFundChartProfit)" />
+              </div>
+              <div class="investment-detail-summary-metric">
+                <span>累计收益率</span>
+                <AmountText tag="strong" :tone="currentFundChartProfitRateTone" :value="currentFundChartProfitRateText" />
+              </div>
             </div>
-            <div class="investment-detail-summary-metric">
-              <span>当日收益率</span>
-              <AmountText tag="strong" :tone="todayTone" :value="todayValue" />
+            <div v-if="showTodayMetrics" class="investment-detail-summary-metric-group">
+              <div class="investment-detail-summary-metric">
+                <span>当日盈亏</span>
+                <AmountText tag="strong" :tone="todayProfitTone" :value="todayProfitValue" />
+              </div>
+              <div class="investment-detail-summary-metric">
+                <span>当日收益率</span>
+                <AmountText tag="strong" :tone="todayTone" :value="todayValue" />
+              </div>
             </div>
           </div>
         </div>
@@ -2808,17 +2840,10 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
       </section>
 
       <section class="investment-detail-card" :aria-label="detail.productType === 'fund' ? '基金走势' : '行情走势'">
-        <header class="investment-detail-card-head" :class="{ 'investment-detail-profit-head': isFundProfitChartActive }">
+        <header class="investment-detail-card-head">
           <h2>{{ detail.chartType === 'candlestick' ? '股票日K走势' : isFundProfitChartActive ? '累计收益走势' : '累计净值走势' }}</h2>
-          <div v-if="isFundProfitChartActive" class="investment-detail-profit-summary">
-            <AmountText
-              tag="strong"
-              :tone="currentTotalProfitTone"
-              :value="formatCurrency(currentFundChartProfit)"
-            />
-          </div>
           <AmountText
-            v-else-if="isFundPosition"
+            v-if="isFundPosition && !isFundProfitChartActive"
             tag="span"
             class="investment-detail-period-return"
             :tone="selectedFundPeriodReturnTone"

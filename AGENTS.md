@@ -32,7 +32,7 @@ mvn clean install -pl common,auth-service   # single module
 ```
 
 | Module | Port | Purpose |
-|---|---|---|
+| --- | --- | --- |
 | auth-service | 8081 | JWT auth, user/family management |
 | finance-service | 8082 | Accounts, transactions, investments |
 | tool-service | 8083 | Contacts, todos, photography orders, calendar |
@@ -71,4 +71,4 @@ In `vue3-ts-app/.env` or shell:
 - `VITE_API_BASE_URL` — default API base (fallback: <http://localhost:8081>)
 - `VITE_AUTH_API_BASE_URL`, `VITE_FINANCE_API_BASE_URL`, `VITE_TOOL_API_BASE_URL`, `VITE_FOOD_API_BASE_URL`
 
-cloudflared tunnel --url <http://localhost:5173>
+cloudflared tunnel --url <http://localhost:4173> --protocol http2
