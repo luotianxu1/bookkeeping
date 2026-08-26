@@ -3465,8 +3465,8 @@ public class InvestmentService {
         if (position == null || !request.getUserId().equals(position.getUserId())) {
             throw new IllegalArgumentException("投资持仓不存在");
         }
-        if (isPendingFundSubscription(position)) {
-            throw new IllegalArgumentException("基金申购待确认，暂不支持加仓或减仓");
+        if (isPendingFundSubscription(position) && !"buy".equals(request.getTradeType())) {
+            throw new IllegalArgumentException("基金申购待确认，暂不支持减仓");
         }
         if (!request.getAccountId().equals(position.getAccountId())) {
             throw new IllegalArgumentException("投资账户不匹配");

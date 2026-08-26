@@ -438,7 +438,7 @@ async function refreshCurrentGoldPrice() {
   try {
     await loadGoldPriceWithOptions({
       forceRefreshCurrent: true,
-      includeChart: false,
+      includeChart: true,
     })
   } catch (error) {
     goldPriceError.value = error instanceof Error ? error.message : '金价刷新失败'

@@ -285,14 +285,19 @@ const chartOption = computed<EChartsCoreOption>(() => {
           points[dataIndex - 1],
           dataIndex === 0 ? trend.value?.previousPeriodValue : null,
         )
+        const todayCompareAmount = getTodayCompareAmount(point)
         const dateLabel = item?.axisValueLabel || item?.axisValue || point.label
         const changeColor = changeAmount === null || changeAmount === 0
           ? tooltipText
           : changeAmount > 0 ? positiveColor : negativeColor
+        const todayCompareColor = todayCompareAmount === null || todayCompareAmount === 0
+          ? tooltipText
+          : todayCompareAmount > 0 ? positiveColor : negativeColor
         return [
           dateLabel,
           `${item?.marker || ''}总资产 ¥ ${formatCurrency(Number(point.value ?? 0))}`,
           `${rangeDetailCompareText.value} <span style="color:${changeColor};font-weight:700">${formatSignedCurrency(changeAmount)}</span>`,
+          `今日较该时间 <span style="color:${todayCompareColor};font-weight:700">${formatSignedCurrency(todayCompareAmount)}</span>`,
         ].join('<br/>')
       },
     },
@@ -705,6 +710,14 @@ function getRangeDetailChangeAmount(
   }
   const currentValue = Number(item.value ?? 0)
   return currentValue - comparisonValue
+}
+
+function getTodayCompareAmount(item: AssetTrendPoint) {
+  const todayValue = Number(trend.value?.totalAssets)
+  if (!Number.isFinite(todayValue)) {
+    return null
+  }
+  return todayValue - Number(item.value ?? 0)
 }
 
 function pickEarlierDate(current: string, candidate?: string | null) {

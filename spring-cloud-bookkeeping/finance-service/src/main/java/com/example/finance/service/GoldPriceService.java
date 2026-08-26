@@ -240,8 +240,11 @@ public class GoldPriceService {
     }
 
     private JsonNode fetchJijinhaoQuotes(String codes) throws Exception {
+        String cacheBust = String.valueOf(System.currentTimeMillis());
         String body = restClient.get()
-            .uri(jijinhaoApiBaseUrl + "/quoteCenter/realTime.htm?codes=" + codes)
+            .uri(jijinhaoApiBaseUrl + "/quoteCenter/realTime.htm?codes=" + codes + "&_=" + cacheBust)
+            .header("Cache-Control", "no-cache, no-store, max-age=0")
+            .header("Pragma", "no-cache")
             .header("Referer", "https://quote.cngold.org/gjs/gjhj_xhhj.html?key=au")
             .header("User-Agent", "Mozilla/5.0")
             .retrieve()
@@ -476,8 +479,11 @@ public class GoldPriceService {
     }
 
     private String fetchJijinhaoText(String url) {
+        String separator = url.contains("?") ? "&" : "?";
         return restClient.get()
-            .uri(url)
+            .uri(url + separator + "_=" + System.currentTimeMillis())
+            .header("Cache-Control", "no-cache, no-store, max-age=0")
+            .header("Pragma", "no-cache")
             .header("Referer", "https://quote.cngold.org/gjs/gjhj_xhhj.html?key=au")
             .header("User-Agent", "Mozilla/5.0")
             .retrieve()

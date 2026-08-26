@@ -1643,7 +1643,7 @@ function resizeChart() {
 
 function openTradeModal(action: 'buy' | 'sell') {
   const position = currentPosition.value
-  if (!position || isPendingSubscription.value) {
+  if (!position || (isPendingSubscription.value && action === 'sell')) {
     return
   }
   currentTradeAction.value = action
@@ -2825,7 +2825,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
       </section>
 
       <section class="investment-detail-actions" aria-label="持仓操作">
-        <button class="investment-detail-action-button buy" type="button" :disabled="isPendingSubscription" @click="openTradeModal('buy')">加仓</button>
+        <button class="investment-detail-action-button buy" type="button" @click="openTradeModal('buy')">加仓</button>
         <button class="investment-detail-action-button sell" type="button" :disabled="isPendingSubscription" @click="openTradeModal('sell')">减仓</button>
         <button
           class="investment-detail-action-button auto-invest"
