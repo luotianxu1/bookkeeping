@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
@@ -24,6 +25,7 @@ type SettledDebtGroup = {
 
 const DEBT_ACCOUNT_CODES = new Set(['debt'])
 
+const router = useRouter()
 const accounts = ref<Account[]>([])
 const contacts = ref<Contact[]>([])
 const debtRecords = ref<DebtRecord[]>([])
@@ -60,6 +62,17 @@ const settledGroups = computed<SettledDebtGroup[]>(() => {
 })
 
 const settledRecordCount = computed(() => settledGroups.value.reduce((total, group) => total + group.records.length, 0))
+
+function openDebtDetail(accountId: number) {
+  router.push(`/finance/accounts/debt/${accountId}`)
+}
+
+function handleGroupKeydown(event: KeyboardEvent, accountId: number) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    openDebtDetail(accountId)
+  }
+}
 
 onMounted(() => {
   void loadHistory()
@@ -157,7 +170,15 @@ function formatDate(value: string) {
       </p>
 
       <section v-else class="debt-history-list" aria-label="已结清账户历史">
-        <article v-for="group in settledGroups" :key="group.accountId" class="debt-history-card">
+        <article
+          v-for="group in settledGroups"
+          :key="group.accountId"
+          class="debt-history-card"
+          role="button"
+          tabindex="0"
+          @click="openDebtDetail(group.accountId)"
+          @keydown="handleGroupKeydown($event, group.accountId)"
+        >
           <div class="debt-history-card-head">
             <div class="debt-history-person">
               <span class="debt-history-avatar" :class="group.avatarClass">{{ group.avatarText }}</span>

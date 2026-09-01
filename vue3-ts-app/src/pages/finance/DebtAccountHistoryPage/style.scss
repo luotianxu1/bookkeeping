@@ -63,6 +63,12 @@
   border-radius: var(--radius-16);
   background: var(--color-bg-card);
   box-shadow: var(--color-shadow-soft);
+  cursor: pointer;
+}
+
+.debt-history-card:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
 }
 
 .debt-history-card-head,
