@@ -4,6 +4,7 @@ import LoginPage from '@/pages/login/LoginPage/index.vue'
 import RegisterPage from '@/pages/login/RegisterPage/index.vue'
 import ProfileFamilyPage from '@/pages/profile/ProfileFamilyPage/index.vue'
 import ProfilePage from '@/pages/profile/ProfilePage/index.vue'
+import TaskManagementPage from '@/pages/profile/TaskManagementPage/index.vue'
 
 export const mainRoutes: RouteRecordRaw[] = [
   {
@@ -40,6 +41,15 @@ export const mainRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'profile',
       title: '绑定家庭成员',
+    },
+  },
+  {
+    path: '/profile/task-management',
+    name: 'profile-task-management',
+    component: TaskManagementPage,
+    meta: {
+      section: 'profile',
+      title: '任务管理',
     },
   },
 ]

@@ -41,6 +41,7 @@ const familyMeta = computed(() => {
 })
 const profileMenus = computed<ProfileMenuItem[]>(() => [
   { label: '家庭成员', path: '/profile/family-members', meta: familyMeta.value },
+  { label: '任务管理', path: '/profile/task-management', meta: '查看今日任务' },
   { label: '隐私与安全' },
   { label: '消息通知' },
   { label: '关于我们' },

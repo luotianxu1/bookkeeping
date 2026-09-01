@@ -129,7 +129,12 @@ const debtCards = computed<DebtCardView[]>(() =>
       netTagText: formatDebtStatusText(netAmount),
       netTagClass: formatDebtStatusClass(netAmount),
     }
-  }).filter((card) => Math.round(card.netAmount * 100) !== 0),
+  }).filter((card) => {
+    if (Math.round(card.netAmount * 100) !== 0) {
+      return true
+    }
+    return (recordsByAccountId.value.get(card.account.id)?.length ?? 0) === 0
+  }),
 )
 
 const summaryAmountText = computed(() => formatSignedCurrency(summary.value.netAmount))

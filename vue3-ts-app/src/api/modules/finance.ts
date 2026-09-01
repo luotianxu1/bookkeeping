@@ -266,6 +266,23 @@ export interface StockScreenRun {
   finishedAt?: string | null
 }
 
+export type ScheduledTaskStatus = 'pending' | 'running' | 'success' | 'failed' | 'missed' | 'skipped'
+
+export interface ScheduledTask {
+  taskName: string
+  taskLabel: string
+  triggerName: string
+  scheduleLabel: string
+  status: ScheduledTaskStatus
+  statusLabel: string
+  executable: boolean
+  taskDate: string
+  startedAt?: string | null
+  finishedAt?: string | null
+  resultMessage?: string | null
+  errorMessage?: string | null
+}
+
 export interface StockScreenItem {
   stockCode: string
   stockName: string
@@ -1542,6 +1559,17 @@ export function getMarketNews(params: { category?: MarketNewsCategory; limit?: n
 
 export function getStockScreenStatus() {
   return requestGet<StockScreenRun | null>(financeRequest, '/api/finance/stock-screener/status')
+}
+
+export function getTodayScheduledTasks() {
+  return requestGet<ScheduledTask[]>(financeRequest, '/api/finance/scheduled-tasks/today')
+}
+
+export function executeTodayScheduledTask(taskName: string, triggerName: string) {
+  return requestPost<ScheduledTask>(
+    financeRequest,
+    `/api/finance/scheduled-tasks/today/${encodeURIComponent(taskName)}/${encodeURIComponent(triggerName)}/execute`,
+  )
 }
 
 export function getStockScreenResults(params: StockScreenQuery = {}) {
