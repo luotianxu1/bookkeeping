@@ -53,6 +53,7 @@ public class TransactionService {
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String DEBT_DIRECTION_PAYABLE = "payable";
     private static final String DEBT_DIRECTION_RECEIVABLE = "receivable";
+    private static final String DEBT_RECORD_TYPE_BORROW = "borrow";
     private static final String DEBT_RECORD_TYPE_REPAYMENT = "repayment";
     private static final String HUMAN_RELATION_DIRECTION_OUTGOING = "outgoing";
     private static final String HUMAN_RELATION_DIRECTION_INCOMING = "incoming";
@@ -493,14 +494,15 @@ public class TransactionService {
         LambdaQueryWrapper<DebtRecordEntity> wrapper = new LambdaQueryWrapper<DebtRecordEntity>()
             .eq(userId != null, DebtRecordEntity::getUserId, userId)
             .eq(accountId != null, DebtRecordEntity::getFundingAccountId, accountId)
+            .eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_PAYABLE)
             .eq(DebtRecordEntity::getStatus, DEBT_RECORD_ACTIVE_STATUS)
             .orderByDesc(DebtRecordEntity::getOccurredAt)
             .orderByDesc(DebtRecordEntity::getId);
 
         if (TYPE_INCOME.equals(type)) {
-            wrapper.eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_RECEIVABLE);
+            wrapper.eq(DebtRecordEntity::getRecordType, DEBT_RECORD_TYPE_BORROW);
         } else if (TYPE_EXPENSE.equals(type)) {
-            wrapper.eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_PAYABLE);
+            wrapper.eq(DebtRecordEntity::getRecordType, DEBT_RECORD_TYPE_REPAYMENT);
         }
 
         return debtRecordMapper.selectList(wrapper);
@@ -517,14 +519,15 @@ public class TransactionService {
         LambdaQueryWrapper<DebtRecordEntity> wrapper = new LambdaQueryWrapper<DebtRecordEntity>()
             .in(DebtRecordEntity::getUserId, userIds)
             .eq(accountId != null, DebtRecordEntity::getFundingAccountId, accountId)
+            .eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_PAYABLE)
             .eq(DebtRecordEntity::getStatus, DEBT_RECORD_ACTIVE_STATUS)
             .orderByDesc(DebtRecordEntity::getOccurredAt)
             .orderByDesc(DebtRecordEntity::getId);
 
         if (TYPE_INCOME.equals(type)) {
-            wrapper.eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_RECEIVABLE);
+            wrapper.eq(DebtRecordEntity::getRecordType, DEBT_RECORD_TYPE_BORROW);
         } else if (TYPE_EXPENSE.equals(type)) {
-            wrapper.eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_PAYABLE);
+            wrapper.eq(DebtRecordEntity::getRecordType, DEBT_RECORD_TYPE_REPAYMENT);
         }
 
         return debtRecordMapper.selectList(wrapper);

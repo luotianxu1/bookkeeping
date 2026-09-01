@@ -175,13 +175,7 @@ const renewalCards = computed<RenewalCardView[]>(() =>
           ? `${dueDays} 天后`
           : ''
 
-    const footNote = subscription.lastChargeStatus === 'failed' && subscription.lastChargeMessage
-      ? subscription.lastChargeMessage
-      : subscription.lastChargedAt
-        ? `上次扣款 ${formatDotDate(subscription.lastChargedAt)} 成功`
-        : isPaused
-          ? '暂停后不再自动扣款'
-          : `下次支出 ${formatDotDate(subscription.nextBillingDate)}`
+    const footNote = `下次扣款 ${formatDotDate(subscription.nextBillingDate)}`
 
     return {
       id: subscription.id,
@@ -655,7 +649,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
             </div>
 
             <div class="renewal-card-foot">
-              <p :class="['renewal-card-foot-note', { 'renewal-card-hint-error': card.raw.lastChargeStatus === 'failed' }]">
+              <p class="renewal-card-foot-note">
                 {{ card.footNote }}
               </p>
             </div>
