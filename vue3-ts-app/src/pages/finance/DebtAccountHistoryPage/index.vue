@@ -126,13 +126,13 @@ function getDebtRecordBalanceDelta(record: Pick<DebtRecord, 'direction' | 'recor
 <template>
   <section class="debt-history-page" aria-label="已结清债务账户">
     <header class="debt-history-header">
-      <PageHeader title="债务明细" back-to="/finance/accounts/debt" back-label="返回债务账户" />
+      <PageHeader title="已结清明细" back-to="/finance/accounts/debt" back-label="返回债务账户" />
     </header>
 
     <p v-if="pageError" class="debt-history-message debt-history-message-error">
       {{ pageError }}
     </p>
-    <CommonLoading v-else-if="isLoading" text="债务明细加载中..." />
+    <CommonLoading v-else-if="isLoading" text="已结清明细加载中..." />
 
     <template v-else>
       <div class="debt-history-summary">
