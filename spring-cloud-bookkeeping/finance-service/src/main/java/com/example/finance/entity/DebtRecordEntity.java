@@ -22,6 +22,9 @@ public class DebtRecordEntity {
     @TableField("account_id")
     private Long accountId;
 
+    @TableField("parent_record_id")
+    private Long parentRecordId;
+
     @TableField("funding_account_id")
     private Long fundingAccountId;
 

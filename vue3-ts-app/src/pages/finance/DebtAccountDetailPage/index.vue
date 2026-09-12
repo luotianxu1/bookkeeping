@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
@@ -37,6 +37,7 @@ const RECORD_KIND_OPTIONS = [
 ]
 
 const route = useRoute()
+const router = useRouter()
 
 const account = ref<Account | null>(null)
 const contacts = ref<Contact[]>([])
@@ -86,6 +87,21 @@ const detailSubtitle = computed(() => {
 const detailNote = computed(() => account.value?.remark?.trim() || relatedContact.value?.remark?.trim() || '')
 const summaryAmountText = computed(() => formatSignedCurrency(Number(account.value?.currentBalance ?? 0)))
 const summarySubText = computed(() => `待还 ${formatCurrency(summary.value.payableTotal)} · 待收 ${formatCurrency(summary.value.receivableTotal)}`)
+const childRecordsByParentId = computed(() => {
+  const grouped = new Map<number, DebtRecord[]>()
+  for (const record of records.value) {
+    if (!record.parentRecordId) {
+      continue
+    }
+    const children = grouped.get(record.parentRecordId) ?? []
+    children.push(record)
+    grouped.set(record.parentRecordId, children)
+  }
+  return grouped
+})
+const topLevelRecords = computed(() => records.value.filter((record) => (
+  record.recordType !== 'repayment' && !record.parentRecordId
+)))
 const borrowInCount = computed(() => records.value.filter((record) => getDebtRecordActionKey(record) === 'borrow-in').length)
 const borrowOutCount = computed(() => records.value.filter((record) => getDebtRecordActionKey(record) === 'borrow-out').length)
 const latestRecordText = computed(() => records.value[0] ? formatDate(records.value[0].occurredAt) : '暂无更新')
@@ -98,6 +114,9 @@ const recordModalTitle = computed(() => {
   }
   return '新增债务记录'
 })
+const recordKindOptions = computed(() => editingRecord.value
+  ? RECORD_KIND_OPTIONS
+  : RECORD_KIND_OPTIONS.filter((option) => !option.value.endsWith('repayment')))
 const recordSubmitLabel = computed(() => {
   if (editingRecord.value) {
     return '保存修改'
@@ -112,8 +131,8 @@ const recordFormHint = computed(() => {
     return ''
   }
   const actionLabel = offsetSourceRecord.value.direction === 'receivable' ? '收款' : '还款'
-  const amountText = formatCurrency(Number(offsetSourceRecord.value.amount ?? 0))
-  return `正在登记“${formatRecordDirectionLabel(offsetSourceRecord.value.direction)} ${amountText}”的${actionLabel}记录，可修改金额以支持部分结清。`
+  const amountText = formatCurrency(Number(offsetSourceRecord.value.remainingAmount ?? offsetSourceRecord.value.amount ?? 0))
+  return `正在登记“${formatRecordDirectionLabel(offsetSourceRecord.value.direction)}”的${actionLabel}，剩余 ${amountText}，可分次结清。`
 })
 const offsetRecordKindLabel = computed(() => {
   if (!offsetSourceRecord.value) {
@@ -204,6 +223,17 @@ function openAddRecordModal() {
   showRecordModal.value = true
 }
 
+function openRecordDetail(recordId: number) {
+  router.push(`/finance/accounts/debt/${accountId.value}/record/${recordId}`)
+}
+
+function handleRecordKeydown(event: KeyboardEvent, recordId: number) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    openRecordDetail(recordId)
+  }
+}
+
 function openEditRecordModal(record: DebtRecord) {
   editingRecord.value = record
   offsetSourceRecord.value = null
@@ -225,7 +255,7 @@ function openOffsetRecordModal(record: DebtRecord) {
   offsetSourceRecord.value = record
   recordFundingAccountId.value = record.fundingAccountId ? String(record.fundingAccountId) : ''
   recordKind.value = record.direction === 'receivable' ? 'receivable-repayment' : 'payable-repayment'
-  recordAmount.value = String(Number(record.amount ?? 0))
+  recordAmount.value = String(Number(record.remainingAmount ?? record.amount ?? 0))
   recordOccurredAt.value = toDateTimeLocalValue(new Date().toISOString())
   recordRemark.value = buildOffsetRecordRemark(record)
   recordFormError.value = ''
@@ -292,6 +322,7 @@ async function saveRecord() {
     const payload = {
       userId: currentUser.id,
       accountId: account.value.id,
+      parentRecordId: offsetSourceRecord.value?.id ?? editingRecord.value?.parentRecordId ?? null,
       fundingAccountId: normalizedFundingAccountId,
       direction: getDebtRecordDirection(recordKind.value),
       recordType: getDebtRecordType(recordKind.value),
@@ -379,6 +410,20 @@ function formatRecordAmount(record: DebtRecord) {
 
 function formatOffsetActionLabel(record: DebtRecord) {
   return record.direction === 'receivable' ? '收款' : '还款'
+}
+
+function getPrincipalRemainingAmount(record: DebtRecord) {
+  if (record.recordType === 'repayment' || record.parentRecordId) {
+    return 0
+  }
+  const amount = Number(record.amount ?? 0)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0
+  }
+  const linkedAmount = (childRecordsByParentId.value.get(record.id) ?? [])
+    .filter((child) => child.status === 'active' && child.recordType === 'repayment')
+    .reduce((total, child) => total + Number(child.amount ?? 0), 0)
+  return Math.max(0, Number(record.remainingAmount ?? amount - linkedAmount))
 }
 
 function formatFundingAccountName(record: DebtRecord) {
@@ -512,21 +557,24 @@ function showFeedback(message: string, type: 'success' | 'error') {
           <div class="debt-record-history-title">
             <strong>往来记录</strong>
           </div>
-          <span class="debt-record-history-badge">{{ records.length }} 条</span>
+          <span class="debt-record-history-badge">{{ topLevelRecords.length }} 条</span>
         </div>
 
         <div class="debt-record-history-list">
-          <p v-if="records.length === 0" class="debt-record-empty">
+          <p v-if="topLevelRecords.length === 0" class="debt-record-empty">
             暂无债务记录
           </p>
 
-          <article
-            v-for="record in records"
-            v-else
-            :key="record.id"
-            class="debt-record-card"
-          >
-            <div class="debt-record-card-main">
+          <template v-else>
+            <template v-for="record in topLevelRecords" :key="record.id">
+            <article
+              class="debt-record-card"
+              role="button"
+              tabindex="0"
+              @click="openRecordDetail(record.id)"
+              @keydown="handleRecordKeydown($event, record.id)"
+            >
+              <div class="debt-record-card-main">
               <div class="debt-record-card-top">
                 <span
                   class="debt-record-chip"
@@ -541,30 +589,36 @@ function showFeedback(message: string, type: 'success' | 'error') {
               </div>
               <p class="debt-record-funding-account">现金账户：{{ formatFundingAccountName(record) }}</p>
               <p v-if="record.remark?.trim()" class="debt-record-remark">{{ record.remark.trim() }}</p>
-            </div>
+              <p v-if="record.recordType !== 'repayment' && !record.parentRecordId" class="debt-record-remaining">
+                剩余 {{ formatCurrency(getPrincipalRemainingAmount(record)) }}
+              </p>
+              </div>
 
-            <div class="debt-record-card-side">
+              <div class="debt-record-card-side">
               <strong class="debt-record-amount" :class="{ 'is-negative': record.direction === 'payable' }">
                 {{ formatRecordAmount(record) }}
               </strong>
               <div class="debt-record-actions">
                 <button
-                  v-if="record.recordType !== 'repayment'"
+                  v-if="record.recordType !== 'repayment' && !record.parentRecordId && getPrincipalRemainingAmount(record) > 0"
                   type="button"
                   class="debt-record-action"
-                  @click="openOffsetRecordModal(record)"
+                  @click.stop="openOffsetRecordModal(record)"
                 >
                   {{ formatOffsetActionLabel(record) }}
                 </button>
-                <button type="button" class="debt-record-action" @click="openEditRecordModal(record)">
+                <button type="button" class="debt-record-action" @click.stop="openEditRecordModal(record)">
                   修改
                 </button>
-                <button type="button" class="debt-record-action is-danger" @click="openDeleteModal(record)">
+                <button type="button" class="debt-record-action is-danger" @click.stop="openDeleteModal(record)">
                   删除
                 </button>
               </div>
-            </div>
-          </article>
+              </div>
+            </article>
+
+            </template>
+          </template>
         </div>
       </section>
 
@@ -583,7 +637,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
         <p v-if="recordFormHint" class="debt-record-form-hint">
           {{ recordFormHint }}
         </p>
-        <CommonSelect v-if="!offsetSourceRecord" v-model="recordKind" label="记录类型" :options="RECORD_KIND_OPTIONS" />
+        <CommonSelect v-if="!offsetSourceRecord" v-model="recordKind" label="记录类型" :options="recordKindOptions" />
         <CommonInput
           v-else
           :model-value="offsetRecordKindLabel"

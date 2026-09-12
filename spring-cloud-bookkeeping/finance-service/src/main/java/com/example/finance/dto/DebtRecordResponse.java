@@ -11,6 +11,7 @@ public class DebtRecordResponse {
     private Long id;
     private Long userId;
     private Long accountId;
+    private Long parentRecordId;
     private Long contactId;
     private String accountName;
     private Long fundingAccountId;
@@ -18,6 +19,7 @@ public class DebtRecordResponse {
     private String direction;
     private String recordType;
     private BigDecimal amount;
+    private BigDecimal remainingAmount;
     private String currencyCode;
     private String remark;
     private LocalDateTime occurredAt;

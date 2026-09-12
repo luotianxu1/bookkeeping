@@ -18,6 +18,7 @@ import FundProfitPage from '@/pages/finance/FundProfitPage/index.vue'
 import BreakEvenForecastPage from '@/pages/finance/BreakEvenForecastPage/index.vue'
 import DividendIncomePage from '@/pages/finance/DividendIncomePage/index.vue'
 import DividendForecastPage from '@/pages/finance/DividendForecastPage/index.vue'
+import FreeEstimatePage from '@/pages/finance/FreeEstimatePage/index.vue'
 import BudgetManagementPage from '@/pages/finance/BudgetManagementPage/index.vue'
 import RenewalManagementPage from '@/pages/finance/RenewalManagementPage/index.vue'
 import ExpenseEntryPage from '@/pages/finance/ExpenseEntryPage/index.vue'
@@ -28,6 +29,7 @@ import CashAssetDetailPage from '@/pages/finance/CashAssetDetailPage/index.vue'
 import DebtAccountPage from '@/pages/finance/DebtAccountPage/index.vue'
 import DebtAccountHistoryPage from '@/pages/finance/DebtAccountHistoryPage/index.vue'
 import DebtAccountDetailPage from '@/pages/finance/DebtAccountDetailPage/index.vue'
+import DebtRecordDetailPage from '@/pages/finance/DebtRecordDetailPage/index.vue'
 import LiabilityAccountPage from '@/pages/finance/LiabilityAccountPage/index.vue'
 import LiabilityAccountDetailPage from '@/pages/finance/LiabilityAccountDetailPage/index.vue'
 import HumanRelationAccountPage from '@/pages/finance/HumanRelationAccountPage/index.vue'
@@ -170,6 +172,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/finance/free-estimate',
+    name: 'finance-free-estimate',
+    component: FreeEstimatePage,
+    meta: {
+      section: 'finance',
+      title: 'Free测算',
+    },
+  },
+  {
     path: '/finance/budgets',
     name: 'finance-budgets',
     component: BudgetManagementPage,
@@ -302,6 +313,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '已结清明细',
+    },
+  },
+  {
+    path: '/finance/accounts/debt/:accountId/record/:recordId',
+    name: 'finance-accounts-debt-record-detail',
+    component: DebtRecordDetailPage,
+    meta: {
+      section: 'finance',
+      title: '债务项详情',
     },
   },
   {

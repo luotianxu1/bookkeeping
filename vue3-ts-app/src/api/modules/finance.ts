@@ -31,6 +31,24 @@ export interface FinanceOverviewSummary {
   totalAssets: number | null
 }
 
+export interface FreeEstimate {
+  userId: number
+  asOfDate: string
+  currentNetAssets: number
+  historicalMonthlyIncome: number
+  historicalMonthlyExpense: number
+  budgetMonthlyExpense: number
+  recurringMonthlyExpense: number
+  monthlyExpense: number
+  monthlyIncome: number
+  monthlySurplus: number
+  dataStartDate?: string | null
+  dataEndDate?: string | null
+  dataMonths: number
+  incomeTransactionCount: number
+  expenseTransactionCount: number
+}
+
 export interface DebtAccountSummary {
   netAmount: number
   payableTotal: number
@@ -62,6 +80,7 @@ export interface DebtRecord {
   id: number
   userId: number
   accountId: number
+  parentRecordId?: number | null
   contactId?: number | null
   accountName?: string | null
   fundingAccountId?: number | null
@@ -69,6 +88,7 @@ export interface DebtRecord {
   direction: DebtDirection
   recordType: DebtRecordType
   amount: number
+  remainingAmount?: number | null
   currencyCode: string
   remark?: string | null
   occurredAt: string
@@ -639,6 +659,7 @@ export interface DebtRecordQuery {
 export interface SaveDebtRecordParams {
   userId: number
   accountId: number
+  parentRecordId?: number | null
   fundingAccountId?: number | null
   direction: DebtDirection
   recordType?: DebtRecordType
@@ -1537,13 +1558,21 @@ export function getGoldPrices(
   includeChart = true,
 ) {
   return requestGet<GoldPrice>(financeRequest, '/api/finance/gold-prices', {
-    params: { range, forceRefreshCurrent, includeChart },
+    params: {
+      range,
+      forceRefreshCurrent,
+      includeChart,
+      ...(forceRefreshCurrent ? { _: Date.now() } : {}),
+    },
   })
 }
 
 export function getRealtimeGoldPrice(forceRefreshCurrent = false) {
   return requestGet<GoldRealtimePrice>(financeRequest, '/api/finance/gold-prices/realtime', {
-    params: { forceRefreshCurrent },
+    params: {
+      forceRefreshCurrent,
+      ...(forceRefreshCurrent ? { _: Date.now() } : {}),
+    },
   })
 }
 
@@ -1623,6 +1652,10 @@ export function getTransactionPage(params: TransactionPageQuery = {}) {
 
 export function getTransactionAnalysis(params: TransactionAnalysisQuery) {
   return requestGet<TransactionAnalysis>(financeRequest, '/api/finance/transactions/analysis', { params })
+}
+
+export function getFreeEstimate(params: { userId: number }) {
+  return requestGet<FreeEstimate>(financeRequest, '/api/finance/accounts/free-estimate', { params })
 }
 
 export function getAccountTransactions(accountId: number, params: Omit<TransactionQuery, 'accountId'> = {}) {
@@ -1821,7 +1854,7 @@ export function refreshInvestmentDividendIncome(userId: number) {
     financeRequest,
     '/api/finance/investments/dividend-income/refresh',
     undefined,
-    { params: { userId } },
+    { params: { userId }, timeout: 120000 },
   )
 }
 

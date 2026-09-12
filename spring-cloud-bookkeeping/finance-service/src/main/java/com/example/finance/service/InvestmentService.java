@@ -96,6 +96,7 @@ import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class InvestmentService {
@@ -2645,16 +2646,23 @@ public class InvestmentService {
                 .stream()
                 .filter(this::supportsDividendProfile)
                 .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
-            products.values().forEach(product -> {
-                try {
-                    if (evaluateDividendProfile(product)) {
-                        productMapper.updateById(product);
+            // 外部分红源访问按产品串行会让刷新耗时随持仓数量线性增长；并行获取后再顺序写库。
+            List<InvestmentProductEntity> evaluatedProducts = products.values().parallelStream()
+                .filter(product -> {
+                    try {
+                        if (FUND_PRODUCT_TYPE.equals(product.getProductType())) {
+                            syncFundDividendPlansForProduct(product);
+                            return false;
+                        }
+                        return evaluateDividendProfile(product);
+                    } catch (Exception ex) {
+                        log.warn("攒股收息资格刷新失败，productId={}, symbol={}, reason={}",
+                            product.getId(), product.getSymbol(), ex.getMessage());
+                        return false;
                     }
-                } catch (Exception ex) {
-                    log.warn("攒股收息资格刷新失败，productId={}, symbol={}, reason={}",
-                        product.getId(), product.getSymbol(), ex.getMessage());
-                }
-            });
+                })
+                .toList();
+            evaluatedProducts.forEach(productMapper::updateById);
         }
         return dividendIncome(userId);
     }
@@ -4053,6 +4061,17 @@ public class InvestmentService {
         }
         List<InvestmentDividendPlanEntity> remotePlans = fetchResult.plans();
         int changedCount = 0;
+        if (!remotePlans.isEmpty()) {
+            Set<String> remotePlanKeys = remotePlans.stream()
+                .map(plan -> dividendPlanKey(plan.getDividendYear(), plan.getPayDate()))
+                .collect(Collectors.toSet());
+            dividendPlanMapper.selectList(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
+                    .eq(InvestmentDividendPlanEntity::getProductId, product.getId())
+                    .eq(InvestmentDividendPlanEntity::getSource, FUND_DIVIDEND_PLAN_SOURCE))
+                .stream()
+                .filter(existing -> !remotePlanKeys.contains(dividendPlanKey(existing.getDividendYear(), existing.getPayDate())))
+                .forEach(existing -> dividendPlanMapper.deleteById(existing.getId()));
+        }
         for (InvestmentDividendPlanEntity remotePlan : remotePlans) {
             InvestmentDividendPlanEntity existing = dividendPlanMapper.selectOne(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
                 .eq(InvestmentDividendPlanEntity::getProductId, remotePlan.getProductId())
@@ -4080,6 +4099,10 @@ public class InvestmentService {
             productMapper.updateById(product);
         }
         return changedCount;
+    }
+
+    private String dividendPlanKey(Integer dividendYear, LocalDate payDate) {
+        return String.valueOf(dividendYear) + '|' + String.valueOf(payDate);
     }
 
     private int syncStockQuoteForProduct(
@@ -5855,9 +5878,13 @@ public class InvestmentService {
         response.setProductId(entity.getProductId());
         response.setProductName(product == null ? null : product.getName());
         response.setProductSymbol(product == null ? null : product.getSymbol());
+        LocalDate paidDate = entity.getPaidAt() == null ? null : entity.getPaidAt().toLocalDate();
+        response.setDividendYear(paidDate == null ? null : paidDate.getYear());
+        response.setPayDate(paidDate);
+        response.setExpectedAmount(entity.getGrossAmount());
         response.setActualAmount(entity.getNetAmount());
         response.setDividendPerUnit(entity.getDividendPerUnit());
-        response.setStatus(entity.getStatus());
+        response.setStatus("paid");
         response.setPaidAt(entity.getPaidAt());
         return response;
     }
@@ -5889,11 +5916,17 @@ public class InvestmentService {
 
         LocalDate today = LocalDate.now();
         LocalDate oneYearAgo = today.minusYears(1);
-        Map<LocalDate, BigDecimal> actualAmountsByDate = dividendRecordMapper.selectList(new LambdaQueryWrapper<InvestmentDividendRecordEntity>()
+        List<InvestmentDividendRecordEntity> actualRecords = dividendRecordMapper.selectList(new LambdaQueryWrapper<InvestmentDividendRecordEntity>()
                 .eq(InvestmentDividendRecordEntity::getPositionId, position.getId())
                 .eq(InvestmentDividendRecordEntity::getStatus, NORMAL_STATUS)
-                .ge(InvestmentDividendRecordEntity::getPaidAt, oneYearAgo.atStartOfDay()))
-            .stream()
+                .ge(InvestmentDividendRecordEntity::getPaidAt, oneYearAgo.atStartOfDay())
+                .orderByDesc(InvestmentDividendRecordEntity::getPaidAt));
+        List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
+            .eq(InvestmentTransactionEntity::getPositionId, position.getId())
+            .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
+            .orderByAsc(InvestmentTransactionEntity::getTradeAt)
+            .orderByAsc(InvestmentTransactionEntity::getId));
+        Map<LocalDate, BigDecimal> actualAmountsByDate = actualRecords.stream()
             .filter(record -> record.getPaidAt() != null)
             .collect(Collectors.toMap(
                 record -> record.getPaidAt().toLocalDate(),
@@ -5902,17 +5935,31 @@ public class InvestmentService {
                 LinkedHashMap::new
             ));
 
-        List<InvestmentDividendPlanEntity> plans = FUND_PRODUCT_TYPE.equals(product.getProductType())
-            ? fetchFundHistoricalDividendPlans(product)
-            : fetchStockHistoricalDividendPlans(product);
+        List<InvestmentDividendPlanEntity> plans = dividendPlanMapper.selectList(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
+            .eq(InvestmentDividendPlanEntity::getProductId, product.getId())
+            .ne(InvestmentDividendPlanEntity::getStatus, "cancelled")
+            .orderByDesc(InvestmentDividendPlanEntity::getPayDate));
 
-        return plans.stream()
+        List<InvestmentDividendResponse> planResponses = plans.stream()
             .filter(plan -> {
                 LocalDate payDate = dividendPlanRecencyDate(plan);
                 return payDate != null && !payDate.isBefore(oneYearAgo) && !payDate.isAfter(today);
             })
             .sorted(Comparator.comparing(this::dividendPlanRecencyDate).reversed())
-            .map(plan -> toDividendRecordResponse(plan, product, position, actualAmountsByDate))
+            .map(plan -> toDividendRecordResponse(plan, product, position, transactions, actualAmountsByDate))
+            .toList();
+
+        Set<LocalDate> planDates = planResponses.stream()
+            .map(InvestmentDividendResponse::getPayDate)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        List<InvestmentDividendResponse> unmatchedActualResponses = actualRecords.stream()
+            .filter(record -> record.getPaidAt() != null && !planDates.contains(record.getPaidAt().toLocalDate()))
+            .map(this::toDividendRecordResponse)
+            .toList();
+
+        return Stream.concat(planResponses.stream(), unmatchedActualResponses.stream())
+            .sorted(Comparator.comparing(InvestmentDividendResponse::getPayDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
     }
 
@@ -5920,11 +5967,12 @@ public class InvestmentService {
         InvestmentDividendPlanEntity plan,
         InvestmentProductEntity product,
         InvestmentPositionEntity position,
+        List<InvestmentTransactionEntity> transactions,
         Map<LocalDate, BigDecimal> actualAmountsByDate
     ) {
         InvestmentDividendResponse response = new InvestmentDividendResponse();
         LocalDate payDate = dividendPlanRecencyDate(plan);
-        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal holdingQuantity = resolveDividendHoldingQuantity(position, plan, transactions);
         BigDecimal perUnit = resolveNetDividendPerUnit(plan);
         response.setId(plan.getId());
         response.setProductId(product.getId());
@@ -5934,11 +5982,34 @@ public class InvestmentService {
         response.setPayDate(payDate);
         response.setDividendPerUnit(defaultZero(plan.getDividendPerUnit()).setScale(6, RoundingMode.HALF_UP));
         response.setExpectedAmount(holdingQuantity.multiply(perUnit).setScale(2, RoundingMode.HALF_UP));
-        response.setActualAmount(payDate == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-            : defaultZero(actualAmountsByDate.get(payDate)).setScale(2, RoundingMode.HALF_UP));
+        BigDecimal actualAmount = payDate == null ? null : actualAmountsByDate.get(payDate);
+        response.setActualAmount(actualAmount == null ? null : actualAmount.setScale(2, RoundingMode.HALF_UP));
         response.setStatus(plan.getStatus());
         response.setPaidAt(payDate == null ? null : payDate.atStartOfDay());
         return response;
+    }
+
+    private BigDecimal resolveDividendHoldingQuantity(
+        InvestmentPositionEntity position,
+        InvestmentDividendPlanEntity plan,
+        List<InvestmentTransactionEntity> transactions
+    ) {
+        BigDecimal fallback = defaultZero(position == null ? null : position.getHoldingQuantity());
+        LocalDate recordDate = plan == null ? null : plan.getRecordDate();
+        if (recordDate == null || transactions == null || transactions.isEmpty()) {
+            return fallback.setScale(6, RoundingMode.HALF_UP);
+        }
+        LocalDateTime cutoff = recordDate.plusDays(1).atStartOfDay();
+        BigDecimal quantity = transactions.stream()
+            .filter(transaction -> transaction.getTradeAt() != null && transaction.getTradeAt().isBefore(cutoff))
+            .map(transaction -> {
+                BigDecimal value = defaultZero(transaction.getQuantity());
+                return isNegativeTradeType(transaction.getTradeType()) ? value.negate() : value;
+            })
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return quantity.compareTo(BigDecimal.ZERO) >= 0
+            ? quantity.setScale(6, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
     }
 
     private InvestmentDividendIncomePageResponse emptyDividendIncomePage(Long userId) {
@@ -6162,6 +6233,7 @@ public class InvestmentService {
             for (JsonNode row : rows) {
                 BigDecimal pretaxBonus = safeDecimal(row.path("PRETAX_BONUS_RMB").asText(null));
                 LocalDate exDividendDate = safeDate(row.path("EX_DIVIDEND_DATE").asText(null));
+                LocalDate payDate = safeDate(row.path("PAY_DATE").asText(null));
                 if (pretaxBonus == null || pretaxBonus.compareTo(BigDecimal.ZERO) <= 0 || exDividendDate == null) {
                     continue;
                 }
@@ -6171,11 +6243,11 @@ public class InvestmentService {
                 plan.setDividendYear(resolveStockDividendYear(row, exDividendDate));
                 plan.setRecordDate(safeDate(row.path("EQUITY_RECORD_DATE").asText(null)));
                 plan.setExDividendDate(exDividendDate);
-                plan.setPayDate(exDividendDate);
+                plan.setPayDate(payDate != null ? payDate : exDividendDate);
                 plan.setDividendPerUnit(pretaxBonus.divide(BigDecimal.TEN, 6, RoundingMode.HALF_UP));
                 plan.setTaxRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
                 plan.setCurrencyCode(blankToDefault(product.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
-                plan.setStatus(resolveDividendPlanStatus(exDividendDate));
+                plan.setStatus(resolveDividendPlanStatus(payDate != null ? payDate : exDividendDate));
                 plan.setSource(STOCK_DIVIDEND_HISTORY_SOURCE);
                 plan.setRemark(row.path("IMPL_PLAN_PROFILE").asText(null));
                 plans.add(plan);

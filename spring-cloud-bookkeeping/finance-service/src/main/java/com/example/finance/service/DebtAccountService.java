@@ -112,12 +112,15 @@ public class DebtAccountService {
         String direction = requireDirection(request.getDirection());
         String recordType = requireRecordType(request.getRecordType());
         AccountEntity account = requireDebtAccount(request.getUserId(), request.getAccountId());
+        DebtRecordEntity parentRecord = resolveParentRecord(request, direction, recordType, null);
         AccountEntity fundingAccount = findCashFundingAccount(request.getUserId(), request.getFundingAccountId());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
+        validateRecordAmount(parentRecord, amount, null);
 
         DebtRecordEntity entity = new DebtRecordEntity();
         entity.setUserId(request.getUserId());
         entity.setAccountId(account.getId());
+        entity.setParentRecordId(parentRecord == null ? null : parentRecord.getId());
         entity.setFundingAccountId(fundingAccount == null ? null : fundingAccount.getId());
         entity.setDirection(direction);
         entity.setRecordType(recordType);
@@ -143,12 +146,25 @@ public class DebtAccountService {
         String direction = requireDirection(request.getDirection());
         String recordType = requireRecordType(request.getRecordType());
         AccountEntity account = requireDebtAccount(request.getUserId(), request.getAccountId());
+        DebtRecordEntity parentRecord = resolveParentRecord(request, direction, recordType, id);
         AccountEntity fundingAccount = findCashFundingAccount(request.getUserId(), request.getFundingAccountId());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
+        if (parentRecord != null) {
+            validateRecordAmount(parentRecord, amount, id);
+        } else {
+            validatePrincipalAmount(entity, amount);
+        }
+        if (isPrincipalRecord(entity) && hasActiveChildren(id)
+            && (!RECORD_TYPE_BORROW.equals(recordType)
+                || !direction.equals(entity.getDirection())
+                || !account.getId().equals(entity.getAccountId()))) {
+            throw new IllegalArgumentException("已有还款或收款记录的借入/借出不能修改方向或账户类型");
+        }
 
         rollbackFundingAccountChange(entity);
 
         entity.setAccountId(account.getId());
+        entity.setParentRecordId(parentRecord == null ? null : parentRecord.getId());
         entity.setFundingAccountId(fundingAccount == null ? null : fundingAccount.getId());
         entity.setDirection(direction);
         entity.setRecordType(recordType);
@@ -168,6 +184,9 @@ public class DebtAccountService {
         DebtRecordEntity entity = debtRecordMapper.selectById(id);
         if (entity == null || !ACTIVE_STATUS.equals(entity.getStatus()) || !userId.equals(entity.getUserId())) {
             return false;
+        }
+        if (isPrincipalRecord(entity) && hasActiveChildren(id)) {
+            throw new IllegalArgumentException("该借入或借出已有还款/收款记录，不能直接删除");
         }
 
         rollbackFundingAccountChange(entity);
@@ -268,6 +287,84 @@ public class DebtAccountService {
         return normalizedRecordType;
     }
 
+    private DebtRecordEntity resolveParentRecord(
+        DebtRecordRequest request,
+        String direction,
+        String recordType,
+        Long currentRecordId
+    ) {
+        if (RECORD_TYPE_BORROW.equals(recordType)) {
+            if (request.getParentRecordId() != null) {
+                throw new IllegalArgumentException("借入或借出不能关联上级记录");
+            }
+            return null;
+        }
+        if (request.getParentRecordId() == null) {
+            throw new IllegalArgumentException("还款或收款必须关联对应的借入或借出记录");
+        }
+        DebtRecordEntity parent = debtRecordMapper.selectById(request.getParentRecordId());
+        if (parent == null || !ACTIVE_STATUS.equals(parent.getStatus())
+            || !request.getUserId().equals(parent.getUserId())
+            || !request.getAccountId().equals(parent.getAccountId())
+            || parent.getId().equals(currentRecordId)) {
+            throw new IllegalArgumentException("对应的借入或借出记录不存在");
+        }
+        if (!RECORD_TYPE_BORROW.equals(normalizeRecordType(parent.getRecordType()))) {
+            throw new IllegalArgumentException("还款或收款只能关联借入或借出记录");
+        }
+        if (!direction.equals(parent.getDirection())) {
+            throw new IllegalArgumentException("还款或收款方向与原始债务不一致");
+        }
+        return parent;
+    }
+
+    private void validateRecordAmount(DebtRecordEntity parentRecord, BigDecimal amount, Long currentRecordId) {
+        if (parentRecord == null) {
+            return;
+        }
+        BigDecimal remaining = resolveRemainingAmount(parentRecord, currentRecordId);
+        if (amount.compareTo(remaining) > 0) {
+            throw new IllegalArgumentException("金额不能超过原始债务剩余金额");
+        }
+    }
+
+    private BigDecimal resolveRemainingAmount(DebtRecordEntity parentRecord, Long excludedRecordId) {
+        BigDecimal paidAmount = resolveChildAmount(parentRecord.getId(), excludedRecordId);
+        BigDecimal principal = parentRecord.getAmount() == null ? BigDecimal.ZERO : parentRecord.getAmount();
+        BigDecimal remaining = principal.subtract(paidAmount);
+        return remaining.compareTo(BigDecimal.ZERO) > 0
+            ? remaining.setScale(2, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private void validatePrincipalAmount(DebtRecordEntity existingRecord, BigDecimal amount) {
+        BigDecimal paidAmount = resolveChildAmount(existingRecord.getId(), null);
+        if (amount.compareTo(paidAmount) < 0) {
+            throw new IllegalArgumentException("原始债务金额不能小于已还款或已收款金额");
+        }
+    }
+
+    private BigDecimal resolveChildAmount(Long parentRecordId, Long excludedRecordId) {
+        return debtRecordMapper.selectList(new LambdaQueryWrapper<DebtRecordEntity>()
+            .eq(DebtRecordEntity::getParentRecordId, parentRecordId)
+            .eq(DebtRecordEntity::getStatus, ACTIVE_STATUS)
+            .ne(excludedRecordId != null, DebtRecordEntity::getId, excludedRecordId))
+            .stream()
+            .map(DebtRecordEntity::getAmount)
+            .filter(amount -> amount != null)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private boolean hasActiveChildren(Long parentRecordId) {
+        return debtRecordMapper.selectCount(new LambdaQueryWrapper<DebtRecordEntity>()
+            .eq(DebtRecordEntity::getParentRecordId, parentRecordId)
+            .eq(DebtRecordEntity::getStatus, ACTIVE_STATUS)) > 0;
+    }
+
+    private boolean isPrincipalRecord(DebtRecordEntity entity) {
+        return RECORD_TYPE_BORROW.equals(normalizeRecordType(entity.getRecordType()));
+    }
+
     private Map<Long, BigDecimal> resolveAccountBalances(List<AccountEntity> accounts, List<DebtRecordEntity> records) {
         Map<Long, BigDecimal> recordBalances = records.stream()
             .filter(record -> record.getAccountId() != null)
@@ -355,6 +452,7 @@ public class DebtAccountService {
         response.setId(entity.getId());
         response.setUserId(entity.getUserId());
         response.setAccountId(entity.getAccountId());
+        response.setParentRecordId(entity.getParentRecordId());
         response.setContactId(account == null ? null : account.getContactId());
         response.setAccountName(account == null ? null : account.getName());
         response.setFundingAccountId(entity.getFundingAccountId());
@@ -362,6 +460,7 @@ public class DebtAccountService {
         response.setDirection(entity.getDirection());
         response.setRecordType(normalizeRecordType(entity.getRecordType()));
         response.setAmount(entity.getAmount());
+        response.setRemainingAmount(isPrincipalRecord(entity) ? resolveRemainingAmount(entity, null) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         response.setCurrencyCode(entity.getCurrencyCode());
         response.setRemark(entity.getRemark());
         response.setOccurredAt(entity.getOccurredAt());

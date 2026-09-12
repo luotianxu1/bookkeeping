@@ -58,6 +58,16 @@ type FundProfitState = {
   costAmount: number
   realizedProfit: number
 }
+
+type FundMarketSnapshot = {
+  expiresAt: number
+  baseInfo: Record<string, any>
+  trend: { netWorthTrend: any[]; acWorthTrend: any[] }
+  periodReturns: Record<string, number | null>
+}
+
+const FUND_MARKET_CACHE_TTL_MS = 10 * 60 * 1000
+const fundMarketCache = new Map<string, FundMarketSnapshot>()
 type FundProfitChartDataPoint = [number, number | null]
 
 const route = useRoute()
@@ -772,49 +782,57 @@ async function loadExternalMarketData(baseDetail: InvestmentAssetDetail) {
 }
 
 async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: string) {
-  const [baseResult, trendResult, periodIncreaseResult] = await Promise.allSettled([
-    jsonpRequest<Record<string, any>>(
-      `https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
-      ['callback'],
-    ),
-    fetchFundTrend(fundCode),
-    jsonpRequest<FundPeriodIncreaseResponse>(
-      `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNPeriodIncrease?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
-      ['callback'],
-    ),
-  ])
+  const cached = fundMarketCache.get(fundCode)
+  let baseInfo: Record<string, any>
+  let trend: { netWorthTrend: any[]; acWorthTrend: any[] }
+  let periodReturns: Record<string, number | null>
+  if (cached && cached.expiresAt > Date.now()) {
+    baseInfo = cached.baseInfo
+    trend = cached.trend
+    periodReturns = cached.periodReturns
+  } else {
+    const [baseResult, trendResult, periodIncreaseResult] = await Promise.allSettled([
+      jsonpRequest<Record<string, any>>(
+        `https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
+        ['callback'],
+      ),
+      fetchFundTrend(fundCode),
+      jsonpRequest<FundPeriodIncreaseResponse>(
+        `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNPeriodIncrease?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
+        ['callback'],
+      ),
+    ])
+    baseInfo = baseResult.status === 'fulfilled' ? baseResult.value?.Datas ?? {} : {}
+    const periodIncreaseRows = periodIncreaseResult.status === 'fulfilled'
+      ? periodIncreaseResult.value?.Datas ?? []
+      : []
+    periodReturns = buildFundPeriodReturnMap(periodIncreaseRows)
+    trend = trendResult.status === 'fulfilled'
+      ? trendResult.value
+      : { netWorthTrend: [], acWorthTrend: [] }
+    fundMarketCache.set(fundCode, {
+      expiresAt: Date.now() + FUND_MARKET_CACHE_TTL_MS,
+      baseInfo,
+      trend,
+      periodReturns,
+    })
+  }
 
-  const baseInfo = baseResult.status === 'fulfilled' ? baseResult.value?.Datas ?? {} : {}
-  const periodIncreaseRows = periodIncreaseResult.status === 'fulfilled'
-    ? periodIncreaseResult.value?.Datas ?? []
-    : []
-  const periodReturns = buildFundPeriodReturnMap(periodIncreaseRows)
   const officialPrice = Number(baseInfo.DWJZ)
   const cumulativePrice = Number(baseInfo.LJJZ)
   const latestPrice = officialPrice
   const changePercent = Number(baseInfo.RZDF)
   const updatedAt = baseInfo.FSRQ
-  const trendValueContext = trendResult.status === 'fulfilled'
-    ? buildFundTrendValueContext(
-        trendResult.value,
-        { label: updatedAt, value: cumulativePrice },
-        { label: updatedAt, value: latestPrice },
-      )
-    : buildFundTrendValueContext(
-        { netWorthTrend: [], acWorthTrend: [] },
-        { label: updatedAt, value: cumulativePrice },
-        { label: updatedAt, value: latestPrice },
-      )
-  const chartPoints = trendResult.status === 'fulfilled'
-    ? buildFundTrendPoints(
-        trendResult.value,
-        { label: updatedAt, value: cumulativePrice },
-        { label: updatedAt, value: latestPrice },
-      )
-    : mergeLatestFundTrendPoint([], {
-        label: updatedAt,
-        value: Number.isFinite(cumulativePrice) ? cumulativePrice : latestPrice,
-      })
+  const trendValueContext = buildFundTrendValueContext(
+    trend,
+    { label: updatedAt, value: cumulativePrice },
+    { label: updatedAt, value: latestPrice },
+  )
+  const chartPoints = buildFundTrendPoints(
+    trend,
+    { label: updatedAt, value: cumulativePrice },
+    { label: updatedAt, value: latestPrice },
+  )
   fullFundChartPoints.value = chartPoints
   fundPeriodReturnMap.value = periodReturns
   fundTrendValueMap.value = trendValueContext.values
@@ -2570,8 +2588,13 @@ function formatDividendPerUnit(value?: number | null) {
   return Number.isFinite(numeric) ? `${formatNumber(numeric, 4)} / ${currentUnitName.value}` : '--'
 }
 
-function getDividendStatusLabel(value?: string | null) {
-  if (value === 'paid') return '已分红'
+function getDividendRecordKey(entry: InvestmentDividendRecord) {
+  return entry.id ?? `${entry.productId}-${entry.payDate ?? 'unknown'}-${entry.dividendPerUnit ?? 0}`
+}
+
+function getDividendStatusLabel(value?: string | null, actualAmount?: number | null) {
+  if (actualAmount !== null && actualAmount !== undefined) return '已到账'
+  if (value === 'paid') return '已公告'
   if (value === 'confirmed') return '已公告'
   if (value === 'planned') return '计划中'
   if (value === 'cancelled') return '已取消'
@@ -2901,22 +2924,22 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
         </div>
       </section>
 
-      <section v-if="showDividendRecordsSection" class="investment-detail-card" aria-label="近一年分红记录">
+      <section v-if="showDividendRecordsSection" class="investment-detail-card" aria-label="近一年分红与计划">
         <header class="investment-detail-card-head">
-          <h2>近一年分红记录</h2>
+          <h2>近一年分红与计划</h2>
           <span>{{ dividendRecords.length }} 条</span>
         </header>
         <div class="investment-detail-dividend-list">
           <article
             v-for="entry in dividendRecords"
-            :key="entry.id"
+            :key="getDividendRecordKey(entry)"
             class="investment-detail-dividend-item"
           >
             <div class="investment-detail-dividend-top">
               <div class="investment-detail-dividend-title">
                 <strong>{{ formatDividendDate(entry.payDate) }}</strong>
               </div>
-              <em class="investment-detail-dividend-status">{{ getDividendStatusLabel(entry.status) }}</em>
+              <em class="investment-detail-dividend-status">{{ getDividendStatusLabel(entry.status, entry.actualAmount) }}</em>
             </div>
 
             <div class="investment-detail-dividend-grid">
@@ -2925,8 +2948,8 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
                 <strong>{{ formatDividendPerUnit(entry.dividendPerUnit) }}</strong>
               </div>
               <div>
-                <span>分红</span>
-                <strong>{{ formatCurrency(Number(entry.expectedAmount ?? 0)) }}</strong>
+                <span>{{ entry.actualAmount === null || entry.actualAmount === undefined ? '预计分红' : '到账分红' }}</span>
+                <strong>{{ formatCurrency(Number(entry.actualAmount ?? entry.expectedAmount ?? 0)) }}</strong>
               </div>
             </div>
           </article>

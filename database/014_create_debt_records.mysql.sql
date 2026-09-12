@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS debt_records (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '债务记录ID',
   user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID',
   account_id BIGINT UNSIGNED NOT NULL COMMENT '债务账户ID',
+  parent_record_id BIGINT UNSIGNED NULL COMMENT '还款/收款对应的借入/借出主记录ID',
   funding_account_id BIGINT UNSIGNED NULL COMMENT '关联现金账户ID',
   direction ENUM('payable', 'receivable') NOT NULL COMMENT '债务方向：借入/借出',
   record_type ENUM('borrow', 'repayment') NOT NULL DEFAULT 'borrow' COMMENT '记录类型：借款/还款',
@@ -24,11 +25,15 @@ CREATE TABLE IF NOT EXISTS debt_records (
   KEY idx_debt_records_user_time (user_id, occurred_at),
   KEY idx_debt_records_account_time (account_id, occurred_at),
   KEY idx_debt_records_account_status (account_id, status),
+  KEY idx_debt_records_parent_status (parent_record_id, status),
   KEY idx_debt_records_funding_account_status (funding_account_id, status),
   CONSTRAINT fk_debt_records_user
     FOREIGN KEY (user_id) REFERENCES users (id),
   CONSTRAINT fk_debt_records_account
-    FOREIGN KEY (account_id) REFERENCES accounts (id)
+    FOREIGN KEY (account_id) REFERENCES accounts (id),
+  CONSTRAINT fk_debt_records_parent
+    FOREIGN KEY (parent_record_id) REFERENCES debt_records (id)
+    ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='债务记录表：记录某个债务账户下的借入和借出明细';
 
 INSERT INTO debt_records (

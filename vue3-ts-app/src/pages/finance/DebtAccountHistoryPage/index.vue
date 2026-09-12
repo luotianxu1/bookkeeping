@@ -3,7 +3,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
-import AmountText from '@/components/common/AmountText/index.vue'
 import {
   getAccounts,
   getDebtRecords,
@@ -13,14 +12,14 @@ import {
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
-type HistoryRecord = Pick<DebtRecord, 'id' | 'direction' | 'recordType' | 'amount' | 'remark' | 'occurredAt'>
-
-type SettledDebtGroup = {
+type DebtHistoryGroup = {
   accountId: number
   name: string
   avatarText: string
   avatarClass: string
-  records: HistoryRecord[]
+  records: DebtRecord[]
+  balance: number
+  settled: boolean
 }
 
 const DEBT_ACCOUNT_CODES = new Set(['debt'])
@@ -33,7 +32,7 @@ const isLoading = ref(false)
 const pageError = ref('')
 
 const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
-const settledGroups = computed<SettledDebtGroup[]>(() => {
+const debtGroups = computed<DebtHistoryGroup[]>(() => {
   const recordsByAccountId = new Map<number, DebtRecord[]>()
   for (const record of debtRecords.value) {
     const records = recordsByAccountId.get(record.accountId) ?? []
@@ -49,6 +48,7 @@ const settledGroups = computed<SettledDebtGroup[]>(() => {
       ))
       const contact = account.contactId ? contactMap.value.get(account.contactId) ?? null : null
       const name = contact?.name?.trim() || account.name
+      const balance = sumDebtBalance(records)
 
       return {
         accountId: account.id,
@@ -56,12 +56,14 @@ const settledGroups = computed<SettledDebtGroup[]>(() => {
         avatarText: (name || '债').slice(0, 1),
         avatarClass: `debt-history-avatar-${index % 4}`,
         records,
+        balance,
+        settled: Math.round(balance * 100) === 0,
       }
     })
-    .filter((group) => group.records.length > 0 && Math.round(sumDebtBalance(group.records) * 100) === 0)
+    .filter((group) => group.records.length > 0 && group.settled)
 })
 
-const settledRecordCount = computed(() => settledGroups.value.reduce((total, group) => total + group.records.length, 0))
+const settledAccountCount = computed(() => debtGroups.value.length)
 
 function openDebtDetail(accountId: number) {
   router.push(`/finance/accounts/debt/${accountId}`)
@@ -81,7 +83,7 @@ onMounted(() => {
 async function loadHistory() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
-    pageError.value = '请先登录后查看已结清明细'
+    pageError.value = '请先登录后查看债务明细'
     return
   }
 
@@ -98,7 +100,7 @@ async function loadHistory() {
     contacts.value = contactList
     debtRecords.value = recordList
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '已结清明细加载失败'
+    pageError.value = error instanceof Error ? error.message : '债务明细加载失败'
   } finally {
     isLoading.value = false
   }
@@ -119,59 +121,32 @@ function getDebtRecordBalanceDelta(record: Pick<DebtRecord, 'direction' | 'recor
   return record.recordType === 'repayment' ? amount : -amount
 }
 
-function formatRecordAction(record: Pick<DebtRecord, 'direction' | 'recordType'>) {
-  if (record.direction === 'receivable') {
-    return record.recordType === 'repayment' ? '收款' : '借出'
-  }
-  return record.recordType === 'repayment' ? '还款' : '借入'
-}
-
-function formatRecordAmount(record: Pick<DebtRecord, 'direction' | 'recordType' | 'amount'>) {
-  const delta = getDebtRecordBalanceDelta(record)
-  const sign = delta > 0 ? '+' : delta < 0 ? '-' : ''
-  return `${sign}¥${formatNumber(Math.abs(delta))}`
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
-}
-
-function formatDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
 </script>
 
 <template>
-  <section class="debt-history-page" aria-label="已结清债务明细">
+  <section class="debt-history-page" aria-label="已结清债务账户">
     <header class="debt-history-header">
-      <PageHeader title="已结清明细" back-to="/finance/accounts/debt" back-label="返回债务账户" />
+      <PageHeader title="债务明细" back-to="/finance/accounts/debt" back-label="返回债务账户" />
     </header>
 
     <p v-if="pageError" class="debt-history-message debt-history-message-error">
       {{ pageError }}
     </p>
-    <CommonLoading v-else-if="isLoading" text="已结清明细加载中..." />
+    <CommonLoading v-else-if="isLoading" text="债务明细加载中..." />
 
     <template v-else>
       <div class="debt-history-summary">
-        <strong>{{ settledGroups.length }} 个已结清账户</strong>
-        <span>{{ settledRecordCount }} 条历史记录</span>
+        <strong>{{ settledAccountCount }} 个已结清账户</strong>
+        <span>点击账户查看详情</span>
       </div>
 
-      <p v-if="settledGroups.length === 0" class="debt-history-empty">
-        暂无已结清债务历史
+      <p v-if="debtGroups.length === 0" class="debt-history-empty">
+        暂无已结清债务账户
       </p>
 
-      <section v-else class="debt-history-list" aria-label="已结清账户历史">
+      <section v-else class="debt-history-list" aria-label="已结清债务账户">
         <article
-          v-for="group in settledGroups"
+          v-for="group in debtGroups"
           :key="group.accountId"
           class="debt-history-card"
           role="button"
@@ -185,35 +160,6 @@ function formatDate(value: string) {
               <strong>{{ group.name }}</strong>
             </div>
             <span class="debt-history-settled-badge">已结清</span>
-          </div>
-
-          <div class="debt-history-records">
-            <div v-for="record in group.records" :key="record.id" class="debt-history-record">
-              <div class="debt-history-record-main">
-                <div class="debt-history-record-top">
-                  <span
-                    class="debt-history-record-action"
-                    :class="{
-                      'is-collect': record.direction === 'receivable' && record.recordType === 'repayment',
-                      'is-lend': record.direction === 'receivable' && record.recordType !== 'repayment',
-                    }"
-                  >
-                    {{ formatRecordAction(record) }}
-                  </span>
-                  <span class="debt-history-record-date">{{ formatDate(record.occurredAt) }}</span>
-                </div>
-                <p v-if="record.remark?.trim()" class="debt-history-record-remark">
-                  <span class="debt-history-record-remark-label">备注：</span>{{ record.remark.trim() }}
-                </p>
-              </div>
-              <AmountText
-                tag="strong"
-                class="debt-history-record-amount"
-                :class="{ 'is-negative': getDebtRecordBalanceDelta(record) < 0 }"
-                :value="formatRecordAmount(record)"
-                tone="inherit"
-              />
-            </div>
           </div>
         </article>
       </section>

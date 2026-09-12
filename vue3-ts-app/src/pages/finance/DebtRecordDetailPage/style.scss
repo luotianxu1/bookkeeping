@@ -1,0 +1,209 @@
+.debt-record-detail-page {
+  display: grid;
+  gap: var(--space-6);
+  padding-bottom: var(--space-72);
+  --page-header-bg: var(--color-bg-page);
+}
+
+.debt-record-detail-header {
+  background: var(--color-bg-page);
+}
+
+.debt-record-detail-message {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.debt-record-detail-message-error {
+  color: var(--color-danger);
+}
+
+.debt-record-detail-summary,
+.debt-record-detail-list {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.debt-record-detail-summary {
+  padding: var(--space-16);
+  border: 1px solid var(--color-border-blue);
+  border-radius: var(--radius-20);
+  background: var(--color-top-card-gradient);
+  box-shadow: var(--color-finance-card-shadow);
+}
+
+.debt-record-detail-summary-top,
+.debt-record-detail-list-head,
+.debt-record-detail-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.debt-record-detail-summary h2,
+.debt-record-detail-summary p,
+.debt-record-detail-item p {
+  margin: 0;
+}
+
+.debt-record-detail-summary h2 {
+  color: var(--color-finance-title);
+  font-size: var(--font-size-20);
+}
+
+.debt-record-detail-summary-top p,
+.debt-record-detail-caption,
+.debt-record-detail-list-head span,
+.debt-record-detail-item span,
+.debt-record-detail-item small {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+}
+
+.debt-record-detail-status {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-strong);
+  font-size: var(--font-size-12);
+  font-weight: 700;
+}
+
+.debt-record-detail-status.is-settled {
+  background: var(--color-bg-blue-soft);
+  color: var(--color-brand);
+}
+
+.debt-record-detail-remaining {
+  margin: 4px 0 0;
+  color: var(--color-finance-title);
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.debt-record-detail-caption {
+  margin-top: -2px;
+}
+
+.debt-record-detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.debt-record-detail-metrics > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--radius-14);
+  background: var(--color-finance-metric-bg);
+}
+
+.debt-record-detail-metrics span {
+  color: var(--color-finance-metric-label);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.debt-record-detail-metrics strong {
+  color: var(--color-finance-metric-value);
+  font-size: var(--font-size-14);
+}
+
+.debt-record-detail-progress {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-12);
+}
+
+.debt-record-detail-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-border-soft);
+}
+
+.debt-record-detail-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-brand);
+}
+
+.debt-record-detail-list-head strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-16);
+}
+
+.debt-record-detail-empty {
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  font-weight: 600;
+}
+
+.debt-record-detail-item {
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+}
+
+.debt-record-detail-item > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.debt-record-detail-item > div > strong {
+  color: var(--color-brand);
+  font-size: var(--font-size-14);
+}
+
+.debt-record-detail-item p {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-13);
+}
+
+.debt-record-detail-item small {
+  font-weight: 600;
+}
+
+.debt-record-detail-item-amount {
+  flex: 0 0 auto;
+  color: var(--color-finance-title);
+  font-size: var(--font-size-16);
+}
+
+@media (max-width: 520px) {
+  .debt-record-detail-metrics {
+    gap: 6px;
+  }
+
+  .debt-record-detail-metrics > div {
+    padding: 9px 8px;
+  }
+
+  .debt-record-detail-metrics span {
+    font-size: 11px;
+  }
+
+  .debt-record-detail-metrics strong {
+    font-size: 12px;
+  }
+}

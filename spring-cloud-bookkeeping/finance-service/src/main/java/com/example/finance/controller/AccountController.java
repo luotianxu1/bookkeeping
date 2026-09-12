@@ -7,9 +7,11 @@ import com.example.finance.dto.AccountSortOrderRequest;
 import com.example.finance.dto.AssetAccountSnapshotResponse;
 import com.example.finance.dto.AssetTrendResponse;
 import com.example.finance.dto.FinanceOverviewResponse;
+import com.example.finance.dto.FreeEstimateResponse;
 import com.example.finance.service.AccountService;
 import com.example.finance.service.AssetSnapshotService;
 import com.example.finance.service.AssetTrendService;
+import com.example.finance.service.FreeEstimateService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -36,15 +38,18 @@ public class AccountController {
     private final AccountService accountService;
     private final AssetTrendService assetTrendService;
     private final AssetSnapshotService assetSnapshotService;
+    private final FreeEstimateService freeEstimateService;
 
     public AccountController(
         AccountService accountService,
         AssetTrendService assetTrendService,
-        AssetSnapshotService assetSnapshotService
+        AssetSnapshotService assetSnapshotService,
+        FreeEstimateService freeEstimateService
     ) {
         this.accountService = accountService;
         this.assetTrendService = assetTrendService;
         this.assetSnapshotService = assetSnapshotService;
+        this.freeEstimateService = freeEstimateService;
     }
 
     @GetMapping
@@ -73,6 +78,14 @@ public class AccountController {
         @RequestParam(name = "range", required = false, defaultValue = "ytd") String range
     ) {
         return Result.ok(assetTrendService.trend(userId, accountId, range));
+    }
+
+    @GetMapping("/free-estimate")
+    @Operation(summary = "查询Free测算基础数据")
+    public Result<FreeEstimateResponse> freeEstimate(
+        @RequestParam(name = "userId") @NotNull Long userId
+    ) {
+        return Result.ok(freeEstimateService.estimate(userId));
     }
 
     @GetMapping("/snapshots/latest")
