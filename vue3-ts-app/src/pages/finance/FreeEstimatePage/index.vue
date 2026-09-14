@@ -20,6 +20,15 @@ const currentUser = getStoredCurrentUser()
 const hasEstimate = computed(() => Boolean(estimate.value))
 const realWithdrawalRate = 4
 const realExpectedReturn = 4
+const tianjinSelfPayRule = {
+  label: '2026年9月起',
+  base: 5180,
+  pensionRate: 20,
+  medicalRate: 8.5,
+}
+const tianjinMinimumPension = tianjinSelfPayRule.base * (tianjinSelfPayRule.pensionRate / 100)
+const tianjinMinimumMedical = tianjinSelfPayRule.base * (tianjinSelfPayRule.medicalRate / 100)
+const tianjinMinimumSelfPay = tianjinMinimumPension + tianjinMinimumMedical
 
 const currentAssets = computed(() => normalizeMoney(currentAssetsInput.value, estimate.value?.currentNetAssets ?? 0))
 const monthlyIncome = computed(() => normalizeMoney(monthlyIncomeInput.value, estimate.value?.monthlyIncome ?? 0))
@@ -33,7 +42,8 @@ const calculation = computed(() => {
   }
 
   const currentNetAssets = Math.max(Number(estimate.value.currentNetAssets ?? 0), 0)
-  const realMonthlyExpense = Math.max(Number(estimate.value.monthlyExpense ?? 0), 0)
+  const realLivingExpense = Math.max(Number(estimate.value.monthlyExpense ?? 0), 0)
+  const realMonthlyExpense = realLivingExpense + tianjinMinimumSelfPay
   const annualExpense = realMonthlyExpense * 12
   const targetAssets = realWithdrawalRate > 0
     ? annualExpense / (realWithdrawalRate / 100)
@@ -75,12 +85,13 @@ const projection = computed(() => {
   }
 
   const currentNetAssets = currentAssets.value
-  const annualExpense = monthlyExpense.value * 12
+  const totalMonthlyExpense = monthlyExpense.value + tianjinMinimumSelfPay
+  const annualExpense = totalMonthlyExpense * 12
   const targetAssets = withdrawalRate.value > 0
     ? annualExpense / (withdrawalRate.value / 100)
     : 0
   const monthlyIncomeValue = monthlyIncome.value
-  const monthlySurplus = monthlyIncomeValue - monthlyExpense.value
+  const monthlySurplus = monthlyIncomeValue - totalMonthlyExpense
   const monthsToFreedom = calculateMonthsToTarget(
     currentNetAssets,
     targetAssets,
@@ -91,6 +102,8 @@ const projection = computed(() => {
   return {
     targetAssets,
     remainingAssets: Math.max(targetAssets - currentNetAssets, 0),
+    monthlyExpense: totalMonthlyExpense,
+    tianjinMinimumSelfPay,
     monthlySurplus,
     monthsToFreedom,
     savingsRate: monthlyIncomeValue > 0 ? (monthlySurplus / monthlyIncomeValue) * 100 : null,
@@ -246,7 +259,7 @@ onMounted(() => {
         <div class="free-hero-target">
           <span>财富自由总金额</span>
           <strong>{{ formatCurrency(calculation.targetAssets) }}</strong>
-          <small>年度支出 ÷ {{ formatPercent(realWithdrawalRate) }} 提现率</small>
+          <small>年度总支出（含最低社保医保） ÷ {{ formatPercent(realWithdrawalRate) }} 提现率</small>
         </div>
         <div class="free-progress">
           <div class="free-progress-head">
@@ -310,6 +323,10 @@ onMounted(() => {
                 <dd>{{ formatCurrency(estimate.historicalMonthlyExpense) }}</dd>
               </div>
               <div>
+                <dt>天津最低社保 + 医保</dt>
+                <dd>{{ formatCurrency(tianjinMinimumSelfPay) }}</dd>
+              </div>
+              <div>
                 <dt>有效固定支出</dt>
                 <dd>{{ formatCurrency(estimate.recurringMonthlyExpense) }}</dd>
               </div>
@@ -355,7 +372,7 @@ onMounted(() => {
                 <b>¥</b>
                 <input v-model="monthlyExpenseInput" inputmode="decimal" type="number" min="0" step="100" aria-label="每月生活费">
               </div>
-              <small>默认取历史月均支出</small>
+              <small>默认取历史月均生活费，另加天津最低社保医保</small>
             </label>
             <label class="free-field">
               <span>安全提现率</span>
@@ -383,6 +400,7 @@ onMounted(() => {
             />
             <small>预计剩余时间 {{ formatDuration(projection?.monthsToFreedom ?? null) }} · 储蓄率 {{ formatPercent(projection?.savingsRate) }}</small>
             <div class="free-assumption-summary">
+              <span>预测月度总支出 <strong>{{ formatCurrency(projection?.monthlyExpense) }}</strong></span>
               <span>预测财富自由总金额 <strong>{{ formatCurrency(projection?.targetAssets) }}</strong></span>
               <span>还需积累 <strong>{{ formatCurrency(projection?.remainingAssets) }}</strong></span>
             </div>
@@ -391,7 +409,7 @@ onMounted(() => {
       </section>
 
       <p class="free-footnote">
-        说明：本页用当前净资产、现金收支和历史月均支出做估算；目标本金采用“年度生活费 ÷ 安全提现率”，结果仅用于规划参考。
+        说明：本页在历史月均生活费之外，另计天津灵活就业最低养老和职工医保（{{ tianjinSelfPayRule.label }}，合计 {{ formatCurrency(tianjinMinimumSelfPay) }}/月）；目标本金采用“年度总支出 ÷ 安全提现率”，结果仅用于规划参考。
       </p>
     </template>
   </section>
