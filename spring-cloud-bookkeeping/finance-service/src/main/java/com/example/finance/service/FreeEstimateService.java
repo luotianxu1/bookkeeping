@@ -5,13 +5,11 @@ import com.example.finance.dto.FreeEstimateResponse;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
 import com.example.finance.entity.InvestmentFixedExpenseEntity;
-import com.example.finance.entity.MonthlyBudgetEntity;
 import com.example.finance.entity.RenewalSubscriptionEntity;
 import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
 import com.example.finance.mapper.InvestmentFixedExpenseMapper;
-import com.example.finance.mapper.MonthlyBudgetMapper;
 import com.example.finance.mapper.RenewalSubscriptionMapper;
 import com.example.finance.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
@@ -44,7 +42,6 @@ public class FreeEstimateService {
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
     private final TransactionMapper transactionMapper;
-    private final MonthlyBudgetMapper monthlyBudgetMapper;
     private final RenewalSubscriptionMapper renewalSubscriptionMapper;
     private final InvestmentFixedExpenseMapper investmentFixedExpenseMapper;
     private final AccountService accountService;
@@ -53,7 +50,6 @@ public class FreeEstimateService {
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         TransactionMapper transactionMapper,
-        MonthlyBudgetMapper monthlyBudgetMapper,
         RenewalSubscriptionMapper renewalSubscriptionMapper,
         InvestmentFixedExpenseMapper investmentFixedExpenseMapper,
         AccountService accountService
@@ -61,7 +57,6 @@ public class FreeEstimateService {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.transactionMapper = transactionMapper;
-        this.monthlyBudgetMapper = monthlyBudgetMapper;
         this.renewalSubscriptionMapper = renewalSubscriptionMapper;
         this.investmentFixedExpenseMapper = investmentFixedExpenseMapper;
         this.accountService = accountService;
@@ -102,13 +97,8 @@ public class FreeEstimateService {
         int dataMonths = calculateDataMonths(firstTransactionDate, lastTransactionDate);
         BigDecimal historicalMonthlyIncome = divide(incomeTotal, dataMonths);
         BigDecimal historicalMonthlyExpense = divide(expenseTotal, dataMonths);
-        BigDecimal budgetMonthlyExpense = loadBudgetMonthlyExpense(userId);
         BigDecimal recurringMonthlyExpense = loadRecurringMonthlyExpense(userId);
-        BigDecimal monthlyExpense = max(
-            historicalMonthlyExpense,
-            budgetMonthlyExpense,
-            recurringMonthlyExpense
-        );
+        BigDecimal monthlyExpense = historicalMonthlyExpense;
         BigDecimal monthlyIncome = historicalMonthlyIncome;
 
         FreeEstimateResponse response = new FreeEstimateResponse();
@@ -117,7 +107,6 @@ public class FreeEstimateService {
         response.setCurrentNetAssets(scale(accountService.calculateTotalAssets(userId, ACTIVE_STATUS)));
         response.setHistoricalMonthlyIncome(scale(historicalMonthlyIncome));
         response.setHistoricalMonthlyExpense(scale(historicalMonthlyExpense));
-        response.setBudgetMonthlyExpense(scale(budgetMonthlyExpense));
         response.setRecurringMonthlyExpense(scale(recurringMonthlyExpense));
         response.setMonthlyExpense(scale(monthlyExpense));
         response.setMonthlyIncome(scale(monthlyIncome));
@@ -151,16 +140,6 @@ public class FreeEstimateService {
             })
             .map(AccountEntity::getId)
             .toList();
-    }
-
-    private BigDecimal loadBudgetMonthlyExpense(Long userId) {
-        MonthlyBudgetEntity budget = monthlyBudgetMapper.selectOne(new LambdaQueryWrapper<MonthlyBudgetEntity>()
-            .eq(MonthlyBudgetEntity::getUserId, userId)
-            .eq(MonthlyBudgetEntity::getStatus, ACTIVE_STATUS)
-            .orderByDesc(MonthlyBudgetEntity::getBudgetMonth)
-            .orderByDesc(MonthlyBudgetEntity::getId)
-            .last("LIMIT 1"));
-        return budget == null ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP) : scale(budget.getAmount());
     }
 
     private BigDecimal loadRecurringMonthlyExpense(Long userId) {
@@ -221,16 +200,6 @@ public class FreeEstimateService {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
         return amount.divide(BigDecimal.valueOf(divisor), 2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal max(BigDecimal... values) {
-        BigDecimal result = BigDecimal.ZERO;
-        for (BigDecimal value : values) {
-            if (value != null && value.compareTo(result) > 0) {
-                result = value;
-            }
-        }
-        return result.setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal scale(BigDecimal value) {

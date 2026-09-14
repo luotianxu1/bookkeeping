@@ -4,10 +4,10 @@
   flex-direction: column;
   gap: var(--space-6);
   padding: 12px 12px 14px;
-  border: 1px solid #bbd7ff;
+  border: 1px solid var(--color-top-card-border);
   border-radius: var(--radius-20);
   background: var(--color-top-card-gradient);
-  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.14);
+  box-shadow: var(--color-top-card-shadow);
 }
 
 .asset-main {
@@ -24,7 +24,7 @@
 .asset-label,
 .asset-row {
   margin: 0;
-  color: #5b6f8c;
+  color: var(--color-finance-home-label);
 }
 
 .asset-label {
@@ -34,7 +34,7 @@
 
 h1 {
   margin: 0;
-  color: #0b2440;
+  color: var(--color-finance-home-title);
   font-size: var(--font-size-28);
   line-height: 1.2;
   letter-spacing: 0;
@@ -63,7 +63,7 @@ h1 {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: #eff6ff;
+  background: var(--color-finance-home-ring-inner-bg);
   display: grid;
   place-items: center;
   align-content: center;
@@ -72,25 +72,25 @@ h1 {
 }
 
 .budget-ring-inner span {
-  color: #0b2440;
+  color: var(--color-finance-home-title);
   font-size: var(--font-size-12);
   font-weight: 600;
   line-height: 1;
 }
 
 .budget-ring-inner strong {
-  color: #0b2440;
+  color: var(--color-finance-home-title);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
 }
 
 .budget-ring-danger .budget-ring-inner {
-  background: #fff7f7;
+  background: var(--color-finance-home-ring-danger-inner-bg);
 }
 
 .budget-ring-danger .budget-ring-inner span {
-  color: #991b1b;
+  color: var(--color-finance-home-ring-danger-text);
 }
 
 .budget-ring-danger .budget-ring-inner strong {
@@ -111,30 +111,30 @@ h1 {
   gap: var(--space-6);
   padding: 6px 8px;
   border-radius: var(--radius-10);
-  border: 1px solid #dceaff;
-  background: #f4f8ff;
+  border: 1px solid var(--color-finance-home-metric-border);
+  background: var(--color-finance-home-metric-bg);
 }
 
 .asset-metric-item:nth-child(1),
 .asset-metric-item:nth-child(3) {
-  border-color: #d7e9ff;
-  background: #eef6ff;
+  border-color: var(--color-finance-home-metric-alt-border);
+  background: var(--color-finance-home-metric-alt-bg);
 }
 
 .asset-metric-item:nth-child(2),
 .asset-metric-item:nth-child(4) {
-  border-color: #d3e3ff;
-  background: #eaf2ff;
+  border-color: var(--color-finance-home-metric-secondary-border);
+  background: var(--color-finance-home-metric-secondary-bg);
 }
 
 .asset-metric-item span {
-  color: #5b6f8c;
+  color: var(--color-finance-home-label);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
 
 .asset-metric-item strong {
-  color: #0b2440;
+  color: var(--color-finance-home-title);
   font-size: var(--font-size-12);
   font-weight: 700;
 }

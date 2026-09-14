@@ -37,7 +37,6 @@ export interface FreeEstimate {
   currentNetAssets: number
   historicalMonthlyIncome: number
   historicalMonthlyExpense: number
-  budgetMonthlyExpense: number
   recurringMonthlyExpense: number
   monthlyExpense: number
   monthlyIncome: number

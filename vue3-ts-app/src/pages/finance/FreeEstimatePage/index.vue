@@ -8,6 +8,8 @@ import { getFreeEstimate, type FreeEstimate } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const estimate = ref<FreeEstimate | null>(null)
+const currentAssetsInput = ref('')
+const monthlyIncomeInput = ref('')
 const monthlyExpenseInput = ref('')
 const withdrawalRateInput = ref('4')
 const expectedReturnInput = ref('4')
@@ -15,9 +17,12 @@ const isLoading = ref(false)
 const pageError = ref('')
 
 const currentUser = getStoredCurrentUser()
-const currentUserName = computed(() => currentUser?.displayName?.trim() || currentUser?.username || '当前用户')
 const hasEstimate = computed(() => Boolean(estimate.value))
+const realWithdrawalRate = 4
+const realExpectedReturn = 4
 
+const currentAssets = computed(() => normalizeMoney(currentAssetsInput.value, estimate.value?.currentNetAssets ?? 0))
+const monthlyIncome = computed(() => normalizeMoney(monthlyIncomeInput.value, estimate.value?.monthlyIncome ?? 0))
 const monthlyExpense = computed(() => normalizeMoney(monthlyExpenseInput.value, estimate.value?.monthlyExpense ?? 0))
 const withdrawalRate = computed(() => normalizeRate(withdrawalRateInput.value, 4, 1, 10))
 const expectedReturn = computed(() => normalizeRate(expectedReturnInput.value, 4, 0, 20))
@@ -28,17 +33,54 @@ const calculation = computed(() => {
   }
 
   const currentNetAssets = Math.max(Number(estimate.value.currentNetAssets ?? 0), 0)
+  const realMonthlyExpense = Math.max(Number(estimate.value.monthlyExpense ?? 0), 0)
+  const annualExpense = realMonthlyExpense * 12
+  const targetAssets = realWithdrawalRate > 0
+    ? annualExpense / (realWithdrawalRate / 100)
+    : 0
+  const monthlyIncomeValue = Math.max(Number(estimate.value.monthlyIncome ?? 0), 0)
+  const monthlySurplus = monthlyIncomeValue - realMonthlyExpense
+  const passiveMonthlyIncome = currentNetAssets * (realExpectedReturn / 100) / 12
+  const sustainableMonthlyExpense = currentNetAssets * (realWithdrawalRate / 100) / 12
+  const progress = targetAssets > 0
+    ? Math.min((currentNetAssets / targetAssets) * 100, 100)
+    : 100
+  const monthsToFreedom = calculateMonthsToTarget(
+    currentNetAssets,
+    targetAssets,
+    Math.max(monthlySurplus, 0),
+    realExpectedReturn,
+  )
+
+  return {
+    currentNetAssets,
+    annualExpense,
+    targetAssets,
+    monthlyIncome: monthlyIncomeValue,
+    monthlySurplus,
+    passiveMonthlyIncome,
+    sustainableMonthlyExpense,
+    progress,
+    monthsToFreedom,
+    remainingAssets: Math.max(targetAssets - currentNetAssets, 0),
+    runwayMonths: realMonthlyExpense > 0 ? currentNetAssets / realMonthlyExpense : null,
+    savingsRate: monthlyIncomeValue > 0 ? (monthlySurplus / monthlyIncomeValue) * 100 : null,
+    isFree: targetAssets <= currentNetAssets,
+  }
+})
+
+const projection = computed(() => {
+  if (!estimate.value) {
+    return null
+  }
+
+  const currentNetAssets = currentAssets.value
   const annualExpense = monthlyExpense.value * 12
   const targetAssets = withdrawalRate.value > 0
     ? annualExpense / (withdrawalRate.value / 100)
     : 0
-  const monthlyIncome = Math.max(Number(estimate.value.monthlyIncome ?? 0), 0)
-  const monthlySurplus = monthlyIncome - monthlyExpense.value
-  const passiveMonthlyIncome = currentNetAssets * (expectedReturn.value / 100) / 12
-  const sustainableMonthlyExpense = currentNetAssets * (withdrawalRate.value / 100) / 12
-  const progress = targetAssets > 0
-    ? Math.min((currentNetAssets / targetAssets) * 100, 100)
-    : 100
+  const monthlyIncomeValue = monthlyIncome.value
+  const monthlySurplus = monthlyIncomeValue - monthlyExpense.value
   const monthsToFreedom = calculateMonthsToTarget(
     currentNetAssets,
     targetAssets,
@@ -47,19 +89,11 @@ const calculation = computed(() => {
   )
 
   return {
-    currentNetAssets,
-    annualExpense,
     targetAssets,
-    monthlyIncome,
-    monthlySurplus,
-    passiveMonthlyIncome,
-    sustainableMonthlyExpense,
-    progress,
-    monthsToFreedom,
     remainingAssets: Math.max(targetAssets - currentNetAssets, 0),
-    runwayMonths: monthlyExpense.value > 0 ? currentNetAssets / monthlyExpense.value : null,
-    savingsRate: monthlyIncome > 0 ? (monthlySurplus / monthlyIncome) * 100 : null,
-    isFree: targetAssets <= currentNetAssets,
+    monthlySurplus,
+    monthsToFreedom,
+    savingsRate: monthlyIncomeValue > 0 ? (monthlySurplus / monthlyIncomeValue) * 100 : null,
   }
 })
 
@@ -107,6 +141,8 @@ async function loadEstimate() {
   try {
     const result = await getFreeEstimate({ userId: currentUser.id })
     estimate.value = result
+    currentAssetsInput.value = formatInputNumber(result.currentNetAssets)
+    monthlyIncomeInput.value = formatInputNumber(result.monthlyIncome)
     monthlyExpenseInput.value = formatInputNumber(result.monthlyExpense)
   } catch (error) {
     estimate.value = null
@@ -208,9 +244,9 @@ onMounted(() => {
           <p class="free-hero-description">{{ statusDescription }}</p>
         </div>
         <div class="free-hero-target">
-          <span>目标自由本金</span>
+          <span>财富自由总金额</span>
           <strong>{{ formatCurrency(calculation.targetAssets) }}</strong>
-          <small>年度支出 ÷ {{ formatPercent(withdrawalRate) }} 提现率</small>
+          <small>年度支出 ÷ {{ formatPercent(realWithdrawalRate) }} 提现率</small>
         </div>
         <div class="free-progress">
           <div class="free-progress-head">
@@ -236,7 +272,6 @@ onMounted(() => {
                 <span class="free-kicker">RESULT</span>
                 <h2>这笔资产能带来什么</h2>
               </div>
-              <span class="free-source-badge">基于 {{ currentUserName }} 的真实记录</span>
             </header>
             <div class="free-result-grid">
               <article class="free-result-item free-result-item-primary">
@@ -275,10 +310,6 @@ onMounted(() => {
                 <dd>{{ formatCurrency(estimate.historicalMonthlyExpense) }}</dd>
               </div>
               <div>
-                <dt>预算月均支出</dt>
-                <dd>{{ formatCurrency(estimate.budgetMonthlyExpense) }}</dd>
-              </div>
-              <div>
                 <dt>有效固定支出</dt>
                 <dd>{{ formatCurrency(estimate.recurringMonthlyExpense) }}</dd>
               </div>
@@ -303,12 +334,28 @@ onMounted(() => {
           </header>
           <div class="free-form">
             <label class="free-field">
+              <span>当前净资产</span>
+              <div class="free-input-wrap">
+                <b>¥</b>
+                <input v-model="currentAssetsInput" inputmode="decimal" type="number" min="0" step="1000" aria-label="当前净资产">
+              </div>
+              <small>默认取账户中的当前净资产</small>
+            </label>
+            <label class="free-field">
+              <span>每月收入</span>
+              <div class="free-input-wrap">
+                <b>¥</b>
+                <input v-model="monthlyIncomeInput" inputmode="decimal" type="number" min="0" step="100" aria-label="每月收入">
+              </div>
+              <small>默认取历史月均收入</small>
+            </label>
+            <label class="free-field">
               <span>每月生活费</span>
               <div class="free-input-wrap">
                 <b>¥</b>
                 <input v-model="monthlyExpenseInput" inputmode="decimal" type="number" min="0" step="100" aria-label="每月生活费">
               </div>
-              <small>默认取历史支出、预算和固定支出中的较高值</small>
+              <small>默认取历史月均支出</small>
             </label>
             <label class="free-field">
               <span>安全提现率</span>
@@ -330,17 +377,21 @@ onMounted(() => {
           <div class="free-assumption">
             <span>当前月度结余</span>
             <AmountText
-              :value="formatCurrency(calculation.monthlySurplus)"
-              :tone="calculation.monthlySurplus >= 0 ? 'positive' : 'negative'"
+              :value="formatCurrency(projection?.monthlySurplus)"
+              :tone="projection && projection.monthlySurplus >= 0 ? 'positive' : 'negative'"
               class="free-assumption-value"
             />
-            <small>储蓄率 {{ formatPercent(calculation.savingsRate) }} · 月收入 {{ formatCurrency(calculation.monthlyIncome) }}</small>
+            <small>预计剩余时间 {{ formatDuration(projection?.monthsToFreedom ?? null) }} · 储蓄率 {{ formatPercent(projection?.savingsRate) }}</small>
+            <div class="free-assumption-summary">
+              <span>预测财富自由总金额 <strong>{{ formatCurrency(projection?.targetAssets) }}</strong></span>
+              <span>还需积累 <strong>{{ formatCurrency(projection?.remainingAssets) }}</strong></span>
+            </div>
           </div>
         </aside>
       </section>
 
       <p class="free-footnote">
-        说明：本页用当前净资产、现金收支和数据库中的预算/固定支出做估算；目标本金采用“年度生活费 ÷ 安全提现率”，结果仅用于规划参考。
+        说明：本页用当前净资产、现金收支和历史月均支出做估算；目标本金采用“年度生活费 ÷ 安全提现率”，结果仅用于规划参考。
       </p>
     </template>
   </section>

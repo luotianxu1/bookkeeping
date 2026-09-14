@@ -25,11 +25,11 @@
 .transaction-family-switch :deep(.common-select-control) {
   min-height: 32px;
   padding: 0 30px 0 10px;
-  border: 1px solid rgba(29, 78, 216, 0.12);
+  border: 1px solid var(--color-border-blue);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
-  color: var(--color-brand);
+  background: var(--color-bg-card);
+  box-shadow: var(--color-finance-card-shadow);
+  color: var(--color-brand-strong);
   font-size: var(--font-size-12);
   font-weight: 700;
 }
@@ -62,7 +62,7 @@
 }
 
 .transaction-summary-copy span {
-  color: #4b6e99;
+  color: var(--color-finance-subtitle);
   font-family: Inter, var(--font-family-base);
   font-size: var(--font-size-12);
   font-weight: 500;
@@ -76,11 +76,11 @@
 }
 
 .transaction-summary-balance-positive {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .transaction-summary-balance-negative {
-  color: #16a34a;
+  color: var(--color-success);
 }
 
 .transaction-summary-metrics {
@@ -97,19 +97,19 @@
   justify-content: stretch;
   align-content: center;
   padding: 8px;
-  border: 1px solid #d7e9ff;
+  border: 1px solid var(--color-border-blue);
   border-radius: 8px;
-  background: #eef6ff;
+  background: var(--color-bg-brand-soft);
   text-align: left;
 }
 
 .transaction-summary-metric-expense {
-  border-color: #dcebff;
-  background: #f4f8ff;
+  border-color: var(--color-border-blue-soft);
+  background: var(--color-finance-bg-1);
 }
 
 .transaction-summary-metric small {
-  color: #5b6f8c;
+  color: var(--color-finance-metric-label);
   font-family: Inter, var(--font-family-base);
   font-size: 10px;
   font-weight: 500;
@@ -125,11 +125,11 @@
 }
 
 .transaction-summary-metric-income strong {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 .transaction-summary-metric-expense strong {
-  color: #16a34a;
+  color: var(--color-success);
 }
 
 .transaction-filter-bar {
@@ -146,10 +146,10 @@
   justify-content: center;
   gap: 5px;
   padding: 0 8px;
-  border: 1px solid #d8e7fa;
+  border: 1px solid var(--color-border-blue);
   border-radius: 12px;
   background: var(--color-bg-card);
-  color: #4b6e99;
+  color: var(--color-finance-subtitle);
   box-shadow: none;
 }
 
@@ -191,10 +191,10 @@
   min-width: 88px;
   min-height: 36px;
   padding: 0 14px;
-  border: 1px solid rgba(29, 78, 216, 0.14);
+  border: 1px solid var(--color-border-blue);
   border-radius: 999px;
-  background: rgba(239, 246, 255, 0.88);
-  color: var(--color-brand);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-strong);
   font-size: var(--font-size-13);
   font-weight: 700;
 }

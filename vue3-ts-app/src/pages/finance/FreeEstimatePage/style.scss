@@ -1,6 +1,6 @@
 .free-estimate-page {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-14);
   min-width: 0;
 }
 
@@ -14,8 +14,9 @@
 
 .free-hero-card {
   display: grid;
-  gap: var(--space-8);
-  padding: var(--space-12);
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 0.72fr);
+  gap: var(--space-16);
+  padding: var(--space-20);
   background:
     radial-gradient(circle at 100% 0%, rgba(29, 78, 216, 0.15), transparent 42%),
     linear-gradient(135deg, var(--color-bg-card) 0%, var(--color-bg-soft) 100%);
@@ -41,9 +42,9 @@
 }
 
 .free-hero-copy h1 {
-  font-size: clamp(20px, 5vw, 34px);
+  max-width: 18ch;
+  font-size: clamp(24px, 3.2vw, 34px);
   line-height: 1.15;
-  white-space: nowrap;
 }
 
 .free-hero-description {
@@ -57,6 +58,11 @@
 .free-hero-target {
   display: grid;
   gap: 4px;
+  align-content: center;
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-border-blue);
+  border-radius: var(--radius-12);
+  background: rgba(255, 255, 255, 0.58);
 }
 
 .free-hero-target span,
@@ -103,6 +109,7 @@
 .free-progress {
   display: grid;
   gap: 8px;
+  grid-column: 1 / -1;
 }
 
 .free-progress-head,
@@ -137,7 +144,7 @@
   height: 100%;
   min-width: 2px;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--color-brand), #60a5fa);
+  background: linear-gradient(90deg, var(--color-brand), var(--color-brand-strong));
   transition: width 0.2s ease;
 }
 
@@ -147,21 +154,21 @@
 
 .free-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
   align-items: start;
-  gap: var(--space-6);
+  gap: var(--space-14);
 }
 
 .free-main-column {
   display: grid;
-  gap: var(--space-6);
+  gap: var(--space-14);
   min-width: 0;
 }
 
 .free-card {
   display: grid;
-  gap: var(--space-8);
-  padding: var(--space-12);
+  gap: var(--space-14);
+  padding: var(--space-16);
 }
 
 .free-card-head {
@@ -183,7 +190,6 @@
   white-space: nowrap;
 }
 
-.free-source-badge,
 .free-card-caption {
   flex: 0 1 auto;
   max-width: 50%;
@@ -194,14 +200,10 @@
   overflow-wrap: anywhere;
 }
 
-.free-source-badge {
-  color: var(--color-brand);
-}
-
 .free-result-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: var(--space-10);
 }
 
 .free-result-item {
@@ -209,13 +211,13 @@
   align-content: start;
   gap: 8px;
   min-width: 0;
-  padding: 12px;
+  padding: var(--space-12);
   border-radius: var(--radius-12);
   background: var(--color-bg-soft);
 }
 
 .free-result-item strong,
-.free-result-value {
+.free-result-item .free-result-value {
   color: var(--color-text-primary);
   font-size: clamp(17px, 3.4vw, 22px);
   font-weight: 800;
@@ -225,17 +227,19 @@
 }
 
 .free-result-item-primary {
-  background: linear-gradient(135deg, rgba(219, 234, 254, 0.9), rgba(239, 246, 255, 0.58));
+  background: var(--color-finance-free-result-gradient);
 }
 
 .free-result-item-primary .free-result-value {
   color: var(--color-brand);
+  font-size: var(--font-size-18);
+  line-height: 1.2;
 }
 
 .free-data-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 24px;
+  gap: 0 var(--space-24);
   margin: 0;
 }
 
@@ -270,12 +274,17 @@
 
 .free-settings-card {
   position: sticky;
-  top: 16px;
+  top: var(--space-14);
 }
 
 .free-form {
   display: grid;
-  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.free-field:last-child {
+  grid-column: 1 / -1;
 }
 
 .free-field {
@@ -291,10 +300,17 @@
   display: flex;
   align-items: center;
   min-height: 44px;
-  padding: 0 12px;
+  padding: 0 var(--space-12);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-10);
   background: var(--color-bg-soft);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.free-input-wrap:focus-within {
+  border-color: var(--color-brand);
+  background: var(--color-bg-card);
+  box-shadow: 0 0 0 3px var(--color-ring-focus);
 }
 
 .free-input-wrap b {
@@ -320,7 +336,7 @@
 .free-assumption {
   display: grid;
   gap: 5px;
-  padding-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid var(--color-bg-soft-2);
 }
 
@@ -330,8 +346,34 @@
   font-variant-numeric: tabular-nums;
 }
 
+.free-assumption-summary {
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-11);
+  line-height: 1.45;
+}
+
+.free-assumption-summary span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.free-assumption-summary strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-12);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .free-footnote {
   margin: 0;
+  padding: 0 var(--space-4);
   color: var(--color-text-muted);
   font-size: var(--font-size-11);
   line-height: 1.6;
@@ -354,7 +396,12 @@
   color: var(--color-danger);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 980px) {
+  .free-hero-card {
+    grid-template-columns: minmax(0, 1fr) minmax(210px, 0.72fr);
+    padding: var(--space-16);
+  }
+
   .free-layout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -370,12 +417,37 @@
     padding: 16px;
   }
 
+  .free-hero-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-16);
+  }
+
+  .free-hero-copy h1 {
+    max-width: none;
+    font-size: var(--font-size-24);
+  }
+
+  .free-hero-target {
+    padding: var(--space-14) var(--space-16);
+  }
+
+  .free-progress {
+    grid-column: auto;
+  }
+
   .free-result-grid,
   .free-data-list {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .free-source-badge,
+  .free-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .free-field:last-child {
+    grid-column: auto;
+  }
+
   .free-card-caption {
     max-width: 100%;
     flex-basis: 100%;
@@ -384,6 +456,14 @@
 
   .free-card-head {
     flex-wrap: wrap;
+  }
+
+  .free-card-head h2 {
+    white-space: normal;
+  }
+
+  .free-data-list > div {
+    padding: 10px 0;
   }
 
   .free-message {
