@@ -1839,6 +1839,14 @@ export function createInvestmentTransaction(params: SaveInvestmentTransactionPar
   return requestPost<InvestmentTransaction, SaveInvestmentTransactionParams>(financeRequest, '/api/finance/investments/transactions', params)
 }
 
+export function updateInvestmentTransaction(id: number, params: SaveInvestmentTransactionParams) {
+  return requestPut<InvestmentTransaction, SaveInvestmentTransactionParams>(financeRequest, `/api/finance/investments/transactions/${id}`, params)
+}
+
+export function deleteInvestmentTransaction(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/investments/transactions/${id}`, { params: { userId } })
+}
+
 export function getInvestmentAutoInvestPlans(params: { userId: number; accountId?: number; positionId?: number; status?: string }) {
   return requestGet<InvestmentAutoInvestPlan[]>(financeRequest, '/api/finance/investments/auto-invest-plans', { params })
 }

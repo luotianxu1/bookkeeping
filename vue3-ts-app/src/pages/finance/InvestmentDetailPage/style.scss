@@ -578,6 +578,16 @@
   gap: var(--space-6);
 }
 
+.investment-detail-transaction-item.is-pending {
+  cursor: pointer;
+}
+
+.investment-detail-transaction-item.is-pending:hover,
+.investment-detail-transaction-item.is-pending:focus-visible {
+  background: var(--color-bg-soft-1);
+  outline: none;
+}
+
 .investment-detail-transaction-item + .investment-detail-transaction-item {
   border-top: 1px solid var(--color-bg-soft-2);
 }
@@ -797,6 +807,17 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.investment-detail-transaction-delete {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(185, 28, 28, 0.2);
+  border-radius: 999px;
+  background: rgba(254, 242, 242, 0.9);
+  color: #b91c1c;
+  font: inherit;
+  font-weight: 700;
 }
 
 .investment-detail-transaction-right .trend-up {

@@ -14,6 +14,7 @@ import AmountText from '@/components/common/AmountText/index.vue'
 import {
   createInvestmentAutoInvestPlan,
   createInvestmentTransaction,
+  deleteInvestmentTransaction,
   deleteInvestmentPosition,
   deleteInvestmentAutoInvestPlan,
   getAccounts,
@@ -22,6 +23,7 @@ import {
   getInvestmentTransactionPage,
   getInvestmentTransactions,
   updateInvestmentAutoInvestPlan,
+  updateInvestmentTransaction,
   updateInvestmentPosition,
   type Account,
   type InvestmentAssetDetail,
@@ -86,6 +88,7 @@ const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const showTradeModal = ref(false)
+const editingTransaction = ref<InvestmentTransaction | null>(null)
 const currentTradeAction = ref<'buy' | 'sell'>('buy')
 const tradeInputMode = ref<'amount' | 'quantity'>('amount')
 const tradeFundingAccountId = ref('')
@@ -164,9 +167,15 @@ const backTo = computed(() => {
   return accountId ? `/finance/accounts/investment/${accountId}` : '/finance/accounts/investment'
 })
 
+const pendingAdditionalPurchaseAmount = computed(() => transactions.value
+  .filter((entry) => entry.tradeType === 'buy'
+    && entry.settlementStatus === 'pending'
+    && !isInitialFundSubscriptionTransaction(entry))
+  .reduce((total, entry) => total + Number(entry.amount ?? 0) + Number(entry.feeAmount ?? 0) + Number(entry.taxAmount ?? 0), 0),
+)
 const summaryAmount = computed(() =>
   currentPosition.value?.subscriptionStatus === 'pending'
-    ? formatCurrency(Number(detail.value?.position?.costAmount ?? 0))
+    ? formatCurrency(Number(detail.value?.position?.costAmount ?? 0) + pendingAdditionalPurchaseAmount.value)
     : formatCurrency(Number(detail.value?.position?.marketValue ?? 0)),
 )
 const todayProfitValue = computed(() => {
@@ -315,7 +324,9 @@ const chartCostBaseline = computed(() => {
   }
   return resolveFundCumulativeChartCostBaseline()
 })
-const tradeModalTitle = computed(() => currentTradeAction.value === 'buy' ? '加仓' : '减仓')
+const tradeModalTitle = computed(() => editingTransaction.value
+  ? '修改待确认交易'
+  : currentTradeAction.value === 'buy' ? '加仓' : '减仓')
 const tradeAmountLabel = computed(() => {
   if (isFundPosition.value) {
     return currentTradeAction.value === 'buy' ? '申购金额' : '回款金额'
@@ -1665,6 +1676,7 @@ function openTradeModal(action: 'buy' | 'sell') {
     return
   }
   currentTradeAction.value = action
+  editingTransaction.value = null
   tradeInputMode.value = 'amount'
   tradeTimeSlot.value = 'before_1500'
   tradeFundingAccountId.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
@@ -1676,6 +1688,41 @@ function openTradeModal(action: 'buy' | 'sell') {
   tradeFundFeeMode.value = 'auto'
   tradeError.value = ''
   showTradeModal.value = true
+}
+
+function openPendingTransactionModal(entry: InvestmentTransaction) {
+  if (entry.id <= 0 || entry.settlementStatus !== 'pending' || !currentPosition.value) return
+  editingTransaction.value = entry
+  currentTradeAction.value = entry.tradeType === 'sell' ? 'sell' : 'buy'
+  tradeInputMode.value = 'amount'
+  tradeFundingAccountId.value = entry.fundingAccountId ? String(entry.fundingAccountId) : (fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : '')
+  tradeAmount.value = currentTradeAction.value === 'buy' ? String(Number(entry.amount) || '') : ''
+  tradeQuantity.value = currentTradeAction.value === 'sell' ? String(Number(entry.quantity) || '') : ''
+  tradePrice.value = ''
+  tradeDate.value = String(entry.tradeAt || '').slice(0, 10)
+  tradeTimeSlot.value = entry.settlementAppliedDate && String(entry.tradeAt).slice(11, 16) >= '15:00' ? 'after_1500' : 'before_1500'
+  tradeRemark.value = entry.remark || ''
+  tradeFundFeeMode.value = 'auto'
+  tradeError.value = ''
+  showTradeModal.value = true
+}
+
+async function removePendingTransaction() {
+  const entry = editingTransaction.value
+  const currentUser = getStoredCurrentUser()
+  if (!entry || !currentUser || isSubmitting.value) return
+  if (!window.confirm('确认删除这条待确认交易吗？删除后会退回资金或解除冻结份额。')) return
+  isSubmitting.value = true
+  try {
+    await deleteInvestmentTransaction(entry.id, currentUser.id)
+    closeTradeModal(true)
+    showFeedback('待确认交易已删除', 'success')
+    await loadDetail()
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : '删除交易失败', 'error')
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 function closeTradeModal(force = false) {
@@ -1957,7 +2004,7 @@ async function submitTrade() {
     tradeError.value = ''
 
     try {
-      const transaction = await createInvestmentTransaction({
+      const payload = {
         userId: currentUser.id,
         accountId: currentPosition.value.accountId,
         positionId: currentPosition.value.id,
@@ -1966,16 +2013,21 @@ async function submitTrade() {
         quantity: currentTradeAction.value === 'sell' ? Number(quantity.toFixed(6)) : 0,
         price: null,
         amount: Number((currentTradeAction.value === 'buy' ? amount : getTradeAmountValue()).toFixed(2)),
-        feeAmount: currentTradeAction.value === 'sell' ? getTradeFundSellFeeAmountPayload() : 0,
-        taxAmount: 0,
+        feeAmount: currentTradeAction.value === 'sell'
+          ? getTradeFundSellFeeAmountPayload()
+          : (editingTransaction.value ? Number(editingTransaction.value.feeAmount ?? 0) : 0),
+        taxAmount: editingTransaction.value ? Number(editingTransaction.value.taxAmount ?? 0) : 0,
         currencyCode: currentPosition.value.currencyCode || 'CNY',
         tradeAt: resolvedTradeAt,
         fundingAccountId,
         subscriptionTimeSlot: tradeTimeSlot.value,
         remark: tradeRemark.value.trim() || null,
-      })
+      }
+      const transaction = editingTransaction.value
+        ? await updateInvestmentTransaction(editingTransaction.value.id, payload)
+        : await createInvestmentTransaction(payload)
       closeTradeModal(true)
-      showFeedback(getFundTransactionSubmitMessage(transaction), 'success')
+      showFeedback(editingTransaction.value ? '待确认交易已更新' : getFundTransactionSubmitMessage(transaction), 'success')
       await loadDetail()
     } catch (error) {
       const message = error instanceof Error ? error.message : `${tradeModalTitle.value}失败`
@@ -2449,6 +2501,12 @@ function getTradeTypeLabel(entry: InvestmentTransaction) {
     bonus: '送股',
   }
   return map[entry.tradeType] ?? entry.tradeType
+}
+
+function isInitialFundSubscriptionTransaction(entry: InvestmentTransaction) {
+  return entry.remark === '基金首次申购'
+    || entry.transactionNo.startsWith('INIT-PENDING-')
+    || entry.transactionNo.startsWith('INIT-')
 }
 
 function getTradeQuantityClass(type: string) {
@@ -3015,11 +3073,14 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           <span>{{ transactionCountText }}</span>
         </header>
 
-        <section class="investment-detail-transactions-card">
+      <section class="investment-detail-transactions-card">
           <article
             v-for="entry in transactionPageItems"
             :key="entry.id"
-            class="investment-detail-transaction-item"
+            :class="['investment-detail-transaction-item', { 'is-pending': entry.id > 0 && entry.settlementStatus === 'pending' }]"
+            :tabindex="entry.id > 0 && entry.settlementStatus === 'pending' ? 0 : undefined"
+            @click="openPendingTransactionModal(entry)"
+            @keydown.enter="openPendingTransactionModal(entry)"
           >
             <div class="investment-detail-transaction-left">
               <strong>{{ getTradeTypeLabel(entry) }}</strong>
@@ -3196,11 +3257,12 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
 
       <template #footer>
         <div class="investment-detail-modal-actions">
+          <button v-if="editingTransaction" type="button" class="investment-detail-transaction-delete" :disabled="isSubmitting" @click="removePendingTransaction">删除</button>
           <CommonButton variant="secondary" :disabled="isSubmitting" @click="closeTradeModal">
             取消
           </CommonButton>
           <CommonButton variant="primary" :disabled="isSubmitting" @click="submitTrade">
-            {{ isSubmitting ? '提交中...' : tradeModalTitle }}
+            {{ isSubmitting ? '提交中...' : editingTransaction ? '保存修改' : tradeModalTitle }}
           </CommonButton>
         </div>
       </template>

@@ -126,6 +126,17 @@ const pendingAmountsByPositionId = computed(() => {
   }
   return pendingMap
 })
+const pendingAdditionalAmountsByPositionId = computed(() => {
+  const pendingMap = new Map<number, number>()
+  for (const entry of transactions.value) {
+    if (entry.settlementStatus !== 'pending' || entry.tradeType !== 'buy' || !entry.positionId || isInitialFundSubscriptionTransaction(entry)) {
+      continue
+    }
+    const nextAmount = (pendingMap.get(entry.positionId) ?? 0) + Number(entry.amount || 0)
+    pendingMap.set(entry.positionId, nextAmount)
+  }
+  return pendingMap
+})
 const autoInvestPositionIds = computed(() => new Set(
   autoInvestPlans.value
     .filter((plan) => plan.status !== 'cancelled')
@@ -761,7 +772,7 @@ function getHoldingMarketValueLabel(position: InvestmentPosition) {
 
 function getHoldingMarketValue(position: InvestmentPosition) {
   return isPendingSubscription(position)
-    ? formatCurrency(position.costAmount, 2)
+    ? formatCurrency(position.costAmount + (pendingAdditionalAmountsByPositionId.value.get(position.id) ?? 0), 2)
     : formatCurrency(position.marketValue, 2)
 }
 
@@ -889,6 +900,12 @@ function getHoldingProfitRate(position: InvestmentPosition) {
 
 function getHoldingPendingAmount(position: InvestmentPosition) {
   return pendingAmountsByPositionId.value.get(position.id) ?? 0
+}
+
+function isInitialFundSubscriptionTransaction(entry: InvestmentTransaction) {
+  return entry.remark === '基金首次申购'
+    || entry.transactionNo.startsWith('INIT-PENDING-')
+    || entry.transactionNo.startsWith('INIT-')
 }
 
 function hasAutoInvestPlan(position: InvestmentPosition) {
@@ -1065,7 +1082,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 </div>
               </div>
 
-              <div class="holding-card-right-top">
+              <div v-if="!isPendingSubscription(holding)" class="holding-card-right-top">
                 <span>{{ getHoldingActionLabel(holding) }}</span>
                 <div class="holding-action-group">
                   <AmountText

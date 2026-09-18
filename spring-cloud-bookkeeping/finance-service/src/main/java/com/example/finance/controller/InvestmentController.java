@@ -209,6 +209,17 @@ public class InvestmentController {
         return Result.ok(investmentService.createTransaction(request));
     }
 
+    @PutMapping("/transactions/{id}")
+    @Operation(summary = "修改投资交易流水")
+    public Result<InvestmentTransactionResponse> updateTransaction(
+        @PathVariable("id") @NotNull Long id,
+        @Valid @RequestBody InvestmentTransactionRequest request
+    ) {
+        return investmentService.updatePendingTransaction(id, request)
+            .map(Result::ok)
+            .orElseGet(() -> Result.<InvestmentTransactionResponse>fail().code(404).message("待确认投资交易不存在或不可修改"));
+    }
+
     @DeleteMapping("/transactions/{id}")
     @Operation(summary = "删除投资交易流水")
     public Result<Void> deleteTransaction(
