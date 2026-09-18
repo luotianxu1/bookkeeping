@@ -1,0 +1,51 @@
+@use '../salary-common.scss';
+
+.salary-year-select {
+  min-width: 88px;
+}
+
+.salary-year-select :deep(.common-field) {
+  gap: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.salary-year-select :deep(.common-field span) {
+  display: none;
+}
+
+.salary-year-select :deep(.common-field-control) {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 24px 0 10px;
+  border-radius: 999px;
+  font-size: var(--font-size-12);
+  line-height: 1;
+}
+
+.salary-cash-metric-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.salary-cash-deductions {
+  display: grid;
+  gap: var(--space-8);
+  margin-top: var(--space-10);
+  padding-top: var(--space-10);
+  border-top: 1px solid var(--color-border);
+}
+
+.salary-cash-deductions .salary-row + .salary-row {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.salary-cash-deductions .salary-row-desc {
+  margin: 0;
+}
+
+.salary-cash-deductions strong {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-13);
+  font-weight: 700;
+}

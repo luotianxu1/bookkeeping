@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { getSalaryOverview, type SalaryOverview } from '@/api/modules/finance'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
+import CommonHeaderLinkButton from '@/components/common/CommonHeaderLinkButton/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -51,7 +52,12 @@ function openFeedback(message: string, type: 'success' | 'error') {
   <section class="salary-page" aria-label="工资管理">
     <PageHeader title="工资管理" back-to="/finance/more-features" :prefer-back-to="true">
       <div class="salary-inline-actions">
-        <RouterLink class="salary-page-link" to="/finance/salary/records">工资明细</RouterLink>
+        <CommonHeaderLinkButton to="/finance/salary/records" label="工资明细">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 4.5H17C18.1 4.5 19 5.4 19 6.5V17.5C19 18.6 18.1 19.5 17 19.5H7C5.9 19.5 5 18.6 5 17.5V6.5C5 5.4 5.9 4.5 7 4.5Z" stroke="currentColor" stroke-width="1.8" />
+            <path d="M8.5 9H15.5M8.5 12H15.5M8.5 15H13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </CommonHeaderLinkButton>
         <RouterLink v-slot="{ navigate }" to="/finance/salary/settings" custom>
           <CommonHeaderActionButton label="工资设置" @click="navigate">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">

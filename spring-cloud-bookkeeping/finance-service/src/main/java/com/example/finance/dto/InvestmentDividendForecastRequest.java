@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 @Data
 public class InvestmentDividendForecastRequest {
@@ -32,6 +33,7 @@ public class InvestmentDividendForecastRequest {
     private String unitName;
 
     private BigDecimal latestPrice;
+    private LocalDate quoteDate;
     private BigDecimal holdingQuantity;
     private BigDecimal holdingAmount;
 }

@@ -42,6 +42,7 @@ import SalaryHomePage from '@/pages/finance/SalaryHomePage/index.vue'
 import SalarySettingsPage from '@/pages/finance/SalarySettingsPage/index.vue'
 import SalaryRecordPage from '@/pages/finance/SalaryRecordPage/index.vue'
 import SalaryAccountPage from '@/pages/finance/SalaryAccountPage/index.vue'
+import SalaryCashPage from '@/pages/finance/SalaryCashPage/index.vue'
 import SalaryTaxPage from '@/pages/finance/SalaryTaxPage/index.vue'
 
 export const financeRoutes: RouteRecordRaw[] = [
@@ -223,6 +224,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'finance',
       title: '工资明细',
+    },
+  },
+  {
+    path: '/finance/salary/cash',
+    name: 'finance-salary-cash',
+    component: SalaryCashPage,
+    meta: {
+      section: 'finance',
+      title: '现金账户',
     },
   },
   {

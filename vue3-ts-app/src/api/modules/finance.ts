@@ -1244,6 +1244,7 @@ export interface InvestmentDividendForecastRequest {
   currencyCode?: string
   unitName?: string
   latestPrice?: number | null
+  quoteDate?: string | null
   holdingQuantity?: number
   holdingAmount?: number
 }
@@ -1264,6 +1265,20 @@ export interface InvestmentDividendForecast {
   estimatedDividendAmount: number
   estimatedDividendRate: number
   calculationNote: string
+  source?: string | null
+}
+
+export interface InvestmentProductQuote {
+  productType: InvestmentProductType | string
+  productTypeLabel: string
+  symbol: string
+  name: string
+  market?: string | null
+  unitName?: string | null
+  latestPrice?: number | null
+  change?: number | null
+  changePercent?: number | null
+  quoteDate?: string | null
   source?: string | null
 }
 
@@ -1865,6 +1880,15 @@ export function getInvestmentDividendForecast(params: InvestmentDividendForecast
   )
 }
 
+export function getInvestmentProductQuote(params: {
+  productType: InvestmentProductType
+  symbol: string
+  exchangeCode?: string | null
+  name?: string | null
+}) {
+  return requestGet<InvestmentProductQuote>(financeRequest, '/api/finance/investments/products/quote', { params })
+}
+
 export function getInvestmentFixedExpenses(userId: number) {
   return requestGet<InvestmentFixedExpense[]>(financeRequest, '/api/finance/investments/fixed-expenses', {
     params: { userId },
@@ -1961,7 +1985,8 @@ export function getGoldLiquidations(userId: number) {
 }
 
 export type SalaryAccountType = 'social_security' | 'housing_fund' | 'medical'
-export type SalaryRecordType = 'initial' | 'auto' | 'manual'
+export type SalaryLinkedAccountType = SalaryAccountType | 'cash'
+export type SalaryRecordType = 'auto' | 'manual'
 
 export interface SalaryMetricItem {
   label: string
@@ -1975,7 +2000,7 @@ export interface SalaryDetailItem {
 }
 
 export interface SalaryLinkedAccount {
-  accountType: SalaryAccountType
+  accountType: SalaryLinkedAccountType
   title: string
   currentBalance: number
   monthlyDeposit: number
@@ -2146,7 +2171,6 @@ export interface SalaryAccountPage {
   badgeText: string
   year: number
   currentBalance: number
-  initialBalance: number
   monthlyPersonal: number
   monthlyCompany: number
   yearlyIncrease: number
@@ -2155,13 +2179,6 @@ export interface SalaryAccountPage {
   records: SalaryAccountRecordItem[]
   forecast: SalaryAccountForecast
   updatedAt?: string | null
-}
-
-export interface SaveSalaryInitialBalanceParams {
-  userId: number
-  amount: number
-  recordMonth: string
-  note?: string | null
 }
 
 export interface SaveSalaryAccountBalanceParams {
@@ -2214,6 +2231,33 @@ export interface SalaryTaxPage {
   monthItems: SalaryTaxMonthItem[]
 }
 
+export interface SalaryCashMetricItem {
+  label: string
+  value: number
+}
+
+export interface SalaryCashMonthItem {
+  monthKey: string
+  monthLabel: string
+  grossIncome: number
+  personalDeduction: number
+  taxAmount: number
+  cashIncome: number
+  statusText: string
+}
+
+export interface SalaryCashPage {
+  year: number
+  paidMonths: number
+  annualCashIncome: number
+  currentMonthCashIncome: number
+  annualGrossIncome: number
+  annualPersonalDeduction: number
+  annualTax: number
+  metrics: SalaryCashMetricItem[]
+  monthItems: SalaryCashMonthItem[]
+}
+
 export function getSalaryOverview(userId: number, month?: string) {
   return requestGet<SalaryOverview>(financeRequest, '/api/finance/salary/overview', {
     params: { userId, month },
@@ -2256,14 +2300,6 @@ export function getSalaryAccountPage(userId: number, accountType: string, year?:
   })
 }
 
-export function saveSalaryInitialBalance(accountType: string, params: SaveSalaryInitialBalanceParams) {
-  return requestPut<SalaryAccountPage, SaveSalaryInitialBalanceParams>(
-    financeRequest,
-    `/api/finance/salary/accounts/${accountType}/initial-balance`,
-    params,
-  )
-}
-
 export function saveSalaryAccountBalance(accountType: string, params: SaveSalaryAccountBalanceParams) {
   return requestPut<SalaryAccountPage, SaveSalaryAccountBalanceParams>(
     financeRequest,
@@ -2298,6 +2334,12 @@ export function deleteSalaryAccountRecord(accountType: string, recordId: number,
 
 export function getSalaryTaxPage(userId: number, year?: number) {
   return requestGet<SalaryTaxPage>(financeRequest, '/api/finance/salary/tax', {
+    params: { userId, year },
+  })
+}
+
+export function getSalaryCashPage(userId: number, year?: number) {
+  return requestGet<SalaryCashPage>(financeRequest, '/api/finance/salary/cash', {
     params: { userId, year },
   })
 }

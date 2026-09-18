@@ -16,7 +16,6 @@ public class SalaryAccountPageResponse {
     private String badgeText;
     private Integer year;
     private BigDecimal currentBalance;
-    private BigDecimal initialBalance;
     private BigDecimal monthlyPersonal;
     private BigDecimal monthlyCompany;
     private BigDecimal yearlyIncrease;

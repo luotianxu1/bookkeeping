@@ -4,7 +4,7 @@ import com.example.common.result.Result;
 import com.example.finance.dto.SalaryAccountBalanceRequest;
 import com.example.finance.dto.SalaryAccountPageResponse;
 import com.example.finance.dto.SalaryAccountRecordRequest;
-import com.example.finance.dto.SalaryInitialBalanceRequest;
+import com.example.finance.dto.SalaryCashPageResponse;
 import com.example.finance.dto.SalaryMonthPageResponse;
 import com.example.finance.dto.SalaryMonthRecordRequest;
 import com.example.finance.dto.SalaryOverviewResponse;
@@ -106,15 +106,6 @@ public class SalaryController {
         return Result.ok(salaryService.getAccountPage(userId, accountType, year));
     }
 
-    @PutMapping("/accounts/{accountType}/initial-balance")
-    @Operation(summary = "设置工资账户初始值")
-    public Result<SalaryAccountPageResponse> saveInitialBalance(
-        @PathVariable("accountType") String accountType,
-        @Valid @RequestBody SalaryInitialBalanceRequest request
-    ) {
-        return Result.ok(salaryService.saveInitialBalance(accountType, request));
-    }
-
     @PutMapping("/accounts/{accountType}/balance")
     @Operation(summary = "设置工资账户总额")
     public Result<SalaryAccountPageResponse> saveAccountBalance(
@@ -160,5 +151,14 @@ public class SalaryController {
         @RequestParam(name = "year", required = false) Integer year
     ) {
         return Result.ok(salaryService.getTaxPage(userId, year));
+    }
+
+    @GetMapping("/cash")
+    @Operation(summary = "查询工资现金账户页")
+    public Result<SalaryCashPageResponse> cashPage(
+        @RequestParam(name = "userId") @NotNull Long userId,
+        @RequestParam(name = "year", required = false) Integer year
+    ) {
+        return Result.ok(salaryService.getCashPage(userId, year));
     }
 }

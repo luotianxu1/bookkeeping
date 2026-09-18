@@ -8,6 +8,7 @@ import com.example.finance.dto.InvestmentDividendIncomePageResponse;
 import com.example.finance.dto.InvestmentDividendIncomeSummaryResponse;
 import com.example.finance.dto.InvestmentDividendForecastRequest;
 import com.example.finance.dto.InvestmentDividendForecastResponse;
+import com.example.finance.dto.InvestmentProductQuoteResponse;
 import com.example.finance.dto.InvestmentAssetDetailResponse;
 import com.example.finance.dto.InvestmentAutoInvestPlanRequest;
 import com.example.finance.dto.InvestmentAutoInvestPlanResponse;
@@ -114,6 +115,12 @@ public class InvestmentService {
         BigDecimal latestPrice,
         BigDecimal preClosePrice,
         LocalDateTime syncedAt
+    ) {
+    }
+
+    private record ForecastPriceSnapshot(
+        LocalDate quoteDate,
+        BigDecimal price
     ) {
     }
 
@@ -359,12 +366,32 @@ public class InvestmentService {
         }
 
         InvestmentProductEntity product = resolveForecastProduct(request, productType, symbol);
-        int basisYear = LocalDate.now().minusYears(1).getYear();
+        ForecastPriceSnapshot forecastPrice = FUND_PRODUCT_TYPE.equals(productType)
+            ? fetchFundForecastPrice(symbol)
+            : fetchStockForecastPrice(symbol, request.getExchangeCode());
+        LocalDate calculationDate = request.getQuoteDate() != null
+            ? request.getQuoteDate()
+            : forecastPrice != null && forecastPrice.quoteDate() != null ? forecastPrice.quoteDate() : LocalDate.now();
+        LocalDate trailingWindowStart = calculationDate.minusMonths(12);
+        int basisYear = calculationDate.getYear();
         List<InvestmentDividendPlanEntity> historicalPlans = FUND_PRODUCT_TYPE.equals(productType)
             ? fetchFundHistoricalDividendPlans(product)
-            : fetchStockForecastDividendPlans(product, basisYear);
-        List<InvestmentDividendPlanEntity> lastYearPlans = historicalPlans.stream()
-            .filter(plan -> isDividendPlanInYear(plan, basisYear))
+            : fetchStockHistoricalDividendPlans(product);
+        List<InvestmentDividendPlanEntity> lastYearPlans = new ArrayList<>(historicalPlans.stream()
+            .filter(plan -> {
+                LocalDate dividendDate = dividendPlanRecencyDate(plan);
+                return dividendDate != null
+                    && !dividendDate.isBefore(trailingWindowStart)
+                    && !dividendDate.isAfter(calculationDate);
+            })
+            .collect(Collectors.toMap(
+                plan -> dividendPlanRecencyDate(plan) + "|" + resolveNetDividendPerUnit(plan).stripTrailingZeros().toPlainString(),
+                Function.identity(),
+                (left, right) -> left,
+                LinkedHashMap::new
+            ))
+            .values());
+        lastYearPlans = lastYearPlans.stream()
             .sorted(Comparator.comparing(this::dividendPlanRecencyDate))
             .toList();
 
@@ -373,7 +400,7 @@ public class InvestmentService {
             .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
             .count();
         if (positivePlanCount <= 0) {
-            throw new IllegalArgumentException("该资产去年暂无可用分红记录");
+            throw new IllegalArgumentException("该资产近12个月暂无可用分红记录");
         }
 
         BigDecimal lastYearDividendPerUnit = lastYearPlans.stream()
@@ -382,10 +409,13 @@ public class InvestmentService {
             .reduce(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP), BigDecimal::add)
             .setScale(6, RoundingMode.HALF_UP);
         if (lastYearDividendPerUnit.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("该资产去年暂无可用分红金额");
+            throw new IllegalArgumentException("该资产近12个月暂无可用分红金额");
         }
 
-        BigDecimal currentPrice = resolveForecastCurrentPrice(product, request.getLatestPrice());
+        BigDecimal currentPrice = forecastPrice != null && forecastPrice.price() != null
+            && forecastPrice.price().compareTo(BigDecimal.ZERO) > 0
+            ? forecastPrice.price().setScale(6, RoundingMode.HALF_UP)
+            : resolveForecastCurrentPrice(productType, symbol, request.getExchangeCode(), request.getLatestPrice());
         BigDecimal estimatedHoldingQuantity = requestedQuantity;
         if ((estimatedHoldingQuantity == null || estimatedHoldingQuantity.compareTo(BigDecimal.ZERO) <= 0)
             && requestedAmount != null && requestedAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -401,8 +431,8 @@ public class InvestmentService {
         BigDecimal estimatedHoldingAmount = requestedAmount != null && requestedAmount.compareTo(BigDecimal.ZERO) > 0
             ? requestedAmount
             : estimatedHoldingQuantity.multiply(currentPrice).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal estimatedDividendAmount = estimatedHoldingQuantity.multiply(lastYearDividendPerUnit)
-            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal unscaledDividendAmount = estimatedHoldingQuantity.multiply(lastYearDividendPerUnit);
+        BigDecimal estimatedDividendAmount = unscaledDividendAmount.setScale(2, RoundingMode.HALF_UP);
 
         InvestmentDividendForecastResponse response = new InvestmentDividendForecastResponse();
         response.setProductType(productType);
@@ -418,10 +448,9 @@ public class InvestmentService {
         response.setEstimatedHoldingQuantity(scaleQuantity(estimatedHoldingQuantity));
         response.setEstimatedHoldingAmount(scaleMoney(estimatedHoldingAmount));
         response.setEstimatedDividendAmount(scaleMoney(estimatedDividendAmount));
-        response.setEstimatedDividendRate(scaleRate(rate(estimatedDividendAmount, estimatedHoldingAmount)));
+        response.setEstimatedDividendRate(scaleRate(rate(lastYearDividendPerUnit, currentPrice)));
         response.setCalculationNote(String.format(
-            "按 %d 年 %d 次分红、每%s合计 %s 元估算",
-            basisYear,
+            "按近12个月 %d 次分红、每%s合计 %s 元估算",
             positivePlanCount,
             blankToDefault(product.getUnitName(), FUND_PRODUCT_TYPE.equals(productType) ? DEFAULT_UNIT_NAME : "股"),
             lastYearDividendPerUnit.setScale(4, RoundingMode.HALF_UP).toPlainString()
@@ -431,6 +460,55 @@ public class InvestmentService {
             .filter(StringUtils::hasText)
             .findFirst()
             .orElse(null));
+        return response;
+    }
+
+    public InvestmentProductQuoteResponse productQuote(String productType, String symbol, String exchangeCode, String name) {
+        String normalizedType = normalizeForecastProductType(productType);
+        String normalizedSymbol = normalizeForecastSymbol(symbol);
+        InvestmentProductQuoteResponse response = new InvestmentProductQuoteResponse();
+        response.setProductType(normalizedType);
+        response.setProductTypeLabel(resolveProductTypeLabel(normalizedType));
+        response.setSymbol(normalizedSymbol);
+        response.setName(blankToDefault(name, normalizedSymbol));
+        response.setUnitName(FUND_PRODUCT_TYPE.equals(normalizedType) ? DEFAULT_UNIT_NAME : "股");
+
+        if (FUND_PRODUCT_TYPE.equals(normalizedType)) {
+            JsonNode baseInfo = fetchFundBaseInfo(normalizedSymbol).path("Datas");
+            ForecastPriceSnapshot price = fetchFundForecastPrice(normalizedSymbol);
+            response.setName(blankToDefault(baseInfo.path("SHORTNAME").asText(null), response.getName()));
+            response.setSymbol(blankToDefault(baseInfo.path("FCODE").asText(null), normalizedSymbol));
+            response.setMarket("FUND");
+            if (price == null) {
+                BigDecimal navPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
+                LocalDate navDate = safeDate(baseInfo.path("FSRQ").asText(null));
+                price = navPrice != null && navDate != null ? new ForecastPriceSnapshot(navDate, navPrice) : null;
+            }
+            response.setLatestPrice(price == null ? null : price.price());
+            response.setQuoteDate(price == null ? null : price.quoteDate());
+            response.setChangePercent(safeDecimal(baseInfo.path("RZDF").asText(null)));
+            response.setSource("东方财富");
+            return response;
+        }
+
+        JsonNode quote = fetchTencentQuoteFields(toTencentSymbol(normalizedSymbol, exchangeCode));
+        LocalDate quoteDate = resolveStockQuoteDate(quote.path("timeRaw").asText(null));
+        BigDecimal latestPrice = safeDecimal(quote.path("price").asText(null));
+        if ((latestPrice == null || latestPrice.compareTo(BigDecimal.ZERO) <= 0)
+            && (quoteDate == null || !quoteDate.equals(LocalDate.now()))) {
+            BigDecimal previousClose = safeDecimal(quote.path("prevClose").asText(null));
+            if (previousClose != null && previousClose.compareTo(BigDecimal.ZERO) > 0) {
+                latestPrice = previousClose;
+                quoteDate = quoteDate == null ? LocalDate.now().minusDays(1) : quoteDate.minusDays(1);
+            }
+        }
+        response.setName(blankToDefault(quote.path("name").asText(null), response.getName()));
+        response.setMarket("CN");
+        response.setLatestPrice(latestPrice);
+        response.setChange(safeDecimal(quote.path("change").asText(null)));
+        response.setChangePercent(safeDecimal(quote.path("changePercent").asText(null)));
+        response.setQuoteDate(quoteDate);
+        response.setSource("腾讯行情");
         return response;
     }
 
@@ -5349,29 +5427,16 @@ public class InvestmentService {
         String productType,
         String symbol
     ) {
-        InvestmentProductResponse externalProduct = resolveExternalForecastProduct(productType, symbol).orElse(null);
         InvestmentProductEntity product = new InvestmentProductEntity();
         product.setProductType(productType);
         product.setSymbol(symbol);
-        product.setName(externalProduct != null && StringUtils.hasText(externalProduct.getName())
-            ? externalProduct.getName()
-            : blankToDefault(request.getName(), symbol));
+        product.setName(blankToDefault(request.getName(), symbol));
         product.setShortName(product.getName());
-        product.setMarket(externalProduct != null && StringUtils.hasText(externalProduct.getMarket())
-            ? externalProduct.getMarket()
-            : request.getMarket());
-        product.setExchangeCode(externalProduct != null && StringUtils.hasText(externalProduct.getExchangeCode())
-            ? externalProduct.getExchangeCode()
-            : request.getExchangeCode());
-        product.setCurrencyCode(externalProduct != null && StringUtils.hasText(externalProduct.getCurrencyCode())
-            ? externalProduct.getCurrencyCode()
-            : blankToDefault(request.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
-        product.setUnitName(externalProduct != null && StringUtils.hasText(externalProduct.getUnitName())
-            ? externalProduct.getUnitName()
-            : blankToDefault(request.getUnitName(), FUND_PRODUCT_TYPE.equals(productType) ? DEFAULT_UNIT_NAME : "股"));
-        product.setPricePrecision(externalProduct != null && externalProduct.getPricePrecision() != null
-            ? externalProduct.getPricePrecision()
-            : (FUND_PRODUCT_TYPE.equals(productType) ? 4 : 2));
+        product.setMarket(request.getMarket());
+        product.setExchangeCode(request.getExchangeCode());
+        product.setCurrencyCode(blankToDefault(request.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
+        product.setUnitName(blankToDefault(request.getUnitName(), FUND_PRODUCT_TYPE.equals(productType) ? DEFAULT_UNIT_NAME : "股"));
+        product.setPricePrecision(FUND_PRODUCT_TYPE.equals(productType) ? 4 : 2);
         product.setStatus(ACTIVE_STATUS);
         return product;
     }
@@ -5383,16 +5448,75 @@ public class InvestmentService {
         return fetchStockProduct(symbol).or(() -> fetchTencentStockProduct(symbol));
     }
 
-    private BigDecimal resolveForecastCurrentPrice(InvestmentProductEntity product, BigDecimal fallbackLatestPrice) {
-        Optional<InvestmentProductResponse> externalProduct = resolveExternalForecastProduct(product.getProductType(), product.getSymbol());
-        if (externalProduct.isPresent() && externalProduct.get().getLatestPrice() != null
-            && externalProduct.get().getLatestPrice().compareTo(BigDecimal.ZERO) > 0) {
-            return externalProduct.get().getLatestPrice().setScale(6, RoundingMode.HALF_UP);
+    private BigDecimal resolveForecastCurrentPrice(
+        String productType,
+        String symbol,
+        String exchangeCode,
+        BigDecimal fallbackLatestPrice
+    ) {
+        ForecastPriceSnapshot externalPrice = FUND_PRODUCT_TYPE.equals(productType)
+            ? fetchFundForecastPrice(symbol)
+            : fetchStockForecastPrice(symbol, exchangeCode);
+        if (externalPrice != null && externalPrice.price() != null
+            && externalPrice.price().compareTo(BigDecimal.ZERO) > 0) {
+            return externalPrice.price().setScale(6, RoundingMode.HALF_UP);
         }
         if (fallbackLatestPrice != null && fallbackLatestPrice.compareTo(BigDecimal.ZERO) > 0) {
             return fallbackLatestPrice.setScale(6, RoundingMode.HALF_UP);
         }
         return BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+    }
+
+    private ForecastPriceSnapshot fetchFundForecastPrice(String code) {
+        try {
+            JsonNode node = fetchFundEstimateInfo(code);
+            LocalDate today = LocalDate.now();
+            BigDecimal navPrice = safeDecimal(node.path("dwjz").asText(null));
+            LocalDate navDate = safeDate(node.path("jzrq").asText(null));
+            if (navDate != null && !navDate.isAfter(today) && navPrice != null
+                && navPrice.compareTo(BigDecimal.ZERO) > 0) {
+                return new ForecastPriceSnapshot(navDate, navPrice);
+            }
+            JsonNode baseInfo = fetchFundBaseInfo(code).path("Datas");
+            BigDecimal basePrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
+            LocalDate baseDate = safeDate(baseInfo.path("FSRQ").asText(null));
+            return basePrice != null && baseDate != null && !baseDate.isAfter(today)
+                ? new ForecastPriceSnapshot(baseDate, basePrice)
+                : null;
+        } catch (Exception ex) {
+            try {
+                JsonNode baseInfo = fetchFundBaseInfo(code).path("Datas");
+                BigDecimal basePrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
+                LocalDate baseDate = safeDate(baseInfo.path("FSRQ").asText(null));
+                return basePrice != null && baseDate != null && !baseDate.isAfter(LocalDate.now())
+                    ? new ForecastPriceSnapshot(baseDate, basePrice)
+                    : null;
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+    }
+
+    private ForecastPriceSnapshot fetchStockForecastPrice(String code, String exchangeCode) {
+        JsonNode quote = fetchTencentQuoteFields(toTencentSymbol(code, exchangeCode));
+        LocalDate quoteDate = resolveStockQuoteDate(quote.path("timeRaw").asText(null));
+        LocalDate today = LocalDate.now();
+        BigDecimal latestPrice = safeDecimal(quote.path("price").asText(null));
+        if (quoteDate != null && quoteDate.equals(today) && latestPrice != null
+            && latestPrice.compareTo(BigDecimal.ZERO) > 0) {
+            return new ForecastPriceSnapshot(quoteDate, latestPrice);
+        }
+        if (quoteDate != null && !quoteDate.isAfter(today) && latestPrice != null
+            && latestPrice.compareTo(BigDecimal.ZERO) > 0) {
+            return new ForecastPriceSnapshot(quoteDate, latestPrice);
+        }
+        BigDecimal previousClose = safeDecimal(quote.path("prevClose").asText(null));
+        if (previousClose != null && previousClose.compareTo(BigDecimal.ZERO) > 0) {
+            return new ForecastPriceSnapshot(quoteDate == null ? today.minusDays(1) : quoteDate.minusDays(1), previousClose);
+        }
+        return latestPrice != null && latestPrice.compareTo(BigDecimal.ZERO) > 0
+            ? new ForecastPriceSnapshot(quoteDate, latestPrice)
+            : null;
     }
 
     private String resolveProductTypeLabel(String productType) {
@@ -5475,19 +5599,7 @@ public class InvestmentService {
 
     private Optional<InvestmentProductResponse> fetchFundProduct(String code) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create("https://fundgz.1234567.com.cn/js/" + code + ".js"))
-                .timeout(Duration.ofSeconds(8))
-                .header("User-Agent", "Mozilla/5.0")
-                .header("Accept", "application/javascript,text/javascript,*/*")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                return Optional.empty();
-            }
-
-            String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
-            JsonNode node = objectMapper.readTree(extractJsonpObject(body));
+            JsonNode node = fetchFundEstimateInfo(code);
             String name = node.path("name").asText("");
             if (!StringUtils.hasText(name)) {
                 return Optional.empty();

@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS salary_account_records (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '工资账户流水ID',
   user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID',
   account_type ENUM('social_security', 'housing_fund', 'medical') NOT NULL COMMENT '账户类型',
-  record_type ENUM('initial', 'auto', 'manual') NOT NULL DEFAULT 'manual' COMMENT '记录类型',
+  record_type ENUM('auto', 'manual') NOT NULL DEFAULT 'manual' COMMENT '记录类型：自动累计/手动调账',
   record_month DATE NOT NULL COMMENT '记录月份，统一存每月1日',
   amount DECIMAL(18, 2) NOT NULL COMMENT '本次变动金额',
   personal_amount DECIMAL(18, 2) NOT NULL DEFAULT 0.00 COMMENT '个人部分',
@@ -76,4 +76,4 @@ CREATE TABLE IF NOT EXISTS salary_account_records (
   KEY idx_salary_account_records_record_type (record_type),
   CONSTRAINT fk_salary_account_records_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工资相关账户流水表：初始值、自动累计、手动调账';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工资相关账户流水表：自动累计、手动调账';

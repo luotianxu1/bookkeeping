@@ -22,7 +22,7 @@
 }
 
 .feature-item {
-  min-height: var(--space-96);
+  aspect-ratio: 1 / 1;
   display: grid;
   justify-items: center;
   align-content: center;

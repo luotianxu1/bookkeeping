@@ -6,7 +6,6 @@ import {
   deleteSalaryAccountRecord,
   getSalaryAccountPage,
   saveSalaryAccountBalance,
-  saveSalaryInitialBalance,
   updateSalaryAccountRecord,
   type SalaryAccountPage,
   type SalaryAccountRecordItem,
@@ -22,7 +21,6 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import {
   createRecentYearOptions,
-  dateToMonthInput,
   formatSalaryCurrency,
   formatSalaryPercent,
   monthInputToDate,
@@ -40,16 +38,9 @@ const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const showBalanceModal = ref(false)
-const showInitialModal = ref(false)
 const showRecordModal = ref(false)
 const editingRecord = ref<SalaryAccountRecordItem | null>(null)
 const selectedYear = ref(String(new Date().getFullYear()))
-
-const initialForm = reactive({
-  amount: '',
-  recordMonth: `${new Date().getFullYear()}-01`,
-  note: '',
-})
 
 const balanceForm = reactive({
   amount: '',
@@ -76,7 +67,7 @@ const isCompactSummaryPage = computed(() =>
 const pageTitle = computed(() => salaryAccountDisplayName(routeAccountType.value))
 const canDeleteRecord = computed(() => recordCanDelete(editingRecord.value))
 const visibleMetrics = computed(() =>
-  pageData.value?.metrics.filter((metric) => metric.label !== '初始值') ?? []
+  pageData.value?.metrics ?? []
 )
 
 onMounted(() => {
@@ -115,15 +106,6 @@ function changeYear(value: string) {
   void loadPage()
 }
 
-function openInitialBalanceModal(record?: SalaryAccountRecordItem) {
-  editingRecord.value = record ?? null
-  initialForm.amount = record ? String(record.amountValue) : String(pageData.value?.initialBalance ?? 0)
-  initialForm.recordMonth = record ? dateToMonthInput(record.monthKey) : `${selectedYear.value}-01`
-  initialForm.note = record?.note ?? ''
-  formError.value = ''
-  showInitialModal.value = true
-}
-
 function openBalanceModal() {
   if (!pageData.value) {
     return
@@ -144,15 +126,6 @@ function openRecordModal(record?: SalaryAccountRecordItem) {
   showRecordModal.value = true
 }
 
-function closeInitialModal() {
-  if (isSaving.value) {
-    return
-  }
-  showInitialModal.value = false
-  editingRecord.value = null
-  formError.value = ''
-}
-
 function closeBalanceModal() {
   if (isSaving.value) {
     return
@@ -168,41 +141,6 @@ function closeRecordModal() {
   showRecordModal.value = false
   editingRecord.value = null
   formError.value = ''
-}
-
-async function submitInitialBalance() {
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
-    formError.value = '请先登录后保存初始值'
-    return
-  }
-
-  const amount = Number(initialForm.amount)
-  if (!Number.isFinite(amount) || amount < 0) {
-    formError.value = '请输入正确的初始金额'
-    return
-  }
-  if (!initialForm.recordMonth) {
-    formError.value = '请选择生效月份'
-    return
-  }
-
-  isSaving.value = true
-  formError.value = ''
-  try {
-    pageData.value = await saveSalaryInitialBalance(routeAccountType.value, {
-      userId: currentUser.id,
-      amount,
-      recordMonth: monthInputToDate(initialForm.recordMonth),
-      note: initialForm.note.trim(),
-    })
-    showInitialModal.value = false
-    openFeedback('初始值已保存', 'success')
-  } catch (error) {
-    formError.value = error instanceof Error ? error.message : '初始值保存失败'
-  } finally {
-    isSaving.value = false
-  }
 }
 
 async function submitBalance() {
@@ -296,10 +234,6 @@ async function removeRecord() {
 
 function handleRecordClick(record: SalaryAccountRecordItem) {
   if (!record.editable) {
-    return
-  }
-  if (record.recordType === 'initial') {
-    openInitialBalanceModal(record)
     return
   }
   openRecordModal(record)
@@ -399,27 +333,6 @@ function formatInterestSettlementDate(value?: string | null) {
         </div>
       </section>
 
-      <section v-if="!isCompactSummaryPage" class="salary-card">
-        <div class="salary-card-head">
-          <strong>账户维护</strong>
-        </div>
-        <div class="salary-maintain-panel">
-          <div class="salary-row">
-            <div>
-              <p class="salary-row-label">已设初始值</p>
-              <p class="salary-row-desc">首次录入后会参与余额累计</p>
-            </div>
-            <div class="salary-row-value">
-              <strong>{{ formatSalaryCurrency(pageData.initialBalance) }}</strong>
-            </div>
-          </div>
-        </div>
-        <div class="salary-action-grid">
-          <CommonButton variant="secondary" @click="openRecordModal()">新增 / 修改记录</CommonButton>
-          <CommonButton @click="openInitialBalanceModal()">设置初始值</CommonButton>
-        </div>
-      </section>
-
       <section class="salary-card">
         <div class="salary-card-head">
           <strong>账户记录</strong>
@@ -500,22 +413,6 @@ function formatInterestSettlementDate(value?: string | null) {
         <div class="salary-modal-footer salary-balance-modal-footer">
           <CommonButton variant="secondary" :disabled="isSaving" @click="closeBalanceModal">取消</CommonButton>
           <CommonButton :disabled="isSaving" @click="submitBalance">{{ isSaving ? '保存中...' : '确认修改' }}</CommonButton>
-        </div>
-      </template>
-    </CommonModal>
-
-    <CommonModal v-model="showInitialModal" title="设置初始值" :close-on-overlay="!isSaving">
-      <div class="salary-form-grid">
-        <p class="salary-modal-note">初始值会作为第一笔手动记录写入，并参与后续自动累计。</p>
-        <CommonInput v-model="initialForm.amount" label="初始金额" input-type="number" input-mode="decimal" />
-        <CommonInput v-model="initialForm.recordMonth" label="生效月份" input-type="month" />
-        <CommonInput v-model="initialForm.note" label="备注说明" placeholder="例如：开户时历史余额" />
-        <p v-if="formError" class="salary-error-text">{{ formError }}</p>
-      </div>
-      <template #footer>
-        <div class="salary-modal-footer">
-          <CommonButton variant="secondary" :disabled="isSaving" @click="closeInitialModal">取消</CommonButton>
-          <CommonButton :disabled="isSaving" @click="submitInitialBalance">{{ isSaving ? '保存中...' : '保存初始值' }}</CommonButton>
         </div>
       </template>
     </CommonModal>

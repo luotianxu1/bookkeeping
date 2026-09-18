@@ -14,6 +14,7 @@ import com.example.finance.dto.InvestmentPositionRequest;
 import com.example.finance.dto.InvestmentPositionResponse;
 import com.example.finance.dto.InvestmentProductRequest;
 import com.example.finance.dto.InvestmentProductResponse;
+import com.example.finance.dto.InvestmentProductQuoteResponse;
 import com.example.finance.dto.InvestmentSummaryResponse;
 import com.example.finance.dto.InvestmentTrendResponse;
 import com.example.finance.dto.InvestmentTransactionRequest;
@@ -291,6 +292,17 @@ public class InvestmentController {
         @Valid @RequestBody InvestmentDividendForecastRequest request
     ) {
         return Result.ok(investmentService.dividendForecast(request));
+    }
+
+    @GetMapping("/products/quote")
+    @Operation(summary = "查询投资产品最新行情")
+    public Result<InvestmentProductQuoteResponse> productQuote(
+        @RequestParam(name = "productType") String productType,
+        @RequestParam(name = "symbol") String symbol,
+        @RequestParam(name = "exchangeCode", required = false) String exchangeCode,
+        @RequestParam(name = "name", required = false) String name
+    ) {
+        return Result.ok(investmentService.productQuote(productType, symbol, exchangeCode, name));
     }
 
     @GetMapping("/fixed-expenses")

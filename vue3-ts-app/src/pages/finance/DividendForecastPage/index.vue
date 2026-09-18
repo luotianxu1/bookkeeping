@@ -7,8 +7,10 @@ import AmountText from '@/components/common/AmountText/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import {
   getInvestmentDividendForecast,
+  getInvestmentProductQuote,
   getInvestmentProducts,
   type InvestmentDividendForecast,
+  type InvestmentProductQuote,
   type InvestmentProduct,
 } from '@/api/modules/finance'
 
@@ -25,10 +27,12 @@ const holdingInputMode = ref<'quantity' | 'amount'>('quantity')
 const holdingInputValue = ref('')
 const isSearching = ref(false)
 const isCalculating = ref(false)
+const isLoadingQuote = ref(false)
 const searchMessage = ref('')
 const formError = ref('')
 const pageError = ref('')
 const forecastResult = ref<InvestmentDividendForecast | null>(null)
+const selectedProductQuote = ref<InvestmentProductQuote | null>(null)
 let isFillingKeyword = false
 
 const selectedProductSummary = computed(() => {
@@ -47,6 +51,14 @@ const holdingInputLabel = computed(() => {
   return `持仓数量(${unitName})`
 })
 const currentPriceLabel = computed(() => selectedProduct.value?.productType === 'fund' ? '当前净值' : '当前股价')
+const isSelectedQuoteToday = computed(() => selectedProductQuote.value?.quoteDate === getLocalDateKey())
+
+function getLocalDateKey() {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
 
 function getProductMatchScore(product: InvestmentProduct, keyword: string, normalizedKeyword: string) {
   const symbol = product.symbol.toUpperCase()
@@ -158,6 +170,7 @@ async function searchProducts() {
     selectedProduct.value = null
     selectedProductKey.value = ''
     forecastResult.value = null
+    selectedProductQuote.value = null
     searchMessage.value = matchedProducts.length > 0 ? `找到 ${matchedProducts.length} 个资产，请选择` : '未找到相关资产'
   } catch (error) {
     searchResults.value = []
@@ -168,7 +181,7 @@ async function searchProducts() {
   }
 }
 
-function selectProduct(product: InvestmentProduct) {
+async function selectProduct(product: InvestmentProduct) {
   selectedProduct.value = product
   selectedProductKey.value = getSearchResultKey(product)
   isFillingKeyword = true
@@ -177,7 +190,28 @@ function selectProduct(product: InvestmentProduct) {
   searchResults.value = []
   searchMessage.value = ''
   forecastResult.value = null
+  selectedProductQuote.value = null
+  pageError.value = ''
+  selectedProduct.value = { ...product, latestPrice: undefined }
   formError.value = ''
+  isLoadingQuote.value = true
+  try {
+    selectedProductQuote.value = await getInvestmentProductQuote({
+      productType: product.productType,
+      symbol: product.symbol,
+      exchangeCode: product.exchangeCode,
+      name: product.name,
+    })
+    selectedProduct.value = {
+      ...product,
+      latestPrice: selectedProductQuote.value.latestPrice ?? product.latestPrice,
+      name: selectedProductQuote.value.name || product.name,
+    }
+  } catch (error) {
+    pageError.value = error instanceof Error ? error.message : '行情查询失败'
+  } finally {
+    isLoadingQuote.value = false
+  }
 }
 
 function handleKeywordInput(value: string) {
@@ -189,6 +223,7 @@ function handleKeywordInput(value: string) {
   selectedProductKey.value = ''
   searchResults.value = []
   forecastResult.value = null
+  selectedProductQuote.value = null
   searchMessage.value = ''
 }
 
@@ -218,6 +253,7 @@ async function calculateForecast() {
       currencyCode: selectedProduct.value.currencyCode,
       unitName: selectedProduct.value.unitName,
       latestPrice: selectedProduct.value.latestPrice ?? undefined,
+      quoteDate: selectedProductQuote.value?.quoteDate ?? undefined,
       holdingQuantity: holdingInputMode.value === 'quantity' ? inputValue : undefined,
       holdingAmount: holdingInputMode.value === 'amount' ? inputValue : undefined,
     })
@@ -289,6 +325,19 @@ function formatPercent(value: number) {
       <div v-if="selectedProduct" class="forecast-selected-product">
         <strong>{{ selectedProduct.symbol }} {{ selectedProduct.name }}</strong>
         <span>{{ selectedProductSummary }}</span>
+        <CommonLoading v-if="isLoadingQuote" text="正在查询最新行情..." />
+        <div v-else-if="selectedProductQuote" class="forecast-quote-detail" aria-label="最新行情详情">
+          <div>
+            <span>{{ selectedProductQuote.productType === 'fund' ? '最新净值' : '最新价' }}</span>
+            <strong>{{ selectedProductQuote.latestPrice == null ? '-' : formatCurrency(selectedProductQuote.latestPrice, selectedProductQuote.productType === 'fund' ? 4 : 2) }}</strong>
+          </div>
+          <div>
+            <span>数据日期</span>
+            <strong>{{ selectedProductQuote.quoteDate || '暂无' }}</strong>
+          </div>
+          <small>{{ selectedProductQuote.source || '行情数据' }} · {{ isSelectedQuoteToday ? '今日数据' : '最近可用数据' }}</small>
+        </div>
+        <p v-else class="forecast-quote-empty">暂无可用行情，持仓金额模式暂不可用</p>
       </div>
 
       <label class="forecast-field">
@@ -315,7 +364,7 @@ function formatPercent(value: number) {
 
       <p v-if="formError" class="forecast-message forecast-message-error">{{ formError }}</p>
 
-      <CommonButton variant="primary" :disabled="isCalculating" @click="calculateForecast">
+      <CommonButton variant="primary" :disabled="isCalculating || isLoadingQuote" @click="calculateForecast">
         {{ isCalculating ? '测算中...' : '开始测算' }}
       </CommonButton>
     </section>
@@ -326,7 +375,7 @@ function formatPercent(value: number) {
       <div class="result-card-head">
         <div>
           <p>{{ forecastResult.productTypeLabel }}</p>
-          <strong>{{ forecastResult.symbol }} {{ forecastResult.name }}</strong>
+          <strong>{{ forecastResult.name }}</strong>
         </div>
         <AmountText
           tag="strong"
@@ -343,11 +392,11 @@ function formatPercent(value: number) {
           <strong>{{ formatCurrency(forecastResult.currentPrice, 4) }}</strong>
         </div>
         <div class="result-stat">
-          <span>去年分红次数</span>
+          <span>近12个月分红次数</span>
           <strong>{{ forecastResult.lastYearDividendCount }} 次</strong>
         </div>
         <div class="result-stat">
-          <span>去年每单位分红</span>
+          <span>近12个月每单位分红</span>
           <strong>{{ formatNumber(forecastResult.lastYearDividendPerUnit, 4) }} / {{ forecastResult.unitName || '份' }}</strong>
         </div>
         <div class="result-stat">

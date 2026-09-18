@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.finance.dto.SalaryAccountBalanceRequest;
 import com.example.finance.dto.SalaryAccountPageResponse;
 import com.example.finance.dto.SalaryAccountRecordRequest;
-import com.example.finance.dto.SalaryInitialBalanceRequest;
+import com.example.finance.dto.SalaryCashPageResponse;
 import com.example.finance.dto.SalaryMonthPageResponse;
 import com.example.finance.dto.SalaryMonthRecordRequest;
 import com.example.finance.dto.SalaryOverviewResponse;
@@ -50,7 +50,6 @@ public class SalaryService {
     private static final String ACCOUNT_SOCIAL = "social_security";
     private static final String ACCOUNT_HOUSING = "housing_fund";
     private static final String ACCOUNT_MEDICAL = "medical";
-    private static final String RECORD_INITIAL = "initial";
     private static final String RECORD_AUTO = "auto";
     private static final String RECORD_MANUAL = "manual";
     private static final String AUTO_SALARY_RECORD_NOTE = "系统按发薪日自动入账";
@@ -123,7 +122,8 @@ public class SalaryService {
         response.setLinkedAccounts(List.of(
             linkedAccount(userId, ACCOUNT_SOCIAL, "社保账户", "/finance/salary/accounts/social-security", year, computation.socialAccountMonthlyIncrease),
             linkedAccount(userId, ACCOUNT_HOUSING, "公积金账户", "/finance/salary/accounts/housing-fund", year, computation.housingFundMonthlyIncrease),
-            linkedAccount(userId, ACCOUNT_MEDICAL, "医保账户", "/finance/salary/accounts/medical", year, computation.medicalMonthlyIncrease)
+            linkedAccount(userId, ACCOUNT_MEDICAL, "医保账户", "/finance/salary/accounts/medical", year, computation.medicalMonthlyIncrease),
+            cashAccount("现金账户", "/finance/salary/cash", sumMonthlyCashIncome(userId, profile, deduction, year, annualComputation.paidMonths))
         ));
 
         SalaryOverviewResponse.TaxSummary taxSummary = new SalaryOverviewResponse.TaxSummary();
@@ -241,41 +241,6 @@ public class SalaryService {
             }
             ensureYearData(profile.getUserId(), profile, currentYear);
         }
-    }
-
-    @Transactional
-    public SalaryAccountPageResponse saveInitialBalance(String accountType, SalaryInitialBalanceRequest request) {
-        String normalizedAccountType = normalizeAccountType(accountType);
-        SalaryProfileEntity profile = ensureProfile(request.getUserId());
-        SalaryAccountRecordEntity initialRecord = salaryAccountRecordMapper.selectOne(new LambdaQueryWrapper<SalaryAccountRecordEntity>()
-            .eq(SalaryAccountRecordEntity::getUserId, request.getUserId())
-            .eq(SalaryAccountRecordEntity::getAccountType, normalizedAccountType)
-            .eq(SalaryAccountRecordEntity::getRecordType, RECORD_INITIAL)
-            .last("LIMIT 1"));
-
-        if (initialRecord == null) {
-            initialRecord = new SalaryAccountRecordEntity();
-            initialRecord.setUserId(request.getUserId());
-            initialRecord.setAccountType(normalizedAccountType);
-            initialRecord.setRecordType(RECORD_INITIAL);
-        }
-
-        initialRecord.setRecordMonth(normalizeMonth(request.getRecordMonth()));
-        initialRecord.setAmount(scale(request.getAmount()));
-        initialRecord.setPersonalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        initialRecord.setCompanyAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        initialRecord.setSyncToCurrent(true);
-        initialRecord.setNote(StringUtils.hasText(request.getNote()) ? request.getNote().trim() : "初始值设置");
-
-        if (initialRecord.getId() == null) {
-            salaryAccountRecordMapper.insert(initialRecord);
-        } else {
-            salaryAccountRecordMapper.updateById(initialRecord);
-        }
-
-        ensureYearData(request.getUserId(), profile, initialRecord.getRecordMonth().getYear());
-        recalculateBalances(request.getUserId(), normalizedAccountType);
-        return buildAccountPage(request.getUserId(), normalizedAccountType, initialRecord.getRecordMonth().getYear(), profile);
     }
 
     @Transactional
@@ -419,6 +384,59 @@ public class SalaryService {
         return response;
     }
 
+    public SalaryCashPageResponse getCashPage(Long userId, Integer year) {
+        SalaryProfileEntity profile = ensureProfile(userId);
+        int resolvedYear = year == null ? LocalDate.now(SHANGHAI_ZONE).getYear() : year;
+        ensureYearData(userId, profile, resolvedYear);
+        SalarySpecialDeductionEntity deduction = ensureSpecialDeduction(userId, resolvedYear);
+        int paidMonths = resolveCurrentPaidMonths(resolvedYear, profile.getPayDay());
+
+        BigDecimal annualGrossIncome = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal annualPersonalDeduction = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal annualTax = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal annualCashIncome = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal currentMonthCashIncome = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        List<SalaryCashPageResponse.MonthCashItem> monthItems = new ArrayList<>();
+
+        for (int month = paidMonths; month >= 1; month--) {
+            SalaryComputation computation = compute(userId, profile, deduction, resolvedYear, month);
+            SalaryCashPageResponse.MonthCashItem item = new SalaryCashPageResponse.MonthCashItem();
+            item.setMonthKey(monthKey(resolvedYear, month));
+            item.setMonthLabel(resolvedYear + " 年 " + month + " 月");
+            item.setGrossIncome(scale(computation.grossMonthlyIncome));
+            item.setPersonalDeduction(scale(computation.personalDeductionMonthly));
+            item.setTaxAmount(scale(computation.currentMonthTax));
+            item.setCashIncome(scale(computation.currentMonthTakeHome));
+            item.setStatusText(month == paidMonths ? "已到账" : "已归档");
+            monthItems.add(item);
+
+            annualGrossIncome = annualGrossIncome.add(computation.grossMonthlyIncome).setScale(2, RoundingMode.HALF_UP);
+            annualPersonalDeduction = annualPersonalDeduction.add(computation.personalDeductionMonthly).setScale(2, RoundingMode.HALF_UP);
+            annualTax = annualTax.add(computation.currentMonthTax).setScale(2, RoundingMode.HALF_UP);
+            annualCashIncome = annualCashIncome.add(computation.currentMonthTakeHome).setScale(2, RoundingMode.HALF_UP);
+            if (month == paidMonths) {
+                currentMonthCashIncome = computation.currentMonthTakeHome;
+            }
+        }
+
+        SalaryCashPageResponse response = new SalaryCashPageResponse();
+        response.setYear(resolvedYear);
+        response.setPaidMonths(paidMonths);
+        response.setAnnualCashIncome(scale(annualCashIncome));
+        response.setCurrentMonthCashIncome(scale(currentMonthCashIncome));
+        response.setAnnualGrossIncome(scale(annualGrossIncome));
+        response.setAnnualPersonalDeduction(scale(annualPersonalDeduction));
+        response.setAnnualTax(scale(annualTax));
+        response.setMetrics(List.of(
+            cashMetric("已发工资", annualGrossIncome),
+            cashMetric("到手现金", annualCashIncome),
+            cashMetric("五险一金", annualPersonalDeduction),
+            cashMetric("个人所得税", annualTax)
+        ));
+        response.setMonthItems(monthItems);
+        return response;
+    }
+
     private SalarySettingsResponse toSettingsResponse(
         SalaryProfileEntity profile,
         SalarySpecialDeductionEntity deduction,
@@ -524,16 +542,10 @@ public class SalaryService {
 
         SalaryComputation computation = compute(userId, profile, ensureSpecialDeduction(userId, year), year, resolveCurrentPaidMonths(year, profile.getPayDay()));
         BigDecimal currentBalance = records.isEmpty() ? BigDecimal.ZERO : defaultZero(records.get(records.size() - 1).getBalanceAfter());
-        BigDecimal initialBalance = records.stream()
-            .filter(record -> RECORD_INITIAL.equals(record.getRecordType()))
-            .findFirst()
-            .map(SalaryAccountRecordEntity::getAmount)
-            .orElse(BigDecimal.ZERO);
         SalaryAccountRecordEntity latestAutoRecord = findLatestVisibleAutoRecord(yearRecords);
         BigDecimal displayedMonthlyPersonal = latestAutoRecord == null ? monthlyPersonal(accountType, computation) : defaultZero(latestAutoRecord.getPersonalAmount());
         BigDecimal displayedMonthlyCompany = latestAutoRecord == null ? monthlyCompany(accountType, computation) : defaultZero(latestAutoRecord.getCompanyAmount());
         BigDecimal yearlyIncrease = yearRecords.stream()
-            .filter(record -> !RECORD_INITIAL.equals(record.getRecordType()))
             .map(this::recordNetAmount)
             .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add);
 
@@ -543,7 +555,6 @@ public class SalaryService {
         response.setBadgeText(accountBadge(accountType));
         response.setYear(year);
         response.setCurrentBalance(scale(currentBalance));
-        response.setInitialBalance(scale(initialBalance));
         response.setMonthlyPersonal(scale(displayedMonthlyPersonal));
         response.setMonthlyCompany(scale(displayedMonthlyCompany));
         response.setYearlyIncrease(scale(yearlyIncrease));
@@ -551,7 +562,7 @@ public class SalaryService {
             metricItem("个人缴存", displayedMonthlyPersonal),
             metricItem("单位缴存", displayedMonthlyCompany)
         ));
-        response.setDetails(buildAccountDetails(accountType, computation, currentBalance, initialBalance));
+        response.setDetails(buildAccountDetails(accountType, computation, currentBalance));
         response.setRecords(buildAccountRecords(yearRecords));
         response.setForecast(buildSalaryAccountForecast(userId, accountType, year, profile, records));
         response.setUpdatedAt(records.isEmpty() ? profile.getUpdatedAt() : records.get(records.size() - 1).getUpdatedAt());
@@ -686,27 +697,26 @@ public class SalaryService {
     private List<SalaryAccountPageResponse.DetailItem> buildAccountDetails(
         String accountType,
         SalaryComputation computation,
-        BigDecimal currentBalance,
-        BigDecimal initialBalance
+        BigDecimal currentBalance
     ) {
         if (ACCOUNT_HOUSING.equals(accountType)) {
             return List.of(
                 accountDetail("公积金个人缴存", "按基数比例自动累计", computation.housingFundPersonal),
                 accountDetail("单位缴存", "公司同步缴存部分", computation.housingFundCompany),
-                accountDetail("当前账户余额", "含历史初始值与手动调整", currentBalance)
+                accountDetail("当前账户余额", "含历史调账与手动调整", currentBalance)
             );
         }
         if (ACCOUNT_MEDICAL.equals(accountType)) {
             return List.of(
                 accountDetail("医保个人缴存", "按基数比例自动累计", computation.medicalPersonal),
                 accountDetail("统筹划入", "单位缴纳进入医保统筹", computation.medicalCompany),
-                accountDetail("初始可用余额", "首次录入后参与累计", initialBalance)
+                accountDetail("当前账户余额", "含历史缴存与手动调整", currentBalance)
             );
         }
         return List.of(
             accountDetail("养老个人缴存", "按社保基数自动累计", computation.pensionPersonal),
             accountDetail("养老单位缴存", "公司同步缴纳部分，不计入个人账户余额", computation.pensionCompany),
-            accountDetail("当前账户余额", "含初始值与月度自动入账", currentBalance)
+            accountDetail("当前账户余额", "含历史调账与月度自动入账", currentBalance)
         );
     }
 
@@ -728,7 +738,7 @@ public class SalaryService {
                     : record.getRecordMonth().getYear() + " 年 " + record.getRecordMonth().getMonthValue() + " 月");
                 item.setRecordType(record.getRecordType());
                 item.setPillText(resolveRecordPill(record.getRecordType()));
-                item.setAmountLabel(RECORD_INITIAL.equals(record.getRecordType()) ? "初始值设置" : RECORD_AUTO.equals(record.getRecordType()) ? "本月缴存" : "手动调整");
+                item.setAmountLabel(RECORD_AUTO.equals(record.getRecordType()) ? "本月缴存" : "手动调整");
                 item.setAmountValue(scale(record.getAmount()));
                 item.setBalanceLabel("账户余额");
                 item.setBalanceValue(scale(record.getBalanceAfter()));
@@ -1212,6 +1222,16 @@ public class SalaryService {
         return item;
     }
 
+    private SalaryOverviewResponse.AccountSummary cashAccount(String title, String routePath, BigDecimal annualCashIncome) {
+        SalaryOverviewResponse.AccountSummary item = new SalaryOverviewResponse.AccountSummary();
+        item.setAccountType("cash");
+        item.setTitle(title);
+        item.setCurrentBalance(scale(annualCashIncome));
+        item.setMonthlyDeposit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        item.setRoutePath(routePath);
+        return item;
+    }
+
     private SalaryMonthPageResponse.MetricItem salaryMonthMetric(String label, BigDecimal value) {
         SalaryMonthPageResponse.MetricItem item = new SalaryMonthPageResponse.MetricItem();
         item.setLabel(label);
@@ -1241,6 +1261,13 @@ public class SalaryService {
         return item;
     }
 
+    private SalaryCashPageResponse.MetricItem cashMetric(String label, BigDecimal value) {
+        SalaryCashPageResponse.MetricItem item = new SalaryCashPageResponse.MetricItem();
+        item.setLabel(label);
+        item.setValue(scale(value));
+        return item;
+    }
+
     private SalaryTaxPageResponse.DeductionItem deductionItem(String label, BigDecimal monthlyValue) {
         SalaryTaxPageResponse.DeductionItem item = new SalaryTaxPageResponse.DeductionItem();
         item.setLabel(label);
@@ -1257,6 +1284,21 @@ public class SalaryService {
             return BigDecimal.ZERO;
         }
         return defaultZero(records.get(records.size() - 1).getBalanceAfter());
+    }
+
+    private BigDecimal sumMonthlyCashIncome(
+        Long userId,
+        SalaryProfileEntity profile,
+        SalarySpecialDeductionEntity deduction,
+        int year,
+        int paidMonths
+    ) {
+        BigDecimal total = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        for (int month = 1; month <= paidMonths; month++) {
+            total = total.add(compute(userId, profile, deduction, year, month).currentMonthTakeHome)
+                .setScale(2, RoundingMode.HALF_UP);
+        }
+        return total;
     }
 
     private List<SalaryMonthRecordEntity> loadSalaryMonthRecords(Long userId, int year) {
@@ -1443,9 +1485,6 @@ public class SalaryService {
     }
 
     private String resolveRecordPill(String recordType) {
-        if (RECORD_INITIAL.equals(recordType)) {
-            return "初始值";
-        }
         if (RECORD_AUTO.equals(recordType)) {
             return "自动入账";
         }

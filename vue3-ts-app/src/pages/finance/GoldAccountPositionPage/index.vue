@@ -88,6 +88,7 @@ const formRemark = ref('')
 const sellFundingAccountId = ref('')
 const sellWeight = ref('')
 const sellPrice = ref('')
+const sellFee = ref('0')
 const sellRemark = ref('')
 
 let requestVersion = 0
@@ -162,10 +163,20 @@ const sellAvailableQuantityText = computed(() => {
 const sellAmountPreview = computed(() => {
   const quantity = Number(sellWeight.value)
   const price = Number(sellPrice.value)
-  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(price) || price <= 0) {
+  const fee = Number(sellFee.value)
+  const amount = quantity * price
+  if (
+    !Number.isFinite(quantity)
+    || quantity <= 0
+    || !Number.isFinite(price)
+    || price <= 0
+    || !Number.isFinite(fee)
+    || fee < 0
+    || fee > amount
+  ) {
     return '--'
   }
-  return `${formatAmount(quantity * price)}元`
+  return `${formatAmount(amount - fee)}元`
 })
 
 onMounted(() => {
@@ -343,6 +354,7 @@ function resetSellForm() {
   sellFundingAccountId.value = ''
   sellWeight.value = ''
   sellPrice.value = realtimeGoldPrice.value > 0 ? String(realtimeGoldPrice.value) : ''
+  sellFee.value = '0'
   sellRemark.value = ''
   sellError.value = ''
 }
@@ -570,6 +582,7 @@ async function submitSellPosition() {
     : undefined
   const quantity = Number(sellWeight.value)
   const price = Number(sellPrice.value)
+  const fee = Number(sellFee.value)
   const amount = quantity * price
   const availableQuantity = Number(sellingPosition.value.availableQuantity ?? 0)
 
@@ -589,6 +602,14 @@ async function submitSellPosition() {
     sellError.value = '卖出克数或价格不正确'
     return
   }
+  if (!Number.isFinite(fee) || fee < 0) {
+    sellError.value = '请输入有效的手续费'
+    return
+  }
+  if (fee > amount) {
+    sellError.value = '手续费不能超过卖出金额'
+    return
+  }
 
   isSellingPosition.value = true
   sellError.value = ''
@@ -603,7 +624,7 @@ async function submitSellPosition() {
       quantity: toFixedNumber(quantity, 6),
       price: toFixedNumber(price, 6),
       amount: toFixedNumber(amount, 2),
-      feeAmount: 0,
+      feeAmount: toFixedNumber(fee, 2),
       taxAmount: 0,
       currencyCode: sellingPosition.value.currencyCode || 'CNY',
       fundingAccountId: normalizedFundingAccountId,
@@ -1036,6 +1057,13 @@ function toApiDateTime(date: Date) {
           v-model="sellPrice"
           label="卖出价格(元/克)"
           placeholder="请输入卖出价格"
+          input-type="number"
+          input-mode="decimal"
+        />
+        <CommonInput
+          v-model="sellFee"
+          label="手续费(元)"
+          placeholder="请输入手续费"
           input-type="number"
           input-mode="decimal"
         />

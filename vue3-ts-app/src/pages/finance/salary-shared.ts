@@ -84,5 +84,5 @@ export function createRecentYearOptions(count = 4) {
 }
 
 export function recordCanDelete(record: SalaryAccountRecordItem | null) {
-  return Boolean(record && record.editable && record.recordType !== 'initial')
+  return Boolean(record && record.editable)
 }
