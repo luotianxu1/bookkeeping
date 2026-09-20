@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AccountIcon from '@/components/common/AccountIcon/index.vue'
 
 // 公共下拉框组件：封装标签、选项和 v-model。
 export type CommonSelectOption = string | {
   label: string
   value: string
   disabled?: boolean
+  icon?: string
 }
 
 type NormalizedOption = {
   label: string
   value: string
   disabled: boolean
+  icon: string
 }
 
 const props = defineProps<{
@@ -41,6 +44,7 @@ const normalizedOptions = computed<NormalizedOption[]>(() => (
     label: getOptionLabel(option),
     value: getOptionValue(option),
     disabled: isOptionDisabled(option),
+    icon: getOptionIcon(option),
   }))
 ))
 
@@ -106,6 +110,10 @@ function getOptionValue(option: CommonSelectOption) {
 
 function isOptionDisabled(option: CommonSelectOption) {
   return typeof option === 'string' ? false : option.disabled === true
+}
+
+function getOptionIcon(option: CommonSelectOption) {
+  return typeof option === 'string' ? '' : option.icon?.trim() ?? ''
 }
 
 function openMenu() {
@@ -304,7 +312,14 @@ function handleDocumentPointerDown(event: PointerEvent) {
         @click="toggleMenu"
         @keydown="handleControlKeydown"
       >
-        <span :id="valueId" class="common-select-value">{{ selectedLabel }}</span>
+        <span class="common-select-current">
+          <AccountIcon
+            v-if="selectedOption?.icon"
+            :icon="selectedOption.icon"
+            :size="24"
+          />
+          <span :id="valueId" class="common-select-value">{{ selectedLabel }}</span>
+        </span>
         <span class="common-select-arrow" aria-hidden="true"></span>
       </button>
 
@@ -339,7 +354,10 @@ function handleDocumentPointerDown(event: PointerEvent) {
               @click="selectOption(index)"
               @mouseenter="activateOption(index)"
             >
-              <span>{{ option.label }}</span>
+              <span class="common-select-option-content">
+                <AccountIcon v-if="option.icon" :icon="option.icon" :size="24" />
+                <span class="common-select-option-label">{{ option.label }}</span>
+              </span>
               <span v-if="option.value === modelValue" class="common-select-check" aria-hidden="true"></span>
             </button>
           </div>

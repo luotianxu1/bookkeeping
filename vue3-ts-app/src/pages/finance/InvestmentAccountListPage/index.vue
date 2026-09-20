@@ -7,7 +7,9 @@ import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButt
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
+import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
+import AccountIcon from '@/components/common/AccountIcon/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
@@ -25,6 +27,11 @@ import {
   updateAccount,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import {
+  DEFAULT_INVESTMENT_ACCOUNT_ICON,
+  allAccountIconOptions,
+  resolveInvestmentAccountIcon,
+} from '@/data/account-icons'
 
 type InvestmentAccountCard = {
   account: Account
@@ -73,6 +80,7 @@ const deleteError = ref('')
 const editingAccount = ref<Account | null>(null)
 const deletingTarget = ref<DeleteTarget | null>(null)
 const accountName = ref('')
+const accountIcon = ref(DEFAULT_INVESTMENT_ACCOUNT_ICON)
 const accountRemark = ref('')
 const includeInNetWorth = ref(true)
 
@@ -209,6 +217,7 @@ function toggleManageMode() {
 function openCreateAccountModal() {
   editingAccount.value = null
   accountName.value = ''
+  accountIcon.value = DEFAULT_INVESTMENT_ACCOUNT_ICON
   accountRemark.value = ''
   includeInNetWorth.value = investmentAccountType.value?.includeInNetWorthDefault ?? true
   accountFormError.value = ''
@@ -218,6 +227,7 @@ function openCreateAccountModal() {
 function openEditAccountModal(account: Account) {
   editingAccount.value = account
   accountName.value = account.name
+  accountIcon.value = resolveInvestmentAccountIcon(account.icon)
   accountRemark.value = account.remark ?? ''
   includeInNetWorth.value = account.includeInNetWorth
   accountFormError.value = ''
@@ -231,6 +241,7 @@ function closeAccountModal(force = false) {
   showAccountModal.value = false
   editingAccount.value = null
   accountName.value = ''
+  accountIcon.value = DEFAULT_INVESTMENT_ACCOUNT_ICON
   accountRemark.value = ''
   includeInNetWorth.value = true
   accountFormError.value = ''
@@ -286,7 +297,7 @@ async function saveAccount() {
       accountTypeId: targetAccountType.id,
       contactId: null,
       name: trimmedName,
-      icon: targetAccountType.code,
+      icon: accountIcon.value,
       currencyCode: editingAccount.value?.currencyCode || 'CNY',
       currentBalance: 0,
       includeInNetWorth: includeInNetWorth.value,
@@ -458,6 +469,13 @@ function showFeedback(message: string, type: 'success' | 'error') {
         >
           <div class="investment-account-list-card-top">
             <div class="investment-account-list-card-title">
+              <AccountIcon
+                :icon="card.account.icon"
+                :account-type-code="card.account.accountTypeCode"
+                :color="card.account.color"
+                :name="card.name"
+                :size="36"
+              />
               <strong>{{ card.name }}</strong>
             </div>
             <div class="investment-account-list-card-side">
@@ -525,6 +543,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     >
       <div class="investment-account-form">
         <CommonInput v-model="accountName" label="账户名称" placeholder="输入投资账户名称" />
+        <CommonSelect v-model="accountIcon" label="账户图标" :options="allAccountIconOptions" />
         <CommonInput v-model="accountRemark" label="备注" placeholder="输入账户说明" />
         <CommonSwitch v-model="includeInNetWorth" label="是否计入总资产" />
         <p v-if="accountFormError" class="investment-account-form-error">

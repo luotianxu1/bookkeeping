@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import alipayIcon from '@/assets/account-icons/alipay.png'
+import applePayIcon from '@/assets/account-icons/apple-pay.png'
 import bankAbcIcon from '@/assets/account-icons/bank-abc.png'
 import bankBocIcon from '@/assets/account-icons/bank-boc.png'
 import bankBocomIcon from '@/assets/account-icons/bank-bocom.png'
@@ -17,18 +18,38 @@ import bankMybankIcon from '@/assets/account-icons/bank-mybank.png'
 import bankPinganIcon from '@/assets/account-icons/bank-pingan.png'
 import bankPsbcIcon from '@/assets/account-icons/bank-psbc.png'
 import bankSpdbIcon from '@/assets/account-icons/bank-spdb.png'
-import creditCardIcon from '@/assets/account-icons/credit-card.png'
-import debtIcon from '@/assets/account-icons/debt.png'
-import fundIcon from '@/assets/account-icons/fund.png'
-import goldIcon from '@/assets/account-icons/gold.png'
-import humanRelationIcon from '@/assets/account-icons/human-relation.png'
-import liabilityIcon from '@/assets/account-icons/liability.png'
-import otherAssetIcon from '@/assets/account-icons/other-asset.png'
-import otherLiabilityIcon from '@/assets/account-icons/other-liability.png'
-import otherIcon from '@/assets/account-icons/other.png'
-import reserveFundIcon from '@/assets/account-icons/reserve-fund.png'
-import stockIcon from '@/assets/account-icons/stock.png'
-import walletIcon from '@/assets/account-icons/wallet.png'
+import brokerCiticsIcon from '@/assets/account-icons/broker-citics.png'
+import brokerCmsIcon from '@/assets/account-icons/broker-cms.png'
+import brokerCscIcon from '@/assets/account-icons/broker-csc.png'
+import brokerEastmoneyIcon from '@/assets/account-icons/broker-eastmoney.png'
+import brokerGalaxyIcon from '@/assets/account-icons/broker-galaxy.png'
+import brokerGfIcon from '@/assets/account-icons/broker-gf.png'
+import brokerGjzqIcon from '@/assets/account-icons/broker-gjzq.png'
+import brokerGthtIcon from '@/assets/account-icons/broker-gtht.png'
+import brokerGuosenIcon from '@/assets/account-icons/broker-guosen.png'
+import brokerHtscIcon from '@/assets/account-icons/broker-htsc.png'
+import brokerHuabaoscIcon from '@/assets/account-icons/broker-huabaosc.png'
+import brokerPinganIcon from '@/assets/account-icons/broker-pingan.png'
+import brokerSwhyIcon from '@/assets/account-icons/broker-swhy.png'
+import creditCardIcon from '@/assets/system-icons/credit-card.png'
+import debtIcon from '@/assets/system-icons/debt.png'
+import digitalYuanIcon from '@/assets/account-icons/digital-yuan.png'
+import fundIcon from '@/assets/system-icons/fund.png'
+import goldIcon from '@/assets/system-icons/gold.png'
+import humanRelationIcon from '@/assets/system-icons/human-relation.png'
+import jdWalletIcon from '@/assets/account-icons/jd-wallet.png'
+import liabilityIcon from '@/assets/system-icons/liability.png'
+import meituanPayIcon from '@/assets/account-icons/meituan-pay.png'
+import otherAssetIcon from '@/assets/system-icons/other-asset.png'
+import otherLiabilityIcon from '@/assets/system-icons/other-liability.png'
+import otherIcon from '@/assets/system-icons/other.png'
+import paypalIcon from '@/assets/account-icons/paypal.png'
+import qqWalletIcon from '@/assets/account-icons/qq-wallet.png'
+import reserveFundIcon from '@/assets/system-icons/reserve-fund.png'
+import stockIcon from '@/assets/system-icons/stock.png'
+import unionpayIcon from '@/assets/account-icons/unionpay.png'
+import walletIcon from '@/assets/system-icons/wallet.png'
+import wechatPayIcon from '@/assets/account-icons/wechat-pay.png'
 
 type AccountIconKey =
   | 'wallet'
@@ -48,7 +69,28 @@ type AccountIconKey =
   | 'bank-ceb'
   | 'bank-cgb'
   | 'bank-mybank'
+  | 'broker-citics'
+  | 'broker-htsc'
+  | 'broker-gtht'
+  | 'broker-cms'
+  | 'broker-gf'
+  | 'broker-galaxy'
+  | 'broker-guosen'
+  | 'broker-swhy'
+  | 'broker-csc'
+  | 'broker-eastmoney'
+  | 'broker-gjzq'
+  | 'broker-pingan'
+  | 'broker-huabaosc'
   | 'alipay'
+  | 'wechat-pay'
+  | 'digital-yuan'
+  | 'qq-wallet'
+  | 'jd-wallet'
+  | 'unionpay'
+  | 'meituan-pay'
+  | 'apple-pay'
+  | 'paypal'
   | 'reserve-fund'
   | 'fund'
   | 'gold'
@@ -93,7 +135,28 @@ const iconSources: Record<AccountIconKey, string> = {
   'bank-ceb': bankCebIcon,
   'bank-cgb': bankCgbIcon,
   'bank-mybank': bankMybankIcon,
+  'broker-citics': brokerCiticsIcon,
+  'broker-htsc': brokerHtscIcon,
+  'broker-gtht': brokerGthtIcon,
+  'broker-cms': brokerCmsIcon,
+  'broker-gf': brokerGfIcon,
+  'broker-galaxy': brokerGalaxyIcon,
+  'broker-guosen': brokerGuosenIcon,
+  'broker-swhy': brokerSwhyIcon,
+  'broker-csc': brokerCscIcon,
+  'broker-eastmoney': brokerEastmoneyIcon,
+  'broker-gjzq': brokerGjzqIcon,
+  'broker-pingan': brokerPinganIcon,
+  'broker-huabaosc': brokerHuabaoscIcon,
   alipay: alipayIcon,
+  'wechat-pay': wechatPayIcon,
+  'digital-yuan': digitalYuanIcon,
+  'qq-wallet': qqWalletIcon,
+  'jd-wallet': jdWalletIcon,
+  unionpay: unionpayIcon,
+  'meituan-pay': meituanPayIcon,
+  'apple-pay': applePayIcon,
+  paypal: paypalIcon,
   'reserve-fund': reserveFundIcon,
   fund: fundIcon,
   gold: goldIcon,

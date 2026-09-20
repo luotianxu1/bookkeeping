@@ -2,6 +2,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 import LoginPage from '@/pages/login/LoginPage/index.vue'
 import RegisterPage from '@/pages/login/RegisterPage/index.vue'
+import IconManagementPage from '@/pages/profile/IconManagementPage/index.vue'
 import ProfileFamilyPage from '@/pages/profile/ProfileFamilyPage/index.vue'
 import ProfilePage from '@/pages/profile/ProfilePage/index.vue'
 import TaskManagementPage from '@/pages/profile/TaskManagementPage/index.vue'
@@ -50,6 +51,15 @@ export const mainRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'profile',
       title: '任务管理',
+    },
+  },
+  {
+    path: '/profile/icon-management',
+    name: 'profile-icon-management',
+    component: IconManagementPage,
+    meta: {
+      section: 'profile',
+      title: '图标管理',
     },
   },
 ]

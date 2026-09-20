@@ -22,7 +22,7 @@ import {
   type TransactionPage,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
-import { cashAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON, resolveCashAccountIcon } from '@/data/account-icons'
+import { allAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON, resolveCashAccountIcon } from '@/data/account-icons'
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
 import type { DayGroup, Transaction } from '@/types/finance'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
@@ -470,7 +470,7 @@ function formatAmount(value: number) {
     <CommonModal v-model="showEditAccountModal" title="修改现金账户">
       <form class="cash-create-form" @submit.prevent="saveCashAccount">
         <CommonInput v-model="formName" label="账户名称" placeholder="例如：日常钱包" />
-        <CommonSelect v-model="formIcon" label="账户图标" :options="cashAccountIconOptions" />
+        <CommonSelect v-model="formIcon" label="账户图标" :options="allAccountIconOptions" />
         <CommonInput
           v-model="formAmount"
           label="当前余额"

@@ -2,6 +2,7 @@
 // 黄金账户页：展示黄金账户汇总，并支持黄金账户列表增删改查。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import AccountIcon from '@/components/common/AccountIcon/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
@@ -619,7 +620,16 @@ function formatSignedAmount(value: number | null | undefined) {
                 }}
               </span>
               <div class="holding-top">
-                <strong>{{ row.name }}</strong>
+                <span class="gold-account-title">
+                  <AccountIcon
+                    :icon="row.account.icon"
+                    :account-type-code="row.account.accountTypeCode"
+                    :color="row.account.color"
+                    :name="row.name"
+                    :size="28"
+                  />
+                  <strong>{{ row.name }}</strong>
+                </span>
                 <span class="holding-profit-inline" :class="{ negative: row.holdingProfit < 0 }">
                   <span>收益:</span>
                   <AmountText tag="strong" tone="inherit" show-sign :value="formatAmount(row.holdingProfit)" />

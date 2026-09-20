@@ -2,6 +2,7 @@
 // 黄金账户持仓页：对接黄金聚合查询接口，并补充持仓新增、修改、删除能力。
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AccountIcon from '@/components/common/AccountIcon/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
@@ -23,6 +24,7 @@ import {
   getGoldLiquidations,
   getGoldAccountSummary,
   getInvestmentPosition,
+  updateAccount,
   updateInvestmentPosition,
   type Account,
   type GoldAccountHolding,
@@ -32,6 +34,7 @@ import {
 } from '@/api/modules/finance'
 import { refreshGoldPriceCache, useGoldPriceCache } from '@/utils/gold-price-cache'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { allAccountIconOptions } from '@/data/account-icons'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,6 +44,7 @@ const isSavingPosition = ref(false)
 const isDeletingPosition = ref(false)
 const isLoadingPositionDetail = ref(false)
 const isSellingPosition = ref(false)
+const isSavingAccountSettings = ref(false)
 const pageError = ref('')
 const actionError = ref('')
 const positionFormError = ref('')
@@ -53,6 +57,7 @@ const feedbackType = ref<'success' | 'error'>('success')
 const showPositionModal = ref(false)
 const showDeleteConfirmModal = ref(false)
 const showSellModal = ref(false)
+const showAccountSettingsModal = ref(false)
 const summary = ref<GoldAccountSummary>({
   totalWeight: 0,
   averagePrice: 0,
@@ -90,6 +95,11 @@ const sellWeight = ref('')
 const sellPrice = ref('')
 const sellFee = ref('0')
 const sellRemark = ref('')
+const accountSettingsName = ref('')
+const accountSettingsIcon = ref('gold')
+const accountSettingsRemark = ref('')
+const accountSettingsIncludeInNetWorth = ref(true)
+const accountSettingsError = ref('')
 
 let requestVersion = 0
 
@@ -259,6 +269,83 @@ function openLiquidationList() {
   }
 
   router.push('/finance/accounts/gold/liquidation')
+}
+
+function openAccountSettingsModal() {
+  const account = scopedAccount.value
+  if (!account) {
+    return
+  }
+
+  accountSettingsName.value = account.name
+  accountSettingsIcon.value = account.icon?.trim() || 'gold'
+  accountSettingsRemark.value = account.remark ?? ''
+  accountSettingsIncludeInNetWorth.value = account.includeInNetWorth
+  accountSettingsError.value = ''
+  showAccountSettingsModal.value = true
+}
+
+function closeAccountSettingsModal(force = false) {
+  if (isSavingAccountSettings.value && !force) {
+    return
+  }
+
+  showAccountSettingsModal.value = false
+  accountSettingsName.value = ''
+  accountSettingsIcon.value = 'gold'
+  accountSettingsRemark.value = ''
+  accountSettingsIncludeInNetWorth.value = true
+  accountSettingsError.value = ''
+}
+
+async function saveAccountSettings() {
+  if (isSavingAccountSettings.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  const account = scopedAccount.value
+  const trimmedName = accountSettingsName.value.trim()
+  const trimmedRemark = accountSettingsRemark.value.trim()
+
+  if (!currentUser || !account) {
+    accountSettingsError.value = '当前黄金账户不存在'
+    return
+  }
+  if (!trimmedName) {
+    accountSettingsError.value = '请输入账户名称'
+    return
+  }
+
+  isSavingAccountSettings.value = true
+  accountSettingsError.value = ''
+
+  try {
+    await updateAccount(account.id, {
+      userId: currentUser.id,
+      accountTypeId: account.accountTypeId,
+      contactId: account.contactId ?? null,
+      name: trimmedName,
+      icon: accountSettingsIcon.value,
+      color: account.color ?? null,
+      currencyCode: account.currencyCode || 'CNY',
+      currentBalance: account.currentBalance,
+      includeInNetWorth: accountSettingsIncludeInNetWorth.value,
+      sortOrder: account.sortOrder,
+      status: account.status || 'active',
+      remark: trimmedRemark || null,
+    })
+
+    closeAccountSettingsModal(true)
+    showFeedback('黄金账户已更新', 'success')
+    await loadGoldPosition()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '黄金账户保存失败'
+    accountSettingsError.value = message
+    showFeedback(message, 'error')
+  } finally {
+    isSavingAccountSettings.value = false
+  }
 }
 
 function openCreateModal() {
@@ -815,6 +902,16 @@ function toApiDateTime(date: Date) {
             :loading="isRefreshingGold"
             @click="refreshGoldData"
           />
+          <CommonHeaderActionButton
+            v-if="scopedAccount"
+            label="修改黄金账户"
+            @click="openAccountSettingsModal"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z" stroke="currentColor" stroke-width="1.8" />
+              <path d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </CommonHeaderActionButton>
         </div>
       </template>
     </PageHeader>
@@ -828,7 +925,18 @@ function toApiDateTime(date: Date) {
       <section class="gold-position-summary">
         <div class="summary-head">
           <div class="summary-head-main">
-            <span class="summary-weight-label">总重量(克)</span>
+            <div v-if="scopedAccount" class="summary-account-identity">
+              <AccountIcon
+                :icon="scopedAccount.icon"
+                :account-type-code="scopedAccount.accountTypeCode"
+                :color="scopedAccount.color"
+                :name="scopedAccount.name"
+                :size="28"
+              />
+              <div class="summary-account-copy">
+                <strong>{{ scopedAccount.name }}</strong>
+              </div>
+            </div>
             <div class="summary-main">
               <strong class="summary-weight-value">{{ formatSummaryWeight(visibleSummary.totalWeight) }}</strong>
             </div>
@@ -951,6 +1059,47 @@ function toApiDateTime(date: Date) {
       storage-key="gold-position"
       @click="openCreateModal"
     />
+
+    <CommonModal
+      v-model="showAccountSettingsModal"
+      title="修改黄金账户"
+      :close-on-overlay="!isSavingAccountSettings"
+      @close="closeAccountSettingsModal()"
+    >
+      <form class="gold-position-form" @submit.prevent="saveAccountSettings">
+        <CommonInput v-model="accountSettingsName" label="账户名称" placeholder="输入黄金账户名称" />
+        <CommonSelect
+          v-model="accountSettingsIcon"
+          label="账户图标"
+          :options="allAccountIconOptions"
+          :disabled="isSavingAccountSettings"
+        />
+        <CommonInput v-model="accountSettingsRemark" label="备注" placeholder="输入账户说明" />
+        <CommonSwitch v-model="accountSettingsIncludeInNetWorth" label="是否计入总资产" />
+        <p v-if="accountSettingsError" class="gold-position-form-error">{{ accountSettingsError }}</p>
+      </form>
+
+      <template #footer>
+        <div class="gold-position-actions">
+          <CommonButton
+            variant="secondary"
+            type="button"
+            :disabled="isSavingAccountSettings"
+            @click="closeAccountSettingsModal()"
+          >
+            取消
+          </CommonButton>
+          <CommonButton
+            variant="primary"
+            type="button"
+            :disabled="isSavingAccountSettings"
+            @click="saveAccountSettings"
+          >
+            {{ isSavingAccountSettings ? '保存中...' : '保存' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
 
     <CommonModal
       v-model="showPositionModal"

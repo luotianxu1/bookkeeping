@@ -2,13 +2,17 @@
 // 投资账户详情页：展示单个投资账户的汇总、持仓列表和新增持仓。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AccountIcon from '@/components/common/AccountIcon/index.vue'
+import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
+import CommonInput from '@/components/common/CommonInput/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
+import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
@@ -21,6 +25,7 @@ import {
   getInvestmentSummary,
   getInvestmentTransactions,
   runInvestmentQuoteSyncTask,
+  updateAccount,
   type Account,
   type InvestmentAutoInvestPlan,
   type InvestmentPosition,
@@ -29,6 +34,11 @@ import {
   type InvestmentSummary,
   type InvestmentTransaction,
 } from '@/api/modules/finance'
+import {
+  DEFAULT_INVESTMENT_ACCOUNT_ICON,
+  allAccountIconOptions,
+  resolveInvestmentAccountIcon,
+} from '@/data/account-icons'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const router = useRouter()
@@ -40,8 +50,10 @@ type HoldingViewMode = 'card' | 'list'
 const activeTab = ref('A股')
 const holdingViewMode = ref<HoldingViewMode>('card')
 const showAddModal = ref(false)
+const showAccountSettingsModal = ref(false)
 const isLoading = ref(false)
 const isSaving = ref(false)
+const isSavingAccountSettings = ref(false)
 const pageError = ref('')
 const formError = ref('')
 const showFeedbackModal = ref(false)
@@ -65,6 +77,11 @@ const positions = ref<InvestmentPosition[]>([])
 const transactions = ref<InvestmentTransaction[]>([])
 const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
 const isRefreshingQuotes = ref(false)
+const accountSettingsName = ref('')
+const accountSettingsIcon = ref(DEFAULT_INVESTMENT_ACCOUNT_ICON)
+const accountSettingsRemark = ref('')
+const accountSettingsIncludeInNetWorth = ref(true)
+const accountSettingsError = ref('')
 
 const addAssetKeyword = ref('')
 const addAssetName = ref('')
@@ -229,6 +246,83 @@ function restoreHoldingViewMode() {
 
 function toggleHoldingViewMode() {
   holdingViewMode.value = holdingViewMode.value === 'list' ? 'card' : 'list'
+}
+
+function openAccountSettingsModal() {
+  const account = selectedAccount.value
+  if (!account) {
+    return
+  }
+
+  accountSettingsName.value = account.name
+  accountSettingsIcon.value = resolveInvestmentAccountIcon(account.icon)
+  accountSettingsRemark.value = account.remark ?? ''
+  accountSettingsIncludeInNetWorth.value = account.includeInNetWorth
+  accountSettingsError.value = ''
+  showAccountSettingsModal.value = true
+}
+
+function closeAccountSettingsModal(force = false) {
+  if (isSavingAccountSettings.value && !force) {
+    return
+  }
+
+  showAccountSettingsModal.value = false
+  accountSettingsName.value = ''
+  accountSettingsIcon.value = DEFAULT_INVESTMENT_ACCOUNT_ICON
+  accountSettingsRemark.value = ''
+  accountSettingsIncludeInNetWorth.value = true
+  accountSettingsError.value = ''
+}
+
+async function saveAccountSettings() {
+  if (isSavingAccountSettings.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  const account = selectedAccount.value
+  const trimmedName = accountSettingsName.value.trim()
+  const trimmedRemark = accountSettingsRemark.value.trim()
+
+  if (!currentUser || !account) {
+    accountSettingsError.value = '当前投资账户不存在'
+    return
+  }
+  if (!trimmedName) {
+    accountSettingsError.value = '请输入账户名称'
+    return
+  }
+
+  isSavingAccountSettings.value = true
+  accountSettingsError.value = ''
+
+  try {
+    await updateAccount(account.id, {
+      userId: currentUser.id,
+      accountTypeId: account.accountTypeId,
+      contactId: account.contactId ?? null,
+      name: trimmedName,
+      icon: accountSettingsIcon.value,
+      color: account.color ?? null,
+      currencyCode: account.currencyCode || 'CNY',
+      currentBalance: account.currentBalance,
+      includeInNetWorth: accountSettingsIncludeInNetWorth.value,
+      sortOrder: account.sortOrder,
+      status: account.status || 'active',
+      remark: trimmedRemark || null,
+    })
+
+    closeAccountSettingsModal(true)
+    showFeedback('投资账户已更新', 'success')
+    await loadInvestmentData()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '投资账户保存失败'
+    accountSettingsError.value = message
+    showFeedback(message, 'error')
+  } finally {
+    isSavingAccountSettings.value = false
+  }
 }
 
 function parseAccountId(value: unknown) {
@@ -1031,6 +1125,16 @@ function showFeedback(message: string, type: 'success' | 'error') {
             :loading="isRefreshingQuotes"
             @click="refreshQuoteData"
           />
+          <CommonHeaderActionButton
+            v-if="selectedAccount"
+            label="修改投资账户"
+            @click="openAccountSettingsModal"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z" stroke="currentColor" stroke-width="1.8" />
+              <path d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </CommonHeaderActionButton>
         </div>
       </template>
     </PageHeader>
@@ -1042,7 +1146,17 @@ function showFeedback(message: string, type: 'success' | 'error') {
       <section class="investment-summary-card" aria-label="投资总览">
         <div class="investment-summary-top">
           <div class="investment-summary-main">
-            <p>{{ selectedAccount?.name || '投资账户' }}</p>
+            <div class="investment-summary-account">
+              <AccountIcon
+                v-if="selectedAccount"
+                :icon="selectedAccount.icon"
+                :account-type-code="selectedAccount.accountTypeCode"
+                :color="selectedAccount.color"
+                :name="selectedAccount.name"
+                :size="28"
+              />
+              <p>{{ selectedAccount?.name || '投资账户' }}</p>
+            </div>
             <AmountText tag="strong" :value="formatAmount(summary.totalMarketValue)" />
             <span>{{ selectedAccount?.remark?.trim() || `同步于 ${summary.lastSyncedAt ? new Date(summary.lastSyncedAt).toLocaleString('zh-CN') : '暂无'}` }}</span>
           </div>
@@ -1227,6 +1341,44 @@ function showFeedback(message: string, type: 'success' | 'error') {
     </template>
 
     <FloatingAddButton aria-label="新增投资资产" storage-key="investment-account" @click="openAddModal" />
+
+    <CommonModal
+      v-model="showAccountSettingsModal"
+      title="修改投资账户"
+      :close-on-overlay="!isSavingAccountSettings"
+      @close="closeAccountSettingsModal()"
+    >
+      <div class="investment-add-modal-form investment-account-settings-form">
+        <CommonInput v-model="accountSettingsName" label="账户名称" placeholder="输入投资账户名称" />
+        <CommonSelect
+          v-model="accountSettingsIcon"
+          label="账户图标"
+          :options="allAccountIconOptions"
+        />
+        <CommonInput v-model="accountSettingsRemark" label="备注" placeholder="输入账户说明" />
+        <CommonSwitch v-model="accountSettingsIncludeInNetWorth" label="是否计入总资产" />
+        <p v-if="accountSettingsError" class="investment-add-error">{{ accountSettingsError }}</p>
+      </div>
+
+      <template #footer>
+        <div class="investment-add-modal-actions">
+          <CommonButton
+            variant="secondary"
+            :disabled="isSavingAccountSettings"
+            @click="closeAccountSettingsModal()"
+          >
+            取消
+          </CommonButton>
+          <CommonButton
+            variant="primary"
+            :disabled="isSavingAccountSettings"
+            @click="saveAccountSettings"
+          >
+            {{ isSavingAccountSettings ? '保存中...' : '保存' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
 
     <CommonModal v-model="showAddModal" title="添加资产" size="compact" :show-close="false">
       <div class="investment-add-modal-form">

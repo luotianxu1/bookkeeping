@@ -203,6 +203,9 @@
 
 .investment-account-list-card-title {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
 }
 
 .investment-account-list-card-title strong,

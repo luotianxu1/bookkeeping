@@ -15,7 +15,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import AccountIcon from '@/components/common/AccountIcon/index.vue'
 import { createAccount, deleteAccount, getAccounts, getAccountTypes, updateAccount, type Account, type AccountType } from '@/api/modules/finance'
-import { cashAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON, resolveCashAccountIcon } from '@/data/account-icons'
+import { allAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON, resolveCashAccountIcon } from '@/data/account-icons'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const isManageMode = ref(false)
@@ -357,7 +357,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <CommonModal v-model="showCreateAccountModal" :title="accountModalTitle">
       <form class="cash-create-form" @submit.prevent="saveCashAccount">
         <CommonInput v-model="formName" label="账户名称" placeholder="例如：日常钱包" />
-        <CommonSelect v-model="formIcon" label="账户图标" :options="cashAccountIconOptions" />
+        <CommonSelect v-model="formIcon" label="账户图标" :options="allAccountIconOptions" />
         <CommonInput
           v-if="editingAccountId"
           v-model="formAmount"

@@ -205,6 +205,19 @@
   gap: 12px;
 }
 
+.gold-account-title {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gold-account-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .holding-top strong {
   color: var(--color-text-primary);
   font-size: 14px;

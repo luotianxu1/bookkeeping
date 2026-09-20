@@ -21,7 +21,11 @@ import {
 import { getFamilyOverview, type FamilyMember } from '@/api/modules/auth'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
-import { cashAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON } from '@/data/account-icons'
+import {
+  allAccountIconOptions,
+  DEFAULT_CASH_ACCOUNT_ICON,
+  DEFAULT_INVESTMENT_ACCOUNT_ICON,
+} from '@/data/account-icons'
 import type { AccountGroup, AccountOverview } from '@/types/account'
 import AccountGroupCard from '../components/AccountGroupCard/index.vue'
 import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
@@ -69,6 +73,7 @@ const familyMembers = ref<FamilyMember[]>([])
 const familyView = ref('self')
 const isDebtAccountTypeSelected = computed(() => CONTACT_LINKED_ACCOUNT_CODES.has(accountType.value))
 const isCashAccountTypeSelected = computed(() => accountType.value === 'cash')
+const isInvestmentAccountTypeSelected = computed(() => accountType.value === 'investment')
 const isLiabilityAccountTypeSelected = computed(() => LIABILITY_ACCOUNT_CODES.has(accountType.value))
 const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
 const contactOptions = computed(() => [
@@ -309,7 +314,11 @@ watch(accountType, (nextType) => {
   if (selectedType) {
     includeInNetWorth.value = selectedType.includeInNetWorthDefault
   }
-  accountIcon.value = nextType === 'cash' ? DEFAULT_CASH_ACCOUNT_ICON : nextType
+  accountIcon.value = nextType === 'cash'
+    ? DEFAULT_CASH_ACCOUNT_ICON
+    : nextType === 'investment'
+      ? DEFAULT_INVESTMENT_ACCOUNT_ICON
+      : nextType
   if (CONTACT_LINKED_ACCOUNT_CODES.has(nextType)) {
     return
   }
@@ -442,7 +451,9 @@ async function saveAccount() {
       accountTypeId: selectedAccountType.id,
       contactId: CONTACT_LINKED_ACCOUNT_CODES.has(selectedAccountType.code) ? normalizedContactId : null,
       name: resolvedName,
-      icon: selectedAccountType.code === 'cash' ? accountIcon.value : selectedAccountType.code,
+      icon: selectedAccountType.code === 'cash' || selectedAccountType.code === 'investment'
+        ? accountIcon.value
+        : selectedAccountType.code,
       currencyCode: 'CNY',
       currentBalance: 0,
       loanTotalAmount: selectedAccountType.code === 'liability' ? normalizedLoanTotalAmount : null,
@@ -752,7 +763,13 @@ function isZeroAmount(value: number) {
           v-if="isCashAccountTypeSelected"
           v-model="accountIcon"
           label="账户图标"
-          :options="cashAccountIconOptions"
+          :options="allAccountIconOptions"
+        />
+        <CommonSelect
+          v-if="isInvestmentAccountTypeSelected"
+          v-model="accountIcon"
+          label="账户图标"
+          :options="allAccountIconOptions"
         />
         <CommonSelect
           v-if="isDebtAccountTypeSelected"
