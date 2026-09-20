@@ -142,19 +142,7 @@
   width: 36px;
   height: 36px;
   flex: 0 0 auto;
-  display: grid;
-  place-items: center;
   border-radius: 12px;
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-  font-size: var(--font-size-14);
-  font-weight: 700;
-  line-height: 1;
-}
-
-.transaction-icon-income {
-  background: var(--color-bg-brand-soft);
-  color: var(--color-brand-strong);
 }
 
 .transaction-copy-main {

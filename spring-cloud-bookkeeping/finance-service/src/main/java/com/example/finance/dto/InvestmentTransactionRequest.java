@@ -20,6 +20,7 @@ public class InvestmentTransactionRequest {
     private Long productId;
     @NotBlank(message = "交易类型不能为空")
     private String tradeType;
+    private String dividendType;
     @DecimalMin(value = "0.000000", message = "交易数量不能小于0")
     private BigDecimal quantity;
     @DecimalMin(value = "0.000000", message = "成交价格不能小于0")

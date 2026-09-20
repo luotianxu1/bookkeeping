@@ -110,34 +110,6 @@
   gap: var(--space-10);
 }
 
-.cash-item-icon {
-  width: var(--space-36);
-  height: var(--space-36);
-  flex: 0 0 var(--space-36);
-  display: inline-grid;
-  place-items: center;
-  border-radius: var(--radius-10);
-  background: var(--color-bg-blue-soft);
-  color: var(--color-brand-strong);
-}
-
-.cash-item-icon svg {
-  width: 18px;
-  height: 18px;
-}
-
-.cash-item-icon-bank-card {
-  background: var(--color-bg-success-soft);
-}
-
-.cash-item-icon-alipay {
-  background: var(--color-bg-neutral-soft);
-}
-
-.cash-item-icon-reserve-fund {
-  background: var(--color-bg-purple-soft);
-}
-
 .cash-item-text {
   min-width: 0;
   display: grid;

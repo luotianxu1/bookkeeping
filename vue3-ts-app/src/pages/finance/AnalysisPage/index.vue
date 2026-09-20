@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
+import CategoryIcon from '@/components/common/CategoryIcon/index.vue'
 import MonthPicker from '@/components/common/MonthPicker/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
@@ -1014,6 +1015,12 @@ function formatDateTime(value: string) {
               @click="toggleBreakdownItem(item)"
             >
               <span class="breakdown-left" :style="{ color: item.categoryColor || '#475569' }">
+                <CategoryIcon
+                  :icon="item.categoryIcon"
+                  :color="item.categoryColor"
+                  :name="item.categoryName"
+                  :size="24"
+                />
                 <strong>{{ item.categoryName }}</strong>
               </span>
               <span class="breakdown-right" :style="{ color: item.categoryColor || '#475569' }">

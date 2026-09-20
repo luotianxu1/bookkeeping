@@ -91,6 +91,13 @@ public class CategoryService {
             return Optional.empty();
         }
 
+        if (isSystemCategory(entity)) {
+            throw new IllegalArgumentException("系统分类不可修改");
+        }
+        if (entity.getUserId() == null || !entity.getUserId().equals(request.getUserId())) {
+            throw new IllegalArgumentException("无权修改该分类");
+        }
+
         if (request.getParentId() != null && hasChildren(id)) {
             throw new IllegalArgumentException("含有二级分类的一级分类不能调整为二级分类");
         }
@@ -104,10 +111,21 @@ public class CategoryService {
     }
 
     public boolean delete(Long id) {
+        CategoryEntity entity = categoryMapper.selectById(id);
+        if (entity == null) {
+            return false;
+        }
+        if (isSystemCategory(entity)) {
+            throw new IllegalArgumentException("系统分类不可删除");
+        }
         if (hasChildren(id)) {
             throw new IllegalArgumentException("请先删除二级分类");
         }
         return categoryMapper.deleteById(id) > 0;
+    }
+
+    private boolean isSystemCategory(CategoryEntity entity) {
+        return Boolean.TRUE.equals(entity.getSystem()) || entity.getUserId() == null;
     }
 
     private void validateNameUnique(Long userId, String type, Long parentId, String name, Long ignoredId) {
@@ -174,7 +192,7 @@ public class CategoryService {
         entity.setColor(request.getColor());
         entity.setParentId(parent == null ? null : parent.getId());
         entity.setLevel(parent == null ? ROOT_LEVEL : CHILD_LEVEL);
-        entity.setSystem(request.getSystem() != null ? request.getSystem() : Boolean.FALSE);
+        entity.setSystem(Boolean.FALSE);
         entity.setSortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0);
         entity.setStatus(StringUtils.hasText(request.getStatus()) ? request.getStatus() : DEFAULT_STATUS);
         entity.setRemark(request.getRemark());

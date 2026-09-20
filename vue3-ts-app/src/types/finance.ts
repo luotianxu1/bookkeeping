@@ -16,6 +16,10 @@ export type Transaction = {
   category: string
   /** 分类 ID。 */
   categoryId?: number | null
+  /** 分类图标 key。 */
+  categoryIcon?: string | null
+  /** 分类背景色。 */
+  categoryColor?: string | null
   /** 账户 ID。 */
   accountId?: number | null
   /** 原始备注。 */

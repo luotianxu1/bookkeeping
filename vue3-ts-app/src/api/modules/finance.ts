@@ -1106,6 +1106,8 @@ export interface InvestmentPosition {
   subscriptionAppliedDate?: string | null
   subscriptionExpectedConfirmDate?: string | null
   subscriptionConfirmedAt?: string | null
+  dividendType?: 'cash' | 'reinvest' | string | null
+  dividendFundingAccountId?: number | null
   remark?: string | null
   createdAt: string
   updatedAt: string
@@ -1371,6 +1373,7 @@ export interface SaveInvestmentTransactionParams {
   tradeAt: string
   fundingAccountId?: number
   subscriptionTimeSlot?: 'before_1500' | 'after_1500'
+  dividendType?: 'cash' | 'reinvest'
   remark?: string | null
 }
 
@@ -1394,6 +1397,7 @@ export interface SaveInvestmentPositionParams {
   currentPrice?: number
   tradeAt?: string
   subscriptionTimeSlot?: 'before_1500' | 'after_1500'
+  dividendType?: 'cash' | 'reinvest'
   includeInNetWorth?: boolean
   status?: string
   remark?: string | null

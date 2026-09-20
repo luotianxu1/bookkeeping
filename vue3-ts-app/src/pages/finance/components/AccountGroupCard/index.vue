@@ -2,6 +2,7 @@
 // 账户分组卡片：展示分组标题及组内账户条目。
 import { RouterLink } from 'vue-router'
 import type { AccountGroup } from '@/types/account'
+import AccountIcon from '@/components/common/AccountIcon/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 
 defineProps<{
@@ -66,7 +67,12 @@ function getAmountTone(value?: string | number): 'negative' | 'inherit' {
       >
         <RouterLink v-if="item.path" class="account-item-link" :to="item.path">
           <span class="account-item-left">
-            <span class="account-item-icon">{{ item.icon }}</span>
+            <AccountIcon
+              :icon="item.icon"
+              :account-type-code="item.accountTypeCode"
+              :color="item.color"
+              :name="item.name"
+            />
             <span class="account-item-text">
               <span class="account-item-name">{{ item.name }}</span>
             </span>
@@ -85,7 +91,12 @@ function getAmountTone(value?: string | number): 'negative' | 'inherit' {
 
         <template v-else>
           <span class="account-item-left">
-            <span class="account-item-icon">{{ item.icon }}</span>
+            <AccountIcon
+              :icon="item.icon"
+              :account-type-code="item.accountTypeCode"
+              :color="item.color"
+              :name="item.name"
+            />
             <span class="account-item-text">
               <span class="account-item-name">{{ item.name }}</span>
             </span>

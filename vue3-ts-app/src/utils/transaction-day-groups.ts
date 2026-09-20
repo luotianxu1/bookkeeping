@@ -37,6 +37,8 @@ export function buildTransactionDayGroups(source: ApiTransaction[], sortOrder: T
         occurredAt: transaction.occurredAt,
         category: transaction.categoryName ?? '',
         categoryId: transaction.categoryId,
+        categoryIcon: transaction.categoryIcon,
+        categoryColor: transaction.categoryColor,
         accountId: transaction.accountId,
         remark: transaction.remark,
         type: transaction.type,

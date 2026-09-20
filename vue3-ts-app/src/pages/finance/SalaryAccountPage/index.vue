@@ -21,6 +21,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import {
   createRecentYearOptions,
+  dateToMonthInput,
   formatSalaryCurrency,
   formatSalaryPercent,
   monthInputToDate,

@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS investment_positions (
   subscription_applied_date DATE NULL COMMENT '基金申购申请日',
   subscription_expected_confirm_date DATE NULL COMMENT '基金预计确认日期',
   subscription_confirmed_at DATETIME(3) NULL COMMENT '基金申购确认时间',
+  dividend_type ENUM('cash', 'reinvest') NOT NULL DEFAULT 'cash' COMMENT '基金分红方式：现金分红或红利再投资',
+  dividend_funding_account_id BIGINT UNSIGNED NULL COMMENT '现金分红到账的现金账户',
   last_synced_at DATETIME(3) NULL COMMENT '行情或估值最近同步时间',
   remark VARCHAR(500) NULL COMMENT '备注',
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
@@ -65,12 +67,15 @@ CREATE TABLE IF NOT EXISTS investment_positions (
   KEY idx_investment_positions_account_product_status (account_id, product_id, status),
   KEY idx_investment_positions_user_account (user_id, account_id, status),
   KEY idx_investment_positions_product (product_id),
+  KEY idx_investment_positions_dividend_funding_account (dividend_funding_account_id),
   CONSTRAINT fk_investment_positions_user
     FOREIGN KEY (user_id) REFERENCES users (id),
   CONSTRAINT fk_investment_positions_account
     FOREIGN KEY (account_id) REFERENCES accounts (id),
   CONSTRAINT fk_investment_positions_product
     FOREIGN KEY (product_id) REFERENCES investment_products (id),
+  CONSTRAINT fk_investment_positions_dividend_funding_account
+    FOREIGN KEY (dividend_funding_account_id) REFERENCES accounts (id),
   CONSTRAINT chk_investment_positions_quantity_nonnegative
     CHECK (holding_quantity >= 0 AND available_quantity >= 0 AND frozen_quantity >= 0),
   CONSTRAINT chk_investment_positions_amount_nonnegative

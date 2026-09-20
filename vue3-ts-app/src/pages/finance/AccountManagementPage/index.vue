@@ -21,6 +21,7 @@ import {
 import { getFamilyOverview, type FamilyMember } from '@/api/modules/auth'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { cashAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON } from '@/data/account-icons'
 import type { AccountGroup, AccountOverview } from '@/types/account'
 import AccountGroupCard from '../components/AccountGroupCard/index.vue'
 import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
@@ -41,6 +42,7 @@ const showCreateAccountModal = ref(false)
 const accountName = ref('')
 const accountRemark = ref('')
 const accountType = ref('')
+const accountIcon = ref(DEFAULT_CASH_ACCOUNT_ICON)
 const accountContactId = ref('')
 const liabilityLoanTotalAmount = ref('')
 const liabilityLoanInterestRate = ref('')
@@ -66,6 +68,7 @@ const collapsedGroupState = ref<Record<string, boolean>>({})
 const familyMembers = ref<FamilyMember[]>([])
 const familyView = ref('self')
 const isDebtAccountTypeSelected = computed(() => CONTACT_LINKED_ACCOUNT_CODES.has(accountType.value))
+const isCashAccountTypeSelected = computed(() => accountType.value === 'cash')
 const isLiabilityAccountTypeSelected = computed(() => LIABILITY_ACCOUNT_CODES.has(accountType.value))
 const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
 const contactOptions = computed(() => [
@@ -246,7 +249,9 @@ const accountGroups = computed<AccountGroup[]>(() => {
       collapsed: collapsedGroupState.value[groupStorageKey] ?? false,
       items: sortedGroupAccounts.map((account) => ({
           id: account.id,
-          icon: getAccountIcon(account.icon, account.accountTypeCode),
+          icon: account.icon?.trim() ?? '',
+          accountTypeCode: account.accountTypeCode ?? accountType?.code ?? 'other',
+          color: account.color?.trim() || undefined,
           name: isReadOnlyFamilyView.value
             ? `${account.name} · ${viewerNameByUserId.value.get(account.userId) ?? `成员${account.userId}`}`
             : account.name,
@@ -304,6 +309,7 @@ watch(accountType, (nextType) => {
   if (selectedType) {
     includeInNetWorth.value = selectedType.includeInNetWorthDefault
   }
+  accountIcon.value = nextType === 'cash' ? DEFAULT_CASH_ACCOUNT_ICON : nextType
   if (CONTACT_LINKED_ACCOUNT_CODES.has(nextType)) {
     return
   }
@@ -436,7 +442,7 @@ async function saveAccount() {
       accountTypeId: selectedAccountType.id,
       contactId: CONTACT_LINKED_ACCOUNT_CODES.has(selectedAccountType.code) ? normalizedContactId : null,
       name: resolvedName,
-      icon: selectedAccountType.code,
+      icon: selectedAccountType.code === 'cash' ? accountIcon.value : selectedAccountType.code,
       currencyCode: 'CNY',
       currentBalance: 0,
       loanTotalAmount: selectedAccountType.code === 'liability' ? normalizedLoanTotalAmount : null,
@@ -537,6 +543,7 @@ async function loadContactsForForm() {
 
 function resetCreateAccountForm() {
   accountName.value = ''
+  accountIcon.value = DEFAULT_CASH_ACCOUNT_ICON
   accountRemark.value = ''
   accountContactId.value = ''
   liabilityLoanTotalAmount.value = ''
@@ -671,35 +678,6 @@ function isZeroAmount(value: number) {
   return Math.abs(value) < 0.005
 }
 
-function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
-  const iconMap: Record<string, string> = {
-    wallet: '💵',
-    cash: '💵',
-    'bank-card': '🏦',
-    alipay: '💳',
-    'reserve-fund': '🧧',
-    investment: '📈',
-    fund: '📈',
-    gold: '🥇',
-    stock: '◉',
-    credit_card: '💳',
-    debt: '债',
-    liability: '负',
-    human_relation: '礼',
-    other_asset: '资',
-    other_liability: '债',
-  }
-
-  if (icon && iconMap[icon]) {
-    return iconMap[icon]
-  }
-
-  if (accountTypeCode && iconMap[accountTypeCode]) {
-    return iconMap[accountTypeCode]
-  }
-
-  return icon || '账'
-}
 </script>
 
 <template>
@@ -769,6 +747,12 @@ function getAccountIcon(icon?: string | null, accountTypeCode?: string | null) {
           label="账户类型"
           :options="accountTypeOptions"
           :disabled="isLoadingAccountTypes || accountTypes.length === 0"
+        />
+        <CommonSelect
+          v-if="isCashAccountTypeSelected"
+          v-model="accountIcon"
+          label="账户图标"
+          :options="cashAccountIconOptions"
         />
         <CommonSelect
           v-if="isDebtAccountTypeSelected"

@@ -46,13 +46,13 @@ SELECT
   'active'
 FROM users u
 JOIN (
-  SELECT 'dish' AS category_type, '主食' AS name, '主' AS icon_text, 'blue' AS icon_tone, '米饭、面食、盖饭' AS description, 10 AS sort_order
-  UNION ALL SELECT 'dish', '小炒', '炒', 'purple', '快手、下饭、家常', 20
-  UNION ALL SELECT 'dish', '汤羹', '汤', 'orange', '炖汤、浓汤、暖胃', 30
-  UNION ALL SELECT 'dish', '甜品饮品', '甜', 'sky', '布丁、饮品、下午茶', 40
-  UNION ALL SELECT 'ingredient', '肉类蛋白', '肉', 'orange', '牛肉、鸡蛋、虾仁等常备主料', 110
-  UNION ALL SELECT 'ingredient', '蔬菜水果', '蔬', 'green', '番茄、西兰花、洋葱等清爽配菜', 120
-  UNION ALL SELECT 'ingredient', '调味干货', '调', 'purple', '盐、黑胡椒、香料与面包糠', 130
+  SELECT 'dish' AS category_type, '主食' AS name, 'food' AS icon_text, 'blue' AS icon_tone, '米饭、面食、盖饭' AS description, 10 AS sort_order
+  UNION ALL SELECT 'dish', '小炒', 'daily', 'purple', '快手、下饭、家常', 20
+  UNION ALL SELECT 'dish', '汤羹', 'food', 'orange', '炖汤、浓汤、暖胃', 30
+  UNION ALL SELECT 'dish', '甜品饮品', 'entertainment', 'sky', '布丁、饮品、下午茶', 40
+  UNION ALL SELECT 'ingredient', '肉类蛋白', 'food', 'orange', '牛肉、鸡蛋、虾仁等常备主料', 110
+  UNION ALL SELECT 'ingredient', '蔬菜水果', 'daily', 'green', '番茄、西兰花、洋葱等清爽配菜', 120
+  UNION ALL SELECT 'ingredient', '调味干货', 'other', 'purple', '盐、黑胡椒、香料与面包糠', 130
 ) seed
 WHERE u.username = 'admin'
 ON DUPLICATE KEY UPDATE

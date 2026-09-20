@@ -67,7 +67,7 @@ FROM users u
 JOIN (
   SELECT 'cash' AS type_code, '钱包' AS name, 'wallet' AS icon, 2300.00 AS current_balance, 10 AS sort_order, '日常零用' AS remark
   UNION ALL
-  SELECT 'cash', '招商银行卡', 'bank-card', 16800.00, 20, '储蓄卡'
+  SELECT 'cash', '招商银行卡', 'bank-cmb', 16800.00, 20, '储蓄卡'
   UNION ALL
   SELECT 'cash', '支付宝', 'alipay', 3200.00, 30, '第三方钱包'
   UNION ALL

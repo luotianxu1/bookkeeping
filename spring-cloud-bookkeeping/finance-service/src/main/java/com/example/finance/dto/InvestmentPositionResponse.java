@@ -43,6 +43,8 @@ public class InvestmentPositionResponse {
     private LocalDate subscriptionAppliedDate;
     private LocalDate subscriptionExpectedConfirmDate;
     private LocalDateTime subscriptionConfirmedAt;
+    private String dividendType;
+    private Long dividendFundingAccountId;
     private String remark;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

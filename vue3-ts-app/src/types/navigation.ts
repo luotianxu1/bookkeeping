@@ -2,8 +2,6 @@
 export type AppSection = 'finance' | 'food' | 'tools' | 'profile'
 
 export type NavItem = {
-  /** 导航图标文本，后续可替换为图标组件。 */
-  icon: string
   /** 导航显示名称。 */
   label: string
   /** 导航对应的业务分区标识。 */

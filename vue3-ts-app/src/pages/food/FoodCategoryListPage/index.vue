@@ -7,6 +7,7 @@ import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
+import CategoryIcon from '@/components/common/CategoryIcon/index.vue'
 import {
   createFoodCategory,
   deleteFoodCategory,
@@ -21,7 +22,6 @@ import {
   getFoodCategoryPath,
   getFoodDishListPath,
   isDarkFoodPath,
-  mapIconToneToClass,
 } from '../shared'
 
 const route = useRoute()
@@ -47,13 +47,13 @@ const deletingCategory = ref<FoodCategory | null>(null)
 
 const formName = ref('')
 const formDescription = ref('')
-const formIconText = ref('汤')
+const formIconText = ref('food')
 const formIconTone = ref<'blue' | 'purple' | 'orange' | 'sky' | 'green'>('blue')
 
 const iconOptions = [
-  { text: '凉', tone: 'blue' },
-  { text: '锅', tone: 'orange' },
-  { text: '拌', tone: 'green' },
+  { text: 'food', label: '餐饮', tone: 'blue' },
+  { text: 'daily', label: '日用', tone: 'orange' },
+  { text: 'entertainment', label: '娱乐', tone: 'green' },
 ]
 
 const filteredCategories = computed(() => {
@@ -136,7 +136,7 @@ function closeCategoryModal() {
 function resetForm() {
   formName.value = ''
   formDescription.value = ''
-  formIconText.value = '汤'
+  formIconText.value = 'food'
   formIconTone.value = 'blue'
 }
 
@@ -274,9 +274,13 @@ function showFeedback(message: string, type: 'success' | 'error') {
             :class="['category-row', { editable: isManageMode }]"
             @click="handleCategoryClick(category)"
           >
-            <div :class="['category-icon', mapIconToneToClass(category.iconTone)]">
-              {{ category.iconText }}
-            </div>
+            <CategoryIcon
+              class="category-icon"
+              :icon="category.iconText"
+              :color="category.iconTone"
+              :name="category.name"
+              :size="48"
+            />
 
             <div class="category-copy">
               <strong>{{ category.name }}</strong>
@@ -321,10 +325,10 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 v-for="option in iconOptions"
                 :key="option.text"
                 type="button"
-                :class="['icon-pill', mapIconToneToClass(option.tone), { active: formIconText === option.text }]"
+                :class="['icon-pill', { active: formIconText === option.text }]"
                 @click="selectIconOption(option.text, option.tone as 'blue' | 'purple' | 'orange' | 'sky' | 'green')"
               >
-                {{ option.text }}
+                <CategoryIcon :icon="option.text" :color="option.tone" :name="option.label" :size="36" />
               </button>
             </div>
           </div>

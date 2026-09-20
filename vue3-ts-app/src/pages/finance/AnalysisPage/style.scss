@@ -158,10 +158,14 @@
 }
 
 .breakdown-left {
-  min-width: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-6);
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.breakdown-left :deep(.category-icon-image) {
+  border-radius: var(--radius-8);
 }
 
 .breakdown-left strong {

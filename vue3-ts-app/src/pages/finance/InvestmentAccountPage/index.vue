@@ -72,6 +72,7 @@ const addAssetSymbol = ref('')
 const addAssetMarket = ref('')
 const addAssetCategory = ref<InvestmentProductType>('fund')
 const addAssetFundingAccount = ref('')
+const addAssetDividendType = ref<'cash' | 'reinvest'>('cash')
 const addAssetQuantity = ref('')
 const addAssetAmount = ref('')
 const addAssetCurrentPrice = ref('')
@@ -93,6 +94,10 @@ const fundingAccountOptions = computed<CommonSelectOption[]>(() => [
 const subscriptionTimeSlotOptions = [
   { label: '15点前', value: 'before_1500' },
   { label: '15点后', value: 'after_1500' },
+]
+const dividendTypeOptions = [
+  { label: '现金分红', value: 'cash' },
+  { label: '红利再投资', value: 'reinvest' },
 ]
 
 const visiblePositions = computed(() =>
@@ -383,6 +388,10 @@ async function saveAsset() {
       formError.value = '请输入买入金额'
       return
     }
+    if (addAssetDividendType.value === 'cash' && !normalizedFundingAccountId) {
+      formError.value = '现金分红必须选择到账资金账户'
+      return
+    }
     costAmount = amountInput
   } else {
     if (!Number.isFinite(holdingQuantity) || holdingQuantity <= 0) {
@@ -431,6 +440,7 @@ async function saveAsset() {
       currentPrice: isFundProduct ? undefined : currentPrice,
       tradeAt: toApiDateTime(new Date()),
       subscriptionTimeSlot: isFundProduct ? addAssetSubscriptionTimeSlot.value : undefined,
+      dividendType: isFundProduct ? addAssetDividendType.value : undefined,
       includeInNetWorth: true,
       status: 'active',
       remark: null,
@@ -605,6 +615,7 @@ function resetAddForm() {
   addAssetMarket.value = ''
   addAssetCategory.value = activeTab.value === 'A股' ? 'stock' : 'fund'
   addAssetFundingAccount.value = ''
+  addAssetDividendType.value = 'cash'
   addAssetQuantity.value = ''
   addAssetAmount.value = ''
   addAssetCurrentPrice.value = ''
@@ -1257,9 +1268,18 @@ function showFeedback(message: string, type: 'success' | 'error') {
           />
         </label>
 
+        <label v-if="isFundSubscriptionDraft" class="investment-add-modal-field">
+          <span>分红方式</span>
+          <SegmentedControl
+            v-model="addAssetDividendType"
+            :options="dividendTypeOptions"
+            label="基金分红方式"
+          />
+        </label>
+
         <CommonSelect
           v-model="addAssetFundingAccount"
-          label="资金账户（选填）"
+          :label="isFundSubscriptionDraft && addAssetDividendType === 'cash' ? '现金分红到账及申购账户' : '申购资金账户（选填）'"
           :options="fundingAccountOptions"
         />
 

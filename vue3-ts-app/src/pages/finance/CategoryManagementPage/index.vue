@@ -11,6 +11,7 @@ import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CategoryIcon from '@/components/common/CategoryIcon/index.vue'
 import {
   createCategory,
   deleteCategory,
@@ -122,7 +123,7 @@ function openCreateModal(parent?: Category) {
 }
 
 function openEditModal(category: Category) {
-  if (!isManageMode.value) {
+  if (!isManageMode.value || category.system) {
     return
   }
 
@@ -233,6 +234,9 @@ async function saveCategory() {
 }
 
 function openDeleteConfirmModal(category: Category) {
+  if (category.system) {
+    return
+  }
   deletingCategory.value = category
   deleteError.value = ''
   showDeleteConfirmModal.value = true
@@ -287,29 +291,8 @@ function getNextCategorySortOrder(type: 'expense' | 'income', parentId: number |
   return (siblingSortOrders.length ? Math.max(...siblingSortOrders) : 0) + 10
 }
 
-function getCategoryIcon(icon: string) {
-  const iconMap: Record<string, string> = {
-    food: '餐',
-    daily: '日',
-    transport: '行',
-    entertainment: '娱',
-    shopping: '购',
-    salary: '薪',
-    'investment-income': '利',
-    other: '其',
-  }
-
-  return iconMap[icon] ?? icon.slice(0, 1)
-}
-
-function getCategoryIconStyle(category: Category) {
-  return {
-    backgroundColor: category.color || '#334155',
-  }
-}
-
 function canDeleteCategory(category: Category) {
-  return !categories.value.some((item) => item.parentId === category.id)
+  return !category.system && !categories.value.some((item) => item.parentId === category.id)
 }
 
 function isHiddenFixedExpenseCategory(category: Category) {
@@ -364,18 +347,21 @@ function isHiddenFixedExpenseCategory(category: Category) {
               <article class="category-item category-item-parent">
                 <button
                   type="button"
-                  :class="['category-tile', 'category-tile-parent', { editable: isManageMode }]"
-                  :disabled="!isManageMode"
-                  :aria-disabled="!isManageMode"
+                  :class="['category-tile', 'category-tile-parent', { editable: isManageMode && !group.parent.system }]"
+                  :disabled="!isManageMode || group.parent.system"
+                  :aria-disabled="!isManageMode || group.parent.system"
                   @click="openEditModal(group.parent)"
                 >
-                  <span class="category-icon" :style="getCategoryIconStyle(group.parent)">
-                    {{ getCategoryIcon(group.parent.icon) }}
-                  </span>
+                  <CategoryIcon
+                    :icon="group.parent.icon"
+                    :color="group.parent.color"
+                    :name="group.parent.name"
+                    :size="28"
+                  />
                   <strong>{{ group.parent.name }}</strong>
                 </button>
                 <button
-                  v-if="isManageMode"
+                  v-if="isManageMode && !group.parent.system"
                   type="button"
                   class="category-delete-trigger"
                   :aria-label="`删除${group.parent.name}`"
@@ -399,18 +385,23 @@ function isHiddenFixedExpenseCategory(category: Category) {
               <article v-for="item in group.children" :key="item.id" class="category-item">
                 <button
                   type="button"
-                  :class="['category-tile', { editable: isManageMode }]"
-                  :disabled="!isManageMode"
-                  :aria-disabled="!isManageMode"
+                  :class="['category-tile', { editable: isManageMode && !item.system }]"
+                  :disabled="!isManageMode || item.system"
+                  :aria-disabled="!isManageMode || item.system"
                   @click="openEditModal(item)"
                 >
-                  <span class="category-icon" :style="getCategoryIconStyle(item)">
-                    {{ getCategoryIcon(item.icon) }}
-                  </span>
+                  <CategoryIcon
+                    :icon="item.icon"
+                    :fallback-icon="group.parent.icon"
+                    :color="item.color"
+                    :fallback-color="group.parent.color"
+                    :name="item.name"
+                    :size="28"
+                  />
                   <strong>{{ item.name }}</strong>
                 </button>
                 <button
-                  v-if="isManageMode"
+                  v-if="isManageMode && !item.system"
                   type="button"
                   class="category-delete-trigger"
                   :aria-label="`删除${item.name}`"
@@ -435,18 +426,21 @@ function isHiddenFixedExpenseCategory(category: Category) {
               <article class="category-item category-item-parent">
                 <button
                   type="button"
-                  :class="['category-tile', 'category-tile-parent', { editable: isManageMode }]"
-                  :disabled="!isManageMode"
-                  :aria-disabled="!isManageMode"
+                  :class="['category-tile', 'category-tile-parent', { editable: isManageMode && !group.parent.system }]"
+                  :disabled="!isManageMode || group.parent.system"
+                  :aria-disabled="!isManageMode || group.parent.system"
                   @click="openEditModal(group.parent)"
                 >
-                  <span class="category-icon" :style="getCategoryIconStyle(group.parent)">
-                    {{ getCategoryIcon(group.parent.icon) }}
-                  </span>
+                  <CategoryIcon
+                    :icon="group.parent.icon"
+                    :color="group.parent.color"
+                    :name="group.parent.name"
+                    :size="28"
+                  />
                   <strong>{{ group.parent.name }}</strong>
                 </button>
                 <button
-                  v-if="isManageMode"
+                  v-if="isManageMode && !group.parent.system"
                   type="button"
                   class="category-delete-trigger"
                   :aria-label="`删除${group.parent.name}`"
@@ -470,18 +464,23 @@ function isHiddenFixedExpenseCategory(category: Category) {
               <article v-for="item in group.children" :key="item.id" class="category-item">
                 <button
                   type="button"
-                  :class="['category-tile', { editable: isManageMode }]"
-                  :disabled="!isManageMode"
-                  :aria-disabled="!isManageMode"
+                  :class="['category-tile', { editable: isManageMode && !item.system }]"
+                  :disabled="!isManageMode || item.system"
+                  :aria-disabled="!isManageMode || item.system"
                   @click="openEditModal(item)"
                 >
-                  <span class="category-icon" :style="getCategoryIconStyle(item)">
-                    {{ getCategoryIcon(item.icon) }}
-                  </span>
+                  <CategoryIcon
+                    :icon="item.icon"
+                    :fallback-icon="group.parent.icon"
+                    :color="item.color"
+                    :fallback-color="group.parent.color"
+                    :name="item.name"
+                    :size="28"
+                  />
                   <strong>{{ item.name }}</strong>
                 </button>
                 <button
-                  v-if="isManageMode"
+                  v-if="isManageMode && !item.system"
                   type="button"
                   class="category-delete-trigger"
                   :aria-label="`删除${item.name}`"

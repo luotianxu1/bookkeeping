@@ -92,6 +92,7 @@ const editingTransaction = ref<InvestmentTransaction | null>(null)
 const currentTradeAction = ref<'buy' | 'sell'>('buy')
 const tradeInputMode = ref<'amount' | 'quantity'>('amount')
 const tradeFundingAccountId = ref('')
+const tradeDividendType = ref<'cash' | 'reinvest'>('cash')
 const tradeAmount = ref('')
 const tradeQuantity = ref('')
 const tradePrice = ref('')
@@ -104,6 +105,8 @@ const showEditModal = ref(false)
 const editPrice = ref('')
 const editHoldingQuantity = ref('')
 const editCostPrice = ref('')
+const editDividendType = ref<'cash' | 'reinvest'>('cash')
+const editDividendFundingAccountId = ref('')
 const editIncludeInNetWorth = ref(true)
 const editRemark = ref('')
 const editError = ref('')
@@ -411,6 +414,10 @@ const autoInvestFrequencyOptions = [
 const tradeTimeSlotOptions = [
   { label: '15点前', value: 'before_1500' },
   { label: '15点后', value: 'after_1500' },
+]
+const dividendTypeOptions = [
+  { label: '现金分红', value: 'cash' },
+  { label: '红利再投资', value: 'reinvest' },
 ]
 const fundTrendRangeOptions = [
   { label: '近1月', value: '1m' },
@@ -963,7 +970,7 @@ function renderLineChart(points: InvestmentChartPoint[]) {
     },
   ]
 
-  if (costPrice !== null) {
+  if (costPrice !== null && isChartValueInRange(points, costPrice)) {
     series.push({
       name: isFundTrendChart ? '持仓成本' : '持仓成本价',
       type: 'line',
@@ -1040,7 +1047,24 @@ function renderLineChart(points: InvestmentChartPoint[]) {
     },
     dataZoom: [{ type: 'inside', start: 0, end: 100 }],
     series,
-  })
+  }, { replaceMerge: ['series'] })
+}
+
+function isChartValueInRange(points: InvestmentChartPoint[], value: number) {
+  if (!Number.isFinite(value)) {
+    return false
+  }
+
+  const values = points
+    .map((point) => Number(point.value ?? point.close))
+    .filter((pointValue) => Number.isFinite(pointValue))
+  if (values.length === 0) {
+    return false
+  }
+
+  const minValue = Math.min(...values)
+  const maxValue = Math.max(...values)
+  return value >= minValue && value <= maxValue
 }
 
 function renderStockChart(points: InvestmentChartPoint[]) {
@@ -1679,7 +1703,10 @@ function openTradeModal(action: 'buy' | 'sell') {
   editingTransaction.value = null
   tradeInputMode.value = 'amount'
   tradeTimeSlot.value = 'before_1500'
-  tradeFundingAccountId.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
+  tradeDividendType.value = position.dividendType === 'reinvest' ? 'reinvest' : 'cash'
+  const preferredFundingAccountId = position.dividendFundingAccountId
+    ?? fundingAccounts.value[0]?.id
+  tradeFundingAccountId.value = preferredFundingAccountId ? String(preferredFundingAccountId) : ''
   tradeAmount.value = ''
   tradeQuantity.value = ''
   tradePrice.value = isFundPosition.value ? '' : String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
@@ -1695,7 +1722,12 @@ function openPendingTransactionModal(entry: InvestmentTransaction) {
   editingTransaction.value = entry
   currentTradeAction.value = entry.tradeType === 'sell' ? 'sell' : 'buy'
   tradeInputMode.value = 'amount'
-  tradeFundingAccountId.value = entry.fundingAccountId ? String(entry.fundingAccountId) : (fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : '')
+  tradeDividendType.value = currentPosition.value.dividendType === 'reinvest' ? 'reinvest' : 'cash'
+  tradeFundingAccountId.value = entry.fundingAccountId
+    ? String(entry.fundingAccountId)
+    : (currentPosition.value.dividendFundingAccountId
+      ? String(currentPosition.value.dividendFundingAccountId)
+      : (fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''))
   tradeAmount.value = currentTradeAction.value === 'buy' ? String(Number(entry.amount) || '') : ''
   tradeQuantity.value = currentTradeAction.value === 'sell' ? String(Number(entry.quantity) || '') : ''
   tradePrice.value = ''
@@ -1743,6 +1775,8 @@ function openEditModal() {
     ? formatEditableFundQuantity(position.holdingQuantity)
     : String(Number(position.holdingQuantity ?? 0) || '')
   editCostPrice.value = String(Number(position.avgCostPrice ?? 0) || '')
+  editDividendType.value = position.dividendType === 'reinvest' ? 'reinvest' : 'cash'
+  editDividendFundingAccountId.value = position.dividendFundingAccountId ? String(position.dividendFundingAccountId) : ''
   editIncludeInNetWorth.value = Boolean(position.includeInNetWorth)
   editRemark.value = position.remark || ''
   editError.value = ''
@@ -2021,6 +2055,7 @@ async function submitTrade() {
         tradeAt: resolvedTradeAt,
         fundingAccountId,
         subscriptionTimeSlot: tradeTimeSlot.value,
+        dividendType: currentTradeAction.value === 'buy' ? tradeDividendType.value : undefined,
         remark: tradeRemark.value.trim() || null,
       }
       const transaction = editingTransaction.value
@@ -2121,6 +2156,13 @@ async function submitEdit() {
       return
     }
   }
+  const isEditingFundPosition = isFundPosition.value
+  const dividendFundingAccountId = Number(editDividendFundingAccountId.value)
+  if (isEditingFundPosition && editDividendType.value === 'cash'
+    && (!Number.isFinite(dividendFundingAccountId) || dividendFundingAccountId <= 0)) {
+    editError.value = '现金分红必须选择到账资金账户'
+    return
+  }
 
   isSubmitting.value = true
   editError.value = ''
@@ -2142,6 +2184,10 @@ async function submitEdit() {
       frozenQuantity,
       costAmount: nextCostAmount,
       currentPrice: isPendingSubscription.value ? undefined : price,
+      fundingAccountId: isEditingFundPosition && editDividendType.value === 'cash'
+        ? dividendFundingAccountId
+        : undefined,
+      dividendType: isEditingFundPosition ? editDividendType.value : undefined,
       includeInNetWorth: editIncludeInNetWorth.value,
       status: currentPosition.value.status,
       remark: editRemark.value.trim() || null,
@@ -3192,9 +3238,18 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
 
         <CommonSelect
           v-model="tradeFundingAccountId"
-          :label="tradeAccountLabel"
+          :label="isFundPosition && currentTradeAction === 'buy' && tradeDividendType === 'cash' ? '申购及现金分红到账账户' : tradeAccountLabel"
           :options="fundingAccountOptions"
         />
+
+        <label v-if="isFundPosition && currentTradeAction === 'buy'" class="investment-detail-modal-field">
+          <span>分红方式</span>
+          <SegmentedControl
+            v-model="tradeDividendType"
+            :options="dividendTypeOptions"
+            label="基金分红方式"
+          />
+        </label>
 
         <label class="investment-detail-modal-field">
           <span>交易日期</span>
@@ -3246,7 +3301,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           <textarea
             v-model="tradeRemark"
             class="investment-detail-textarea-control"
-            rows="3"
+            rows="1"
             maxlength="200"
             placeholder="选填"
           ></textarea>
@@ -3328,7 +3383,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           <textarea
             v-model="autoInvestRemark"
             class="investment-detail-textarea-control"
-            rows="3"
+            rows="1"
             maxlength="200"
             placeholder="选填"
           ></textarea>
@@ -3433,13 +3488,21 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           </label>
         </div>
 
-        <p v-if="isPendingSubscription" class="investment-detail-description">
-          场外基金待确认时不支持手动修改价格；若目标申购日净值已同步，系统会直接确认份额和成本价，否则会在净值同步后自动完成。
-        </p>
+        <label v-if="isFundPosition" class="investment-detail-modal-field">
+          <span>分红方式</span>
+          <SegmentedControl
+            v-model="editDividendType"
+            :options="dividendTypeOptions"
+            label="基金分红方式"
+          />
+        </label>
 
-        <p v-if="!isPendingSubscription" class="investment-detail-description">
-          总持仓成本将按 当前{{ currentUnitName }} × 持仓成本价 自动计算，当前约为 {{ editFundCostAmountPreview }}，保存后立即生效。
-        </p>
+        <CommonSelect
+          v-if="isFundPosition && editDividendType === 'cash'"
+          v-model="editDividendFundingAccountId"
+          label="现金分红到账账户"
+          :options="fundingAccountOptions"
+        />
 
         <label class="investment-detail-switch-field">
           <span>计入总资产</span>
@@ -3457,7 +3520,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
           <textarea
             v-model="editRemark"
             class="investment-detail-textarea-control"
-            rows="3"
+            rows="1"
             maxlength="200"
             placeholder="选填"
           ></textarea>

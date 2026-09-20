@@ -8,6 +8,7 @@ import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButt
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
+import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
@@ -21,6 +22,7 @@ import {
   type TransactionPage,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { cashAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON, resolveCashAccountIcon } from '@/data/account-icons'
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
 import type { DayGroup, Transaction } from '@/types/finance'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
@@ -50,6 +52,7 @@ const showEditAccountModal = ref(false)
 const isSavingAccount = ref(false)
 const accountFormError = ref('')
 const formName = ref('')
+const formIcon = ref(DEFAULT_CASH_ACCOUNT_ICON)
 const formAmount = ref('')
 const formRemark = ref('')
 const setAsCommon = ref(true)
@@ -98,6 +101,7 @@ function openEditAccountModal() {
   }
 
   formName.value = account.value.name
+  formIcon.value = resolveCashAccountIcon(account.value.icon)
   formAmount.value = String(account.value.currentBalance ?? 0)
   formRemark.value = account.value.remark ?? ''
   setAsCommon.value = account.value.includeInNetWorth
@@ -112,6 +116,7 @@ function closeEditAccountModal() {
 
 function resetAccountForm() {
   formName.value = ''
+  formIcon.value = DEFAULT_CASH_ACCOUNT_ICON
   formAmount.value = ''
   formRemark.value = ''
   setAsCommon.value = true
@@ -148,7 +153,7 @@ async function saveCashAccount() {
       accountTypeId: account.value.accountTypeId,
       contactId: account.value.contactId ?? null,
       name: trimmedName,
-      icon: getCashIconCode(trimmedName),
+      icon: formIcon.value,
       color: account.value.color ?? null,
       currencyCode: account.value.currencyCode || 'CNY',
       currentBalance: normalizedAmount,
@@ -347,19 +352,6 @@ function formatAmount(value: number) {
   })
 }
 
-function getCashIconCode(name: string) {
-  if (name.includes('银行') || name.includes('卡')) {
-    return 'bank-card'
-  }
-  if (name.includes('支付宝') || name.includes('微信')) {
-    return 'alipay'
-  }
-  if (name.includes('备用')) {
-    return 'reserve-fund'
-  }
-  return 'wallet'
-}
-
 </script>
 
 <template>
@@ -478,6 +470,7 @@ function getCashIconCode(name: string) {
     <CommonModal v-model="showEditAccountModal" title="修改现金账户">
       <form class="cash-create-form" @submit.prevent="saveCashAccount">
         <CommonInput v-model="formName" label="账户名称" placeholder="例如：日常钱包" />
+        <CommonSelect v-model="formIcon" label="账户图标" :options="cashAccountIconOptions" />
         <CommonInput
           v-model="formAmount"
           label="当前余额"

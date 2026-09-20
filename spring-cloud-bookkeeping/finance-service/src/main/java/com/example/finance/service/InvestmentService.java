@@ -227,6 +227,8 @@ public class InvestmentService {
     private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
     private static final String FUND_PRODUCT_TYPE = "fund";
     private static final String STOCK_PRODUCT_TYPE = "stock";
+    private static final String DIVIDEND_TYPE_CASH = "cash";
+    private static final String DIVIDEND_TYPE_REINVEST = "reinvest";
     private static final String FUND_QUOTE_SOURCE = "EASTMONEY_FUND_DAILY";
     private static final String STOCK_QUOTE_SOURCE = "TENCENT_STOCK_LATEST";
     private static final String FUND_DIVIDEND_PLAN_SOURCE = "EASTMONEY_FUND_FHSP";
@@ -633,6 +635,10 @@ public class InvestmentService {
             ? requireProduct(request.getProductId())
             : createOrLoadProduct(request.getProduct());
         if (isPendingFundSubscription(entity)) {
+            if (isFundSubscriptionProduct(product)
+                && (StringUtils.hasText(request.getDividendType()) || request.getFundingAccountId() != null)) {
+                applyDividendPreference(entity, request.getDividendType(), request.getFundingAccountId());
+            }
             entity.setIncludeInNetWorth(request.getIncludeInNetWorth() == null ? entity.getIncludeInNetWorth() : request.getIncludeInNetWorth());
             entity.setRemark(request.getRemark());
             positionMapper.updateById(entity);
@@ -2430,6 +2436,10 @@ public class InvestmentService {
         InvestmentProductEntity product = requireProduct(request.getProductId());
         InvestmentPositionEntity position = requirePosition(request);
         if (isFundSubscriptionProduct(product)) {
+            if ("buy".equals(request.getTradeType())) {
+                applyDividendPreference(position, request.getDividendType(), request.getFundingAccountId());
+                positionMapper.updateById(position);
+            }
             return createPendingFundTransaction(request, investmentAccount, position, product);
         }
         BigDecimal quantity = defaultZero(request.getQuantity()).setScale(6, RoundingMode.HALF_UP);
@@ -2515,6 +2525,9 @@ public class InvestmentService {
         InvestmentProductEntity product = requireProduct(entity.getProductId());
         InvestmentPositionEntity position = requirePosition(request);
         rollbackPendingTransaction(entity);
+        if (isFundSubscriptionProduct(product) && "buy".equals(entity.getTradeType())) {
+            applyDividendPreference(position, request.getDividendType(), request.getFundingAccountId());
+        }
 
         BigDecimal amount = defaultZero(request.getAmount()).setScale(2, RoundingMode.HALF_UP);
         BigDecimal feeAmount = (request.getFeeAmount() == null ? defaultZero(entity.getFeeAmount()) : request.getFeeAmount())
@@ -2913,8 +2926,65 @@ public class InvestmentService {
         entity.setSubscriptionAppliedDate(null);
         entity.setSubscriptionExpectedConfirmDate(null);
         entity.setSubscriptionConfirmedAt(LocalDateTime.now());
+        InvestmentProductEntity product = productMapper.selectById(productId);
+        if (isFundSubscriptionProduct(product)) {
+            boolean hasDividendPreference = StringUtils.hasText(request.getDividendType())
+                || request.getFundingAccountId() != null
+                || !StringUtils.hasText(entity.getDividendType());
+            if (hasDividendPreference) {
+                String dividendType = resolveDividendType(request.getDividendType());
+                Long dividendFundingAccountId = resolveDividendFundingAccountId(
+                    request.getUserId(),
+                    request.getDividendType(),
+                    request.getFundingAccountId()
+                );
+                if (DIVIDEND_TYPE_CASH.equals(dividendType) && dividendFundingAccountId == null) {
+                    dividendFundingAccountId = entity.getDividendFundingAccountId();
+                }
+                entity.setDividendType(dividendType);
+                entity.setDividendFundingAccountId(dividendFundingAccountId);
+            }
+        } else {
+            entity.setDividendType(DIVIDEND_TYPE_CASH);
+            entity.setDividendFundingAccountId(null);
+        }
         entity.setLastSyncedAt(LocalDateTime.now());
         entity.setRemark(request.getRemark());
+    }
+
+    private String resolveDividendType(String dividendType) {
+        if (DIVIDEND_TYPE_REINVEST.equalsIgnoreCase(dividendType)) {
+            return DIVIDEND_TYPE_REINVEST;
+        }
+        return DIVIDEND_TYPE_CASH;
+    }
+
+    private Long resolveDividendFundingAccountId(Long userId, String dividendType, Long fundingAccountId) {
+        if (!DIVIDEND_TYPE_CASH.equals(resolveDividendType(dividendType))) {
+            return null;
+        }
+        if (fundingAccountId == null) {
+            return null;
+        }
+        requireCashFundingAccount(userId, fundingAccountId);
+        return fundingAccountId;
+    }
+
+    private void applyDividendPreference(
+        InvestmentPositionEntity position,
+        String dividendType,
+        Long fundingAccountId
+    ) {
+        String resolvedType = resolveDividendType(dividendType);
+        Long resolvedFundingAccountId = resolveDividendFundingAccountId(position.getUserId(), resolvedType, fundingAccountId);
+        if (DIVIDEND_TYPE_CASH.equals(resolvedType) && resolvedFundingAccountId == null) {
+            resolvedFundingAccountId = position.getDividendFundingAccountId();
+        }
+        if (DIVIDEND_TYPE_CASH.equals(resolvedType) && resolvedFundingAccountId == null) {
+            throw new IllegalArgumentException("现金分红必须选择资金账户");
+        }
+        position.setDividendType(resolvedType);
+        position.setDividendFundingAccountId(resolvedFundingAccountId);
     }
 
     private void createBuyTransaction(
@@ -3226,6 +3296,11 @@ public class InvestmentService {
         if (costAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("申购金额必须大于0");
         }
+        String dividendType = resolveDividendType(request.getDividendType());
+        Long dividendFundingAccountId = resolveDividendFundingAccountId(request.getUserId(), request.getDividendType(), request.getFundingAccountId());
+        if (DIVIDEND_TYPE_CASH.equals(dividendType) && dividendFundingAccountId == null) {
+            throw new IllegalArgumentException("现金分红必须选择资金账户");
+        }
 
         InvestmentPositionEntity entity = new InvestmentPositionEntity();
         entity.setUserId(request.getUserId());
@@ -3250,6 +3325,8 @@ public class InvestmentService {
         entity.setSubscriptionAppliedDate(appliedDate);
         entity.setSubscriptionExpectedConfirmDate(expectedConfirmDate);
         entity.setSubscriptionConfirmedAt(null);
+        entity.setDividendType(dividendType);
+        entity.setDividendFundingAccountId(dividendFundingAccountId);
         entity.setLastSyncedAt(tradeAt);
         entity.setRemark(request.getRemark());
 
@@ -3993,6 +4070,8 @@ public class InvestmentService {
         response.setSubscriptionAppliedDate(entity.getSubscriptionAppliedDate());
         response.setSubscriptionExpectedConfirmDate(entity.getSubscriptionExpectedConfirmDate());
         response.setSubscriptionConfirmedAt(entity.getSubscriptionConfirmedAt());
+        response.setDividendType(resolveDividendType(entity.getDividendType()));
+        response.setDividendFundingAccountId(entity.getDividendFundingAccountId());
         response.setRemark(entity.getRemark());
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
@@ -4288,6 +4367,13 @@ public class InvestmentService {
         List<InvestmentPositionEntity> positions,
         Map<Long, Long> accountUsers
     ) {
+        // 先刷新计划，确保当天派息计划已经可用于结算；计划源失败不应阻断净值同步。
+        try {
+            syncFundDividendPlansForProduct(product);
+        } catch (Exception ex) {
+            log.warn("基金分红计划刷新失败，继续同步净值：productId={}, symbol={}, reason={}",
+                product.getId(), product.getSymbol(), ex.getMessage());
+        }
         FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product);
         if (snapshot == null) {
             return 0;
@@ -4295,6 +4381,7 @@ public class InvestmentService {
 
         int updatedCount = 0;
         for (InvestmentPositionEntity position : positions) {
+            processFundDividendForPosition(position, product, snapshot);
             if (isPendingFundSubscription(position)) {
                 updatePendingFundPositionSnapshot(position, snapshot.latestPrice(), snapshot.syncedAt());
             } else {
@@ -4305,6 +4392,124 @@ public class InvestmentService {
             updatedCount++;
         }
         return updatedCount;
+    }
+
+    private void processFundDividendForPosition(
+        InvestmentPositionEntity position,
+        InvestmentProductEntity product,
+        FundQuoteSnapshot snapshot
+    ) {
+        if (position == null || product == null || snapshot == null
+            || isPendingFundSubscription(position)
+            || position.getId() == null
+            || snapshot.quoteDate() == null
+            || defaultZero(position.getHoldingQuantity()).compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        List<InvestmentDividendPlanEntity> plans = dividendPlanMapper.selectList(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
+            .eq(InvestmentDividendPlanEntity::getProductId, product.getId())
+            .ne(InvestmentDividendPlanEntity::getStatus, "cancelled")
+            .eq(InvestmentDividendPlanEntity::getPayDate, snapshot.quoteDate()));
+        if (plans.isEmpty()) {
+            return;
+        }
+        for (InvestmentDividendPlanEntity plan : plans) {
+            boolean alreadyProcessed = dividendRecordMapper.selectCount(new LambdaQueryWrapper<InvestmentDividendRecordEntity>()
+                .eq(InvestmentDividendRecordEntity::getPositionId, position.getId())
+                .eq(InvestmentDividendRecordEntity::getPlanId, plan.getId())
+                .eq(InvestmentDividendRecordEntity::getStatus, NORMAL_STATUS)) > 0;
+            if (alreadyProcessed) {
+                continue;
+            }
+            settleFundDividend(position, product, plan, snapshot);
+        }
+    }
+
+    private void settleFundDividend(
+        InvestmentPositionEntity position,
+        InvestmentProductEntity product,
+        InvestmentDividendPlanEntity plan,
+        FundQuoteSnapshot snapshot
+    ) {
+        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal dividendPerUnit = defaultZero(plan.getDividendPerUnit()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal grossAmount = holdingQuantity.multiply(dividendPerUnit).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal taxAmount = grossAmount.multiply(defaultZero(plan.getTaxRate())
+                .divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP))
+            .setScale(2, RoundingMode.HALF_UP);
+        BigDecimal netAmount = grossAmount.subtract(taxAmount).setScale(2, RoundingMode.HALF_UP);
+        String dividendType = resolveDividendType(position.getDividendType());
+        BigDecimal reinvestQuantity = BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+        if (DIVIDEND_TYPE_REINVEST.equals(dividendType)) {
+            BigDecimal price = defaultZero(snapshot.latestPrice());
+            if (price.compareTo(BigDecimal.ZERO) <= 0) {
+                return;
+            }
+            reinvestQuantity = netAmount.divide(price, 6, RoundingMode.HALF_UP);
+            position.setHoldingQuantity(holdingQuantity.add(reinvestQuantity).setScale(6, RoundingMode.HALF_UP));
+            position.setAvailableQuantity(defaultZero(position.getAvailableQuantity()).add(reinvestQuantity).setScale(6, RoundingMode.HALF_UP));
+            position.setMarketValue(defaultZero(position.getHoldingQuantity()).multiply(price).setScale(2, RoundingMode.HALF_UP));
+            position.setCurrentPrice(price.setScale(6, RoundingMode.HALF_UP));
+            position.setCumulativeProfit(defaultZero(position.getCumulativeProfit()).add(netAmount).setScale(2, RoundingMode.HALF_UP));
+            recalculatePositionMetrics(position, ACTIVE_STATUS);
+            createDividendReinvestTransaction(position, plan, reinvestQuantity, price, netAmount, snapshot.syncedAt());
+        } else {
+            Long fundingAccountId = position.getDividendFundingAccountId();
+            if (fundingAccountId == null) {
+                return;
+            }
+            AccountEntity fundingAccount = requireCashFundingAccount(position.getUserId(), fundingAccountId);
+            creditFundingAccount(fundingAccount, netAmount);
+            position.setCumulativeProfit(defaultZero(position.getCumulativeProfit()).add(netAmount).setScale(2, RoundingMode.HALF_UP));
+            position.setCumulativeProfitRate(rate(position.getCumulativeProfit(), position.getCostAmount()));
+        }
+        InvestmentDividendRecordEntity record = new InvestmentDividendRecordEntity();
+        record.setUserId(position.getUserId());
+        record.setAccountId(position.getAccountId());
+        record.setPositionId(position.getId());
+        record.setProductId(product.getId());
+        record.setPlanId(plan.getId());
+        record.setDividendType(dividendType);
+        record.setHoldingQuantity(holdingQuantity);
+        record.setDividendPerUnit(dividendPerUnit);
+        record.setGrossAmount(grossAmount);
+        record.setTaxAmount(taxAmount);
+        record.setNetAmount(netAmount);
+        record.setReinvestQuantity(reinvestQuantity);
+        record.setCurrencyCode(blankToDefault(product.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
+        record.setPaidAt(snapshot.quoteDate().atStartOfDay());
+        record.setStatus(NORMAL_STATUS);
+        record.setRemark("基金分红自动结算");
+        dividendRecordMapper.insert(record);
+    }
+
+    private void createDividendReinvestTransaction(
+        InvestmentPositionEntity position,
+        InvestmentDividendPlanEntity plan,
+        BigDecimal quantity,
+        BigDecimal price,
+        BigDecimal amount,
+        LocalDateTime tradeAt
+    ) {
+        InvestmentTransactionEntity transaction = new InvestmentTransactionEntity();
+        transaction.setTransactionNo(generateTransactionNo());
+        transaction.setUserId(position.getUserId());
+        transaction.setAccountId(position.getAccountId());
+        transaction.setPositionId(position.getId());
+        transaction.setProductId(position.getProductId());
+        transaction.setTradeType("dividend_reinvest");
+        transaction.setQuantity(quantity);
+        transaction.setPrice(price);
+        transaction.setAmount(amount);
+        transaction.setFeeAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        transaction.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        transaction.setCurrencyCode(DEFAULT_CURRENCY_CODE);
+        transaction.setTradeAt(tradeAt);
+        transaction.setStatus(NORMAL_STATUS);
+        transaction.setSettlementStatus(SETTLEMENT_STATUS_CONFIRMED);
+        transaction.setSettlementConfirmedAt(tradeAt);
+        transaction.setRemark("基金红利再投资");
+        transactionMapper.insert(transaction);
     }
 
     private int syncFundDividendPlansForProduct(InvestmentProductEntity product) {

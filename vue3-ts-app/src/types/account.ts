@@ -2,8 +2,12 @@
 export type AccountItem = {
   /** 账户ID。 */
   id?: number
-  /** 账户图标文本，后续可替换为图标组件。 */
+  /** 数据库中的账户图标编码。 */
   icon: string
+  /** 账户类型编码，用于图标兜底。 */
+  accountTypeCode?: string
+  /** 数据库中的账户图标背景色。 */
+  color?: string
   /** 账户名称。 */
   name: string
   /** 账户副标题。 */

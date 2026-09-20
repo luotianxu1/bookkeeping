@@ -85,6 +85,12 @@ public class InvestmentPositionEntity {
     @TableField("subscription_confirmed_at")
     private LocalDateTime subscriptionConfirmedAt;
 
+    @TableField("dividend_type")
+    private String dividendType;
+
+    @TableField("dividend_funding_account_id")
+    private Long dividendFundingAccountId;
+
     private String remark;
 
     @TableField("created_at")

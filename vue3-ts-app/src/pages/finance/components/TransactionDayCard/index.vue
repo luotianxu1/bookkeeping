@@ -3,6 +3,7 @@
 import { ref } from 'vue'
 import type { DayGroup } from '@/types/finance'
 import AmountText from '@/components/common/AmountText/index.vue'
+import CategoryIcon from '@/components/common/CategoryIcon/index.vue'
 import SwipeActionGroup from '@/components/common/SwipeActionGroup/index.vue'
 
 const ACTION_WIDTH = 40
@@ -51,10 +52,6 @@ function transactionAmount(transaction: DayGroup['transactions'][number]) {
 
 function transactionTone(transaction: DayGroup['transactions'][number]) {
   return transaction.type === 'expense' ? 'negative' : 'positive'
-}
-
-function transactionIconText(transaction: DayGroup['transactions'][number]) {
-  return (transaction.category || transaction.name || '账').trim().slice(0, 1)
 }
 
 function amountNumber(value: string) {
@@ -233,9 +230,13 @@ function handleDelete(transaction: DayGroup['transactions'][number]) {
           @pointercancel="handlePointerUp"
         >
           <span class="transaction-copy">
-            <span :class="['transaction-icon', `transaction-icon-${transaction.type}`]" aria-hidden="true">
-              {{ transactionIconText(transaction) }}
-            </span>
+            <CategoryIcon
+              class="transaction-icon"
+              :icon="transaction.categoryIcon"
+              :color="transaction.categoryColor"
+              :name="transaction.category || transaction.name"
+              :size="36"
+            />
             <span class="transaction-copy-main">
               <strong>{{ transaction.name }}</strong>
               <span>{{ transaction.time }}</span>

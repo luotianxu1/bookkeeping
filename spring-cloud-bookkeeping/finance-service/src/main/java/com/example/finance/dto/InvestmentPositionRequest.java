@@ -42,6 +42,8 @@ public class InvestmentPositionRequest {
 
     private String subscriptionTimeSlot;
 
+    private String dividendType;
+
     private Boolean includeInNetWorth;
     private String status;
 

@@ -6,6 +6,7 @@ import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonDateTimePicker from '@/components/common/CommonDateTimePicker/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
+import CategoryIcon from '@/components/common/CategoryIcon/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import ExpenseInlineSelect, {
   type ExpenseInlineSelectOption,
@@ -27,6 +28,7 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 type PrimaryCategoryOption = {
   id: number
   icon: string
+  color?: string | null
   label: string
   manage: boolean
 }
@@ -47,7 +49,8 @@ const rootCategories = computed(() => categories.value.filter((category) => !cat
 const primaryCategoryOptions = computed<PrimaryCategoryOption[]>(() => [
   ...rootCategories.value.map((category) => ({
     id: category.id,
-    icon: displayIcon(category.icon),
+    icon: category.icon,
+    color: category.color,
     label: category.name,
     manage: false,
   })),
@@ -57,7 +60,10 @@ const secondaryCategoryOptions = computed(() => categories.value
   .filter((category) => category.parentId === activeParentCategoryId.value)
   .map((category) => ({
     id: category.id,
-    icon: displayIcon(category.icon),
+    icon: category.icon,
+    color: category.color,
+    fallbackIcon: categories.value.find((parent) => parent.id === category.parentId)?.icon ?? null,
+    fallbackColor: categories.value.find((parent) => parent.id === category.parentId)?.color ?? null,
     label: category.name,
   })))
 // 表单数据：账户、时间、备注和金额。
@@ -315,39 +321,6 @@ function formatDateTimeLocal(date: Date) {
   ].join('-') + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-function displayIcon(icon: string) {
-  const iconMap: Record<string, string> = {
-    food: '🍽',
-    daily: '🧴',
-    transport: '🚗',
-    entertainment: '🎬',
-    shopping: '🛍',
-    salary: '💼',
-    'investment-income': '📈',
-    renewal: '🔁',
-    subscription: '🔁',
-    membership: '🔁',
-    'member-renewal': '🔁',
-    other: '🧩',
-  }
-
-  if (iconMap[icon]) {
-    return iconMap[icon]
-  }
-
-  const normalized = icon.trim().toLowerCase()
-  if (
-    normalized.includes('renew')
-    || normalized.includes('subscription')
-    || normalized.includes('member')
-    || normalized.includes('vip')
-  ) {
-    return '🔁'
-  }
-
-  return icon
-}
-
 function formatAccountBalance(value: number) {
   const amount = Number(value)
   if (!Number.isFinite(amount)) {
@@ -468,7 +441,14 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
             :class="['category-item', { active: !item.manage && activeParentCategoryId === item.id }]"
             @click="selectCategory(item)"
           >
-            <span>{{ item.icon }}</span>
+            <CategoryIcon
+              v-if="!item.manage"
+              :icon="item.icon"
+              :color="item.color"
+              :name="item.label"
+              :size="28"
+            />
+            <span v-else class="category-manage-icon" aria-hidden="true">⚙</span>
             <strong>{{ item.label }}</strong>
           </button>
         </div>
@@ -485,7 +465,14 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
               :class="['category-item', { active: activeCategoryId === item.id }]"
               @click="selectSecondaryCategory(item.id)"
             >
-              <span>{{ item.icon }}</span>
+              <CategoryIcon
+                :icon="item.icon"
+                :fallback-icon="item.fallbackIcon"
+                :color="item.color"
+                :fallback-color="item.fallbackColor"
+                :name="item.label"
+                :size="28"
+              />
               <strong>{{ item.label }}</strong>
             </button>
           </div>

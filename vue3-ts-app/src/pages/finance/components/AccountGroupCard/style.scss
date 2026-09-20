@@ -129,18 +129,6 @@
   gap: var(--space-6);
 }
 
-.account-item-icon {
-  width: 36px;
-  height: 36px;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-  border-radius: var(--radius-10);
-  background: var(--color-bg-blue-soft);
-  color: var(--color-brand);
-  font-size: var(--font-size-16);
-}
-
 .account-item-name {
   color: var(--color-text-primary);
   font-size: var(--font-size-14);

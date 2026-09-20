@@ -8,11 +8,14 @@ import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButt
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
+import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
+import AccountIcon from '@/components/common/AccountIcon/index.vue'
 import { createAccount, deleteAccount, getAccounts, getAccountTypes, updateAccount, type Account, type AccountType } from '@/api/modules/finance'
+import { cashAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON, resolveCashAccountIcon } from '@/data/account-icons'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const isManageMode = ref(false)
@@ -34,6 +37,7 @@ const feedbackType = ref<'success' | 'error'>('success')
 const router = useRouter()
 
 const formName = ref('')
+const formIcon = ref(DEFAULT_CASH_ACCOUNT_ICON)
 const formAmount = ref('')
 const formRemark = ref('')
 const setAsCommon = ref(true)
@@ -71,6 +75,7 @@ function closeCreateModal() {
 
 function resetForm() {
   formName.value = ''
+  formIcon.value = DEFAULT_CASH_ACCOUNT_ICON
   formAmount.value = ''
   formRemark.value = ''
   setAsCommon.value = true
@@ -80,6 +85,7 @@ function resetForm() {
 function openEditModal(account: Account) {
   editingAccountId.value = account.id
   formName.value = account.name
+  formIcon.value = resolveCashAccountIcon(account.icon)
   formAmount.value = String(account.currentBalance ?? 0)
   formRemark.value = account.remark ?? ''
   setAsCommon.value = account.includeInNetWorth
@@ -121,7 +127,7 @@ async function saveCashAccount() {
       userId: currentUser.id,
       accountTypeId: cashAccountType.value.id,
       name: trimmedName,
-      icon: getCashIconCode(trimmedName),
+      icon: formIcon.value,
       currencyCode: 'CNY',
       currentBalance: normalizedAmount,
       includeInNetWorth: setAsCommon.value,
@@ -230,7 +236,6 @@ async function loadCashAccounts() {
 function toAccountItem(account: Account) {
   return {
     id: account.id,
-    icon: getCashIcon(account.icon),
     name: account.name,
     subtitle: account.remark || account.accountTypeName || '现金账户',
     amount: formatAmount(Number(account.currentBalance)),
@@ -248,31 +253,6 @@ function formatAmount(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
-}
-
-function getCashIcon(icon?: string | null) {
-  const iconMap: Record<string, 'wallet' | 'bank-card' | 'alipay' | 'reserve-fund'> = {
-    wallet: 'wallet',
-    cash: 'wallet',
-    'bank-card': 'bank-card',
-    alipay: 'alipay',
-    'reserve-fund': 'reserve-fund',
-  }
-
-  return icon ? iconMap[icon] ?? 'wallet' : 'wallet'
-}
-
-function getCashIconCode(name: string) {
-  if (name.includes('银行') || name.includes('卡')) {
-    return 'bank-card'
-  }
-  if (name.includes('支付宝') || name.includes('微信')) {
-    return 'alipay'
-  }
-  if (name.includes('备用')) {
-    return 'reserve-fund'
-  }
-  return 'wallet'
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {
@@ -329,25 +309,12 @@ function showFeedback(message: string, type: 'success' | 'error') {
           @click="handleAccountClick(account)"
         >
         <span class="cash-item-left">
-          <span :class="['cash-item-icon', `cash-item-icon-${toAccountItem(account).icon}`]" aria-hidden="true">
-            <svg v-if="toAccountItem(account).icon === 'bank-card'" viewBox="0 0 24 24" fill="none">
-              <path d="M3 8H21M6 16H10M4 5H20C20.55 5 21 5.45 21 6V18C21 18.55 20.55 19 20 19H4C3.45 19 3 18.55 3 18V6C3 5.45 3.45 5 4 5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <svg v-else-if="toAccountItem(account).icon === 'alipay'" viewBox="0 0 24 24" fill="none">
-              <path d="M8 2H16C17.1 2 18 2.9 18 4V20C18 21.1 17.1 22 16 22H8C6.9 22 6 21.1 6 20V4C6 2.9 6.9 2 8 2Z" stroke="currentColor" stroke-width="1.8" />
-              <path d="M10 18H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            </svg>
-            <svg v-else-if="toAccountItem(account).icon === 'reserve-fund'" viewBox="0 0 24 24" fill="none">
-              <path d="M6 8H18L20 20H4L6 8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-              <path d="M9 8V6A3 3 0 0 1 15 6V8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-              <path d="M9 13H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none">
-              <path d="M20 7H5C3.9 7 3 7.9 3 9V18C3 19.1 3.9 20 5 20H20C20.55 20 21 19.55 21 19V8C21 7.45 20.55 7 20 7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-              <path d="M16 13H21V17H16C14.9 17 14 16.1 14 15C14 13.9 14.9 13 16 13Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-              <path d="M6 7V5C6 4.45 6.45 4 7 4H18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            </svg>
-          </span>
+          <AccountIcon
+            :icon="account.icon"
+            account-type-code="cash"
+            :color="account.color"
+            :name="account.name"
+          />
           <span class="cash-item-text">
             <span class="cash-item-name">{{ account.name }}</span>
             <span class="cash-item-subtitle">{{ toAccountItem(account).subtitle }}</span>
@@ -390,6 +357,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
     <CommonModal v-model="showCreateAccountModal" :title="accountModalTitle">
       <form class="cash-create-form" @submit.prevent="saveCashAccount">
         <CommonInput v-model="formName" label="账户名称" placeholder="例如：日常钱包" />
+        <CommonSelect v-model="formIcon" label="账户图标" :options="cashAccountIconOptions" />
         <CommonInput
           v-if="editingAccountId"
           v-model="formAmount"
