@@ -49,7 +49,7 @@
 }
 
 .category-item {
-  min-height: 48px;
+  min-height: var(--space-56);
   display: grid;
   justify-items: center;
   align-content: center;
@@ -58,7 +58,7 @@
   background: var(--color-bg-page);
 }
 
-.category-item span {
+.category-manage-icon {
   font-size: var(--font-size-14);
   line-height: 1;
 }

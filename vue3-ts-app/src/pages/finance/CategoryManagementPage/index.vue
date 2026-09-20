@@ -253,11 +253,17 @@ async function confirmDeleteCategory() {
     return
   }
 
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    deleteError.value = '请先登录后再删除分类'
+    return
+  }
+
   isDeletingCategory.value = true
   deleteError.value = ''
 
   try {
-    await deleteCategory(deletingCategory.value.id)
+    await deleteCategory(deletingCategory.value.id, currentUser.id)
     closeDeleteConfirmModal()
     showFeedback('删除成功', 'success')
     await loadCategories()
@@ -356,7 +362,7 @@ function isHiddenFixedExpenseCategory(category: Category) {
                     :icon="group.parent.icon"
                     :color="group.parent.color"
                     :name="group.parent.name"
-                    :size="28"
+                    :size="24"
                   />
                   <strong>{{ group.parent.name }}</strong>
                 </button>
@@ -435,7 +441,7 @@ function isHiddenFixedExpenseCategory(category: Category) {
                     :icon="group.parent.icon"
                     :color="group.parent.color"
                     :name="group.parent.name"
-                    :size="28"
+                    :size="24"
                   />
                   <strong>{{ group.parent.name }}</strong>
                 </button>
@@ -548,6 +554,7 @@ function isHiddenFixedExpenseCategory(category: Category) {
     >
       <p class="category-delete-message">
         确认删除“{{ deletingCategory?.name }}”吗？
+        关联的历史流水和固定支出将归入“其他”。
       </p>
       <p v-if="deleteError" class="category-form-error">{{ deleteError }}</p>
 

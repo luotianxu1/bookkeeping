@@ -25,7 +25,7 @@ export const cashAccountIconOptions = [
 const cashAccountIconKeys = new Set<string>(cashAccountIconOptions.map((option) => option.value))
 
 export function resolveCashAccountIcon(value?: string | null) {
-  const normalized = value?.trim().toLowerCase().replaceAll('_', '-') ?? ''
+  const normalized = value?.trim().toLowerCase().replace(/_/g, '-') ?? ''
   if (normalized === 'cash') return DEFAULT_CASH_ACCOUNT_ICON
   return cashAccountIconKeys.has(normalized) ? normalized : DEFAULT_CASH_ACCOUNT_ICON
 }

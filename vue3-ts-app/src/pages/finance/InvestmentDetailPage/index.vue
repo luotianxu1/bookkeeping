@@ -363,14 +363,6 @@ const tradeFundFeeSelectValue = computed({
       : 'auto'
   },
 })
-const editFundCostAmountPreview = computed(() => {
-  const quantity = Number(editHoldingQuantity.value)
-  const costPrice = Number(editCostPrice.value)
-  if (!Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(costPrice) || costPrice < 0) {
-    return '--'
-  }
-  return formatCurrency(quantity * costPrice)
-})
 const showTradeInputMode = computed(() => currentTradeAction.value === 'buy' && !isFundPosition.value)
 const tradePrimaryLabel = computed(() => {
   if (isFundPosition.value) {

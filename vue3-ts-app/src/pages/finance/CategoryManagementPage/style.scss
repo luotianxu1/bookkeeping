@@ -76,15 +76,6 @@
   padding-left: var(--space-8);
 }
 
-.category-grid-children :deep(.category-icon-image) {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  flex: 0 0 28px;
-  opacity: 1;
-  visibility: visible;
-}
-
 .category-item {
   position: relative;
   min-height: var(--space-56);

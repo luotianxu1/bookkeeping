@@ -136,7 +136,7 @@ const colorAliases: Record<string, string> = {
 }
 
 function normalizeIcon(value?: string | null) {
-  return value?.trim().toLowerCase().replaceAll('_', '-') ?? ''
+  return value?.trim().toLowerCase().replace(/_/g, '-') ?? ''
 }
 
 function resolveIconKey(value?: string | null): AccountIconKey | null {

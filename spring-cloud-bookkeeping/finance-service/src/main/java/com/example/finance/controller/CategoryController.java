@@ -70,8 +70,11 @@ public class CategoryController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "删除分类")
-    public Result<Void> delete(@PathVariable("id") @NotNull Long id) {
-        if (!categoryService.delete(id)) {
+    public Result<Void> delete(
+        @PathVariable("id") @NotNull Long id,
+        @RequestParam("userId") @NotNull Long userId
+    ) {
+        if (!categoryService.delete(id, userId)) {
             return Result.<Void>fail().code(404).message("分类不存在");
         }
         return Result.ok();

@@ -1,11 +1,17 @@
 package com.example.finance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.finance.dto.CategoryRequest;
 import com.example.finance.dto.CategoryResponse;
 import com.example.finance.entity.CategoryEntity;
+import com.example.finance.entity.RenewalSubscriptionEntity;
+import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.CategoryMapper;
+import com.example.finance.mapper.RenewalSubscriptionMapper;
+import com.example.finance.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
@@ -19,13 +25,24 @@ import java.util.stream.Collectors;
 public class CategoryService {
 
     private static final String DEFAULT_STATUS = "active";
+    private static final String EXPENSE_TYPE = "expense";
+    private static final String FALLBACK_CATEGORY_NAME = "其他";
+    private static final String FALLBACK_CATEGORY_ICON = "other";
     private static final int ROOT_LEVEL = 1;
     private static final int CHILD_LEVEL = 2;
 
     private final CategoryMapper categoryMapper;
+    private final TransactionMapper transactionMapper;
+    private final RenewalSubscriptionMapper renewalSubscriptionMapper;
 
-    public CategoryService(CategoryMapper categoryMapper) {
+    public CategoryService(
+        CategoryMapper categoryMapper,
+        TransactionMapper transactionMapper,
+        RenewalSubscriptionMapper renewalSubscriptionMapper
+    ) {
         this.categoryMapper = categoryMapper;
+        this.transactionMapper = transactionMapper;
+        this.renewalSubscriptionMapper = renewalSubscriptionMapper;
     }
 
     public List<CategoryResponse> list(Long userId, String type, String status) {
@@ -110,7 +127,8 @@ public class CategoryService {
         return Optional.of(toResponse(categoryMapper.selectById(id)));
     }
 
-    public boolean delete(Long id) {
+    @Transactional
+    public boolean delete(Long id, Long userId) {
         CategoryEntity entity = categoryMapper.selectById(id);
         if (entity == null) {
             return false;
@@ -121,7 +139,37 @@ public class CategoryService {
         if (hasChildren(id)) {
             throw new IllegalArgumentException("请先删除二级分类");
         }
+        if (entity.getUserId() == null || !entity.getUserId().equals(userId)) {
+            throw new IllegalArgumentException("无权删除该分类");
+        }
+
+        CategoryEntity fallbackCategory = requireFallbackCategory();
+        transactionMapper.update(null, new LambdaUpdateWrapper<TransactionEntity>()
+            .eq(TransactionEntity::getUserId, userId)
+            .eq(TransactionEntity::getCategoryId, id)
+            .set(TransactionEntity::getCategoryId, fallbackCategory.getId()));
+        renewalSubscriptionMapper.update(null, new LambdaUpdateWrapper<RenewalSubscriptionEntity>()
+            .eq(RenewalSubscriptionEntity::getUserId, userId)
+            .eq(RenewalSubscriptionEntity::getCategoryId, id)
+            .set(RenewalSubscriptionEntity::getCategoryId, fallbackCategory.getId()));
+
         return categoryMapper.deleteById(id) > 0;
+    }
+
+    private CategoryEntity requireFallbackCategory() {
+        CategoryEntity category = categoryMapper.selectOne(new LambdaQueryWrapper<CategoryEntity>()
+            .isNull(CategoryEntity::getUserId)
+            .isNull(CategoryEntity::getParentId)
+            .eq(CategoryEntity::getType, EXPENSE_TYPE)
+            .eq(CategoryEntity::getName, FALLBACK_CATEGORY_NAME)
+            .eq(CategoryEntity::getIcon, FALLBACK_CATEGORY_ICON)
+            .eq(CategoryEntity::getSystem, true)
+            .eq(CategoryEntity::getStatus, DEFAULT_STATUS)
+            .last("LIMIT 1"));
+        if (category == null) {
+            throw new IllegalArgumentException("未配置可接收历史流水的“其他”分类");
+        }
+        return category;
     }
 
     private boolean isSystemCategory(CategoryEntity entity) {

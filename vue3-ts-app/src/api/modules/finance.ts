@@ -1566,8 +1566,10 @@ export function updateCategory(id: number, params: SaveCategoryParams) {
   return requestPut<Category, SaveCategoryParams>(financeRequest, `/api/finance/categories/${id}`, params)
 }
 
-export function deleteCategory(id: number) {
-  return requestDelete<void>(financeRequest, `/api/finance/categories/${id}`)
+export function deleteCategory(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/categories/${id}`, {
+    params: { userId },
+  })
 }
 
 export function getGoldPrices(
