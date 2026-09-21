@@ -14,6 +14,7 @@
   min-height: 0;
   width: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   padding: 0 var(--app-page-side-padding) var(--app-page-bottom-padding);
@@ -28,6 +29,16 @@
   --app-page-bottom-padding: calc(var(--space-16) + env(safe-area-inset-bottom, 0px));
 }
 
+.page-content--auth {
+  --app-page-side-padding: 0px;
+  --app-page-bottom-padding: 0px;
+  overflow: hidden;
+}
+
 .page-content--without-nav {
   --app-page-bottom-padding: calc(var(--space-16) + env(safe-area-inset-bottom, 0px));
+}
+
+.page-content--auth.page-content--without-nav {
+  --app-page-bottom-padding: 0px;
 }
