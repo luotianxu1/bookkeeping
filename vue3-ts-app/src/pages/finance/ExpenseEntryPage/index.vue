@@ -499,6 +499,17 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
           label="选择时间"
         />
       </div>
+      <div class="expense-divider"></div>
+      <label class="expense-info-row expense-note-input-wrap">
+        <span>备注</span>
+        <input
+          v-model="note"
+          class="expense-note-input"
+          type="text"
+          placeholder="输入备注内容"
+          aria-label="输入备注"
+        />
+      </label>
     </section>
 
     <section v-else class="expense-detail-card transfer-detail-card" aria-label="转账详情">
@@ -525,18 +536,6 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
           :disabled="loading || accountSelectOptions.length === 0"
         />
       </div>
-    </section>
-
-    <section class="expense-note-card" aria-label="备注">
-      <label class="expense-note-input-wrap">
-        <span>备注</span>
-        <textarea
-          v-model="note"
-          class="expense-note-input"
-          placeholder="输入备注内容"
-          aria-label="输入备注"
-        ></textarea>
-      </label>
     </section>
 
     <section class="expense-keypad" aria-label="数字键盘">

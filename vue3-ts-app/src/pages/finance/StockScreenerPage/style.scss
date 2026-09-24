@@ -894,23 +894,6 @@
   text-align: center;
 }
 
-@media (min-width: 768px) {
-  .stock-screener-page {
-    max-width: 880px;
-    width: 100%;
-    margin: 0 auto;
-  }
-
-  .rule-panel {
-    padding: var(--space-20);
-  }
-
-  .market-index-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-}
-
 @media (max-width: 390px) {
   .limit-summary-grid {
     gap: var(--space-4);

@@ -14,9 +14,9 @@
 
 .free-hero-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(230px, 0.72fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-16);
-  padding: var(--space-20);
+  padding: 16px;
   background:
     radial-gradient(circle at 100% 0%, rgba(29, 78, 216, 0.15), transparent 42%),
     linear-gradient(135deg, var(--color-bg-card) 0%, var(--color-bg-soft) 100%);
@@ -42,8 +42,8 @@
 }
 
 .free-hero-copy h1 {
-  max-width: 18ch;
-  font-size: clamp(24px, 3.2vw, 34px);
+  max-width: none;
+  font-size: var(--font-size-24);
   line-height: 1.15;
 }
 
@@ -59,7 +59,7 @@
   display: grid;
   gap: 4px;
   align-content: center;
-  padding: var(--space-12) var(--space-16);
+  padding: var(--space-14) var(--space-16);
   border: 1px solid var(--color-border-blue);
   border-radius: var(--radius-12);
   background: rgba(255, 255, 255, 0.58);
@@ -91,7 +91,7 @@
 
 .free-hero-target strong {
   color: var(--color-brand);
-  font-size: clamp(26px, 8vw, 48px);
+  font-size: var(--font-size-26);
   font-weight: 850;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
@@ -109,7 +109,7 @@
 .free-progress {
   display: grid;
   gap: 8px;
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 .free-progress-head,
@@ -154,7 +154,7 @@
 
 .free-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: var(--space-14);
 }
@@ -168,7 +168,7 @@
 .free-card {
   display: grid;
   gap: var(--space-14);
-  padding: var(--space-16);
+  padding: 16px;
 }
 
 .free-card-head {
@@ -176,6 +176,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .free-card-head > div {
@@ -187,22 +188,22 @@
 .free-card-head h2 {
   font-size: var(--font-size-16);
   line-height: 1.3;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .free-card-caption {
-  flex: 0 1 auto;
-  max-width: 50%;
+  flex: 0 0 100%;
+  max-width: 100%;
   min-width: 0;
-  text-align: right;
-  font-size: clamp(10px, 2.4vw, 11px);
+  text-align: left;
+  font-size: var(--font-size-11);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
 .free-result-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-10);
 }
 
@@ -219,7 +220,7 @@
 .free-result-item strong,
 .free-result-item .free-result-value {
   color: var(--color-text-primary);
-  font-size: clamp(17px, 3.4vw, 22px);
+  font-size: var(--font-size-18);
   font-weight: 800;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
@@ -238,8 +239,8 @@
 
 .free-data-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 var(--space-24);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   margin: 0;
 }
 
@@ -248,7 +249,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--color-bg-soft-2);
 }
 
@@ -273,18 +274,17 @@
 }
 
 .free-settings-card {
-  position: sticky;
-  top: var(--space-14);
+  position: static;
 }
 
 .free-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
 .free-field:last-child {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 .free-field {
@@ -381,8 +381,9 @@
 
 .free-message {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: flex-start;
   gap: 16px;
   padding: var(--space-12);
   border: 1px solid var(--color-bg-soft-2);
@@ -394,80 +395,4 @@
 
 .free-message-error {
   color: var(--color-danger);
-}
-
-@media (max-width: 980px) {
-  .free-hero-card {
-    grid-template-columns: minmax(0, 1fr) minmax(210px, 0.72fr);
-    padding: var(--space-16);
-  }
-
-  .free-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .free-settings-card {
-    position: static;
-  }
-}
-
-@media (max-width: 520px) {
-  .free-hero-card,
-  .free-card {
-    padding: 16px;
-  }
-
-  .free-hero-card {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-16);
-  }
-
-  .free-hero-copy h1 {
-    max-width: none;
-    font-size: var(--font-size-24);
-  }
-
-  .free-hero-target {
-    padding: var(--space-14) var(--space-16);
-  }
-
-  .free-progress {
-    grid-column: auto;
-  }
-
-  .free-result-grid,
-  .free-data-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .free-form {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .free-field:last-child {
-    grid-column: auto;
-  }
-
-  .free-card-caption {
-    max-width: 100%;
-    flex-basis: 100%;
-    text-align: left;
-  }
-
-  .free-card-head {
-    flex-wrap: wrap;
-  }
-
-  .free-card-head h2 {
-    white-space: normal;
-  }
-
-  .free-data-list > div {
-    padding: 10px 0;
-  }
-
-  .free-message {
-    align-items: flex-start;
-    flex-direction: column;
-  }
 }

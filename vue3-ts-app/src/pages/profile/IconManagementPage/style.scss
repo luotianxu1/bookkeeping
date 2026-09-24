@@ -135,9 +135,3 @@
   font-size: 9px;
   line-height: 1.2;
 }
-
-@media (min-width: 520px) {
-  .icon-catalog-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
-}
