@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import BackToTopButton from '@/components/common/BackToTopButton/index.vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -110,6 +111,8 @@ function formatPublishedAt(value: string | null) {
 
 <template>
   <section class="market-news-page" aria-label="市场快讯">
+    <BackToTopButton />
+
     <header class="market-news-header">
       <PageHeader title="市场快讯" back-to="/finance/more-features" back-label="返回更多功能">
         <template #right>

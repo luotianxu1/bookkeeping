@@ -12,6 +12,7 @@ import {
   type TransactionType,
 } from '@/api/modules/finance'
 import CommonBottomSheet from '@/components/common/CommonBottomSheet/index.vue'
+import BackToTopButton from '@/components/common/BackToTopButton/index.vue'
 import CommonConfirmSheet from '@/components/common/CommonConfirmSheet/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -470,6 +471,8 @@ function accountLabel(account: Account) {
 
 <template>
   <section class="transaction-list-page" aria-label="收支列表">
+    <BackToTopButton />
+
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"

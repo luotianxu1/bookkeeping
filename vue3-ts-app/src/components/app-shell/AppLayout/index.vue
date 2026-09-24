@@ -159,6 +159,7 @@ function normalizePath(path: string) {
       :class="[
         'page-content',
         `page-content--${contentMode}`,
+        { 'page-content--finance-home': route.path === '/finance' },
         { 'page-content--without-nav': !showBottomNav },
       ]"
     >

@@ -1,0 +1,50 @@
+.back-to-top-button-container {
+  position: fixed;
+  right: 16px;
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  z-index: 15;
+  pointer-events: none;
+}
+
+.back-to-top-button {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border-blue);
+  border-radius: 50%;
+  background: var(--color-bg-card);
+  color: var(--color-brand-strong);
+  box-shadow: var(--color-shadow-soft);
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.back-to-top-button svg {
+  width: 22px;
+  height: 22px;
+}
+
+.back-to-top-button:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 3px;
+}
+
+.back-to-top-enter-active,
+.back-to-top-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.back-to-top-enter-from,
+.back-to-top-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .back-to-top-enter-active,
+  .back-to-top-leave-active {
+    transition: none;
+  }
+}

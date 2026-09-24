@@ -24,6 +24,11 @@
   --app-page-bottom-padding: calc(var(--space-96) + env(safe-area-inset-bottom, 0px));
 }
 
+.page-content--finance-home {
+  --app-page-bottom-padding: env(safe-area-inset-bottom, 0px);
+  overflow: hidden;
+}
+
 .page-content--subpage,
 .page-content--auth {
   --app-page-bottom-padding: calc(var(--space-16) + env(safe-area-inset-bottom, 0px));
