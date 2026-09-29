@@ -959,32 +959,32 @@ function formatDateTime(value: string) {
 
 <template>
   <section class="analysis-page" aria-label="收支分析">
-    <PageHeader title="收支分析" back-to="/finance" back-label="返回财务首页">
-      <template #right>
-        <div v-if="canSwitchFamilyView" class="analysis-family-switch">
-          <CommonSelect
-            v-model="familyView"
-            label="切换家庭成员收支分析视角"
-            :options="familyViewSelectOptions"
-          />
-        </div>
-      </template>
-    </PageHeader>
+    <div class="analysis-top">
+      <PageHeader title="收支分析" back-to="/finance" back-label="返回财务首页">
+        <template #right>
+          <div v-if="canSwitchFamilyView" class="analysis-family-switch">
+            <CommonSelect
+              v-model="familyView"
+              label="切换家庭成员收支分析视角"
+              :options="familyViewSelectOptions"
+            />
+          </div>
+        </template>
+      </PageHeader>
 
-    <p v-if="familyViewHint" class="analysis-view-hint">
-      {{ familyViewHint }}
-    </p>
+      <p v-if="familyViewHint" class="analysis-view-hint">
+        {{ familyViewHint }}
+      </p>
 
-    <SegmentedControl v-model="period" :options="periodOptions" label="月年切换" />
+      <SegmentedControl v-model="period" :options="periodOptions" label="月年切换" />
 
-    <MonthPicker v-if="period === '月'" v-model="activeMonth" />
-    <YearPicker v-else v-model="activeYear" />
+      <MonthPicker v-if="period === '月'" v-model="activeMonth" />
+      <YearPicker v-else v-model="activeYear" />
 
-    <p v-if="pageError" class="analysis-status analysis-status-error">{{ pageError }}</p>
-    <CommonLoading v-else-if="isLoading" />
+      <p v-if="pageError" class="analysis-status analysis-status-error">{{ pageError }}</p>
+      <CommonLoading v-else-if="isLoading" />
 
-    <template v-else>
-      <section class="summary-switch" aria-label="收支概览">
+      <section v-else class="summary-switch" aria-label="收支概览">
         <button
           v-for="item in summaryCards"
           :key="item.label"
@@ -996,7 +996,9 @@ function formatDateTime(value: string) {
           <AmountText tag="span" :value="item.amount" :tone="item.tone" />
         </button>
       </section>
+    </div>
 
+    <div v-if="!pageError && !isLoading" class="analysis-scroll">
       <section v-if="summaryTab !== '结余'" class="card">
         <header class="card-head">
           <strong>{{ breakdownSectionTitle }}</strong>
@@ -1207,7 +1209,7 @@ function formatDateTime(value: string) {
           </div>
         </div>
       </section>
-    </template>
+    </div>
   </section>
 </template>
 
