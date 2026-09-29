@@ -250,15 +250,56 @@ VITE_FOOD_API_BASE_URL=/food-api
 
 如果使用 Vite 代理，建议使用 `/auth-api`、`/finance-api` 这类相对路径。
 
-## 外网临时访问
+## 外网访问（Cloudflare Tunnel）
 
-前端开发服务启动后，可以通过 Cloudflare Tunnel 暂时暴露：
+### 命名隧道（固定域名，已配置）
 
-```bash
-cloudflared tunnel --url http://localhost:5173
+前端已通过命名隧道绑定固定域名：
+
+```text
+https://luotianxu.dpdns.org  →  http://localhost:4173（Vite preview）
 ```
 
-`vite.config.ts` 已允许 `.trycloudflare.com` 作为访问域名。
+配置信息：
+
+| 项目 | 值 |
+| --- | --- |
+| 隧道名称 | `bookkeeping` |
+| 隧道 ID | `e4c7f515-1bc2-4427-b905-202919103e51` |
+| 公网域名 | `luotianxu.dpdns.org` |
+| 回源地址 | `http://localhost:4173` |
+| 协议 | `http2`（本机网络限制 UDP/QUIC） |
+| 配置文件 | `~/.cloudflared/config.yml` |
+| 凭证文件 | `~/.cloudflared/e4c7f515-1bc2-4427-b905-202919103e51.json` |
+
+日常使用：
+
+```bash
+# 启动隧道（需先启动前端 preview 和后端服务）
+pnpm tunnel                     # 在 vue3-ts-app 目录下
+cloudflared tunnel run bookkeeping   # 或直接用 cloudflared
+
+# 查看隧道状态
+cloudflared tunnel list
+```
+
+API 请求无需单独暴露：前端页面经 Vite 代理（`/auth-api` 等）转发到本地 8081-8084，隧道只暴露 4173 一个入口。
+
+开机自启（可选）：
+
+```bash
+sudo cloudflared service install
+```
+
+### 快速隧道（临时使用，无需登录）
+
+```bash
+cloudflared tunnel --url http://localhost:4173 --protocol http2
+```
+
+会随机分配一个 `xxx.trycloudflare.com` 地址，重启后失效。
+
+注意：`vite.config.ts` 的 `preview.allowedHosts` 中已加入 `luotianxu.dpdns.org` 和 `.trycloudflare.com`，否则 Vite 会以 403 拦截这些域名的请求。
 
 ## 测试
 

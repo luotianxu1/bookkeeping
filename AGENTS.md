@@ -71,4 +71,6 @@ In `vue3-ts-app/.env` or shell:
 - `VITE_API_BASE_URL` — default API base (fallback: <http://localhost:8081>)
 - `VITE_AUTH_API_BASE_URL`, `VITE_FINANCE_API_BASE_URL`, `VITE_TOOL_API_BASE_URL`, `VITE_FOOD_API_BASE_URL`
 
-cloudflared tunnel --url <http://localhost:4173> --protocol http2
+## Cloudflare Tunnel (External Access)
+
+Named tunnel `bookkeeping` is configured: <https://luotianxu.dpdns.org> → <http://localhost:4173> (Vite preview). Config at `~/.cloudflared/config.yml` (protocol http2). Start with `cloudflared tunnel run bookkeeping`. See README "外网访问（Cloudflare Tunnel）" for details. `vite.config.ts` `preview.allowedHosts` must include `luotianxu.dpdns.org`.
