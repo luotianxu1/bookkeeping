@@ -1,5 +1,6 @@
 package com.example.tool.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -25,7 +26,8 @@ public class PhotographyOrderEntity {
     @TableField("customer_name")
     private String customerName;
 
-    @TableField("contact_info")
+    // 允许清空联系方式：默认 NOT_NULL 策略会把 null 字段从 UPDATE 的 SET 中剔除
+    @TableField(value = "contact_info", updateStrategy = FieldStrategy.ALWAYS)
     private String contactInfo;
 
     @TableField("order_type")
@@ -63,7 +65,12 @@ public class PhotographyOrderEntity {
     @TableField("final_received_at")
     private LocalDateTime finalReceivedAt;
 
+    // 允许清空地址：默认 NOT_NULL 策略会把 null 字段从 UPDATE 的 SET 中剔除
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String address;
+
+    // 允许清空备注：默认 NOT_NULL 策略会把 null 字段从 UPDATE 的 SET 中剔除
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("sort_order")

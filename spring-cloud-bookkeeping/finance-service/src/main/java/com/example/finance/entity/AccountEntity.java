@@ -1,5 +1,6 @@
 package com.example.finance.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -23,7 +24,7 @@ public class AccountEntity {
     @TableField("account_type_id")
     private Long accountTypeId;
 
-    @TableField("contact_id")
+    @TableField(value = "contact_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long contactId;
 
     private String name;
@@ -36,25 +37,25 @@ public class AccountEntity {
     @TableField("current_balance")
     private BigDecimal currentBalance;
 
-    @TableField("loan_total_amount")
+    @TableField(value = "loan_total_amount", updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal loanTotalAmount;
 
-    @TableField("loan_interest_amount")
+    @TableField(value = "loan_interest_amount", updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal loanInterestAmount;
 
-    @TableField("loan_interest_rate")
+    @TableField(value = "loan_interest_rate", updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal loanInterestRate;
 
-    @TableField("loan_total_periods")
+    @TableField(value = "loan_total_periods", updateStrategy = FieldStrategy.ALWAYS)
     private Integer loanTotalPeriods;
 
-    @TableField("loan_repayment_day")
+    @TableField(value = "loan_repayment_day", updateStrategy = FieldStrategy.ALWAYS)
     private Integer loanRepaymentDay;
 
-    @TableField("loan_start_date")
+    @TableField(value = "loan_start_date", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate loanStartDate;
 
-    @TableField("loan_settled_at")
+    @TableField(value = "loan_settled_at", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime loanSettledAt;
 
     @TableField("include_in_net_worth")
@@ -64,6 +65,8 @@ public class AccountEntity {
     private Integer sortOrder;
 
     private String status;
+
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("created_at")

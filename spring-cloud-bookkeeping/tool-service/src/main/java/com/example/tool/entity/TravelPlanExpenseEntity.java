@@ -1,5 +1,6 @@
 package com.example.tool.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -26,9 +27,11 @@ public class TravelPlanExpenseEntity {
     private String title;
     private BigDecimal amount;
 
-    @TableField("payer_contact_id")
+    // 允许清空付款人等可选字段：默认 NOT_NULL 策略会把 null 字段从 UPDATE 的 SET 中剔除
+    @TableField(value = "payer_contact_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long payerContactId;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("sort_order")

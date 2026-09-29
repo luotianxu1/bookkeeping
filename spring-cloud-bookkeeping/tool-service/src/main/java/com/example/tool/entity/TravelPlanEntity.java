@@ -1,5 +1,6 @@
 package com.example.tool.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -20,14 +21,18 @@ public class TravelPlanEntity {
     private Long userId;
 
     private String name;
+
+    // 允许清空目的地：默认 NOT_NULL 策略会把 null 字段从 UPDATE 的 SET 中剔除
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String destination;
 
-    @TableField("start_date")
+    @TableField(value = "start_date", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate startDate;
 
-    @TableField("end_date")
+    @TableField(value = "end_date", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate endDate;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
     private String status;
 

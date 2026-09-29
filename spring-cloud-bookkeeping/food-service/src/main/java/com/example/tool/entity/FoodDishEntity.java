@@ -1,5 +1,6 @@
 package com.example.tool.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -22,13 +23,17 @@ public class FoodDishEntity {
     private Long categoryId;
 
     private String name;
+
+    // 允许清空副标题/介绍/标签：默认 NOT_NULL 策略会把 null 字段从 UPDATE 的 SET 中剔除
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String subtitle;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String description;
 
-    @TableField("taste_tags")
+    @TableField(value = "taste_tags", updateStrategy = FieldStrategy.ALWAYS)
     private String tasteTags;
 
-    @TableField("highlight_tags")
+    @TableField(value = "highlight_tags", updateStrategy = FieldStrategy.ALWAYS)
     private String highlightTags;
 
     @TableField("cook_minutes")

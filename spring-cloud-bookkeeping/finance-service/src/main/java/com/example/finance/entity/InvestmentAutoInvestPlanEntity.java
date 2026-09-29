@@ -1,5 +1,6 @@
 package com.example.finance.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -45,6 +46,8 @@ public class InvestmentAutoInvestPlanEntity {
     private LocalDateTime lastExecutedAt;
 
     private String status;
+
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("created_at")

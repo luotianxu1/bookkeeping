@@ -1,5 +1,6 @@
 package com.example.finance.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -22,10 +23,10 @@ public class DebtRecordEntity {
     @TableField("account_id")
     private Long accountId;
 
-    @TableField("parent_record_id")
+    @TableField(value = "parent_record_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long parentRecordId;
 
-    @TableField("funding_account_id")
+    @TableField(value = "funding_account_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long fundingAccountId;
 
     private String direction;
@@ -38,6 +39,7 @@ public class DebtRecordEntity {
     @TableField("currency_code")
     private String currencyCode;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("occurred_at")

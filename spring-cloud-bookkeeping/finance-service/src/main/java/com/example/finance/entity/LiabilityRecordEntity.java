@@ -1,5 +1,6 @@
 package com.example.finance.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -42,6 +43,7 @@ public class LiabilityRecordEntity {
     @TableField("currency_code")
     private String currencyCode;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("occurred_at")

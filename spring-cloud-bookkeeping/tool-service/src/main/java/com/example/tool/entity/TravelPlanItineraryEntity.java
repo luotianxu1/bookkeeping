@@ -1,5 +1,6 @@
 package com.example.tool.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -23,28 +24,33 @@ public class TravelPlanItineraryEntity {
     private String type;
     private String title;
 
-    @TableField("poi_name")
+    // 允许清空地点名称等可选字段：默认 NOT_NULL 策略会把 null 字段从 UPDATE 的 SET 中剔除
+    @TableField(value = "poi_name", updateStrategy = FieldStrategy.ALWAYS)
     private String poiName;
 
-    @TableField("poi_id")
+    @TableField(value = "poi_id", updateStrategy = FieldStrategy.ALWAYS)
     private String poiId;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String address;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal longitude;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal latitude;
 
-    @TableField("start_time")
+    @TableField(value = "start_time", updateStrategy = FieldStrategy.ALWAYS)
     private LocalTime startTime;
 
-    @TableField("transport_mode")
+    @TableField(value = "transport_mode", updateStrategy = FieldStrategy.ALWAYS)
     private String transportMode;
 
-    @TableField("distance_meters")
+    @TableField(value = "distance_meters", updateStrategy = FieldStrategy.ALWAYS)
     private Integer distanceMeters;
 
-    @TableField("duration_seconds")
+    @TableField(value = "duration_seconds", updateStrategy = FieldStrategy.ALWAYS)
     private Integer durationSeconds;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("sort_order")

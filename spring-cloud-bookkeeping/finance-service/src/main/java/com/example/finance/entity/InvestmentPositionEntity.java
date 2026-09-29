@@ -1,5 +1,6 @@
 package com.example.finance.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -76,10 +77,10 @@ public class InvestmentPositionEntity {
     @TableField("subscription_status")
     private String subscriptionStatus;
 
-    @TableField("subscription_applied_date")
+    @TableField(value = "subscription_applied_date", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate subscriptionAppliedDate;
 
-    @TableField("subscription_expected_confirm_date")
+    @TableField(value = "subscription_expected_confirm_date", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate subscriptionExpectedConfirmDate;
 
     @TableField("subscription_confirmed_at")
@@ -88,9 +89,10 @@ public class InvestmentPositionEntity {
     @TableField("dividend_type")
     private String dividendType;
 
-    @TableField("dividend_funding_account_id")
+    @TableField(value = "dividend_funding_account_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long dividendFundingAccountId;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("created_at")

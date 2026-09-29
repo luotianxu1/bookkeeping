@@ -1,5 +1,6 @@
 package com.example.finance.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -48,7 +49,7 @@ public class InvestmentTransactionEntity {
     @TableField("currency_code")
     private String currencyCode;
 
-    @TableField("funding_account_id")
+    @TableField(value = "funding_account_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long fundingAccountId;
 
     @TableField("trade_at")
@@ -68,6 +69,7 @@ public class InvestmentTransactionEntity {
     @TableField("settlement_confirmed_at")
     private LocalDateTime settlementConfirmedAt;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("created_at")

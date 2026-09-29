@@ -1,5 +1,6 @@
 package com.example.tool.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -32,11 +33,13 @@ public class FoodIngredientEntity {
     @TableField("reorder_level")
     private BigDecimal reorderLevel;
 
-    @TableField("storage_location")
+    // 允许清空存放位置/备注：默认 NOT_NULL 策略会把 null 字段从 UPDATE 的 SET 中剔除
+    @TableField(value = "storage_location", updateStrategy = FieldStrategy.ALWAYS)
     private String storageLocation;
 
     private String status;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String note;
 
     @TableField("sort_order")

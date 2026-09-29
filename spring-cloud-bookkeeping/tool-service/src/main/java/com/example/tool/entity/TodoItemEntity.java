@@ -1,5 +1,6 @@
 package com.example.tool.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -23,6 +24,8 @@ public class TodoItemEntity {
     @TableField("due_at")
     private LocalDateTime dueAt;
 
+    // 允许清空备注/完成时间：默认 NOT_NULL 策略会把 null 字段从 UPDATE 的 SET 中剔除
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("sort_order")
@@ -30,7 +33,7 @@ public class TodoItemEntity {
 
     private String status;
 
-    @TableField("completed_at")
+    @TableField(value = "completed_at", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime completedAt;
 
     @TableField("created_at")

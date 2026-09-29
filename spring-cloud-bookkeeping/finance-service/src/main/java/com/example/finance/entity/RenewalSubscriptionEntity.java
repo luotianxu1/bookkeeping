@@ -1,5 +1,6 @@
 package com.example.finance.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -22,7 +23,7 @@ public class RenewalSubscriptionEntity {
 
     private String name;
 
-    @TableField("provider_name")
+    @TableField(value = "provider_name", updateStrategy = FieldStrategy.ALWAYS)
     private String providerName;
 
     private BigDecimal amount;
@@ -58,6 +59,8 @@ public class RenewalSubscriptionEntity {
     private String lastChargeMessage;
 
     private String status;
+
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String remark;
 
     @TableField("created_at")
