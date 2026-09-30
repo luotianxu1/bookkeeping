@@ -638,12 +638,10 @@ function handleResize() {
         <article class="overview-stat-card">
           <span>总单数</span>
           <strong>{{ summary?.totalOrders ?? 0 }}</strong>
-          <p>已拍摄 {{ summary?.shotOrders ?? 0 }} · 未拍摄 {{ summary?.pendingOrders ?? 0 }}</p>
         </article>
         <article class="overview-stat-card">
           <span>总金额</span>
           <strong :class="amountTextClass(summary?.totalContractAmount)">{{ formatCurrency(summary?.totalContractAmount) }}</strong>
-          <p>订金 {{ formatCurrency(summary?.depositIncome) }} · 尾款 {{ formatCurrency(summary?.finalIncome) }}</p>
         </article>
       </div>
     </section>
@@ -681,7 +679,7 @@ function handleResize() {
             <template v-if="viewMode === 'calendar'">
               <template v-if="bucket.currentScope">
                 <span v-if="bucket.workdayLabel" class="calendar-day-badge is-workday">班</span>
-                <span v-if="bucket.holidayLabel" class="calendar-day-badge is-holiday">{{ bucket.holidayLabel }}</span>
+                <span v-if="bucket.holidayLabel" class="calendar-day-badge is-holiday" :title="bucket.holidayLabel">休</span>
                 <span class="calendar-day-number">{{ bucket.label }}</span>
                 <span class="calendar-day-lunar">{{ formatLunarLabel(bucket.key) }}</span>
                 <span v-if="bucket.orderCount > 0" class="calendar-day-dot" aria-hidden="true"></span>

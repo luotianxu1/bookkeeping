@@ -59,7 +59,6 @@
 }
 .overview-panel-head span,
 .chart-card-head p,
-.overview-stat-card p,
 .overview-empty,
 .overview-page-error,
 .chart-empty,
@@ -110,11 +109,6 @@
 .bucket-card-metrics b.is-zero,
 .overview-order-metrics strong.is-zero {
   color: var(--color-text-subtle);
-}
-
-.overview-stat-card p {
-  font-size: 10px;
-  line-height: 1.4;
 }
 
 .calendar-weekdays,
@@ -203,10 +197,12 @@
 }
 
 .bucket-card--calendar .calendar-day-badge.is-holiday {
+  width: auto;
   min-width: 14px;
   padding: 0 3px;
   background: var(--color-danger);
   color: var(--color-text-inverse);
+  white-space: nowrap;
 }
 
 .bucket-card--calendar .calendar-day-lunar {

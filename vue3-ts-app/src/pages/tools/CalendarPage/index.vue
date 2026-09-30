@@ -320,7 +320,7 @@ function noteStatusClass(item: CalendarAnniversaryNote) {
             >
               <template v-if="day.currentMonth">
                 <span v-if="day.workdayLabel" class="calendar-day-badge is-workday">班</span>
-                <span v-if="day.holidayLabel" class="calendar-day-badge is-holiday">{{ day.holidayLabel }}</span>
+                <span v-if="day.holidayLabel" class="calendar-day-badge is-holiday" :title="day.holidayLabel">休</span>
                 <span class="calendar-day-number">{{ day.day }}</span>
                 <span class="calendar-day-lunar">{{ formatLunarLabel(day.date) }}</span>
                 <span v-if="day.anniversaryCount > 0" class="calendar-day-dot"></span>

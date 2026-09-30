@@ -3,10 +3,10 @@ package com.example.finance.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.finance.dto.MonthlyBudgetRequest;
 import com.example.finance.dto.MonthlyBudgetResponse;
+import com.example.finance.dto.TransactionResponse;
 import com.example.finance.entity.MonthlyBudgetEntity;
-import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.MonthlyBudgetMapper;
-import com.example.finance.mapper.TransactionMapper;
+import com.example.finance.service.TransactionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -14,7 +14,6 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,14 +24,13 @@ public class MonthlyBudgetService {
     private static final String ACTIVE_STATUS = "active";
     private static final String DELETED_STATUS = "deleted";
     private static final String EXPENSE_TYPE = "expense";
-    private static final String NORMAL_TRANSACTION_STATUS = "normal";
 
     private final MonthlyBudgetMapper monthlyBudgetMapper;
-    private final TransactionMapper transactionMapper;
+    private final TransactionService transactionService;
 
-    public MonthlyBudgetService(MonthlyBudgetMapper monthlyBudgetMapper, TransactionMapper transactionMapper) {
+    public MonthlyBudgetService(MonthlyBudgetMapper monthlyBudgetMapper, TransactionService transactionService) {
         this.monthlyBudgetMapper = monthlyBudgetMapper;
-        this.transactionMapper = transactionMapper;
+        this.transactionService = transactionService;
     }
 
     public List<MonthlyBudgetResponse> list(Long userId, Integer limit) {
@@ -149,17 +147,17 @@ public class MonthlyBudgetService {
         return response;
     }
 
+    /**
+     * 已用金额口径与流水页（/finance/transactions 本月统计）一致：
+     * 仅统计现金账户，且合并债务还款、人情送出等记录来源。
+     */
     private BigDecimal calculateUsedAmount(Long userId, LocalDate month) {
-        LocalDateTime startTime = month.atStartOfDay();
-        LocalDateTime endTime = month.plusMonths(1).atStartOfDay();
-        return transactionMapper.selectList(new LambdaQueryWrapper<TransactionEntity>()
-                .eq(TransactionEntity::getUserId, userId)
-                .eq(TransactionEntity::getType, EXPENSE_TYPE)
-                .eq(TransactionEntity::getStatus, NORMAL_TRANSACTION_STATUS)
-                .ge(TransactionEntity::getOccurredAt, startTime)
-                .lt(TransactionEntity::getOccurredAt, endTime))
+        LocalDate startDate = month;
+        LocalDate endDate = month.plusMonths(1).minusDays(1);
+        return transactionService.listMergedCashTransactions(List.of(userId), startDate, endDate)
             .stream()
-            .map(TransactionEntity::getAmount)
+            .filter(transaction -> EXPENSE_TYPE.equals(transaction.getType()))
+            .map(TransactionResponse::getAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
     }

@@ -112,6 +112,19 @@ public class TransactionService {
         return mergeResponses(transactions, debtRecords, humanRelationRecords);
     }
 
+    /**
+     * 合并流水 + 债务/人情记录后，按现金账户过滤并截取日期区间。
+     * 口径与流水页（/finance/transactions 本月统计）保持一致。
+     */
+    public List<TransactionResponse> listMergedCashTransactions(Collection<Long> userIds, LocalDate startDate, LocalDate endDate) {
+        List<TransactionResponse> transactions = loadMergedTransactions(userIds, null, null);
+        Set<Long> cashAccountIds = loadCashAccountIds(userIds);
+        transactions = transactions.stream()
+            .filter(transaction -> transaction.getAccountId() != null && cashAccountIds.contains(transaction.getAccountId()))
+            .toList();
+        return filterTransactionsByDateRange(transactions, startDate, endDate);
+    }
+
     public TransactionPageResponse page(
         List<Long> userIds,
         String type,
