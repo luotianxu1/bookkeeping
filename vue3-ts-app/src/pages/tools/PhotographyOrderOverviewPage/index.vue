@@ -9,6 +9,7 @@ import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import YearPicker from '@/components/common/YearPicker/index.vue'
 import {
   getPhotographyOrderOverview,
+  getPhotographyOrders,
   type PhotographyOrder,
   type PhotographyOrderOverview,
   type PhotographyOrderOverviewBucket,
@@ -191,29 +192,23 @@ async function loadOverview() {
 
 async function loadCalendarOrders() {
   const currentUser = getStoredCurrentUser()
-  if (!currentUser || viewMode.value !== 'calendar') {
+  if (!currentUser || viewMode.value !== 'calendar' || !calendarSelectedDate.value) {
     return
   }
 
   const currentRequest = ++requestSerial
 
   try {
-    const response = await getPhotographyOrderOverview({
+    const response = await getPhotographyOrders({
       userId: currentUser.id,
-      view: 'calendar',
-      anchor: calendarMonth.value,
-      selectedDate: calendarSelectedDate.value ?? undefined,
+      status: 'all',
+      shootDate: calendarSelectedDate.value,
     })
     if (currentRequest !== requestSerial) {
       return
     }
 
-    calendarBuckets.value = response.buckets ?? []
-    calendarOrders.value = response.orders ?? []
-    calendarActiveDate.value = response.selectedValue ?? null
-    if (calendarSelectedDate.value !== (response.selectedValue ?? null)) {
-      calendarSelectedDate.value = response.selectedValue ?? null
-    }
+    calendarOrders.value = response
 
     void router.replace({
       query: buildRouteQuery(),
@@ -224,6 +219,15 @@ async function loadCalendarOrders() {
     }
     pageError.value = error instanceof Error ? error.message : '订单列表加载失败'
   }
+}
+
+function applyCalendarSelection(date: string) {
+  calendarActiveDate.value = date
+  calendarBuckets.value = calendarBuckets.value.map((bucket) => (
+    bucket.selected === (bucket.key === date)
+      ? bucket
+      : { ...bucket, selected: bucket.key === date }
+  ))
 }
 
 function buildQuery(userId: number) {
@@ -271,16 +275,18 @@ function buildRouteQuery() {
 
 function handleBucketClick(bucket: PhotographyOrderOverviewBucket) {
   if (viewMode.value === 'calendar') {
-    if (bucket.orderCount <= 0) {
+    if (!bucket.currentScope || bucket.orderCount <= 0) {
+      return
+    }
+    if (bucket.key === calendarSelectedDate.value) {
       return
     }
     const nextMonth = bucket.key.slice(0, 7)
     if (calendarMonth.value !== nextMonth) {
       calendarMonth.value = nextMonth
     }
-    if (calendarSelectedDate.value !== bucket.key) {
-      calendarSelectedDate.value = bucket.key
-    }
+    calendarSelectedDate.value = bucket.key
+    applyCalendarSelection(bucket.key)
     void loadCalendarOrders()
     return
   }
@@ -417,6 +423,54 @@ function typeAccent(type: string) {
     engagement: rootStyle.getPropertyValue('--color-danger').trim(),
     thanks_banquet: rootStyle.getPropertyValue('--color-purple').trim(),
   }[type] ?? rootStyle.getPropertyValue('--color-brand').trim()
+}
+
+function isBucketWeekend(key: string) {
+  const weekday = new Date(`${key}T12:00:00`).getDay()
+  return weekday === 0 || weekday === 6
+}
+
+const lunarFormatter = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
+  month: 'long',
+  day: 'numeric',
+})
+const lunarLabelCache = new Map<string, string>()
+
+function formatLunarLabel(dateText: string) {
+  const cached = lunarLabelCache.get(dateText)
+  if (cached) {
+    return cached
+  }
+
+  const lunarText = lunarFormatter.format(new Date(`${dateText}T12:00:00`))
+  const matched = /^(.+?)(\d+)日$/.exec(lunarText)
+  if (!matched) {
+    lunarLabelCache.set(dateText, lunarText)
+    return lunarText
+  }
+
+  const monthLabel = matched[1]
+  const dayValue = Number(matched[2])
+  const label = dayValue === 1 ? monthLabel : toChineseDay(dayValue)
+  lunarLabelCache.set(dateText, label)
+  return label
+}
+
+function toChineseDay(day: number) {
+  const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九']
+  if (day <= 10) {
+    return day === 10 ? '初十' : `初${digits[day]}`
+  }
+  if (day < 20) {
+    return `十${digits[day - 10]}`
+  }
+  if (day === 20) {
+    return '二十'
+  }
+  if (day < 30) {
+    return `廿${digits[day - 20]}`
+  }
+  return day === 30 ? '三十' : String(day)
 }
 
 function amountTextClass(value: number | string | null | undefined) {
@@ -619,15 +673,19 @@ function handleResize() {
                 'is-selected': bucket.selected,
                 'is-muted': !bucket.currentScope,
                 'is-active': bucket.orderCount > 0,
+                'is-weekend': viewMode === 'calendar' && !bucket.workdayLabel && isBucketWeekend(bucket.key),
               },
             ]"
             @click="handleBucketClick(bucket)"
           >
             <template v-if="viewMode === 'calendar'">
-              <div class="calendar-card-center">
-                <strong>{{ bucket.label }}</strong>
-                <span v-if="bucket.orderCount > 0" class="calendar-card-dot" aria-hidden="true"></span>
-              </div>
+              <template v-if="bucket.currentScope">
+                <span v-if="bucket.workdayLabel" class="calendar-day-badge is-workday">班</span>
+                <span v-if="bucket.holidayLabel" class="calendar-day-badge is-holiday">{{ bucket.holidayLabel }}</span>
+                <span class="calendar-day-number">{{ bucket.label }}</span>
+                <span class="calendar-day-lunar">{{ formatLunarLabel(bucket.key) }}</span>
+                <span v-if="bucket.orderCount > 0" class="calendar-day-dot" aria-hidden="true"></span>
+              </template>
             </template>
             <template v-else>
               <div class="bucket-card-head">

@@ -132,14 +132,14 @@
 
 .calendar-weekdays span {
   text-align: center;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-11);
-  font-weight: 700;
+  color: var(--color-text-subtle);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .calendar-grid {
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .bucket-grid {
@@ -159,79 +159,74 @@
 }
 
 .bucket-card--calendar {
-  aspect-ratio: 1 / 1;
-  place-items: center;
-  padding: 10px;
-  border-color: var(--color-border-blue-soft);
-  background:
-    linear-gradient(180deg, var(--color-bg-card) 0%, var(--color-bg-card-grad) 100%);
-  box-shadow: inset 0 1px 0 var(--color-fund-profit-pill-bg);
-}
-
-.bucket-card--calendar .calendar-card-center {
   position: relative;
-  width: 100%;
-  height: 100%;
+  min-height: 46px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
 }
 
-.bucket-card--calendar .calendar-card-center strong {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 18px;
-  line-height: 1;
-  font-weight: 700;
+.bucket-card--calendar .calendar-day-number {
+  position: relative;
+  z-index: 1;
   color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
 }
 
-.bucket-card--calendar .calendar-card-dot {
+.bucket-card--calendar .calendar-day-badge {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.bucket-card--calendar .calendar-day-badge.is-workday {
+  background: var(--color-warning);
+  color: var(--color-text-inverse);
+}
+
+.bucket-card--calendar .calendar-day-badge.is-holiday {
+  min-width: 14px;
+  padding: 0 3px;
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+}
+
+.bucket-card--calendar .calendar-day-lunar {
+  height: 8px;
+  color: var(--color-text-subtle);
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.bucket-card--calendar .calendar-day-dot {
   position: absolute;
   left: 50%;
-  top: 50%;
-  margin-top: 12px;
-  transform: translateX(-50%);
-  width: 8px;
-  height: 8px;
+  bottom: 4px;
+  z-index: 1;
+  width: 4px;
+  height: 4px;
   border-radius: 999px;
-  background: var(--color-brand-strong);
-  box-shadow: 0 0 0 4px var(--color-ring-focus);
-}
-
-.bucket-card--calendar.is-active {
-  border-color: var(--color-bg-sky-grad-2);
-  background:
-    radial-gradient(circle at top right, var(--color-ring-focus), transparent 42%),
-    linear-gradient(180deg, var(--color-bg-card) 0%, var(--color-bg-brand-soft) 100%);
-}
-
-.bucket-card--calendar.is-selected {
-  border-color: var(--color-brand-strong);
-  background:
-    linear-gradient(180deg, var(--color-bg-brand-tint) 0%, var(--color-bg-brand-soft) 100%);
-  box-shadow:
-    0 12px 24px var(--color-ring-focus),
-    inset 0 0 0 1px var(--color-fund-profit-pill-bg);
-}
-
-.bucket-card--calendar.is-selected .calendar-card-center strong {
-  color: var(--color-brand);
-}
-
-.bucket-card--calendar.is-muted {
-  opacity: 1;
-  border-style: dashed;
-  border-color: var(--color-border);
-  background: var(--color-bg-card-soft);
-}
-
-.bucket-card--calendar.is-muted .calendar-card-center strong {
-  color: var(--color-text-subtle);
-}
-
-.bucket-card--calendar.is-muted .calendar-card-dot {
-  background: var(--color-border);
-  box-shadow: none;
+  background: var(--color-brand);
+  transform: translateX(-50%);
 }
 
 .bucket-card.is-selected {
@@ -246,6 +241,50 @@
 
 .bucket-card.is-active .bucket-card-metrics b {
   color: var(--color-danger);
+}
+
+.bucket-card--calendar.is-muted {
+  opacity: 1;
+  cursor: default;
+}
+
+.bucket-card--calendar.is-weekend .calendar-day-number {
+  color: var(--color-brand);
+  font-weight: 700;
+}
+
+.bucket-card--calendar.is-selected {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.bucket-card--calendar.is-selected::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--color-brand);
+  transform: translate(-50%, -50%);
+}
+
+.bucket-card--calendar.is-selected .calendar-day-number {
+  color: var(--color-text-inverse);
+  font-weight: 700;
+}
+
+.bucket-card--calendar.is-selected .calendar-day-lunar {
+  position: relative;
+  z-index: 1;
+  color: var(--color-text-inverse);
+  font-weight: 500;
+}
+
+.bucket-card--calendar.is-selected .calendar-day-dot {
+  background: var(--color-text-inverse);
 }
 
 .bucket-card-head,

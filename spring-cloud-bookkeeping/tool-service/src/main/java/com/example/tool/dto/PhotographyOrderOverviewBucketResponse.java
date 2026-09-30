@@ -10,6 +10,8 @@ public class PhotographyOrderOverviewBucketResponse {
     private String key;
     private String label;
     private String subLabel;
+    private String holidayLabel;
+    private String workdayLabel;
     private Integer orderCount;
     private Integer shotCount;
     private Integer pendingCount;

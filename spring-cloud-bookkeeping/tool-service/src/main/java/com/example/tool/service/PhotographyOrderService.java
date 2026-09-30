@@ -79,25 +79,31 @@ public class PhotographyOrderService {
     private final AccountTypeMapper accountTypeMapper;
     private final CategoryMapper categoryMapper;
     private final TransactionMapper transactionMapper;
+    private final CalendarService calendarService;
 
     public PhotographyOrderService(
         PhotographyOrderMapper photographyOrderMapper,
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         CategoryMapper categoryMapper,
-        TransactionMapper transactionMapper
+        TransactionMapper transactionMapper,
+        CalendarService calendarService
     ) {
         this.photographyOrderMapper = photographyOrderMapper;
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.categoryMapper = categoryMapper;
         this.transactionMapper = transactionMapper;
+        this.calendarService = calendarService;
     }
 
-    public List<PhotographyOrderResponse> list(Long userId, String status, String keyword) {
+    public List<PhotographyOrderResponse> list(Long userId, String status, String keyword, String shootDate) {
+        LocalDate shootDateParsed = parseLocalDate(shootDate, null);
         LambdaQueryWrapper<PhotographyOrderEntity> wrapper = new LambdaQueryWrapper<PhotographyOrderEntity>()
             .eq(userId != null, PhotographyOrderEntity::getUserId, userId)
             .eq(shouldFilterStatus(status), PhotographyOrderEntity::getStatus, normalizeStatus(status))
+            .ge(shootDateParsed != null, PhotographyOrderEntity::getShootAt, shootDateParsed == null ? null : shootDateParsed.atStartOfDay())
+            .lt(shootDateParsed != null, PhotographyOrderEntity::getShootAt, shootDateParsed == null ? null : shootDateParsed.plusDays(1).atStartOfDay())
             .and(StringUtils.hasText(keyword), query -> query
                 .like(PhotographyOrderEntity::getContactInfo, keyword.trim())
                 .or()
@@ -584,7 +590,7 @@ public class PhotographyOrderService {
         response.setSummary(buildSummary(monthOrders));
         response.setTrendPoints(buildDailyTrendPoints(monthOrders, month));
         response.setTypeStats(buildTypeStats(monthOrders));
-        response.setBuckets(buildCalendarBuckets(monthOrders, month, selectedTargetDate));
+        response.setBuckets(buildCalendarBuckets(monthOrders, month, selectedTargetDate, calendarService.officialDayMarks(month.getYear())));
         response.setOrders(toResponses(periodOrders));
         return response;
     }
@@ -742,19 +748,26 @@ public class PhotographyOrderService {
     private List<PhotographyOrderOverviewBucketResponse> buildCalendarBuckets(
         List<PhotographyOrderEntity> entities,
         YearMonth month,
-        LocalDate selectedDate
+        LocalDate selectedDate,
+        Map<LocalDate, CalendarService.CalendarDayMark> dayMarks
     ) {
         LocalDate start = month.atDay(1).with(TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
         LocalDate end = month.atEndOfMonth().with(TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SUNDAY));
         return start.datesUntil(end.plusDays(1))
-            .map(date -> buildBucket(
-                date.toString(),
-                String.valueOf(date.getDayOfMonth()),
-                toWeekdayShortLabel(date),
-                entities.stream().filter(entity -> isInDate(entity, date)).toList(),
-                date.equals(selectedDate),
-                YearMonth.from(date).equals(month)
-            ))
+            .map(date -> {
+                CalendarService.CalendarDayMark dayMark = dayMarks.get(date);
+                PhotographyOrderOverviewBucketResponse bucket = buildBucket(
+                    date.toString(),
+                    String.valueOf(date.getDayOfMonth()),
+                    toWeekdayShortLabel(date),
+                    entities.stream().filter(entity -> isInDate(entity, date)).toList(),
+                    date.equals(selectedDate),
+                    YearMonth.from(date).equals(month)
+                );
+                bucket.setHolidayLabel(dayMark == null ? null : dayMark.holidayLabel());
+                bucket.setWorkdayLabel(dayMark == null ? null : dayMark.workdayLabel());
+                return bucket;
+            })
             .toList();
     }
 

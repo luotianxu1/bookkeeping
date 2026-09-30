@@ -486,9 +486,13 @@ public class CalendarService {
     ) {
     }
 
-    private record CalendarDayMark(
+    public record CalendarDayMark(
         String holidayLabel,
         String workdayLabel
     ) {
+    }
+
+    public Map<LocalDate, CalendarDayMark> officialDayMarks(int year) {
+        return buildOfficialDayMarks(year);
     }
 }

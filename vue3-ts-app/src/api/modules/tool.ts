@@ -182,6 +182,7 @@ export interface PhotographyOrderQuery {
   userId?: number
   status?: PhotographyOrderStatus | 'all'
   keyword?: string
+  shootDate?: string
 }
 
 export interface SavePhotographyOrderParams {
@@ -242,6 +243,8 @@ export interface PhotographyOrderOverviewBucket {
   key: string
   label: string
   subLabel?: string | null
+  holidayLabel?: string | null
+  workdayLabel?: string | null
   orderCount: number
   shotCount: number
   pendingCount: number

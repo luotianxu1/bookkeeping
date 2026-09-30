@@ -40,9 +40,10 @@ public class PhotographyOrderController {
     public Result<List<PhotographyOrderResponse>> list(
         @RequestParam(name = "userId", required = false) Long userId,
         @RequestParam(name = "status", required = false) String status,
-        @RequestParam(name = "keyword", required = false) String keyword
+        @RequestParam(name = "keyword", required = false) String keyword,
+        @RequestParam(name = "shootDate", required = false) String shootDate
     ) {
-        return Result.ok(photographyOrderService.list(userId, status, keyword));
+        return Result.ok(photographyOrderService.list(userId, status, keyword, shootDate));
     }
 
     @GetMapping("/{id}")
