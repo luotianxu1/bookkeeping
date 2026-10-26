@@ -2,6 +2,7 @@
 // 美股行情页：通过东财 push2delay 快照 + 分时接口展示美股指数实时行情与当日走势。
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
+import { useRouter } from 'vue-router'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getUsPremarket, type UsPremarketData, type UsPremarketIndex } from '@/api/modules/finance'
@@ -43,6 +44,13 @@ const MAX_INTRADAY_POINTS = 480
 const SESSION_MINUTES = 390
 
 const { isDark } = useTheme()
+const router = useRouter()
+
+// 跳转到全球行情详情页（东财 secid「100.NDX100」-> 品种代码「NDX100」）
+function goDetail(secid: string) {
+  const symbol = secid.includes('.') ? secid.split('.')[1] : secid
+  void router.push(`/finance/global-market/${symbol}`)
+}
 
 const cards = reactive<IndexCard[]>(
   INDEX_CONFIGS.map((config) => ({
@@ -536,6 +544,11 @@ onBeforeUnmount(() => {
         :key="card.secid"
         class="market-card"
         :class="toneClass(card)"
+        role="link"
+        tabindex="0"
+        :aria-label="`查看${card.name}行情详情`"
+        @click="goDetail(card.secid)"
+        @keydown.enter="goDetail(card.secid)"
       >
         <header class="market-card-head">
           <span class="market-name">{{ card.name }}</span>

@@ -45,6 +45,7 @@ const typeOptions: Array<{ label: string; value: PhotographyOrderType }> = [
   { label: '订婚', value: 'engagement' },
   { label: '答谢宴', value: 'thanks_banquet' },
   { label: '婚礼', value: 'wedding' },
+  { label: '领证', value: 'marriage_registration' },
   { label: '毕业照', value: 'graduation' },
 ]
 

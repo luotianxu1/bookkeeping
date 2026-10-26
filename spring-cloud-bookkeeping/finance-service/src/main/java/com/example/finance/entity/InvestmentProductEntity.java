@@ -1,5 +1,6 @@
 package com.example.finance.entity;
 
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
@@ -49,10 +50,10 @@ public class InvestmentProductEntity {
     @TableField("dividend_stable_years")
     private Integer dividendStableYears;
 
-    @TableField("dividend_last_paid_date")
+    @TableField(value = "dividend_last_paid_date", updateStrategy = FieldStrategy.ALWAYS)
     private LocalDate dividendLastPaidDate;
 
-    @TableField("dividend_data_source")
+    @TableField(value = "dividend_data_source", updateStrategy = FieldStrategy.ALWAYS)
     private String dividendDataSource;
 
     @TableField("dividend_evaluated_at")

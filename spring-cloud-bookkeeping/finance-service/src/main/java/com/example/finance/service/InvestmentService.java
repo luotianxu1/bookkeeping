@@ -2611,6 +2611,17 @@ public class InvestmentService {
         InvestmentPositionEntity position = requireAutoInvestPosition(request.getUserId(), request.getPositionId());
         validateAutoInvestPlanRequest(request, position, id);
 
+        // 恢复定投时，若下次执行日期已过期，则按定投周期从原锚点顺延到今天之后的下一个执行日，
+        // 避免恢复后立即补执行暂停期间错过的期次
+        boolean resumingFromPause = AUTO_INVEST_STATUS_PAUSED.equals(entity.getStatus())
+            && AUTO_INVEST_STATUS_ACTIVE.equals(request.getStatus());
+        if (resumingFromPause && request.getNextExecuteDate().isBefore(LocalDate.now())) {
+            LocalDate nextExecuteDate = resolveNextAutoInvestExecuteDate(
+                request.getFrequency(), request.getNextExecuteDate(), LocalDate.now());
+            log.info("基金定投恢复：planId={}, 原下次执行日期={}, 顺延后={}", id, request.getNextExecuteDate(), nextExecuteDate);
+            request.setNextExecuteDate(nextExecuteDate);
+        }
+
         fillAutoInvestPlan(entity, request, position);
         autoInvestPlanMapper.updateById(entity);
         return Optional.of(toAutoInvestPlanResponse(autoInvestPlanMapper.selectById(id)));
@@ -2834,22 +2845,24 @@ public class InvestmentService {
                 .stream()
                 .filter(this::supportsDividendProfile)
                 .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
-            // 外部分红源访问按产品串行会让刷新耗时随持仓数量线性增长；并行获取后再顺序写库。
-            List<InvestmentProductEntity> evaluatedProducts = products.values().parallelStream()
-                .filter(product -> {
-                    try {
-                        if (FUND_PRODUCT_TYPE.equals(product.getProductType())) {
-                            syncFundDividendPlansForProduct(product);
-                            return false;
-                        }
-                        return evaluateDividendProfile(product);
-                    } catch (Exception ex) {
-                        log.warn("攒股收息资格刷新失败，productId={}, symbol={}, reason={}",
-                            product.getId(), product.getSymbol(), ex.getMessage());
-                        return false;
+            // 东方财富对外部抓取有频率限制，并发或高频请求会返回 514 反爬状态码，
+            // 因此按产品串行逐个刷新并在请求间留出间隔（与夜间定时同步的节奏一致）。
+            List<InvestmentProductEntity> evaluatedProducts = new ArrayList<>();
+            for (InvestmentProductEntity product : products.values()) {
+                try {
+                    if (FUND_PRODUCT_TYPE.equals(product.getProductType())) {
+                        syncFundDividendPlansForProduct(product);
+                        Thread.sleep(400);
+                        continue;
                     }
-                })
-                .toList();
+                    if (evaluateDividendProfile(product)) {
+                        evaluatedProducts.add(product);
+                    }
+                } catch (Exception ex) {
+                    log.warn("攒股收息资格刷新失败，productId={}, symbol={}, reason={}",
+                        product.getId(), product.getSymbol(), ex.getMessage());
+                }
+            }
             evaluatedProducts.forEach(productMapper::updateById);
         }
         return dividendIncome(userId);
@@ -4519,16 +4532,20 @@ public class InvestmentService {
         }
         List<InvestmentDividendPlanEntity> remotePlans = fetchResult.plans();
         int changedCount = 0;
-        if (!remotePlans.isEmpty()) {
-            Set<String> remotePlanKeys = remotePlans.stream()
-                .map(plan -> dividendPlanKey(plan.getDividendYear(), plan.getPayDate()))
-                .collect(Collectors.toSet());
-            dividendPlanMapper.selectList(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
-                    .eq(InvestmentDividendPlanEntity::getProductId, product.getId())
-                    .eq(InvestmentDividendPlanEntity::getSource, FUND_DIVIDEND_PLAN_SOURCE))
-                .stream()
-                .filter(existing -> !remotePlanKeys.contains(dividendPlanKey(existing.getDividendYear(), existing.getPayDate())))
-                .forEach(existing -> dividendPlanMapper.deleteById(existing.getId()));
+        // 远端获取成功后，本地不存在于远端结果中的同源计划一律删除；
+        // 远端为空表示该基金当前无分红记录，需要清掉历史上可能串入的脏数据。
+        Set<String> remotePlanKeys = remotePlans.stream()
+            .map(plan -> dividendPlanKey(plan.getDividendYear(), plan.getPayDate()))
+            .collect(Collectors.toSet());
+        List<InvestmentDividendPlanEntity> stalePlans = dividendPlanMapper.selectList(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
+                .eq(InvestmentDividendPlanEntity::getProductId, product.getId())
+                .eq(InvestmentDividendPlanEntity::getSource, FUND_DIVIDEND_PLAN_SOURCE))
+            .stream()
+            .filter(existing -> !remotePlanKeys.contains(dividendPlanKey(existing.getDividendYear(), existing.getPayDate())))
+            .toList();
+        for (InvestmentDividendPlanEntity stalePlan : stalePlans) {
+            dividendPlanMapper.deleteById(stalePlan.getId());
+            changedCount++;
         }
         for (InvestmentDividendPlanEntity remotePlan : remotePlans) {
             InvestmentDividendPlanEntity existing = dividendPlanMapper.selectOne(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
@@ -5527,6 +5544,11 @@ public class InvestmentService {
             }
 
             String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
+            if (!isFundDividendPageOfProduct(product, body)) {
+                log.warn("基金分红历史获取失败，productId={}, symbol={}, reason=页面基金代码不匹配",
+                    product.getId(), product.getSymbol());
+                return new DividendHistoryFetchResult(false, Collections.emptyList());
+            }
             return parseFundDividendPlansFromHtml(product, body);
         } catch (Exception ex) {
             log.warn("基金分红历史获取失败，productId={}, symbol={}, reason={}",
@@ -5535,13 +5557,25 @@ public class InvestmentService {
         }
     }
 
+    /**
+     * 东方财富分红页面偶发返回其他基金的页面内容，先校验标题中的基金代码与请求一致再解析，
+     * 避免把其他基金的分红历史写入当前产品。
+     */
+    private boolean isFundDividendPageOfProduct(InvestmentProductEntity product, String body) {
+        if (product == null || !StringUtils.hasText(product.getSymbol())) {
+            return false;
+        }
+        Matcher titleMatcher = Pattern.compile("<title>(.*?)</title>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(body);
+        return titleMatcher.find() && titleMatcher.group(1).contains("(" + product.getSymbol() + ")");
+    }
+
     private DividendHistoryFetchResult parseFundDividendPlansFromHtml(InvestmentProductEntity product, String body) {
         if (!StringUtils.hasText(body)) {
             return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
 
         Pattern tablePattern = Pattern.compile(
-            "<table[^>]*class=['\"][^'\"]*comm\\s+cfxq[^'\"]*['\"][^>]*>.*?<tbody>(.*?)</tbody>.*?</table>",
+            "<table[^>]*class=['\"][^'\"]*comm\\s+cfxq[^'\"]*['\"][^>]*>(.*?)</table>",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL
         );
         Matcher tableMatcher = tablePattern.matcher(body);
@@ -5551,7 +5585,25 @@ public class InvestmentService {
             return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
 
-        String tableBody = tableMatcher.group(1);
+        String tableHtml = tableMatcher.group(1);
+        // 校验表头确为分红送配表（年份/权益登记日/除息日/每10份分红/分红发放日），
+        // 防止页面结构变化时把拆分、公告等同类名表格的行误解析成分红数据。
+        Matcher headMatcher = Pattern.compile("<thead>(.*?)</thead>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(tableHtml);
+        if (!headMatcher.find()
+            || !headMatcher.group(1).contains("权益登记日")
+            || !headMatcher.group(1).contains("分红发放日")) {
+            log.warn("基金分红历史解析失败，productId={}, symbol={}, reason=分红表头不匹配",
+                product.getId(), product.getSymbol());
+            return new DividendHistoryFetchResult(false, Collections.emptyList());
+        }
+
+        Matcher tbodyMatcher = Pattern.compile("<tbody>(.*?)</tbody>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(tableHtml);
+        if (!tbodyMatcher.find()) {
+            log.warn("基金分红历史解析失败，productId={}, symbol={}, reason=未找到分红表体",
+                product.getId(), product.getSymbol());
+            return new DividendHistoryFetchResult(false, Collections.emptyList());
+        }
+        String tableBody = tbodyMatcher.group(1);
         Matcher rowMatcher = Pattern.compile("<tr>(.*?)</tr>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(tableBody);
         List<InvestmentDividendPlanEntity> plans = new ArrayList<>();
         while (rowMatcher.find()) {

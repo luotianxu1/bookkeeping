@@ -355,8 +355,7 @@ public class SalaryService {
         response.setMetrics(List.of(
             taxMetric("本年个税", computation.annualTax),
             taxMetric("本月个税", computation.currentMonthTax),
-            taxMetric("专项扣除", computation.monthlySpecialDeductionTotal.multiply(BigDecimal.valueOf(paidMonths))),
-            taxMetric("年后净收入", computation.annualNetIncome)
+            taxMetric("专项扣除", computation.monthlySpecialDeductionTotal.multiply(BigDecimal.valueOf(paidMonths)))
         ));
         response.setDeductions(List.of(
             deductionItem("子女教育", deduction.getChildEducation()),
@@ -369,7 +368,7 @@ public class SalaryService {
         ));
 
         List<SalaryTaxPageResponse.MonthTaxItem> monthItems = new ArrayList<>();
-        for (int month = 1; month <= paidMonths; month++) {
+        for (int month = paidMonths; month >= 1; month--) {
             SalaryComputation monthComputation = compute(userId, profile, deduction, resolvedYear, month);
             SalaryTaxPageResponse.MonthTaxItem item = new SalaryTaxPageResponse.MonthTaxItem();
             item.setMonthKey(monthKey(resolvedYear, month));

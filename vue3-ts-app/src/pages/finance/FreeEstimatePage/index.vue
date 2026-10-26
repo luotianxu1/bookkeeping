@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getFreeEstimate, type FreeEstimate } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -29,6 +30,8 @@ const tianjinSelfPayRule = {
 const tianjinMinimumPension = tianjinSelfPayRule.base * (tianjinSelfPayRule.pensionRate / 100)
 const tianjinMinimumMedical = tianjinSelfPayRule.base * (tianjinSelfPayRule.medicalRate / 100)
 const tianjinMinimumSelfPay = tianjinMinimumPension + tianjinMinimumMedical
+const includeSocialInsurance = ref(true)
+const socialInsuranceMonthly = computed(() => (includeSocialInsurance.value ? tianjinMinimumSelfPay : 0))
 
 const currentAssets = computed(() => normalizeMoney(currentAssetsInput.value, estimate.value?.currentNetAssets ?? 0))
 const monthlyIncome = computed(() => normalizeMoney(monthlyIncomeInput.value, estimate.value?.monthlyIncome ?? 0))
@@ -43,7 +46,7 @@ const calculation = computed(() => {
 
   const currentNetAssets = Math.max(Number(estimate.value.currentNetAssets ?? 0), 0)
   const realLivingExpense = Math.max(Number(estimate.value.monthlyExpense ?? 0), 0)
-  const realMonthlyExpense = realLivingExpense + tianjinMinimumSelfPay
+  const realMonthlyExpense = realLivingExpense + socialInsuranceMonthly.value
   const annualExpense = realMonthlyExpense * 12
   const targetAssets = realWithdrawalRate > 0
     ? annualExpense / (realWithdrawalRate / 100)
@@ -85,7 +88,7 @@ const projection = computed(() => {
   }
 
   const currentNetAssets = currentAssets.value
-  const totalMonthlyExpense = monthlyExpense.value + tianjinMinimumSelfPay
+  const totalMonthlyExpense = monthlyExpense.value + socialInsuranceMonthly.value
   const annualExpense = totalMonthlyExpense * 12
   const targetAssets = withdrawalRate.value > 0
     ? annualExpense / (withdrawalRate.value / 100)
@@ -103,7 +106,6 @@ const projection = computed(() => {
     targetAssets,
     remainingAssets: Math.max(targetAssets - currentNetAssets, 0),
     monthlyExpense: totalMonthlyExpense,
-    tianjinMinimumSelfPay,
     monthlySurplus,
     monthsToFreedom,
     savingsRate: monthlyIncomeValue > 0 ? (monthlySurplus / monthlyIncomeValue) * 100 : null,
@@ -259,7 +261,7 @@ onMounted(() => {
         <div class="free-hero-target">
           <span>财富自由总金额</span>
           <strong>{{ formatCurrency(calculation.targetAssets) }}</strong>
-          <small>年度总支出（含最低社保医保） ÷ {{ formatPercent(realWithdrawalRate) }} 提现率</small>
+          <small>年度总支出（{{ includeSocialInsurance ? '含' : '不含' }}最低社保医保） ÷ {{ formatPercent(realWithdrawalRate) }} 提现率</small>
         </div>
         <div class="free-progress">
           <div class="free-progress-head">
@@ -324,11 +326,7 @@ onMounted(() => {
               </div>
               <div>
                 <dt>天津最低社保 + 医保</dt>
-                <dd>{{ formatCurrency(tianjinMinimumSelfPay) }}</dd>
-              </div>
-              <div>
-                <dt>有效固定支出</dt>
-                <dd>{{ formatCurrency(estimate.recurringMonthlyExpense) }}</dd>
+                <dd>{{ formatCurrency(tianjinMinimumSelfPay) }}（{{ includeSocialInsurance ? '已计入' : '未计入' }}）</dd>
               </div>
               <div>
                 <dt>纳入统计月份</dt>
@@ -356,7 +354,6 @@ onMounted(() => {
                 <b>¥</b>
                 <input v-model="currentAssetsInput" inputmode="decimal" type="number" min="0" step="1000" aria-label="当前净资产">
               </div>
-              <small>默认取账户中的当前净资产</small>
             </label>
             <label class="free-field">
               <span>每月收入</span>
@@ -364,7 +361,6 @@ onMounted(() => {
                 <b>¥</b>
                 <input v-model="monthlyIncomeInput" inputmode="decimal" type="number" min="0" step="100" aria-label="每月收入">
               </div>
-              <small>默认取历史月均收入</small>
             </label>
             <label class="free-field">
               <span>每月生活费</span>
@@ -372,15 +368,19 @@ onMounted(() => {
                 <b>¥</b>
                 <input v-model="monthlyExpenseInput" inputmode="decimal" type="number" min="0" step="100" aria-label="每月生活费">
               </div>
-              <small>默认取历史月均生活费，另加天津最低社保医保</small>
             </label>
+            <div class="free-field free-switch-field">
+              <CommonSwitch
+                v-model="includeSocialInsurance"
+                :label="`计入最低社保医保 ${formatCurrency(tianjinMinimumSelfPay)}/月`"
+              />
+            </div>
             <label class="free-field">
               <span>安全提现率</span>
               <div class="free-input-wrap">
                 <input v-model="withdrawalRateInput" inputmode="decimal" type="number" min="1" max="10" step="0.1" aria-label="安全提现率">
                 <b>%</b>
               </div>
-              <small>常见长期测算区间为 3%～4%</small>
             </label>
             <label class="free-field">
               <span>预期年化回报</span>
@@ -388,7 +388,6 @@ onMounted(() => {
                 <input v-model="expectedReturnInput" inputmode="decimal" type="number" min="0" max="20" step="0.1" aria-label="预期年化回报">
                 <b>%</b>
               </div>
-              <small>只用于推演，不代表实际收益承诺</small>
             </label>
           </div>
           <div class="free-assumption">
@@ -409,7 +408,7 @@ onMounted(() => {
       </section>
 
       <p class="free-footnote">
-        说明：本页在历史月均生活费之外，另计天津灵活就业最低养老和职工医保（{{ tianjinSelfPayRule.label }}，合计 {{ formatCurrency(tianjinMinimumSelfPay) }}/月）；目标本金采用“年度总支出 ÷ 安全提现率”，结果仅用于规划参考。
+        说明：本页{{ includeSocialInsurance ? '在历史月均生活费之外，另计' : '未计入' }}天津灵活就业最低养老和职工医保（{{ tianjinSelfPayRule.label }}，合计 {{ formatCurrency(tianjinMinimumSelfPay) }}/月{{ includeSocialInsurance ? '' : '，可在“调整你的假设”中开启' }}）；目标本金采用“年度总支出 ÷ 安全提现率”，结果仅用于规划参考。
       </p>
     </template>
   </section>

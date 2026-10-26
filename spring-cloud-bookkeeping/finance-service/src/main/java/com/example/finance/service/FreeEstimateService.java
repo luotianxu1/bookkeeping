@@ -4,13 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.finance.dto.FreeEstimateResponse;
 import com.example.finance.entity.AccountEntity;
 import com.example.finance.entity.AccountTypeEntity;
-import com.example.finance.entity.InvestmentFixedExpenseEntity;
-import com.example.finance.entity.RenewalSubscriptionEntity;
 import com.example.finance.entity.TransactionEntity;
 import com.example.finance.mapper.AccountMapper;
 import com.example.finance.mapper.AccountTypeMapper;
-import com.example.finance.mapper.InvestmentFixedExpenseMapper;
-import com.example.finance.mapper.RenewalSubscriptionMapper;
 import com.example.finance.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
 
@@ -35,30 +31,21 @@ public class FreeEstimateService {
     private static final String CASH_ACCOUNT_TYPE = "cash";
     private static final String TYPE_INCOME = "income";
     private static final String TYPE_EXPENSE = "expense";
-    private static final String CYCLE_MONTHLY = "monthly";
-    private static final String CYCLE_QUARTERLY = "quarterly";
-    private static final String CYCLE_YEARLY = "yearly";
 
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
     private final TransactionMapper transactionMapper;
-    private final RenewalSubscriptionMapper renewalSubscriptionMapper;
-    private final InvestmentFixedExpenseMapper investmentFixedExpenseMapper;
     private final AccountService accountService;
 
     public FreeEstimateService(
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         TransactionMapper transactionMapper,
-        RenewalSubscriptionMapper renewalSubscriptionMapper,
-        InvestmentFixedExpenseMapper investmentFixedExpenseMapper,
         AccountService accountService
     ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.transactionMapper = transactionMapper;
-        this.renewalSubscriptionMapper = renewalSubscriptionMapper;
-        this.investmentFixedExpenseMapper = investmentFixedExpenseMapper;
         this.accountService = accountService;
     }
 
@@ -68,6 +55,7 @@ public class FreeEstimateService {
         }
 
         LocalDate today = LocalDate.now();
+        LocalDate windowStart = today.minusMonths(11).withDayOfMonth(1);
         List<Long> cashAccountIds = loadCashAccountIds(userId);
         List<TransactionEntity> transactions = cashAccountIds.isEmpty()
             ? Collections.emptyList()
@@ -76,6 +64,7 @@ public class FreeEstimateService {
                 .eq(TransactionEntity::getStatus, NORMAL_STATUS)
                 .in(TransactionEntity::getType, List.of(TYPE_INCOME, TYPE_EXPENSE))
                 .in(TransactionEntity::getAccountId, cashAccountIds)
+                .ge(TransactionEntity::getOccurredAt, windowStart.atStartOfDay())
                 .orderByAsc(TransactionEntity::getOccurredAt)
                 .orderByAsc(TransactionEntity::getId));
 
@@ -97,7 +86,6 @@ public class FreeEstimateService {
         int dataMonths = calculateDataMonths(firstTransactionDate, lastTransactionDate);
         BigDecimal historicalMonthlyIncome = divide(incomeTotal, dataMonths);
         BigDecimal historicalMonthlyExpense = divide(expenseTotal, dataMonths);
-        BigDecimal recurringMonthlyExpense = loadRecurringMonthlyExpense(userId);
         BigDecimal monthlyExpense = historicalMonthlyExpense;
         BigDecimal monthlyIncome = historicalMonthlyIncome;
 
@@ -107,7 +95,6 @@ public class FreeEstimateService {
         response.setCurrentNetAssets(scale(accountService.calculateTotalAssets(userId, ACTIVE_STATUS)));
         response.setHistoricalMonthlyIncome(scale(historicalMonthlyIncome));
         response.setHistoricalMonthlyExpense(scale(historicalMonthlyExpense));
-        response.setRecurringMonthlyExpense(scale(recurringMonthlyExpense));
         response.setMonthlyExpense(scale(monthlyExpense));
         response.setMonthlyIncome(scale(monthlyIncome));
         response.setMonthlySurplus(scale(monthlyIncome.subtract(monthlyExpense)));
@@ -140,35 +127,6 @@ public class FreeEstimateService {
             })
             .map(AccountEntity::getId)
             .toList();
-    }
-
-    private BigDecimal loadRecurringMonthlyExpense(Long userId) {
-        BigDecimal renewalExpense = renewalSubscriptionMapper.selectList(new LambdaQueryWrapper<RenewalSubscriptionEntity>()
-                .eq(RenewalSubscriptionEntity::getUserId, userId)
-                .eq(RenewalSubscriptionEntity::getStatus, ACTIVE_STATUS))
-            .stream()
-            .map(this::toMonthlyRenewalAmount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal fixedExpense = investmentFixedExpenseMapper.selectList(new LambdaQueryWrapper<InvestmentFixedExpenseEntity>()
-                .eq(InvestmentFixedExpenseEntity::getUserId, userId)
-                .eq(InvestmentFixedExpenseEntity::getStatus, ACTIVE_STATUS))
-            .stream()
-            .map(InvestmentFixedExpenseEntity::getAmount)
-            .filter(item -> item != null)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return renewalExpense.add(fixedExpense).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal toMonthlyRenewalAmount(RenewalSubscriptionEntity subscription) {
-        BigDecimal amount = subscription.getAmount() == null ? BigDecimal.ZERO : subscription.getAmount();
-        String cycle = subscription.getBillingCycle();
-        if (CYCLE_QUARTERLY.equals(cycle)) {
-            return amount.divide(BigDecimal.valueOf(3), 8, RoundingMode.HALF_UP);
-        }
-        if (CYCLE_YEARLY.equals(cycle)) {
-            return amount.divide(BigDecimal.valueOf(12), 8, RoundingMode.HALF_UP);
-        }
-        return amount;
     }
 
     private int calculateDataMonths(LocalDate startDate, LocalDate endDate) {

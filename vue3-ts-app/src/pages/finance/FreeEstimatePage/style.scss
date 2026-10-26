@@ -15,7 +15,7 @@
 .free-hero-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-16);
+  gap: 8px;
   padding: 16px;
   background:
     radial-gradient(circle at 100% 0%, rgba(29, 78, 216, 0.15), transparent 42%),
@@ -167,7 +167,7 @@
 
 .free-card {
   display: grid;
-  gap: var(--space-14);
+  gap: 6px;
   padding: 16px;
 }
 
@@ -175,14 +175,14 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 2px 12px;
   flex-wrap: wrap;
 }
 
 .free-card-head > div {
   min-width: 0;
   display: grid;
-  gap: 5px;
+  gap: 2px;
 }
 
 .free-card-head h2 {
@@ -204,13 +204,13 @@
 .free-result-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-10);
+  gap: 6px;
 }
 
 .free-result-item {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
   padding: var(--space-12);
   border-radius: var(--radius-12);
@@ -253,6 +253,10 @@
   border-bottom: 1px solid var(--color-bg-soft-2);
 }
 
+.free-data-list > div:first-child {
+  padding-top: 4px;
+}
+
 .free-data-list dt,
 .free-data-list dd {
   min-width: 0;
@@ -280,7 +284,7 @@
 .free-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 10px;
 }
 
 .free-field:last-child {
@@ -290,6 +294,11 @@
 .free-field {
   display: grid;
   gap: 7px;
+}
+
+.free-switch-field {
+  gap: 2px;
+  padding: 4px 0;
 }
 
 .free-field > span {

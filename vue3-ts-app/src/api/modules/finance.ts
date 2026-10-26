@@ -37,7 +37,6 @@ export interface FreeEstimate {
   currentNetAssets: number
   historicalMonthlyIncome: number
   historicalMonthlyExpense: number
-  recurringMonthlyExpense: number
   monthlyExpense: number
   monthlyIncome: number
   monthlySurplus: number
@@ -1652,6 +1651,48 @@ export function getMarketStatus() {
 
 export function getUsPremarket() {
   return requestGet<UsPremarketData>(financeRequest, '/api/finance/us-market/premarket', { timeout: 15000 })
+}
+
+export type GlobalMarketQuote = {
+  symbol: string
+  name: string
+  price: number
+  change: number
+  changePercent: number
+  open: number | null
+  high: number | null
+  low: number | null
+  preClose: number | null
+  quoteDate: string | null
+  quoteTime: string | null
+  dataSource: string | null
+}
+
+export function getGlobalMarketQuotes(symbols: string[] = ['hf_OIL']) {
+  return requestGet<GlobalMarketQuote[]>(financeRequest, '/api/finance/global-market/quotes', {
+    params: { symbols: symbols.join(',') },
+    timeout: 15000,
+  })
+}
+
+export type GlobalMarketKLineItem = {
+  date: string
+  open: number | null
+  high: number | null
+  low: number | null
+  close: number | null
+  volume: number | null
+}
+
+export function getGlobalMarketKline(symbol: string, period = 'day', days = 90) {
+  return requestGet<GlobalMarketKLineItem[]>(financeRequest, '/api/finance/global-market/kline', {
+    params: { symbol, period, days },
+    timeout: 20000,
+  })
+}
+
+export function getGlobalMarketQuoteBySymbol(symbol: string) {
+  return getGlobalMarketQuotes([symbol]).then((items) => items[0] ?? null)
 }
 
 export function createTransaction(params: CreateTransactionParams) {

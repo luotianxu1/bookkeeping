@@ -3,6 +3,8 @@ import type { RouteRecordRaw } from 'vue-router'
 import AnniversaryPage from '@/pages/tools/AnniversaryPage/index.vue'
 import CalendarPage from '@/pages/tools/CalendarPage/index.vue'
 import ContactsPage from '@/pages/tools/ContactsPage/index.vue'
+import HealthPage from '@/pages/tools/HealthPage/index.vue'
+import HealthRecordPage from '@/pages/tools/HealthRecordPage/index.vue'
 import PhotographyOrderOverviewPage from '@/pages/tools/PhotographyOrderOverviewPage/index.vue'
 import PhotographyOrdersPage from '@/pages/tools/PhotographyOrdersPage/index.vue'
 import TodoPage from '@/pages/tools/TodoPage/index.vue'
@@ -73,6 +75,24 @@ export const toolsRoutes: RouteRecordRaw[] = [
     meta: {
       section: 'tools',
       title: '联系人管理',
+    },
+  },
+  {
+    path: '/tools/health',
+    name: 'tools-health',
+    component: HealthPage,
+    meta: {
+      section: 'tools',
+      title: '健康管理',
+    },
+  },
+  {
+    path: '/tools/health/records',
+    name: 'tools-health-records',
+    component: HealthRecordPage,
+    meta: {
+      section: 'tools',
+      title: '体重打卡',
     },
   },
   {

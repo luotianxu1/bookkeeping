@@ -365,6 +365,7 @@ function orderTypeLabel(type: string) {
     engagement: '订婚',
     thanks_banquet: '答谢宴',
     wedding: '婚礼',
+    marriage_registration: '领证',
     graduation: '毕业照',
   }[type] ?? type
 }
@@ -422,6 +423,7 @@ function typeAccent(type: string) {
     hundred_days: rootStyle.getPropertyValue('--color-teal').trim(),
     engagement: rootStyle.getPropertyValue('--color-danger').trim(),
     thanks_banquet: rootStyle.getPropertyValue('--color-purple').trim(),
+    marriage_registration: rootStyle.getPropertyValue('--color-orange').trim(),
   }[type] ?? rootStyle.getPropertyValue('--color-brand').trim()
 }
 

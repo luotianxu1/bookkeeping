@@ -79,10 +79,6 @@ function handleYearChange(value: string) {
               <strong>{{ formatSalaryCurrency(pageData.annualTax) }}</strong>
               <span class="salary-pill">已发 {{ pageData.paidMonths }} 个月</span>
             </div>
-            <div class="salary-summary-sub">
-              <span>年度收入 {{ formatSalaryCurrency(pageData.annualIncome) }}</span>
-              <span class="highlight">本月个税 {{ formatSalaryCurrency(pageData.currentMonthTax) }}</span>
-            </div>
           </div>
         </div>
 

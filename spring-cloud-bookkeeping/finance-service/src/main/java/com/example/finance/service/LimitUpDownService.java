@@ -3,6 +3,8 @@ package com.example.finance.service;
 import com.example.finance.dto.LimitUpDownResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -14,12 +16,16 @@ import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class LimitUpDownService {
+
+    private static final Logger log = LoggerFactory.getLogger(LimitUpDownService.class);
 
     private static final ZoneId MARKET_ZONE = ZoneId.of("Asia/Shanghai");
     private static final long CACHE_MILLIS = 30_000L;
@@ -27,10 +33,13 @@ public class LimitUpDownService {
     private static final int MAX_PAGES = 10;
     private static final int DISPLAY_STOCK_COUNT = 6;
     private static final BigDecimal EXTREME_CHANGE_THRESHOLD = new BigDecimal("4.5");
+    /** 东财行情主域名节点故障/限流时的备用域名（分片节点解析到不同 CDN，与主域独立） */
+    private static final String EM_LIST_HOST_FALLBACK = "https://push2.eastmoney.com";
+    private static final String EM_LIST_HOST_FALLBACK_SHARD = "https://82.push2delay.eastmoney.com";
 
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
-    private final String stockListApiUrl;
+    private final List<String> candidateApiUrls;
     private final AtomicReference<CachedStatistics> cache = new AtomicReference<>();
 
     public LimitUpDownService(
@@ -38,11 +47,28 @@ public class LimitUpDownService {
         @Value("${finance.limit-up-down.stock-list-api-url:https://push2delay.eastmoney.com/api/qt/clist/get}") String stockListApiUrl
     ) {
         this.objectMapper = objectMapper;
-        this.stockListApiUrl = stockListApiUrl;
+        this.candidateApiUrls = resolveCandidateApiUrls(stockListApiUrl);
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(2500);
         requestFactory.setReadTimeout(4500);
         this.restClient = RestClient.builder().requestFactory(requestFactory).build();
+    }
+
+    /** 东财域名下的配置 URL 追加备用域名候选；其他自定义数据源仅使用配置地址 */
+    private static List<String> resolveCandidateApiUrls(String stockListApiUrl) {
+        URI primary = URI.create(stockListApiUrl);
+        String host = primary.getHost() == null ? "" : primary.getHost();
+        if (!host.endsWith("eastmoney.com")) {
+            return List.of(stockListApiUrl);
+        }
+        String path = primary.getRawPath() == null || primary.getRawPath().isEmpty()
+            ? "/api/qt/clist/get"
+            : primary.getRawPath();
+        Set<String> urls = new LinkedHashSet<>();
+        urls.add(stockListApiUrl);
+        urls.add(EM_LIST_HOST_FALLBACK + path);
+        urls.add(EM_LIST_HOST_FALLBACK_SHARD + path);
+        return List.copyOf(urls);
     }
 
     public LimitUpDownResponse getLimitUpDown() {
@@ -57,6 +83,7 @@ public class LimitUpDownService {
             return response;
         } catch (Exception ex) {
             if (cached != null) {
+                log.warn("涨跌停数据刷新失败，返回缓存数据: {}", ex.getMessage());
                 return cached.response();
             }
             throw new IllegalStateException("涨跌停数据加载失败", ex);
@@ -64,8 +91,20 @@ public class LimitUpDownService {
     }
 
     private LimitUpDownResponse fetchLimitUpDown() throws Exception {
-        List<StockQuote> gainers = fetchExtremeQuotes(true);
-        List<StockQuote> decliners = fetchExtremeQuotes(false);
+        Exception lastError = null;
+        for (String apiUrl : candidateApiUrls) {
+            try {
+                return fetchLimitUpDownFrom(apiUrl);
+            } catch (Exception ex) {
+                lastError = ex;
+            }
+        }
+        throw lastError;
+    }
+
+    private LimitUpDownResponse fetchLimitUpDownFrom(String apiUrl) throws Exception {
+        List<StockQuote> gainers = fetchExtremeQuotes(apiUrl, true);
+        List<StockQuote> decliners = fetchExtremeQuotes(apiUrl, false);
         List<LimitUpDownResponse.StockItem> limitUps = new ArrayList<>();
         List<LimitUpDownResponse.StockItem> limitDowns = new ArrayList<>();
         int limitUpCount = 0;
@@ -112,10 +151,10 @@ public class LimitUpDownService {
         return response;
     }
 
-    private List<StockQuote> fetchExtremeQuotes(boolean descending) throws Exception {
+    private List<StockQuote> fetchExtremeQuotes(String apiUrl, boolean descending) throws Exception {
         List<StockQuote> quotes = new ArrayList<>();
         for (int page = 1; page <= MAX_PAGES; page++) {
-            String url = stockListApiUrl
+            String url = apiUrl
                 + "?pn=" + page
                 + "&pz=" + PAGE_SIZE
                 + "&po=" + (descending ? 1 : 0)

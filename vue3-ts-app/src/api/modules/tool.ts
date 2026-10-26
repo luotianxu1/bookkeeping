@@ -150,6 +150,7 @@ export type PhotographyOrderType =
   | 'engagement'
   | 'thanks_banquet'
   | 'wedding'
+  | 'marriage_registration'
   | 'graduation'
 
 export interface PhotographyOrder {
@@ -660,4 +661,61 @@ export function deleteTravelPlanExpense(expenseId: number, userId: number) {
   return requestDelete<void>(toolRequest, `/api/tools/travel-plans/expenses/${expenseId}`, {
     params: { userId },
   })
+}
+
+export interface WeightRecord {
+  id: number
+  userId: number
+  recordDate: string
+  weight: number
+  bodyFatRate?: number | null
+  remark?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaveWeightRecordParams {
+  userId: number
+  recordDate: string
+  weight: number
+  remark?: string | null
+}
+
+export type HealthGender = 1 | 2
+
+export interface HealthProfile {
+  id: number
+  userId: number
+  gender: HealthGender
+  age: number
+  heightCm: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SaveHealthProfileParams {
+  userId: number
+  gender: HealthGender
+  age: number
+  heightCm: number
+}
+
+export function getWeightRecords(userId: number, limit?: number) {
+  return requestGet<WeightRecord[]>(toolRequest, '/api/tools/weight-records', {
+    params: limit ? { userId, limit } : { userId },
+  })
+}
+
+export function saveWeightRecord(params: SaveWeightRecordParams) {
+  return requestPost<WeightRecord, SaveWeightRecordParams>(toolRequest, '/api/tools/weight-records', params)
+}
+
+export function getHealthProfile(userId: number) {
+  return requestGet<HealthProfile | null>(toolRequest, '/api/tools/health-profile', {
+    params: { userId },
+  })
+}
+
+export function saveHealthProfile(params: SaveHealthProfileParams) {
+  return requestPut<HealthProfile, SaveHealthProfileParams>(toolRequest, '/api/tools/health-profile', params)
 }

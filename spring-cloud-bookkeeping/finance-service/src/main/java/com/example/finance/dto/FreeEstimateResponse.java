@@ -12,7 +12,6 @@ public class FreeEstimateResponse {
     private BigDecimal currentNetAssets;
     private BigDecimal historicalMonthlyIncome;
     private BigDecimal historicalMonthlyExpense;
-    private BigDecimal recurringMonthlyExpense;
     private BigDecimal monthlyExpense;
     private BigDecimal monthlyIncome;
     private BigDecimal monthlySurplus;

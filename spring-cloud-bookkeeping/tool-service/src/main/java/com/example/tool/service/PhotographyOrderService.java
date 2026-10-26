@@ -71,6 +71,7 @@ public class PhotographyOrderService {
         "engagement",
         "thanks_banquet",
         "wedding",
+        "marriage_registration",
         "graduation"
     );
 
@@ -541,6 +542,7 @@ public class PhotographyOrderService {
             case "engagement" -> "订婚";
             case "thanks_banquet" -> "答谢宴";
             case "wedding" -> "婚礼";
+            case "marriage_registration" -> "领证";
             case "graduation" -> "毕业照";
             default -> orderType;
         };

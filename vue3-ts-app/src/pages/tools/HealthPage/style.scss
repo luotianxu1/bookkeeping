@@ -1,0 +1,210 @@
+.health-page {
+  min-height: calc(100dvh - 142px);
+  display: grid;
+  align-content: start;
+  gap: var(--space-12);
+  padding-bottom: 120px;
+  color: var(--color-text-primary);
+}
+
+.health-hero {
+  display: grid;
+  gap: var(--space-12);
+  padding: 16px;
+  border: 1px solid var(--color-border-blue);
+  border-radius: 22px;
+  background: var(--color-top-card-gradient);
+  box-shadow: var(--color-finance-card-shadow);
+}
+
+.health-hero-header {
+  display: grid;
+  gap: 6px;
+}
+
+.health-hero-header h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.health-hero-header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.health-activity {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.health-field-label {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.health-modal-body {
+  display: grid;
+  gap: 12px;
+}
+
+.health-field {
+  display: grid;
+  gap: 6px;
+}
+
+.health-profile-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.health-profile-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-danger, #e5484d);
+}
+
+.health-profile-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.health-profile-save {
+  width: 100%;
+}
+
+.health-message {
+  margin: 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: var(--color-bg-card);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-14);
+  line-height: 1.6;
+}
+
+.health-calorie-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--color-border-brand-soft);
+  border-radius: 22px;
+  background: var(--color-bg-card-muted);
+  box-shadow: var(--color-shadow-soft);
+}
+
+.health-calorie-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.health-calorie-value {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--color-brand-strong);
+}
+
+.health-calorie-value span {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.health-calorie-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.health-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-bg-card-glass);
+  box-shadow: var(--color-shadow-soft);
+}
+
+.health-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.health-card-value {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.health-card-value span {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.health-card-hint {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.health-note {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-bg-card-glass);
+}
+
+.health-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+}
+
+.health-record-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-brand-soft);
+  border-radius: 22px;
+  background: var(--color-top-card-gradient);
+  box-shadow: var(--color-finance-card-shadow);
+}
+
+.health-record-info {
+  display: grid;
+  gap: 4px;
+}
+
+.health-record-info h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.health-record-info p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
