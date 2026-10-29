@@ -1,76 +1,57 @@
 <script setup lang="ts">
-// 投资详情页：通过后端聚合接口展示持仓、实时行情和走势，并支持加仓、减仓、修改。
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+// 投资详情页：负责数据加载与页面编排，行情/图表/弹窗/交易列表拆分至同目录子模块。
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { ECharts } from 'echarts'
-import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
-import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
+import CommonButton from '@/components/common/CommonButton/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import {
-  createInvestmentAutoInvestPlan,
-  createInvestmentTransaction,
-  deleteInvestmentTransaction,
   deleteInvestmentPosition,
-  deleteInvestmentAutoInvestPlan,
   getAccounts,
   getInvestmentAutoInvestPlans,
   getInvestmentPositionDetail,
   getInvestmentTransactionPage,
   getInvestmentTransactions,
   updateInvestmentAutoInvestPlan,
-  updateInvestmentTransaction,
-  updateInvestmentPosition,
+  deleteInvestmentAutoInvestPlan,
   type Account,
   type InvestmentAssetDetail,
-  type InvestmentAutoInvestFrequency,
   type InvestmentAutoInvestPlan,
-  type InvestmentChartPoint,
-  type InvestmentDetailStat,
   type InvestmentDividendRecord,
-  type InvestmentFundRedeemFeeOption,
   type InvestmentPosition,
-  type InvestmentTransactionPage,
   type InvestmentTransaction,
+  type InvestmentTransactionPage,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { useTheme } from '@/utils/theme'
-
-type FundTrendRange = '1m' | '3m' | '6m' | '1y' | '3y'
-type FundChartView = 'netValue' | 'profit'
-type TradeFundFeeMode = 'auto' | `manual-${number}`
-type FundTrendValueMode = 'cumulative' | 'net'
-type FundTrendValueEntry = {
-  cumulative?: number | null
-  net?: number | null
-}
-type FundPeriodIncreaseItem = {
-  title?: string | null
-  syl?: string | number | null
-}
-type FundPeriodIncreaseResponse = {
-  Datas?: FundPeriodIncreaseItem[] | null
-}
-type FundProfitState = {
-  holdingQuantity: number
-  costAmount: number
-  realizedProfit: number
-}
-
-type FundMarketSnapshot = {
-  expiresAt: number
-  baseInfo: Record<string, any>
-  trend: { netWorthTrend: any[]; acWorthTrend: any[] }
-  periodReturns: Record<string, number | null>
-}
-
-const FUND_MARKET_CACHE_TTL_MS = 10 * 60 * 1000
-const fundMarketCache = new Map<string, FundMarketSnapshot>()
-type FundProfitChartDataPoint = [number, number | null]
+import TradeModal from './TradeModal.vue'
+import EditPositionModal from './EditPositionModal.vue'
+import AutoInvestModal from './AutoInvestModal.vue'
+import TransactionList from './TransactionList.vue'
+import { useFundMarket } from './useFundMarket'
+import { useTrendCharts } from './useTrendCharts'
+import {
+  TRANSACTION_PAGE_SIZE,
+  formatCurrency,
+  formatDateTimeLabel,
+  formatDividendDate,
+  formatNumber,
+  fundChartViewOptions,
+  fundTrendRangeOptions,
+  formatAutoInvestFrequency,
+  formatAutoInvestStatus,
+  getDividendRecordKey,
+  getDividendStatusLabel,
+  isInitialFundSubscriptionTransaction,
+  isTodayMarketData,
+  statClass,
+  statTone,
+  toneByNumber,
+} from './utils'
 
 const route = useRoute()
 const router = useRouter()
@@ -81,83 +62,23 @@ const detail = ref<InvestmentAssetDetail | null>(null)
 const transactions = ref<InvestmentTransaction[]>([])
 const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
 const fundingAccounts = ref<Account[]>([])
-const externalStatus = ref('')
-const chartRef = ref<HTMLDivElement | null>(null)
-const cumulativeProfitChartRef = ref<HTMLDivElement | null>(null)
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
-const showTradeModal = ref(false)
-const editingTransaction = ref<InvestmentTransaction | null>(null)
-const currentTradeAction = ref<'buy' | 'sell'>('buy')
-const tradeInputMode = ref<'amount' | 'quantity'>('amount')
-const tradeFundingAccountId = ref('')
-const tradeDividendType = ref<'cash' | 'reinvest'>('cash')
-const tradeAmount = ref('')
-const tradeQuantity = ref('')
-const tradePrice = ref('')
-const tradeDate = ref('')
-const tradeRemark = ref('')
-const tradeError = ref('')
-const tradeTimeSlot = ref<'before_1500' | 'after_1500'>('before_1500')
-const tradeFundFeeMode = ref<TradeFundFeeMode>('auto')
-const showEditModal = ref(false)
-const editPrice = ref('')
-const editHoldingQuantity = ref('')
-const editCostPrice = ref('')
-const editDividendType = ref<'cash' | 'reinvest'>('cash')
-const editDividendFundingAccountId = ref('')
-const editIncludeInNetWorth = ref(true)
-const editRemark = ref('')
-const editError = ref('')
-const isSubmitting = ref(false)
-const showAutoInvestModal = ref(false)
-const editingAutoInvestPlanId = ref<number | null>(null)
-const autoInvestFundingAccountId = ref('')
-const autoInvestFrequency = ref<InvestmentAutoInvestFrequency>('daily')
-const autoInvestAmount = ref('')
-const autoInvestNextExecuteDate = ref('')
-const autoInvestRemark = ref('')
-const autoInvestError = ref('')
-const isSavingAutoInvest = ref(false)
-const showDeleteModal = ref(false)
-const isDeletingPosition = ref(false)
-const deleteError = ref('')
-const selectedFundTrendRange = ref<FundTrendRange>('3m')
-const selectedFundChartView = ref<FundChartView>('netValue')
-const fullFundChartPoints = ref<InvestmentChartPoint[]>([])
-const fundPeriodReturnMap = ref<Record<string, number | null>>({})
-const fundTrendValueMap = ref<Record<string, FundTrendValueEntry>>({})
-const fundTrendValueMode = ref<FundTrendValueMode>('cumulative')
-const TRANSACTION_PAGE_SIZE = 10
-const FUND_QUANTITY_MATCH_TOLERANCE = 0.01
+const selectedFundChartView = ref<'netValue' | 'profit'>('netValue')
+const currentTransactionPage = ref(1)
 const transactionPageItems = ref<InvestmentTransaction[]>([])
 const transactionTotal = ref(0)
 const transactionPageSize = ref(TRANSACTION_PAGE_SIZE)
 const isLoadingTransactionPage = ref(false)
-let chart: ECharts | null = null
-let cumulativeProfitChart: ECharts | null = null
-const TRADE_MARKER_COLORS = {
-  buy: '#DC2626',
-  sell: '#16A34A',
-} as const
-const FUND_PERIOD_RETURN_FIELDS = [
-  { title: 'Y', label: '近1个月收益率' },
-  { title: '3Y', label: '近3个月收益率' },
-  { title: '6Y', label: '近6个月收益率' },
-  { title: '1N', label: '近1年收益率' },
-  { title: '2N', label: '近2年收益率' },
-  { title: '3N', label: '近3年收益率' },
-  { title: '5N', label: '近5年收益率' },
-] as const
-const FUND_TREND_RANGE_RETURN_TITLES: Record<FundTrendRange, string> = {
-  '1m': 'Y',
-  '3m': '3Y',
-  '6m': '6Y',
-  '1y': '1N',
-  '3y': '3N',
-}
-const currentTransactionPage = ref(1)
+const showDeleteModal = ref(false)
+const isDeletingPosition = ref(false)
+const deleteError = ref('')
+const isSavingAutoInvest = ref(false)
+
+const tradeModalRef = ref<InstanceType<typeof TradeModal> | null>(null)
+const editModalRef = ref<InstanceType<typeof EditPositionModal> | null>(null)
+const autoInvestModalRef = ref<InstanceType<typeof AutoInvestModal> | null>(null)
 
 const positionId = computed(() => {
   const raw = Array.isArray(route.query.positionId) ? route.query.positionId[0] : route.query.positionId
@@ -169,6 +90,11 @@ const backTo = computed(() => {
   const accountId = detail.value?.position?.accountId
   return accountId ? `/finance/accounts/investment/${accountId}` : '/finance/accounts/investment'
 })
+
+const currentPosition = computed<InvestmentPosition | null>(() => detail.value?.position ?? null)
+const isPendingSubscription = computed(() => currentPosition.value?.subscriptionStatus === 'pending')
+const isFundPosition = computed(() => (detail.value?.productType || currentPosition.value?.productType) === 'fund')
+const currentUnitName = computed(() => detail.value?.unitName || detail.value?.position.unitName || '份')
 
 const pendingAdditionalPurchaseAmount = computed(() => transactions.value
   .filter((entry) => entry.tradeType === 'buy'
@@ -213,8 +139,6 @@ const todayTone = computed<'positive' | 'negative' | 'neutral'>(() => {
   }
   return resolvedValue > 0 ? 'positive' : 'negative'
 })
-const dividendRecords = computed<InvestmentDividendRecord[]>(() => detail.value?.dividendRecords ?? [])
-const showDividendRecordsSection = computed(() => dividendRecords.value.length > 0)
 const showTodayMetrics = computed(() => {
   if (currentPosition.value?.subscriptionStatus === 'pending') {
     return false
@@ -228,17 +152,6 @@ const displayUpdatedAt = computed(() => {
   const syncedAt = formatDateTimeLabel(currentPosition.value?.lastSyncedAt)
   return syncedAt === '--' ? '同步于 --' : `同步于 ${syncedAt}`
 })
-const transactionCountText = computed(() => `共 ${transactionTotal.value} 条`)
-const totalTransactionPages = computed(() => Math.max(1, Math.ceil(transactionTotal.value / transactionPageSize.value)))
-const hasTransactionPagination = computed(() => totalTransactionPages.value > 1)
-const transactionPaginationSummary = computed(() =>
-  `第 ${currentTransactionPage.value} / ${totalTransactionPages.value} 页，共 ${transactionTotal.value} 条`,
-)
-const canGoPrevTransactionPage = computed(() => currentTransactionPage.value > 1)
-const canGoNextTransactionPage = computed(() => currentTransactionPage.value < totalTransactionPages.value)
-const currentPosition = computed<InvestmentPosition | null>(() => detail.value?.position ?? null)
-const isPendingSubscription = computed(() => currentPosition.value?.subscriptionStatus === 'pending')
-const isFundPosition = computed(() => (detail.value?.productType || currentPosition.value?.productType) === 'fund')
 const showFundCumulativeProfitChart = computed(() => {
   const holdingQuantity = Number(currentPosition.value?.holdingQuantity ?? 0)
   return isFundPosition.value
@@ -249,27 +162,29 @@ const showFundCumulativeProfitChart = computed(() => {
 const isFundProfitChartActive = computed(() =>
   showFundCumulativeProfitChart.value && selectedFundChartView.value === 'profit',
 )
-const selectedFundPeriodReturn = computed(() =>
-  fundPeriodReturnMap.value[FUND_TREND_RANGE_RETURN_TITLES[selectedFundTrendRange.value]] ?? null,
-)
-const selectedFundPeriodReturnTone = computed<'positive' | 'negative' | 'neutral'>(() => {
-  if (externalStatus.value || selectedFundPeriodReturn.value === null) {
-    return 'neutral'
-  }
-  return toneByNumber(selectedFundPeriodReturn.value)
-})
-const fundTrendPeriodReturnText = computed(() => {
-  if (externalStatus.value) {
-    return externalStatus.value
-  }
-  const rangeLabel = fundTrendRangeOptions.find((item) => item.value === selectedFundTrendRange.value)?.label ?? ''
-  const value = selectedFundPeriodReturn.value
-  return `${rangeLabel}收益率 ${value === null ? '--' : `${formatNumber(value)}%`}`
-})
-const cumulativeProfitPoints = computed(() => buildFundCumulativeProfitPoints(fullFundChartPoints.value))
 const currentTotalProfit = computed(() =>
   Number(currentPosition.value?.holdingProfit ?? 0) + Number(currentPosition.value?.cumulativeProfit ?? 0),
 )
+
+const {
+  externalStatus,
+  selectedFundTrendRange,
+  selectedFundPeriodReturnTone,
+  fundTrendPeriodReturnText,
+  chartCostBaseline,
+  cumulativeProfitPoints,
+  resetFundMarketState,
+  loadExternalMarketData,
+} = useFundMarket({
+  detail,
+  transactions,
+  currentPosition,
+  isFundPosition,
+  currentTotalProfit,
+  showFundCumulativeProfitChart,
+  mergeDetail,
+})
+
 const currentFundChartProfit = computed(() => {
   const points = cumulativeProfitPoints.value
   const latestPoint = points[points.length - 1]
@@ -295,9 +210,20 @@ const currentFundChartProfitRateTone = computed<'positive' | 'negative' | 'neutr
 const cumulativeProfitChartAriaLabel = computed(() =>
   `${detail.value?.name || currentPosition.value?.productName || '基金'}累计收益折线图，当前累计收益${formatCurrency(currentFundChartProfit.value)}，累计收益率${currentFundChartProfitRateText.value}`,
 )
-const showAutoInvestSection = computed(() => isFundPosition.value && !isPendingSubscription.value)
-const showAutoInvestPlansSection = computed(() => showAutoInvestSection.value && autoInvestPlans.value.length > 0)
-const currentUnitName = computed(() => detail.value?.unitName || detail.value?.position.unitName || '份')
+
+const { chartRef, cumulativeProfitChartRef } = useTrendCharts({
+  detail,
+  transactions,
+  currentPosition,
+  chartCostBaseline,
+  cumulativeProfitPoints,
+  showFundCumulativeProfitChart,
+  cumulativeProfitChartAriaLabel,
+  selectedFundChartView,
+})
+
+const dividendRecords = computed<InvestmentDividendRecord[]>(() => detail.value?.dividendRecords ?? [])
+const showDividendRecordsSection = computed(() => dividendRecords.value.length > 0)
 const showDividendReminder = computed(() =>
   isFundPosition.value
   && Boolean(currentPosition.value?.hasRecentDividendPlan && currentPosition.value?.recentDividendDate),
@@ -317,283 +243,92 @@ const dividendReminderText = computed(() => {
   }
   return `${dateText} · ${formatNumber(perUnit, 4)} / ${currentUnitName.value}`
 })
-const chartCostBaseline = computed(() => {
-  const costPrice = Number(currentPosition.value?.avgCostPrice ?? 0)
-  if (!Number.isFinite(costPrice) || costPrice <= 0) {
-    return null
-  }
-  if (!isFundPosition.value || detail.value?.chartType !== 'line' || fundTrendValueMode.value !== 'cumulative') {
-    return costPrice
-  }
-  return resolveFundCumulativeChartCostBaseline()
-})
-const tradeModalTitle = computed(() => editingTransaction.value
-  ? '修改待确认交易'
-  : currentTradeAction.value === 'buy' ? '加仓' : '减仓')
-const tradeAmountLabel = computed(() => {
-  if (isFundPosition.value) {
-    return currentTradeAction.value === 'buy' ? '申购金额' : '回款金额'
-  }
-  return currentTradeAction.value === 'buy' ? '加仓金额' : '减仓金额'
-})
-const tradeAccountLabel = computed(() => currentTradeAction.value === 'buy' ? '资金账户' : '回款账户')
-const fundRedeemFeeOptions = computed<InvestmentFundRedeemFeeOption[]>(() => detail.value?.fundRedeemFeeOptions ?? [])
-const showFundRedeemFeeSelector = computed(() =>
-  isFundPosition.value && currentTradeAction.value === 'sell' && fundRedeemFeeOptions.value.length > 0,
+
+function formatDividendPerUnit(value?: number | null) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? `${formatNumber(numeric, 4)} / ${currentUnitName.value}` : '--'
+}
+
+const showAutoInvestSection = computed(() => isFundPosition.value && !isPendingSubscription.value)
+const showAutoInvestPlansSection = computed(() => showAutoInvestSection.value && autoInvestPlans.value.length > 0)
+
+// ---------- 交易记录分页 ----------
+
+const totalTransactionPages = computed(() => Math.max(1, Math.ceil(transactionTotal.value / transactionPageSize.value)))
+const transactionPaginationSummary = computed(() =>
+  `第 ${currentTransactionPage.value} / ${totalTransactionPages.value} 页，共 ${transactionTotal.value} 条`,
 )
-const selectedTradeFundFeeOption = computed<InvestmentFundRedeemFeeOption | null>(() => {
-  if (tradeFundFeeMode.value === 'auto') {
-    return null
-  }
-  const index = Number(tradeFundFeeMode.value.replace('manual-', ''))
-  return Number.isInteger(index) && index >= 0 ? fundRedeemFeeOptions.value[index] ?? null : null
-})
-const tradeFundFeeSelectOptions = computed<CommonSelectOption[]>(() => [
-  { label: '自动计算（推荐）', value: 'auto' as const },
-  ...fundRedeemFeeOptions.value.map((option, index) => ({
-    label: `${option.label}（${formatPercentValue(Number(option.feeRate))}）`,
-    value: `manual-${index}`,
-  })),
-])
-const tradeFundFeeSelectValue = computed({
-  get: () => tradeFundFeeMode.value,
-  set: (value: string) => {
-    tradeFundFeeMode.value = value === 'auto' || value.startsWith('manual-')
-      ? value as TradeFundFeeMode
-      : 'auto'
-  },
-})
-const showTradeInputMode = computed(() => currentTradeAction.value === 'buy' && !isFundPosition.value)
-const tradePrimaryLabel = computed(() => {
-  if (isFundPosition.value) {
-    return currentTradeAction.value === 'buy' ? '申购金额' : '赎回份额'
-  }
-  if (currentTradeAction.value === 'buy') {
-    return tradeInputMode.value === 'amount' ? '加仓金额' : '加仓份额'
-  }
-  return '减仓金额'
-})
-const tradePrimaryPlaceholder = computed(() => {
-  if (isFundPosition.value) {
-    return currentTradeAction.value === 'buy' ? '请输入申购金额' : '请输入赎回份额'
-  }
-  if (currentTradeAction.value === 'buy') {
-    return tradeInputMode.value === 'amount' ? '请输入金额' : '请输入份额'
-  }
-  return '请输入金额'
-})
-const fundingAccountOptions = computed<CommonSelectOption[]>(() => {
-  if (!fundingAccounts.value.length) {
-    return [{ label: '暂无可用现金账户', value: '', disabled: true }]
-  }
-
-  return fundingAccounts.value.map((account) => ({
-    label: `${account.name}（余额 ${formatCurrency(Number(account.currentBalance ?? 0))}）`,
-    value: String(account.id),
-  }))
-})
-const tradeModeOptions = ['按金额', '按份额和净值']
-const tradeQuantityQuickFillPresets = [
-  { label: '全部', ratio: 1 },
-  { label: '2/1', ratio: 0.5 },
-  { label: '4/1', ratio: 0.25 },
-] as const
-const autoInvestFrequencyOptions = [
-  { label: '每日', value: 'daily' },
-  { label: '每周', value: 'weekly' },
-  { label: '每月', value: 'monthly' },
-]
-const tradeTimeSlotOptions = [
-  { label: '15点前', value: 'before_1500' },
-  { label: '15点后', value: 'after_1500' },
-]
-const dividendTypeOptions = [
-  { label: '现金分红', value: 'cash' },
-  { label: '红利再投资', value: 'reinvest' },
-]
-const fundTrendRangeOptions = [
-  { label: '近1月', value: '1m' },
-  { label: '近3月', value: '3m' },
-  { label: '近6月', value: '6m' },
-  { label: '近1年', value: '1y' },
-  { label: '近3年', value: '3y' },
-]
-const fundChartViewOptions = [
-  { label: '累计净值', value: 'netValue' },
-  { label: '累计收益', value: 'profit' },
-]
-const tradeModeValue = computed({
-  get: () => tradeInputMode.value === 'quantity' ? '按份额和净值' : '按金额',
-  set: (value: string) => {
-    tradeInputMode.value = value === '按份额和净值' ? 'quantity' : 'amount'
-  },
-})
-const showTradePriceField = computed(() => !isFundPosition.value)
-const showTradeQuantityPreview = computed(() => !isFundPosition.value)
-const showTradeAmountPreview = computed(() => !isFundPosition.value && currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity')
-const showTradeQuantityQuickTabs = computed(() => isFundPosition.value && currentTradeAction.value === 'sell')
-const tradeQuantityQuickFillTabs = computed(() => {
-  const availableQuantity = Number(currentPosition.value?.availableQuantity ?? 0)
-  if (!Number.isFinite(availableQuantity) || availableQuantity <= 0) {
-    return []
-  }
-  return tradeQuantityQuickFillPresets.map((preset) => ({
-    label: preset.label,
-    value: formatTradeQuantityInput(availableQuantity * preset.ratio),
-  })).filter((item) => item.value)
-})
-const activeTradeQuantityQuickTab = computed(() => {
-  const currentQuantity = Number(tradeQuantity.value)
-  if (!Number.isFinite(currentQuantity) || currentQuantity <= 0) {
-    return ''
-  }
-  const matchedTab = tradeQuantityQuickFillTabs.value.find((item) => {
-    const tabQuantity = Number(item.value)
-    return Number.isFinite(tabQuantity) && Math.abs(tabQuantity - currentQuantity) < 0.000001
-  })
-  return matchedTab?.label ?? ''
-})
-const tradeQuantityPreview = computed(() => {
-  const amount = getTradeAmountValue()
-  const quantity = getTradeQuantityValue()
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    return '--'
-  }
-  if (currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity') {
-    return `${formatNumber(quantity, 2)} ${currentUnitName.value}`
-  }
-  const price = Number(tradePrice.value)
-  if (!Number.isFinite(amount) || !Number.isFinite(price) || amount <= 0 || price <= 0) {
-    return '--'
-  }
-  return `${formatNumber(quantity, 2)} ${currentUnitName.value}`
-})
-const tradeAmountPreview = computed(() => {
-  const amount = getTradeAmountValue()
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return '--'
-  }
-  return formatCurrency(amount)
-})
-const tradeFundFeeAmountPreview = computed(() => {
-  if (!showFundRedeemFeeSelector.value) {
-    return '--'
-  }
-  if (tradeFundFeeMode.value === 'auto') {
-    return '按持仓批次自动计算'
-  }
-  const amount = getTradeFundSellFeeAmountValue()
-  return Number.isFinite(amount) && amount >= 0 ? formatCurrency(amount) : '--'
-})
-const tradeFundNetAmountPreview = computed(() => {
-  if (!showFundRedeemFeeSelector.value) {
-    return '--'
-  }
-  const amount = getTradeAmountValue()
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return '--'
-  }
-  if (tradeFundFeeMode.value === 'auto') {
-    return '以提交结果为准'
-  }
-  const feeAmount = getTradeFundSellFeeAmountValue()
-  return Number.isFinite(feeAmount) ? formatCurrency(amount - feeAmount) : '--'
-})
-
-function getTradeAmountValue() {
-  if (isFundPosition.value) {
-    if (currentTradeAction.value === 'buy') {
-      return Number(tradeAmount.value)
-    }
-    const quantity = Number(tradeQuantity.value)
-    const price = Number(detail.value?.latestPrice ?? currentPosition.value?.currentPrice ?? 0)
-    return Number.isFinite(quantity) && quantity > 0 && Number.isFinite(price) && price > 0 ? quantity * price : NaN
-  }
-  if (currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity') {
-    const quantity = Number(tradeQuantity.value)
-    const price = Number(tradePrice.value)
-    return quantity > 0 && price > 0 ? quantity * price : NaN
-  }
-  return Number(tradeAmount.value)
-}
-
-function getTradeFundSellFeeAmountValue() {
-  if (!isFundPosition.value || currentTradeAction.value !== 'sell') {
-    return NaN
-  }
-  const option = selectedTradeFundFeeOption.value
-  const amount = getTradeAmountValue()
-  if (!option || !Number.isFinite(amount) || amount <= 0) {
-    return NaN
-  }
-  const feeRate = Number(option.feeRate)
-  if (!Number.isFinite(feeRate) || feeRate < 0) {
-    return NaN
-  }
-  return Number((amount * feeRate).toFixed(2))
-}
-
-function getTradeFundSellFeeAmountPayload() {
-  if (!isFundPosition.value || currentTradeAction.value !== 'sell' || tradeFundFeeMode.value === 'auto') {
-    return undefined
-  }
-  const feeAmount = getTradeFundSellFeeAmountValue()
-  return Number.isFinite(feeAmount) && feeAmount >= 0 ? feeAmount : undefined
-}
-
-function getTradeQuantityValue() {
-  if (isFundPosition.value) {
-    if (currentTradeAction.value === 'sell') {
-      return Number(tradeQuantity.value)
-    }
-    return NaN
-  }
-  if (currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity') {
-    return Number(tradeQuantity.value)
-  }
-  const amount = Number(tradeAmount.value)
-  const price = Number(tradePrice.value)
-  if (!Number.isFinite(amount) || !Number.isFinite(price) || amount <= 0 || price <= 0) {
-    return NaN
-  }
-  return amount / price
-}
-
-onMounted(() => {
-  loadDetail()
-  window.addEventListener('resize', resizeChart)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', resizeChart)
-  disposeCharts()
-})
-
-watch([detail, transactions, isDark], async () => {
-  await nextTick()
-  requestAnimationFrame(() => {
-    renderChart()
-    renderCumulativeProfitChart()
-  })
-})
-
-watch(selectedFundTrendRange, () => {
-  applyFundTrendRange()
-})
-
-watch(selectedFundChartView, async () => {
-  await nextTick()
-  requestAnimationFrame(() => {
-    renderChart()
-    renderCumulativeProfitChart()
-  })
-})
+const canGoPrevTransactionPage = computed(() => currentTransactionPage.value > 1)
+const canGoNextTransactionPage = computed(() => currentTransactionPage.value < totalTransactionPages.value)
 
 watch(totalTransactionPages, (totalPages) => {
   if (currentTransactionPage.value > totalPages) {
     currentTransactionPage.value = totalPages
   }
 })
+
+function applyTransactionPage(pageData: InvestmentTransactionPage) {
+  transactionPageItems.value = pageData.items ?? []
+  transactionTotal.value = Number(pageData.total ?? 0)
+  transactionPageSize.value = Number(pageData.pageSize || TRANSACTION_PAGE_SIZE)
+  currentTransactionPage.value = Math.max(1, Number(pageData.page || 1))
+}
+
+async function loadTransactionPage(page: number) {
+  if (isLoadingTransactionPage.value || !positionId.value) {
+    return
+  }
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    applyTransactionPage({ items: [], total: 0, page: 1, pageSize: TRANSACTION_PAGE_SIZE, totalPages: 1 })
+    return
+  }
+
+  isLoadingTransactionPage.value = true
+  try {
+    const pageData = await getInvestmentTransactionPage({
+      userId: currentUser.id,
+      positionId: positionId.value,
+      page,
+      pageSize: TRANSACTION_PAGE_SIZE,
+    })
+    applyTransactionPage(pageData)
+  } catch (error) {
+    showFeedback(error instanceof Error ? error.message : '交易记录加载失败', 'error')
+  } finally {
+    isLoadingTransactionPage.value = false
+  }
+}
+
+function goToPrevTransactionPage() {
+  if (!canGoPrevTransactionPage.value || isLoadingTransactionPage.value) {
+    return
+  }
+  void loadTransactionPage(currentTransactionPage.value - 1)
+}
+
+function goToNextTransactionPage() {
+  if (!canGoNextTransactionPage.value || isLoadingTransactionPage.value) {
+    return
+  }
+  void loadTransactionPage(currentTransactionPage.value + 1)
+}
+
+function openPendingTransactionModal(entry: InvestmentTransaction) {
+  tradeModalRef.value?.openPending(entry)
+}
+
+// ---------- 数据加载 ----------
+
+function mergeDetail(partial: Partial<InvestmentAssetDetail>) {
+  if (!detail.value) {
+    return
+  }
+  detail.value = {
+    ...detail.value,
+    ...partial,
+  }
+}
 
 async function loadDetail() {
   if (!positionId.value) {
@@ -604,11 +339,7 @@ async function loadDetail() {
   isLoading.value = true
   pageError.value = ''
   try {
-    fullFundChartPoints.value = []
-    fundPeriodReturnMap.value = {}
-    fundTrendValueMap.value = {}
-    fundTrendValueMode.value = 'cumulative'
-    selectedFundTrendRange.value = '3m'
+    resetFundMarketState()
     const currentUser = getStoredCurrentUser()
     const [detailData, transactionList, transactionPage, planList, accountList] = await Promise.all([
       getInvestmentPositionDetail(positionId.value),
@@ -638,1271 +369,7 @@ async function loadDetail() {
   }
 }
 
-async function renderChart() {
-  disposeChart()
-  const chartContainer = chartRef.value
-  if (!chartContainer || !detail.value) {
-    return
-  }
-
-  const points = detail.value.chartPoints ?? []
-  if (points.length === 0) {
-    return
-  }
-
-  const echarts = await import('echarts')
-  if (chartRef.value !== chartContainer) {
-    return
-  }
-  chart = echarts.init(chartContainer)
-  if (detail.value.chartType === 'candlestick') {
-    renderStockChart(points)
-  } else {
-    renderLineChart(points)
-  }
-  requestAnimationFrame(() => chart?.resize())
-}
-
-async function renderCumulativeProfitChart() {
-  disposeCumulativeProfitChart()
-  const chartContainer = cumulativeProfitChartRef.value
-  if (!chartContainer || !showFundCumulativeProfitChart.value || cumulativeProfitPoints.value.length === 0) {
-    return
-  }
-
-  const points = cumulativeProfitPoints.value
-  const rootStyle = getComputedStyle(document.documentElement)
-  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
-  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
-  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
-  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
-  const positiveColor = rootStyle.getPropertyValue('--color-danger').trim()
-  const negativeColor = rootStyle.getPropertyValue('--color-success').trim()
-  const echarts = await import('echarts')
-  const profitSeriesData = buildFundProfitChartSeriesData(points)
-
-  if (cumulativeProfitChartRef.value !== chartContainer) {
-    return
-  }
-  cumulativeProfitChart = echarts.init(chartContainer)
-  cumulativeProfitChart.setOption({
-    animationDuration: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 240,
-    aria: {
-      enabled: true,
-      description: cumulativeProfitChartAriaLabel.value,
-    },
-    tooltip: {
-      trigger: 'axis',
-      confine: true,
-      backgroundColor: tooltipBg,
-      borderColor: tooltipBorder,
-      textStyle: { color: tooltipText },
-      formatter: (params: any) => {
-        const items = Array.isArray(params) ? params : [params]
-        const item = items.find((entry: any) => {
-          const entryValue = Array.isArray(entry?.value) ? entry.value[1] : entry?.value
-          return entryValue !== null && entryValue !== undefined && Number.isFinite(Number(entryValue))
-        }) ?? items[0]
-        const value = Array.isArray(item?.value) ? item.value[1] : item?.value
-        const timestamp = Array.isArray(item?.value) ? Number(item.value[0]) : Number(item?.axisValue)
-        const dateLabel = Number.isFinite(timestamp)
-          ? formatDate(timestamp)
-          : item?.axisValueLabel || item?.axisValue || '--'
-        return `${dateLabel}<br/>${item?.marker || ''}累计收益 ${formatCurrency(Number(value))}`
-      },
-    },
-    grid: { top: 18, right: 14, bottom: 26, left: 56 },
-    xAxis: {
-      type: 'time',
-      axisLabel: {
-        color: axisText,
-        fontSize: 10,
-        hideOverlap: true,
-        formatter: (value: number) => formatDate(value),
-      },
-      axisLine: { lineStyle: { color: axisLine } },
-    },
-    yAxis: {
-      type: 'value',
-      scale: true,
-      axisLabel: {
-        color: axisText,
-        fontSize: 10,
-        formatter: (value: number) => formatCompactCurrency(value),
-      },
-      splitLine: { lineStyle: { color: splitLine } },
-    },
-    dataZoom: [{ type: 'inside', start: 0, end: 100 }],
-    series: [
-      {
-        name: '累计收益',
-        type: 'line',
-        smooth: false,
-        showSymbol: points.length <= 2,
-        symbol: 'circle',
-        symbolSize: 7,
-        connectNulls: false,
-        itemStyle: { color: positiveColor },
-        lineStyle: { width: 2, color: positiveColor },
-        data: profitSeriesData.positive,
-        markLine: {
-          silent: true,
-          symbol: 'none',
-          label: { show: false },
-          lineStyle: { color: axisLine, type: 'dashed', width: 1 },
-          data: [{ yAxis: 0 }],
-        },
-      },
-      {
-        name: '累计收益',
-        type: 'line',
-        smooth: false,
-        showSymbol: points.length <= 2,
-        symbol: 'circle',
-        symbolSize: 7,
-        connectNulls: false,
-        itemStyle: { color: negativeColor },
-        lineStyle: { width: 2, color: negativeColor },
-        data: profitSeriesData.negative,
-      },
-    ],
-  })
-  requestAnimationFrame(() => cumulativeProfitChart?.resize())
-}
-
-async function loadExternalMarketData(baseDetail: InvestmentAssetDetail) {
-  const symbol = baseDetail.symbol || baseDetail.position.productSymbol
-  if (!symbol) {
-    return
-  }
-
-  externalStatus.value = '行情加载中...'
-  try {
-    if (baseDetail.productType === 'stock') {
-      await loadStockMarketData(baseDetail, symbol)
-    } else if (baseDetail.productType === 'fund') {
-      await loadFundMarketData(baseDetail, symbol)
-    }
-    externalStatus.value = ''
-  } catch (error) {
-    externalStatus.value = error instanceof Error ? error.message : '行情加载失败'
-  }
-}
-
-async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: string) {
-  const cached = fundMarketCache.get(fundCode)
-  let baseInfo: Record<string, any>
-  let trend: { netWorthTrend: any[]; acWorthTrend: any[] }
-  let periodReturns: Record<string, number | null>
-  if (cached && cached.expiresAt > Date.now()) {
-    baseInfo = cached.baseInfo
-    trend = cached.trend
-    periodReturns = cached.periodReturns
-  } else {
-    const [baseResult, trendResult, periodIncreaseResult] = await Promise.allSettled([
-      jsonpRequest<Record<string, any>>(
-        `https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
-        ['callback'],
-      ),
-      fetchFundTrend(fundCode),
-      jsonpRequest<FundPeriodIncreaseResponse>(
-        `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNPeriodIncrease?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
-        ['callback'],
-      ),
-    ])
-    baseInfo = baseResult.status === 'fulfilled' ? baseResult.value?.Datas ?? {} : {}
-    const periodIncreaseRows = periodIncreaseResult.status === 'fulfilled'
-      ? periodIncreaseResult.value?.Datas ?? []
-      : []
-    periodReturns = buildFundPeriodReturnMap(periodIncreaseRows)
-    trend = trendResult.status === 'fulfilled'
-      ? trendResult.value
-      : { netWorthTrend: [], acWorthTrend: [] }
-    fundMarketCache.set(fundCode, {
-      expiresAt: Date.now() + FUND_MARKET_CACHE_TTL_MS,
-      baseInfo,
-      trend,
-      periodReturns,
-    })
-  }
-
-  const officialPrice = Number(baseInfo.DWJZ)
-  const cumulativePrice = Number(baseInfo.LJJZ)
-  const latestPrice = officialPrice
-  const changePercent = Number(baseInfo.RZDF)
-  const updatedAt = baseInfo.FSRQ
-  const trendValueContext = buildFundTrendValueContext(
-    trend,
-    { label: updatedAt, value: cumulativePrice },
-    { label: updatedAt, value: latestPrice },
-  )
-  const chartPoints = buildFundTrendPoints(
-    trend,
-    { label: updatedAt, value: cumulativePrice },
-    { label: updatedAt, value: latestPrice },
-  )
-  fullFundChartPoints.value = chartPoints
-  fundPeriodReturnMap.value = periodReturns
-  fundTrendValueMap.value = trendValueContext.values
-  fundTrendValueMode.value = trendValueContext.mode
-
-  mergeDetail({
-    name: baseInfo.SHORTNAME || baseDetail.name,
-    latestPrice: Number.isFinite(latestPrice) ? latestPrice : baseDetail.latestPrice,
-    changePercent: Number.isFinite(changePercent) ? changePercent : baseDetail.changePercent,
-    updatedAt: updatedAt || baseDetail.updatedAt,
-    source: '东方财富（累计净值）',
-    chartType: 'line',
-    chartPoints: filterFundTrendPoints(chartPoints, selectedFundTrendRange.value),
-    marketStats: [
-      stat('资产类型', '基金'),
-      stat('基金代码', fundCode),
-      stat('基金类型', baseInfo.FTYPE || '-'),
-      stat('当前净值（单位净值）', Number.isFinite(latestPrice) ? formatNumber(latestPrice, 4) : '-', toneByNumber(changePercent)),
-      stat('累计净值', baseInfo.LJJZ || '-'),
-      stat('当日涨跌幅', Number.isFinite(changePercent) ? `${formatNumber(changePercent)}%` : '-', toneByNumber(changePercent)),
-      stat('净值日期', updatedAt || '-'),
-      stat('基金公司', baseInfo.JJGS || '-'),
-      stat('申购状态', baseInfo.SGZT || '-'),
-      stat('赎回状态', baseInfo.SHZT || '-'),
-      ...buildFundPeriodReturnStats(periodReturns),
-    ],
-  })
-}
-
-function buildFundPeriodReturnMap(rows: FundPeriodIncreaseItem[]) {
-  return Object.fromEntries(
-    rows.map((item) => [String(item.title ?? '').toUpperCase(), parseFundPeriodReturn(item.syl)]),
-  ) as Record<string, number | null>
-}
-
-function buildFundPeriodReturnStats(returnByPeriod: Record<string, number | null>) {
-  return FUND_PERIOD_RETURN_FIELDS.map(({ title, label }) => {
-    const value = returnByPeriod[title]
-    return stat(
-      label,
-      value !== undefined && value !== null ? `${formatNumber(value)}%` : '--',
-      value !== undefined && value !== null ? toneByNumber(value) : 'neutral',
-    )
-  })
-}
-
-function parseFundPeriodReturn(value: string | number | null | undefined) {
-  if (value === null || value === undefined || String(value).trim() === '') {
-    return null
-  }
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-async function loadStockMarketData(baseDetail: InvestmentAssetDetail, stockCode: string) {
-  const symbol = toTencentSymbol(stockCode, baseDetail.position.market || baseDetail.market)
-  const [quote, kline] = await Promise.all([
-    fetchStockQuote(symbol),
-    fetchStockKline(symbol).catch(() => []),
-  ])
-
-  const latestPrice = Number(quote.price)
-  const change = Number(quote.change)
-  const changePercent = Number(quote.changePct)
-
-  mergeDetail({
-    name: quote.name || baseDetail.name,
-    latestPrice: Number.isFinite(latestPrice) ? latestPrice : baseDetail.latestPrice,
-    change: Number.isFinite(change) ? change : baseDetail.change,
-    changePercent: Number.isFinite(changePercent) ? changePercent : baseDetail.changePercent,
-    updatedAt: formatTencentTime(quote.timeRaw) || baseDetail.updatedAt,
-    source: '腾讯行情',
-    chartType: 'candlestick',
-    chartPoints: kline,
-    marketStats: [
-      stat('资产类型', '股票'),
-      stat('股票代码', stockCode),
-      stat('市场', baseDetail.market || '-'),
-      stat('当前净值（当前价）', Number.isFinite(latestPrice) ? formatNumber(latestPrice, 2) : '-', toneByNumber(change)),
-      stat('涨跌额', Number.isFinite(change) ? formatNumber(change, 2) : '-', toneByNumber(change)),
-      stat('涨跌幅', Number.isFinite(changePercent) ? `${formatNumber(changePercent)}%` : '-', toneByNumber(changePercent)),
-      stat('今开', quote.open || '-'),
-      stat('昨收', quote.prevClose || '-'),
-      stat('最高', quote.high || '-'),
-      stat('最低', quote.low || '-'),
-      stat('成交量（手）', quote.volume || '-'),
-      stat('更新时间', formatTencentTime(quote.timeRaw) || '-'),
-    ],
-  })
-}
-
-function renderLineChart(points: InvestmentChartPoint[]) {
-  const rootStyle = getComputedStyle(document.documentElement)
-  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
-  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
-  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
-  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
-  const brandColor = rootStyle.getPropertyValue('--color-brand').trim()
-  const brandStrongColor = rootStyle.getPropertyValue('--color-brand-strong').trim()
-  const warningStrongColor = rootStyle.getPropertyValue('--color-warning-strong').trim()
-  const dangerColor = rootStyle.getPropertyValue('--color-danger').trim()
-  const isFundTrendChart = detail.value?.productType === 'fund'
-  const baselineValue = resolveLineChartBaseline(points, isFundTrendChart)
-  const costPrice = chartCostBaseline.value
-  const tradeMarkerSeries = buildTradeMarkerSeries(points, 'line')
-  const series: Array<Record<string, any>> = [
-    {
-      name: isFundTrendChart ? '累计净值' : '单位净值',
-      type: 'line',
-      smooth: false,
-      showSymbol: false,
-      data: points.map((point) => point.value ?? null),
-      lineStyle: { width: 2 },
-      areaStyle: { opacity: 0.08 },
-    },
-  ]
-
-  if (costPrice !== null && isChartValueInRange(points, costPrice)) {
-    series.push({
-      name: isFundTrendChart ? '持仓成本' : '持仓成本价',
-      type: 'line',
-      smooth: false,
-      showSymbol: false,
-      data: points.map(() => costPrice),
-      itemStyle: { color: warningStrongColor },
-      lineStyle: {
-        width: 1.5,
-        type: 'dashed',
-        color: warningStrongColor,
-      },
-    })
-  }
-
-  series.push(...tradeMarkerSeries)
-
-  chart?.setOption({
-    color: [brandColor, warningStrongColor, brandStrongColor, dangerColor],
-    tooltip: {
-      trigger: 'axis',
-      confine: true,
-      backgroundColor: tooltipBg,
-      borderColor: tooltipBorder,
-      textStyle: { color: tooltipText },
-      formatter: (params: any) => {
-        const items = Array.isArray(params) ? params : [params]
-        if (items.length === 0) {
-          return '--'
-        }
-        const title = items[0]?.axisValueLabel || items[0]?.axisValue || '--'
-        const lines = [title]
-        for (const item of items) {
-          const pointValue = getTooltipPointValue(item)
-          lines.push(
-            `${item.marker}${item.seriesName} ${
-              isFundTrendChart
-                ? formatValueWithBaselinePercent(pointValue, 4, baselineValue)
-                : formatPriceWithChange(pointValue, 4)
-            }`,
-          )
-        }
-        return lines.join('<br/>')
-      },
-    },
-    legend: {
-      top: 0,
-      left: 0,
-      icon: 'roundRect',
-      itemWidth: 10,
-      itemHeight: 10,
-      textStyle: {
-        color: axisText,
-        fontSize: 11,
-      },
-      data: series.map((entry) => entry.name),
-    },
-    grid: { top: 42, right: 14, bottom: 26, left: 42 },
-    xAxis: {
-      type: 'category',
-      data: points.map((point) => point.label),
-      axisLabel: { color: axisText, fontSize: 10 },
-      axisLine: { lineStyle: { color: axisLine } },
-    },
-    yAxis: {
-      type: 'value',
-      scale: true,
-      axisLabel: {
-        color: axisText,
-        fontSize: 10,
-        formatter: (value: number) => formatAxisChangeLabel(value, baselineValue),
-      },
-      splitLine: { lineStyle: { color: splitLine } },
-    },
-    dataZoom: [{ type: 'inside', start: 0, end: 100 }],
-    series,
-  }, { replaceMerge: ['series'] })
-}
-
-function isChartValueInRange(points: InvestmentChartPoint[], value: number) {
-  if (!Number.isFinite(value)) {
-    return false
-  }
-
-  const values = points
-    .map((point) => Number(point.value ?? point.close))
-    .filter((pointValue) => Number.isFinite(pointValue))
-  if (values.length === 0) {
-    return false
-  }
-
-  const minValue = Math.min(...values)
-  const maxValue = Math.max(...values)
-  return value >= minValue && value <= maxValue
-}
-
-function renderStockChart(points: InvestmentChartPoint[]) {
-  const rootStyle = getComputedStyle(document.documentElement)
-  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
-  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
-  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
-  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
-  const brandSoftColor = rootStyle.getPropertyValue('--color-brand-soft').trim()
-  const dates = points.map((point) => point.label)
-  const candleData = points.map((point) => [point.open, point.close, point.low, point.high])
-  const volumeData = points.map((point) => point.volume ?? 0)
-  const tradeMarkerSeries = buildTradeMarkerSeries(points, 'candlestick')
-
-  chart?.setOption({
-    animation: false,
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross' },
-      confine: true,
-      backgroundColor: tooltipBg,
-      borderColor: tooltipBorder,
-      textStyle: { color: tooltipText },
-      formatter: (params: any) => {
-        const items = Array.isArray(params) ? params : [params]
-        if (items.length === 0) {
-          return '--'
-        }
-        const title = items[0]?.axisValueLabel || items[0]?.axisValue || '--'
-        const lines = [title]
-        for (const item of items) {
-          if (item.seriesType === 'candlestick' && Array.isArray(item.data)) {
-            const [open, close, low, high] = item.data
-            lines.push(`${item.marker}${item.seriesName} 开 ${formatTooltipPointValue(open, 2)} 收 ${formatTooltipPointValue(close, 2)} 高 ${formatTooltipPointValue(high, 2)} 低 ${formatTooltipPointValue(low, 2)}`)
-            continue
-          }
-          if (item.seriesType === 'bar') {
-            lines.push(`${item.marker}${item.seriesName} ${formatTooltipPointValue(item.value, 0)}`)
-            continue
-          }
-          lines.push(`${item.marker}${item.seriesName} ${formatPriceWithChange(getTooltipPointValue(item), 2)}`)
-        }
-        return lines.join('<br/>')
-      },
-    },
-    legend: {
-      top: 0,
-      left: 0,
-      icon: 'roundRect',
-      itemWidth: 10,
-      itemHeight: 10,
-      textStyle: {
-        color: axisText,
-        fontSize: 11,
-      },
-      data: ['K线', '买入点', '卖出点'],
-    },
-    grid: [
-      { left: 42, right: 14, top: 42, height: '54%' },
-      { left: 42, right: 14, top: '76%', height: '14%' },
-    ],
-    xAxis: [
-      { type: 'category', data: dates, boundaryGap: false, axisLabel: { color: axisText, fontSize: 10 } },
-      { type: 'category', gridIndex: 1, data: dates, boundaryGap: false, axisLabel: { show: false }, axisTick: { show: false } },
-    ],
-    yAxis: [
-      {
-        scale: true,
-        axisLabel: {
-          color: axisText,
-          fontSize: 10,
-          formatter: (value: number) => formatAxisChangeLabel(value),
-        },
-        splitLine: { lineStyle: { color: splitLine } },
-      },
-      { scale: true, gridIndex: 1, splitNumber: 2, axisLabel: { color: axisText, fontSize: 10 }, splitLine: { show: false } },
-    ],
-    dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 }],
-    series: [
-      {
-        name: 'K线',
-        type: 'candlestick',
-        data: candleData,
-        itemStyle: {
-          color: '#DC2626',
-          color0: '#16A34A',
-          borderColor: '#DC2626',
-          borderColor0: '#16A34A',
-        },
-      },
-      {
-        name: '成交量',
-        type: 'bar',
-        xAxisIndex: 1,
-        yAxisIndex: 1,
-        data: volumeData,
-        itemStyle: { color: brandSoftColor },
-      },
-      ...tradeMarkerSeries,
-    ],
-  })
-}
-
-function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line' | 'candlestick') {
-  const isFundLineChart = chartType === 'line' && detail.value?.productType === 'fund'
-  const pointMap = new Map(points.map((point) => [normalizeDateLabel(point.label), point]))
-  const buyData: Array<Record<string, any>> = []
-  const sellData: Array<Record<string, any>> = []
-
-  for (const entry of transactions.value) {
-    if (entry.tradeType !== 'buy' && entry.tradeType !== 'sell') {
-      continue
-    }
-
-    const tradeDateLabel = resolveTradeMarkerDateLabel(entry, isFundLineChart)
-    const point = pointMap.get(tradeDateLabel)
-    if (!point) {
-      continue
-    }
-
-    const rawPrice = Number(entry.price)
-    const fallbackPrice = chartType === 'candlestick'
-      ? Number(point.close ?? point.open ?? point.high ?? point.low ?? point.value)
-      : Number(point.value ?? point.close ?? point.open ?? point.high ?? point.low)
-    const targetPrice = isFundLineChart
-      ? fallbackPrice
-      : Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : fallbackPrice
-    if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
-      continue
-    }
-
-    const marker = {
-      value: [point.label, targetPrice],
-      tradeAt: entry.tradeAt,
-      amount: entry.amount,
-      price: targetPrice,
-      settlementStatus: entry.settlementStatus,
-    }
-
-    if (entry.tradeType === 'buy') {
-      buyData.push(marker)
-    } else {
-      sellData.push(marker)
-    }
-  }
-
-  const result: Array<Record<string, any>> = []
-  if (buyData.length > 0) {
-    result.push({
-      name: '买入点',
-      type: 'scatter',
-      data: buyData,
-      xAxisIndex: 0,
-      yAxisIndex: 0,
-      symbol: 'circle',
-      symbolSize: 6,
-      itemStyle: { color: TRADE_MARKER_COLORS.buy },
-      emphasis: { scale: 1.1 },
-      z: 5,
-    })
-  }
-  if (sellData.length > 0) {
-    result.push({
-      name: '卖出点',
-      type: 'scatter',
-      data: sellData,
-      xAxisIndex: 0,
-      yAxisIndex: 0,
-      symbol: 'diamond',
-      symbolSize: 7,
-      itemStyle: { color: TRADE_MARKER_COLORS.sell },
-      emphasis: { scale: 1.1 },
-      z: 5,
-    })
-  }
-
-  return result
-}
-
-function resolveTradeMarkerDateLabel(entry: InvestmentTransaction, isFundLineChart: boolean) {
-  if (!isFundLineChart) {
-    return normalizeDateLabel(entry.tradeAt)
-  }
-
-  const candidateDates = [
-    entry.settlementAppliedDate,
-    entry.settlementConfirmedAt,
-    entry.tradeAt,
-  ]
-
-  for (const candidate of candidateDates) {
-    const normalized = normalizeDateLabel(candidate || '')
-    if (normalized) {
-      return normalized
-    }
-  }
-
-  return ''
-}
-
-function resolveFundCumulativeChartCostBaseline() {
-  const currentHoldingQuantity = Number(currentPosition.value?.holdingQuantity ?? 0)
-  if (!Number.isFinite(currentHoldingQuantity) || currentHoldingQuantity <= 0) {
-    return null
-  }
-  const currentCostAmount = Number(currentPosition.value?.costAmount ?? 0)
-  if (!Number.isFinite(currentCostAmount) || currentCostAmount <= 0) {
-    return null
-  }
-
-  let holdingQuantity = 0
-  let cumulativeOffsetAmount = 0
-
-  const sortedTransactions = transactions.value
-    .filter((entry) => entry.tradeType === 'buy' || entry.tradeType === 'sell')
-    .filter((entry) => entry.settlementStatus !== 'pending')
-    .slice()
-    .sort(compareFundCostTransactions)
-
-  for (const entry of sortedTransactions) {
-    const quantity = Number(entry.quantity)
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      continue
-    }
-
-    if (entry.tradeType === 'buy') {
-      const cumulativeOffset = Number(resolveFundTradeCumulativeOffset(entry))
-      if (!Number.isFinite(cumulativeOffset) || cumulativeOffset < 0) {
-        continue
-      }
-      holdingQuantity += quantity
-      cumulativeOffsetAmount += cumulativeOffset * quantity
-      continue
-    }
-
-    if (holdingQuantity <= 0) {
-      continue
-    }
-
-    const soldQuantity = Math.min(quantity, holdingQuantity)
-    const averageOffset = cumulativeOffsetAmount / holdingQuantity
-    cumulativeOffsetAmount -= averageOffset * soldQuantity
-    holdingQuantity -= soldQuantity
-  }
-
-  if (holdingQuantity <= 0) {
-    return resolveEstimatedFundCumulativeChartCostBaseline()
-  }
-
-  const quantityDiff = Number(Math.abs(holdingQuantity - currentHoldingQuantity).toFixed(6))
-  if (quantityDiff > FUND_QUANTITY_MATCH_TOLERANCE) {
-    return resolveEstimatedFundCumulativeChartCostBaseline()
-  }
-
-  const baseline = (currentCostAmount + cumulativeOffsetAmount) / currentHoldingQuantity
-  return Number.isFinite(baseline) && baseline > 0
-    ? baseline
-    : resolveEstimatedFundCumulativeChartCostBaseline()
-}
-
-function resolveEstimatedFundCumulativeChartCostBaseline() {
-  const averageCostPrice = Number(currentPosition.value?.avgCostPrice ?? 0)
-  if (!Number.isFinite(averageCostPrice) || averageCostPrice <= 0) {
-    return null
-  }
-
-  const latestCumulativePoint = fullFundChartPoints.value
-    .slice()
-    .reverse()
-    .find((point) => Number.isFinite(Number(point.value)) && Number(point.value) > 0)
-  if (!latestCumulativePoint) {
-    return null
-  }
-
-  const latestCumulativeValue = Number(latestCumulativePoint.value)
-  const latestDateLabel = normalizeDateLabel(latestCumulativePoint.label)
-  const mappedNetValue = Number(fundTrendValueMap.value[latestDateLabel]?.net)
-  const currentNetValue = Number(detail.value?.latestPrice ?? 0)
-  const latestNetValue = Number.isFinite(mappedNetValue) && mappedNetValue > 0
-    ? mappedNetValue
-    : currentNetValue
-  const cumulativeOffset = latestCumulativeValue - latestNetValue
-  if (!Number.isFinite(latestNetValue) || latestNetValue <= 0 || !Number.isFinite(cumulativeOffset) || cumulativeOffset < 0) {
-    return null
-  }
-
-  const baseline = averageCostPrice + cumulativeOffset
-  return Number.isFinite(baseline) && baseline > 0 ? baseline : null
-}
-
-function compareFundCostTransactions(left: InvestmentTransaction, right: InvestmentTransaction) {
-  const leftTime = resolveFundCostTransactionTime(left)
-  const rightTime = resolveFundCostTransactionTime(right)
-  if (leftTime !== rightTime) {
-    return leftTime - rightTime
-  }
-  return Number(left.id ?? 0) - Number(right.id ?? 0)
-}
-
-function resolveFundCostTransactionTime(entry: InvestmentTransaction) {
-  if (entry.settlementAppliedDate) {
-    const appliedTime = new Date(`${entry.settlementAppliedDate}T00:00:00`).getTime()
-    if (Number.isFinite(appliedTime)) {
-      return appliedTime
-    }
-  }
-
-  const fallbackTime = new Date(entry.settlementConfirmedAt || entry.tradeAt).getTime()
-  return Number.isFinite(fallbackTime) ? fallbackTime : 0
-}
-
-function resolveFundTradeCumulativeValue(entry: InvestmentTransaction) {
-  const dateLabel = resolveTradeMarkerDateLabel(entry, true)
-  if (!dateLabel) {
-    return null
-  }
-
-  const trendEntry = fundTrendValueMap.value[dateLabel]
-  const cumulativeValue = Number(trendEntry?.cumulative)
-  if (Number.isFinite(cumulativeValue) && cumulativeValue > 0) {
-    return cumulativeValue
-  }
-
-  const fallbackValue = Number(trendEntry?.net)
-  return Number.isFinite(fallbackValue) && fallbackValue > 0 ? fallbackValue : null
-}
-
-function resolveFundTradeNetValue(entry: InvestmentTransaction) {
-  const confirmedPrice = Number(entry.price)
-  if (Number.isFinite(confirmedPrice) && confirmedPrice > 0) {
-    return confirmedPrice
-  }
-
-  const dateLabel = resolveTradeMarkerDateLabel(entry, true)
-  if (!dateLabel) {
-    return null
-  }
-
-  const trendEntry = fundTrendValueMap.value[dateLabel]
-  const netValue = Number(trendEntry?.net)
-  return Number.isFinite(netValue) && netValue > 0 ? netValue : null
-}
-
-function resolveFundTradeCumulativeOffset(entry: InvestmentTransaction) {
-  const cumulativeValue = Number(resolveFundTradeCumulativeValue(entry))
-  const netValue = Number(resolveFundTradeNetValue(entry))
-  if (!Number.isFinite(cumulativeValue) || cumulativeValue <= 0 || !Number.isFinite(netValue) || netValue <= 0) {
-    return null
-  }
-
-  return Math.max(cumulativeValue - netValue, 0)
-}
-
-function buildFundCumulativeProfitPoints(points: InvestmentChartPoint[]) {
-  if (!showFundCumulativeProfitChart.value) {
-    return []
-  }
-
-  const position = currentPosition.value
-  if (!position) {
-    return []
-  }
-
-  const tradeEvents = transactions.value
-    .filter((entry) => entry.status === 'normal')
-    .filter((entry) => entry.settlementStatus !== 'pending')
-    .filter((entry) => entry.tradeType === 'buy' || entry.tradeType === 'sell')
-    .map((entry) => ({ entry, timestamp: resolveFundCostTransactionTime(entry) }))
-    .filter((item) => item.timestamp > 0)
-    .sort((left, right) => left.timestamp - right.timestamp || Number(left.entry.id) - Number(right.entry.id))
-
-  if (!hasReliableFundTradeHistory(tradeEvents.map((item) => item.entry), Number(position.holdingQuantity))) {
-    return ensureFundProfitBoundaryPoints(buildFundProfitFallbackPoints(points), tradeEvents)
-  }
-
-  const expectedRealizedProfit = Number(position.cumulativeProfit ?? 0)
-  const finalState = tradeEvents.reduce(
-    (state, item) => applyFundProfitTransaction(state, item.entry),
-    createEmptyFundProfitState(),
-  )
-  const realizedProfitOffset = Number.isFinite(expectedRealizedProfit)
-    ? expectedRealizedProfit - finalState.realizedProfit
-    : 0
-  let state = createEmptyFundProfitState()
-  let transactionIndex = 0
-  let hasStarted = false
-
-  const calculatedPoints = points.flatMap((point) => {
-    const pointDate = parsePointLabelDate(point.label)
-    if (!pointDate) {
-      return []
-    }
-    const pointEndTime = pointDate.getTime() + 24 * 60 * 60 * 1000 - 1
-    while (transactionIndex < tradeEvents.length && tradeEvents[transactionIndex].timestamp <= pointEndTime) {
-      state = applyFundProfitTransaction(state, tradeEvents[transactionIndex].entry)
-      transactionIndex += 1
-      hasStarted = true
-    }
-    if (!hasStarted) {
-      return []
-    }
-
-    const netValue = resolveFundProfitNetValue(point)
-    if (!Number.isFinite(netValue) || netValue <= 0) {
-      return []
-    }
-    const profit = state.realizedProfit
-      + realizedProfitOffset
-      + state.holdingQuantity * netValue
-      - state.costAmount
-    return [{
-      label: point.label,
-      value: Number(profit.toFixed(2)),
-    }]
-  })
-  const currentNetValue = Number(position.currentPrice ?? detail.value?.latestPrice ?? 0)
-  const currentProfit = Number.isFinite(currentNetValue) && currentNetValue > 0
-    ? Number((
-        finalState.realizedProfit
-        + realizedProfitOffset
-        + finalState.holdingQuantity * currentNetValue
-        - finalState.costAmount
-      ).toFixed(2))
-    : null
-  return ensureFundProfitBoundaryPoints(calculatedPoints, tradeEvents, currentProfit)
-}
-
-function ensureFundProfitBoundaryPoints(
-  points: InvestmentChartPoint[],
-  tradeEvents: Array<{ entry: InvestmentTransaction; timestamp: number }>,
-  currentProfitOverride: number | null = null,
-) {
-  const position = currentPosition.value
-  if (!position) {
-    return points
-  }
-
-  const normalizedPoints = new Map<string, InvestmentChartPoint>()
-  for (const point of points) {
-    const label = normalizeDateLabel(point.label)
-    const value = Number(point.value)
-    if (label && Number.isFinite(value)) {
-      normalizedPoints.set(label, { label, value })
-    }
-  }
-
-  const firstBuyEvent = tradeEvents.find((item) => item.entry.tradeType === 'buy')
-  const positionStartTimestamp = firstBuyEvent?.timestamp
-    ?? parsePointLabelDate(normalizeDateLabel(position.createdAt))?.getTime()
-    ?? NaN
-  const firstPointTimestamp = Array.from(normalizedPoints.values())
-    .map((point) => parsePointLabelDate(point.label)?.getTime() ?? NaN)
-    .filter(Number.isFinite)
-    .sort((left, right) => left - right)[0]
-
-  if (Number.isFinite(positionStartTimestamp)
-    && (!Number.isFinite(firstPointTimestamp) || positionStartTimestamp >= firstPointTimestamp)) {
-    const startLabel = formatDate(positionStartTimestamp)
-    if (!normalizedPoints.has(startLabel)) {
-      normalizedPoints.set(startLabel, { label: startLabel, value: 0 })
-    }
-  }
-
-  const lastSyncedTimestamp = new Date(position.lastSyncedAt || detail.value?.updatedAt || '').getTime()
-  const currentTimestamp = Number.isFinite(lastSyncedTimestamp) ? lastSyncedTimestamp : Date.now()
-  const currentLabel = formatDate(Math.max(currentTimestamp, Number.isFinite(positionStartTimestamp) ? positionStartTimestamp : 0))
-  const totalProfit = currentProfitOverride ?? currentTotalProfit.value
-  if (currentLabel && Number.isFinite(totalProfit)) {
-    normalizedPoints.set(currentLabel, {
-      label: currentLabel,
-      value: Number(totalProfit.toFixed(2)),
-    })
-  }
-
-  return Array.from(normalizedPoints.values()).sort((left, right) => {
-    const leftTime = parsePointLabelDate(left.label)?.getTime() ?? 0
-    const rightTime = parsePointLabelDate(right.label)?.getTime() ?? 0
-    return leftTime - rightTime
-  })
-}
-
-function createEmptyFundProfitState(): FundProfitState {
-  return {
-    holdingQuantity: 0,
-    costAmount: 0,
-    realizedProfit: 0,
-  }
-}
-
-function applyFundProfitTransaction(state: FundProfitState, entry: InvestmentTransaction): FundProfitState {
-  const quantity = Number(entry.quantity ?? 0)
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    return state
-  }
-
-  const amount = Number(entry.amount ?? 0)
-  const feeAmount = Number(entry.feeAmount ?? 0)
-  const taxAmount = Number(entry.taxAmount ?? 0)
-  if (![amount, feeAmount, taxAmount].every(Number.isFinite)) {
-    return state
-  }
-
-  if (entry.tradeType === 'buy') {
-    return {
-      holdingQuantity: state.holdingQuantity + quantity,
-      costAmount: state.costAmount + amount + feeAmount + taxAmount,
-      realizedProfit: state.realizedProfit,
-    }
-  }
-
-  if (entry.tradeType !== 'sell' || state.holdingQuantity <= 0) {
-    return state
-  }
-  const soldQuantity = Math.min(quantity, state.holdingQuantity)
-  const soldCostAmount = state.costAmount / state.holdingQuantity * soldQuantity
-  const proceedsRatio = quantity > 0 ? soldQuantity / quantity : 0
-  const netProceeds = (amount - feeAmount - taxAmount) * proceedsRatio
-  return {
-    holdingQuantity: Math.max(state.holdingQuantity - soldQuantity, 0),
-    costAmount: Math.max(state.costAmount - soldCostAmount, 0),
-    realizedProfit: state.realizedProfit + netProceeds - soldCostAmount,
-  }
-}
-
-function hasReliableFundTradeHistory(entries: InvestmentTransaction[], expectedHoldingQuantity: number) {
-  if (entries.length === 0 || !Number.isFinite(expectedHoldingQuantity) || expectedHoldingQuantity <= 0) {
-    return false
-  }
-  const finalState = entries.reduce(applyFundProfitTransaction, createEmptyFundProfitState())
-  const quantityDifference = Number(Math.abs(finalState.holdingQuantity - expectedHoldingQuantity).toFixed(6))
-  return quantityDifference <= FUND_QUANTITY_MATCH_TOLERANCE
-}
-
-function buildFundProfitFallbackPoints(points: InvestmentChartPoint[]) {
-  const position = currentPosition.value
-  if (!position) {
-    return []
-  }
-  const holdingQuantity = Number(position.holdingQuantity ?? 0)
-  const averageCostPrice = Number(position.avgCostPrice ?? 0)
-  const realizedProfit = Number(position.cumulativeProfit ?? 0)
-  const positionStartTime = parsePointLabelDate(normalizeDateLabel(position.createdAt))?.getTime() ?? NaN
-  if (![holdingQuantity, averageCostPrice, realizedProfit].every(Number.isFinite) || holdingQuantity <= 0) {
-    return []
-  }
-
-  return points.flatMap((point) => {
-    const pointDate = parsePointLabelDate(point.label)
-    if (!pointDate || (Number.isFinite(positionStartTime) && pointDate.getTime() < positionStartTime)) {
-      return []
-    }
-    const netValue = resolveFundProfitNetValue(point)
-    if (!Number.isFinite(netValue) || netValue <= 0) {
-      return []
-    }
-    return [{
-      label: point.label,
-      value: Number((realizedProfit + (netValue - averageCostPrice) * holdingQuantity).toFixed(2)),
-    }]
-  })
-}
-
-function resolveFundProfitNetValue(point: InvestmentChartPoint) {
-  const trendEntry = fundTrendValueMap.value[normalizeDateLabel(point.label)]
-  const netValue = Number(trendEntry?.net)
-  if (Number.isFinite(netValue) && netValue > 0) {
-    return netValue
-  }
-  return Number(point.value)
-}
-
-function buildFundProfitChartSeriesData(points: InvestmentChartPoint[]) {
-  const expandedPoints: Array<{ timestamp: number; value: number }> = []
-  const datedPoints = points.flatMap((point) => {
-    const timestamp = parsePointLabelDate(point.label)?.getTime() ?? NaN
-    const value = Number(point.value)
-    return Number.isFinite(timestamp) && Number.isFinite(value) ? [{ timestamp, value }] : []
-  })
-
-  datedPoints.forEach((point, index) => {
-    const previousPoint = datedPoints[index - 1]
-    if (previousPoint && previousPoint.value * point.value < 0) {
-      const crossingRatio = Math.abs(previousPoint.value)
-        / (Math.abs(previousPoint.value) + Math.abs(point.value))
-      expandedPoints.push({
-        timestamp: Math.round(previousPoint.timestamp + (point.timestamp - previousPoint.timestamp) * crossingRatio),
-        value: 0,
-      })
-    }
-    expandedPoints.push(point)
-  })
-
-  return {
-    positive: expandedPoints.map<FundProfitChartDataPoint>((point) => [
-      point.timestamp,
-      point.value >= 0 ? point.value : null,
-    ]),
-    negative: expandedPoints.map<FundProfitChartDataPoint>((point) => [
-      point.timestamp,
-      point.value <= 0 ? point.value : null,
-    ]),
-  }
-}
-
-function disposeChart() {
-  if (chart) {
-    chart.dispose()
-    chart = null
-  }
-}
-
-function disposeCumulativeProfitChart() {
-  if (cumulativeProfitChart) {
-    cumulativeProfitChart.dispose()
-    cumulativeProfitChart = null
-  }
-}
-
-function disposeCharts() {
-  disposeChart()
-  disposeCumulativeProfitChart()
-}
-
-function resizeChart() {
-  chart?.resize()
-  cumulativeProfitChart?.resize()
-}
-
-function openTradeModal(action: 'buy' | 'sell') {
-  const position = currentPosition.value
-  if (!position || (isPendingSubscription.value && action === 'sell')) {
-    return
-  }
-  currentTradeAction.value = action
-  editingTransaction.value = null
-  tradeInputMode.value = 'amount'
-  tradeTimeSlot.value = 'before_1500'
-  tradeDividendType.value = position.dividendType === 'reinvest' ? 'reinvest' : 'cash'
-  const preferredFundingAccountId = position.dividendFundingAccountId
-    ?? fundingAccounts.value[0]?.id
-  tradeFundingAccountId.value = preferredFundingAccountId ? String(preferredFundingAccountId) : ''
-  tradeAmount.value = ''
-  tradeQuantity.value = ''
-  tradePrice.value = isFundPosition.value ? '' : String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
-  tradeDate.value = formatDateInput(new Date())
-  tradeRemark.value = ''
-  tradeFundFeeMode.value = 'auto'
-  tradeError.value = ''
-  showTradeModal.value = true
-}
-
-function openPendingTransactionModal(entry: InvestmentTransaction) {
-  if (entry.id <= 0 || entry.settlementStatus !== 'pending' || !currentPosition.value) return
-  editingTransaction.value = entry
-  currentTradeAction.value = entry.tradeType === 'sell' ? 'sell' : 'buy'
-  tradeInputMode.value = 'amount'
-  tradeDividendType.value = currentPosition.value.dividendType === 'reinvest' ? 'reinvest' : 'cash'
-  tradeFundingAccountId.value = entry.fundingAccountId
-    ? String(entry.fundingAccountId)
-    : (currentPosition.value.dividendFundingAccountId
-      ? String(currentPosition.value.dividendFundingAccountId)
-      : (fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''))
-  tradeAmount.value = currentTradeAction.value === 'buy' ? String(Number(entry.amount) || '') : ''
-  tradeQuantity.value = currentTradeAction.value === 'sell' ? String(Number(entry.quantity) || '') : ''
-  tradePrice.value = ''
-  tradeDate.value = String(entry.tradeAt || '').slice(0, 10)
-  tradeTimeSlot.value = entry.settlementAppliedDate && String(entry.tradeAt).slice(11, 16) >= '15:00' ? 'after_1500' : 'before_1500'
-  tradeRemark.value = entry.remark || ''
-  tradeFundFeeMode.value = 'auto'
-  tradeError.value = ''
-  showTradeModal.value = true
-}
-
-async function removePendingTransaction() {
-  const entry = editingTransaction.value
-  const currentUser = getStoredCurrentUser()
-  if (!entry || !currentUser || isSubmitting.value) return
-  if (!window.confirm('确认删除这条待确认交易吗？删除后会退回资金或解除冻结份额。')) return
-  isSubmitting.value = true
-  try {
-    await deleteInvestmentTransaction(entry.id, currentUser.id)
-    closeTradeModal(true)
-    showFeedback('待确认交易已删除', 'success')
-    await loadDetail()
-  } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '删除交易失败', 'error')
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-function closeTradeModal(force = false) {
-  if (isSubmitting.value && !force) {
-    return
-  }
-  showTradeModal.value = false
-  tradeError.value = ''
-}
-
-function openEditModal() {
-  const position = currentPosition.value
-  if (!position) {
-    return
-  }
-  editPrice.value = isPendingSubscription.value ? '' : String(Number(detail.value?.latestPrice ?? position.currentPrice ?? 0) || '')
-  editHoldingQuantity.value = isFundPosition.value
-    ? formatEditableFundQuantity(position.holdingQuantity)
-    : String(Number(position.holdingQuantity ?? 0) || '')
-  editCostPrice.value = String(Number(position.avgCostPrice ?? 0) || '')
-  editDividendType.value = position.dividendType === 'reinvest' ? 'reinvest' : 'cash'
-  editDividendFundingAccountId.value = position.dividendFundingAccountId ? String(position.dividendFundingAccountId) : ''
-  editIncludeInNetWorth.value = Boolean(position.includeInNetWorth)
-  editRemark.value = position.remark || ''
-  editError.value = ''
-  showEditModal.value = true
-}
-
-function closeEditModal(force = false) {
-  if (isSubmitting.value && !force) {
-    return
-  }
-  showEditModal.value = false
-  editError.value = ''
-}
-
-function applyTradeQuantityQuickFill(value: string) {
-  tradeQuantity.value = value
-  tradeError.value = ''
-}
-
-function resetAutoInvestForm() {
-  autoInvestFundingAccountId.value = fundingAccounts.value[0] ? String(fundingAccounts.value[0].id) : ''
-  autoInvestFrequency.value = 'daily'
-  autoInvestAmount.value = ''
-  autoInvestNextExecuteDate.value = formatDateInput(new Date())
-  autoInvestRemark.value = ''
-  autoInvestError.value = ''
-}
-
-function openAutoInvestModal(plan?: InvestmentAutoInvestPlan) {
-  if (!currentPosition.value || !showAutoInvestSection.value) {
-    return
-  }
-  autoInvestError.value = ''
-  if (!plan) {
-    editingAutoInvestPlanId.value = null
-    resetAutoInvestForm()
-  } else {
-    editingAutoInvestPlanId.value = plan.id
-    autoInvestFundingAccountId.value = String(plan.fundingAccountId)
-    autoInvestFrequency.value = plan.frequency === 'monthly'
-      ? 'monthly'
-      : plan.frequency === 'weekly'
-        ? 'weekly'
-        : 'daily'
-    autoInvestAmount.value = String(Number(plan.amount) || '')
-    autoInvestNextExecuteDate.value = plan.nextExecuteDate
-    autoInvestRemark.value = plan.remark || ''
-  }
-  showAutoInvestModal.value = true
-}
-
-function closeAutoInvestModal(force = false) {
-  if (isSavingAutoInvest.value && !force) {
-    return
-  }
-  showAutoInvestModal.value = false
-  autoInvestError.value = ''
-}
-
-function openDeleteModal() {
-  if (!currentPosition.value || isDeletingPosition.value) {
-    return
-  }
-  deleteError.value = ''
-  showDeleteModal.value = true
-}
-
-function closeDeleteModal(force = false) {
-  if (isDeletingPosition.value && !force) {
-    return
-  }
-  showDeleteModal.value = false
-  deleteError.value = ''
-}
-
-async function saveAutoInvestPlan() {
-  if (isSavingAutoInvest.value || !currentPosition.value) {
-    return
-  }
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
-    autoInvestError.value = '请先登录后再操作'
-    return
-  }
-  const fundingAccountId = Number(autoInvestFundingAccountId.value)
-  const amount = Number(autoInvestAmount.value)
-  if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
-    autoInvestError.value = '请选择资金账户'
-    return
-  }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    autoInvestError.value = '请输入有效的定投金额'
-    return
-  }
-  if (!autoInvestNextExecuteDate.value) {
-    autoInvestError.value = '请选择下次执行日期'
-    return
-  }
-
-  isSavingAutoInvest.value = true
-  autoInvestError.value = ''
-
-  try {
-    const existingPlan = editingAutoInvestPlanId.value
-      ? autoInvestPlans.value.find((item) => item.id === editingAutoInvestPlanId.value) ?? null
-      : null
-    const payload = {
-      userId: currentUser.id,
-      accountId: currentPosition.value.accountId,
-      positionId: currentPosition.value.id,
-      fundingAccountId,
-      frequency: autoInvestFrequency.value,
-      amount: Number(amount.toFixed(2)),
-      currencyCode: currentPosition.value.currencyCode || 'CNY',
-      nextExecuteDate: autoInvestNextExecuteDate.value,
-      status: existingPlan?.status === 'paused' ? 'paused' as const : existingPlan?.status === 'cancelled' ? 'cancelled' as const : 'active' as const,
-      remark: autoInvestRemark.value.trim() || null,
-    }
-    if (editingAutoInvestPlanId.value) {
-      await updateInvestmentAutoInvestPlan(editingAutoInvestPlanId.value, payload)
-    } else {
-      await createInvestmentAutoInvestPlan(payload)
-    }
-    closeAutoInvestModal(true)
-    showFeedback(editingAutoInvestPlanId.value ? '定投计划已更新' : '定投计划已创建', 'success')
-    await loadDetail()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '定投计划保存失败'
-    autoInvestError.value = message
-    showFeedback(message, 'error')
-  } finally {
-    isSavingAutoInvest.value = false
-  }
-}
+// ---------- 定投计划操作 ----------
 
 async function updateAutoInvestPlanStatus(plan: InvestmentAutoInvestPlan, status: 'active' | 'paused' | 'cancelled') {
   const currentUser = getStoredCurrentUser()
@@ -1956,6 +423,24 @@ async function removeAutoInvestPlan(plan: InvestmentAutoInvestPlan) {
   }
 }
 
+// ---------- 删除持仓 ----------
+
+function openDeleteModal() {
+  if (!currentPosition.value || isDeletingPosition.value) {
+    return
+  }
+  deleteError.value = ''
+  showDeleteModal.value = true
+}
+
+function closeDeleteModal(force = false) {
+  if (isDeletingPosition.value && !force) {
+    return
+  }
+  showDeleteModal.value = false
+  deleteError.value = ''
+}
+
 async function confirmDeletePosition() {
   if (!currentPosition.value || isDeletingPosition.value) {
     return
@@ -1984,905 +469,15 @@ async function confirmDeletePosition() {
   }
 }
 
-async function submitTrade() {
-  if (isSubmitting.value || !currentPosition.value || !detail.value) {
-    return
-  }
-
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
-    tradeError.value = '请先登录后再操作'
-    return
-  }
-
-  const fundingAccountId = Number(tradeFundingAccountId.value)
-  const amount = getTradeAmountValue()
-  const price = Number(tradePrice.value)
-  const quantity = getTradeQuantityValue()
-  const resolvedTradeAt = resolveTradeAtPayload(tradeDate.value, isFundPosition.value ? tradeTimeSlot.value : undefined)
-
-  if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
-    tradeError.value = '请选择资金账户'
-    return
-  }
-  if (!resolvedTradeAt) {
-    tradeError.value = '请选择有效的交易日期'
-    return
-  }
-  if (isFundPosition.value) {
-    if (currentTradeAction.value === 'buy') {
-      if (!Number.isFinite(amount) || amount <= 0) {
-        tradeError.value = '请输入有效的申购金额'
-        return
-      }
-    } else {
-      if (!Number.isFinite(quantity) || quantity <= 0) {
-        tradeError.value = '请输入有效的赎回份额'
-        return
-      }
-      if (quantity > Number(currentPosition.value.availableQuantity)) {
-        tradeError.value = '赎回份额不能超过可用持仓'
-        return
-      }
-    }
-
-    isSubmitting.value = true
-    tradeError.value = ''
-
-    try {
-      const payload = {
-        userId: currentUser.id,
-        accountId: currentPosition.value.accountId,
-        positionId: currentPosition.value.id,
-        productId: currentPosition.value.productId,
-        tradeType: currentTradeAction.value,
-        quantity: currentTradeAction.value === 'sell' ? Number(quantity.toFixed(6)) : 0,
-        price: null,
-        amount: Number((currentTradeAction.value === 'buy' ? amount : getTradeAmountValue()).toFixed(2)),
-        feeAmount: currentTradeAction.value === 'sell'
-          ? getTradeFundSellFeeAmountPayload()
-          : (editingTransaction.value ? Number(editingTransaction.value.feeAmount ?? 0) : 0),
-        taxAmount: editingTransaction.value ? Number(editingTransaction.value.taxAmount ?? 0) : 0,
-        currencyCode: currentPosition.value.currencyCode || 'CNY',
-        tradeAt: resolvedTradeAt,
-        fundingAccountId,
-        subscriptionTimeSlot: tradeTimeSlot.value,
-        dividendType: currentTradeAction.value === 'buy' ? tradeDividendType.value : undefined,
-        remark: tradeRemark.value.trim() || null,
-      }
-      const transaction = editingTransaction.value
-        ? await updateInvestmentTransaction(editingTransaction.value.id, payload)
-        : await createInvestmentTransaction(payload)
-      closeTradeModal(true)
-      showFeedback(editingTransaction.value ? '待确认交易已更新' : getFundTransactionSubmitMessage(transaction), 'success')
-      await loadDetail()
-    } catch (error) {
-      const message = error instanceof Error ? error.message : `${tradeModalTitle.value}失败`
-      tradeError.value = message
-      showFeedback(message, 'error')
-    } finally {
-      isSubmitting.value = false
-    }
-    return
-  }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    tradeError.value = currentTradeAction.value === 'buy' && tradeInputMode.value === 'quantity'
-      ? '请输入有效的加仓份额'
-      : `请输入有效的${tradeAmountLabel.value}`
-    return
-  }
-  if (!Number.isFinite(price) || price <= 0) {
-    tradeError.value = '请输入有效的成交价格'
-    return
-  }
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    tradeError.value = '金额或价格不正确'
-    return
-  }
-  if (currentTradeAction.value === 'sell' && quantity > Number(currentPosition.value.availableQuantity)) {
-    tradeError.value = '减仓数量不能超过可用持仓'
-    return
-  }
-
-  isSubmitting.value = true
-  tradeError.value = ''
-
-  try {
-    await createInvestmentTransaction({
-      userId: currentUser.id,
-      accountId: currentPosition.value.accountId,
-      positionId: currentPosition.value.id,
-      productId: currentPosition.value.productId,
-      tradeType: currentTradeAction.value,
-      quantity: Number(quantity.toFixed(6)),
-      price,
-      amount: Number(amount.toFixed(2)),
-      feeAmount: 0,
-      taxAmount: 0,
-      currencyCode: currentPosition.value.currencyCode || 'CNY',
-      tradeAt: resolvedTradeAt,
-      fundingAccountId,
-      remark: tradeRemark.value.trim() || null,
-    })
-    closeTradeModal(true)
-    showFeedback(currentTradeAction.value === 'buy' ? '加仓成功' : '减仓成功', 'success')
-    await loadDetail()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : `${tradeModalTitle.value}失败`
-    tradeError.value = message
-    showFeedback(message, 'error')
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-async function submitEdit() {
-  if (isSubmitting.value || !currentPosition.value) {
-    return
-  }
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
-    editError.value = '请先登录后再操作'
-    return
-  }
-  const price = Number(editPrice.value)
-  const holdingQuantity = Number(editHoldingQuantity.value)
-  const costPrice = Number(editCostPrice.value)
-  const frozenQuantity = Number(currentPosition.value.frozenQuantity ?? 0)
-  const isEditingDirectPosition = !isPendingSubscription.value
-  if (!isPendingSubscription.value && (!Number.isFinite(price) || price <= 0)) {
-    editError.value = '请输入有效的当前价格'
-    return
-  }
-  if (isEditingDirectPosition) {
-    if (!Number.isFinite(holdingQuantity) || holdingQuantity <= 0) {
-      editError.value = `请输入有效的当前${currentUnitName.value}`
-      return
-    }
-    if (!Number.isFinite(costPrice) || costPrice < 0) {
-      editError.value = '请输入有效的持仓成本价'
-      return
-    }
-    if (holdingQuantity < frozenQuantity) {
-      editError.value = '当前份额不能小于冻结份额'
-      return
-    }
-  }
-  const isEditingFundPosition = isFundPosition.value
-  const dividendFundingAccountId = Number(editDividendFundingAccountId.value)
-  if (isEditingFundPosition && editDividendType.value === 'cash'
-    && (!Number.isFinite(dividendFundingAccountId) || dividendFundingAccountId <= 0)) {
-    editError.value = '现金分红必须选择到账资金账户'
-    return
-  }
-
-  isSubmitting.value = true
-  editError.value = ''
-
-  try {
-    const nextHoldingQuantity = isEditingDirectPosition ? holdingQuantity : Number(currentPosition.value.holdingQuantity)
-    const nextCostAmount = isEditingDirectPosition
-      ? Number((holdingQuantity * costPrice).toFixed(2))
-      : Number(currentPosition.value.costAmount)
-    const nextAvailableQuantity = isEditingDirectPosition
-      ? Number((holdingQuantity - frozenQuantity).toFixed(6))
-      : Number(currentPosition.value.availableQuantity)
-    await updateInvestmentPosition(currentPosition.value.id, {
-      userId: currentUser.id,
-      accountId: currentPosition.value.accountId,
-      productId: currentPosition.value.productId,
-      holdingQuantity: isEditingDirectPosition ? Number(nextHoldingQuantity.toFixed(6)) : nextHoldingQuantity,
-      availableQuantity: nextAvailableQuantity,
-      frozenQuantity,
-      costAmount: nextCostAmount,
-      currentPrice: isPendingSubscription.value ? undefined : price,
-      fundingAccountId: isEditingFundPosition && editDividendType.value === 'cash'
-        ? dividendFundingAccountId
-        : undefined,
-      dividendType: isEditingFundPosition ? editDividendType.value : undefined,
-      includeInNetWorth: editIncludeInNetWorth.value,
-      status: currentPosition.value.status,
-      remark: editRemark.value.trim() || null,
-    })
-    closeEditModal(true)
-    showFeedback('修改成功', 'success')
-    await loadDetail()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '修改失败'
-    editError.value = message
-    showFeedback(message, 'error')
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
 function showFeedback(message: string, type: 'success' | 'error') {
   feedbackMessage.value = message
   feedbackType.value = type
   showFeedbackModal.value = true
 }
 
-function statClass(entry: InvestmentDetailStat) {
-  if (entry.tone === 'primary') return 'tone-primary'
-  return ''
-}
-
-function statTone(entry: InvestmentDetailStat) {
-  if (entry.tone === 'positive') return 'positive'
-  if (entry.tone === 'negative') return 'negative'
-  if (entry.tone === 'neutral') return 'neutral'
-  return 'inherit'
-}
-
-function mergeDetail(partial: Partial<InvestmentAssetDetail>) {
-  if (!detail.value) {
-    return
-  }
-  detail.value = {
-    ...detail.value,
-    ...partial,
-  }
-}
-
-function stat(label: string, value: string, tone?: string): InvestmentDetailStat {
-  return { label, value, tone }
-}
-
-function toneByNumber(value: number) {
-  if (!Number.isFinite(value) || value === 0) {
-    return 'neutral'
-  }
-  return value > 0 ? 'positive' : 'negative'
-}
-
-function jsonpRequest<T>(url: string, callbackParams: string[], timeoutMs = 8000) {
-  return new Promise<T>((resolve, reject) => {
-    const callbackName = `__jsonp_${Date.now()}_${Math.floor(Math.random() * 100000)}`
-    const script = document.createElement('script')
-    const globalWindow = window as unknown as Window & Record<string, unknown>
-    const timer = window.setTimeout(() => {
-      cleanup()
-      reject(new Error('行情接口请求超时'))
-    }, timeoutMs)
-
-    function cleanup() {
-      window.clearTimeout(timer)
-      script.remove()
-      delete globalWindow[callbackName]
-    }
-
-    globalWindow[callbackName] = (data: T) => {
-      cleanup()
-      resolve(data)
-    }
-
-    script.onerror = () => {
-      cleanup()
-      reject(new Error('行情接口加载失败'))
-    }
-
-    const connector = url.includes('?') ? '&' : '?'
-    const callbackQuery = callbackParams
-      .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(callbackName)}`)
-      .join('&')
-    script.src = `${url}${connector}${callbackQuery}`
-    document.body.appendChild(script)
-  })
-}
-
-function fetchFundTrend(fundCode: string) {
-  return new Promise<{ netWorthTrend: any[]; acWorthTrend: any[] }>((resolve, reject) => {
-    const script = document.createElement('script')
-    const globalWindow = window as Window & Record<string, any>
-    const timer = window.setTimeout(() => {
-      cleanup()
-      reject(new Error('基金走势请求超时'))
-    }, 10000)
-
-    function cleanup() {
-      window.clearTimeout(timer)
-      script.remove()
-    }
-
-    globalWindow.Data_netWorthTrend = undefined
-    globalWindow.Data_ACWorthTrend = undefined
-
-    script.onload = () => {
-      const netWorthTrend = Array.isArray(globalWindow.Data_netWorthTrend) ? globalWindow.Data_netWorthTrend.slice() : []
-      const acWorthTrend = Array.isArray(globalWindow.Data_ACWorthTrend) ? globalWindow.Data_ACWorthTrend.slice() : []
-      cleanup()
-      resolve({ netWorthTrend, acWorthTrend })
-    }
-
-    script.onerror = () => {
-      cleanup()
-      reject(new Error('基金走势加载失败'))
-    }
-
-    script.src = `https://fund.eastmoney.com/pingzhongdata/${encodeURIComponent(fundCode)}.js?v=${Date.now()}`
-    document.body.appendChild(script)
-  })
-}
-
-function buildFundTrendPoints(
-  trend: { netWorthTrend: any[]; acWorthTrend?: any[] },
-  latestAccumulativePoint?: { label?: string | null; value?: number | null },
-  latestNetPoint?: { label?: string | null; value?: number | null },
-) {
-  const acRows = Array.isArray(trend.acWorthTrend) ? trend.acWorthTrend : []
-  if (acRows.length > 0) {
-    const points = acRows
-      .map((item) => ({ ts: Number(item?.[0]), value: Number(item?.[1]) }))
-      .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.value))
-      .sort((a, b) => a.ts - b.ts)
-      .map((item) => ({
-        label: formatDate(item.ts),
-        value: item.value,
-      }))
-
-    return mergeLatestFundTrendPoint(points, latestAccumulativePoint)
-  }
-
-  const netRows = Array.isArray(trend.netWorthTrend) ? trend.netWorthTrend : []
-  const points = netRows
-    .map((item) => ({ ts: Number(item?.x), value: Number(item?.y) }))
-    .filter((item) => Number.isFinite(item.ts) && Number.isFinite(item.value))
-    .sort((a, b) => a.ts - b.ts)
-    .map((item) => ({
-      label: formatDate(item.ts),
-      value: item.value,
-    }))
-
-  return mergeLatestFundTrendPoint(points, latestNetPoint ?? latestAccumulativePoint)
-}
-
-function buildFundTrendValueContext(
-  trend: { netWorthTrend: any[]; acWorthTrend?: any[] },
-  latestAccumulativePoint?: { label?: string | null; value?: number | null },
-  latestNetPoint?: { label?: string | null; value?: number | null },
-) {
-  const values: Record<string, FundTrendValueEntry> = {}
-  const acRows = Array.isArray(trend.acWorthTrend) ? trend.acWorthTrend : []
-  const netRows = Array.isArray(trend.netWorthTrend) ? trend.netWorthTrend : []
-
-  for (const item of acRows) {
-    const ts = Number(item?.[0])
-    const value = Number(item?.[1])
-    if (!Number.isFinite(ts) || !Number.isFinite(value) || value <= 0) {
-      continue
-    }
-    setFundTrendValue(values, formatDate(ts), 'cumulative', value)
-  }
-
-  for (const item of netRows) {
-    const ts = Number(item?.x)
-    const value = Number(item?.y)
-    if (!Number.isFinite(ts) || !Number.isFinite(value) || value <= 0) {
-      continue
-    }
-    setFundTrendValue(values, formatDate(ts), 'net', value)
-  }
-
-  setFundTrendValue(values, latestAccumulativePoint?.label, 'cumulative', latestAccumulativePoint?.value)
-  setFundTrendValue(values, latestNetPoint?.label, 'net', latestNetPoint?.value)
-
-  const hasCumulative = Object.values(values).some((entry) => Number.isFinite(Number(entry.cumulative)) && Number(entry.cumulative) > 0)
-  return {
-    values,
-    mode: hasCumulative ? 'cumulative' as const : 'net' as const,
-  }
-}
-
-function setFundTrendValue(
-  values: Record<string, FundTrendValueEntry>,
-  label: string | null | undefined,
-  key: keyof FundTrendValueEntry,
-  rawValue: unknown,
-) {
-  const normalizedLabel = normalizeDateLabel(label || '')
-  const value = Number(rawValue)
-  if (!normalizedLabel || !Number.isFinite(value) || value <= 0) {
-    return
-  }
-  values[normalizedLabel] = {
-    ...(values[normalizedLabel] ?? {}),
-    [key]: value,
-  }
-}
-
-function mergeLatestFundTrendPoint(
-  points: InvestmentChartPoint[],
-  latestPoint?: { label?: string | null; value?: number | null },
-) {
-  const normalizedLabel = normalizeDateLabel(latestPoint?.label || '')
-  const numericValue = Number(latestPoint?.value)
-  if (!normalizedLabel || !Number.isFinite(numericValue)) {
-    return points
-  }
-
-  const merged = points.filter((point) => normalizeDateLabel(point.label) !== normalizedLabel)
-  merged.push({
-    label: normalizedLabel,
-    value: numericValue,
-  })
-  merged.sort((left, right) => {
-    const leftDate = parsePointLabelDate(left.label)?.getTime() ?? 0
-    const rightDate = parsePointLabelDate(right.label)?.getTime() ?? 0
-    return leftDate - rightDate
-  })
-  return merged
-}
-
-function applyFundTrendRange() {
-  if (!detail.value || detail.value.productType !== 'fund') {
-    return
-  }
-  const nextPoints = filterFundTrendPoints(fullFundChartPoints.value, selectedFundTrendRange.value)
-  mergeDetail({
-    chartPoints: nextPoints,
-  })
-}
-
-function filterFundTrendPoints(points: InvestmentChartPoint[], range: FundTrendRange) {
-  if (!points.length) {
-    return []
-  }
-
-  const datedPoints = points
-    .map((point) => {
-      const date = parsePointLabelDate(point.label)
-      return date ? { point, date } : null
-    })
-    .filter((item): item is { point: InvestmentChartPoint; date: Date } => Boolean(item))
-
-  if (!datedPoints.length) {
-    return points
-  }
-
-  const latestDate = datedPoints[datedPoints.length - 1].date
-  const cutoff = new Date(latestDate)
-
-  if (range === '1m') {
-    cutoff.setMonth(cutoff.getMonth() - 1)
-  } else if (range === '3m') {
-    cutoff.setMonth(cutoff.getMonth() - 3)
-  } else if (range === '6m') {
-    cutoff.setMonth(cutoff.getMonth() - 6)
-  } else if (range === '1y') {
-    cutoff.setFullYear(cutoff.getFullYear() - 1)
-  } else {
-    cutoff.setFullYear(cutoff.getFullYear() - 3)
-  }
-
-  const filtered = datedPoints
-    .filter((item) => item.date >= cutoff)
-    .map((item) => item.point)
-
-  return filtered.length ? filtered : points
-}
-
-function parsePointLabelDate(label: string) {
-  const normalized = normalizeDateLabel(label)
-  const parsed = new Date(`${normalized}T00:00:00`)
-  return Number.isNaN(parsed.getTime()) ? null : parsed
-}
-
-async function fetchStockQuote(symbol: string) {
-  const response = await fetch(`https://qt.gtimg.cn/q=${encodeURIComponent(symbol)}`)
-  const buffer = await response.arrayBuffer()
-  let text = ''
-  try {
-    text = new TextDecoder('gbk').decode(buffer)
-  } catch {
-    text = new TextDecoder().decode(buffer)
-  }
-  const start = text.indexOf('"')
-  const end = text.lastIndexOf('"')
-  if (start < 0 || end <= start) {
-    throw new Error('股票行情格式异常')
-  }
-  const arr = text.slice(start + 1, end).split('~')
-  return {
-    name: arr[1],
-    code: arr[2],
-    price: arr[3],
-    prevClose: arr[4],
-    open: arr[5],
-    volume: arr[6],
-    timeRaw: arr[30],
-    change: arr[31],
-    changePct: arr[32],
-    high: arr[33],
-    low: arr[34],
-  }
-}
-
-async function fetchStockKline(symbol: string) {
-  const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${encodeURIComponent(`${symbol},day,,,260,qfq`)}`)
-  const data = await response.json()
-  const rows = data?.data?.[symbol]?.qfqday || data?.data?.[symbol]?.day || []
-  if (!Array.isArray(rows)) {
-    return []
-  }
-  return rows
-    .map((row) => ({
-      label: row?.[0],
-      open: Number(row?.[1]),
-      close: Number(row?.[2]),
-      high: Number(row?.[3]),
-      low: Number(row?.[4]),
-      volume: Number(row?.[5]),
-      value: Number(row?.[2]),
-    }))
-    .filter((item) => item.label && Number.isFinite(item.close))
-}
-
-function toTencentSymbol(code: string, market?: string | null) {
-  if (market === 'SSE') return `sh${code}`
-  if (market === 'SZSE') return `sz${code}`
-  return code.startsWith('6') ? `sh${code}` : `sz${code}`
-}
-
-function getTradeTypeLabel(entry: InvestmentTransaction) {
-  if (entry.settlementStatus === 'pending') {
-    if (entry.tradeType === 'buy') {
-      return '加仓待确认'
-    }
-    if (entry.tradeType === 'sell') {
-      return '减仓待确认'
-    }
-  }
-  const map: Record<string, string> = {
-    buy: '买入',
-    sell: '卖出',
-    dividend: '分红',
-    bonus: '送股',
-  }
-  return map[entry.tradeType] ?? entry.tradeType
-}
-
-function isInitialFundSubscriptionTransaction(entry: InvestmentTransaction) {
-  return entry.remark === '基金首次申购'
-    || entry.transactionNo.startsWith('INIT-PENDING-')
-    || entry.transactionNo.startsWith('INIT-')
-}
-
-function getTradeQuantityClass(type: string) {
-  if (type === 'sell') {
-    return 'trend-down'
-  }
-  return 'trend-up'
-}
-
-function getTradeQuantityText(entry: InvestmentTransaction, unitName?: string | null) {
-  if (entry.settlementStatus === 'pending' && entry.tradeType === 'buy') {
-    return '待确认份额'
-  }
-  const sign = entry.tradeType === 'sell' ? '-' : '+'
-  return `${sign} ${formatNumber(Number(entry.quantity), 2)} ${unitName || '份'}`
-}
-
-function formatTradeTime(value: string) {
-  if (!value) return '--'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  const today = new Date()
-  const isToday = date.toDateString() === today.toDateString()
-  const time = date.toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-  if (isToday) {
-    return `今天 ${time}`
-  }
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${month}-${day} ${time}`
-}
-
-function applyTransactionPage(pageData: InvestmentTransactionPage) {
-  transactionPageItems.value = pageData.items ?? []
-  transactionTotal.value = Number(pageData.total ?? 0)
-  transactionPageSize.value = Number(pageData.pageSize || TRANSACTION_PAGE_SIZE)
-  currentTransactionPage.value = Math.max(1, Number(pageData.page || 1))
-}
-
-async function loadTransactionPage(page: number) {
-  if (isLoadingTransactionPage.value || !positionId.value) {
-    return
-  }
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
-    applyTransactionPage({ items: [], total: 0, page: 1, pageSize: TRANSACTION_PAGE_SIZE, totalPages: 1 })
-    return
-  }
-
-  isLoadingTransactionPage.value = true
-  try {
-    const pageData = await getInvestmentTransactionPage({
-      userId: currentUser.id,
-      positionId: positionId.value,
-      page,
-      pageSize: TRANSACTION_PAGE_SIZE,
-    })
-    applyTransactionPage(pageData)
-  } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '交易记录加载失败', 'error')
-  } finally {
-    isLoadingTransactionPage.value = false
-  }
-}
-
-function goToPrevTransactionPage() {
-  if (!canGoPrevTransactionPage.value || isLoadingTransactionPage.value) {
-    return
-  }
-  void loadTransactionPage(currentTransactionPage.value - 1)
-}
-
-function goToNextTransactionPage() {
-  if (!canGoNextTransactionPage.value || isLoadingTransactionPage.value) {
-    return
-  }
-  void loadTransactionPage(currentTransactionPage.value + 1)
-}
-
-function formatDateInput(value: Date) {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function isTodayMarketData(value?: string | null) {
-  if (!value) {
-    return false
-  }
-  const normalized = value.trim().replace(' ', 'T')
-  const date = new Date(normalized)
-  if (Number.isNaN(date.getTime())) {
-    const matched = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
-    if (!matched) {
-      return false
-    }
-    return value.slice(0, 10) === formatDateInput(new Date())
-  }
-  return formatDateInput(date) === formatDateInput(new Date())
-}
-
-function formatAutoInvestFrequency(value: string) {
-  if (value === 'daily') return '每日定投'
-  return value === 'monthly' ? '每月定投' : '每周定投'
-}
-
-function formatAutoInvestStatus(value: string) {
-  if (value === 'paused') return '已暂停'
-  if (value === 'cancelled') return '已停用'
-  return '执行中'
-}
-
-function formatDateTimeLabel(value?: string | null) {
-  if (!value) return '--'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return `${formatDate(date.getTime())} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
-function formatDividendDate(value?: string | null) {
-  if (!value) return '--'
-  const date = new Date(`${value}T00:00:00`)
-  if (Number.isNaN(date.getTime())) return value
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function formatDividendPerUnit(value?: number | null) {
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? `${formatNumber(numeric, 4)} / ${currentUnitName.value}` : '--'
-}
-
-function getDividendRecordKey(entry: InvestmentDividendRecord) {
-  return entry.id ?? `${entry.productId}-${entry.payDate ?? 'unknown'}-${entry.dividendPerUnit ?? 0}`
-}
-
-function getDividendStatusLabel(value?: string | null, actualAmount?: number | null) {
-  if (actualAmount !== null && actualAmount !== undefined) return '已到账'
-  if (value === 'paid') return '已公告'
-  if (value === 'confirmed') return '已公告'
-  if (value === 'planned') return '计划中'
-  if (value === 'cancelled') return '已取消'
-  return value || '--'
-}
-
-function normalizeDateLabel(value: string) {
-  if (!value) return ''
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value.slice(0, 10)
-  }
-  return formatDate(date.getTime())
-}
-
-function getTooltipPointValue(item: any) {
-  if (Array.isArray(item?.value)) {
-    return item.value[item.value.length - 1]
-  }
-  return item?.value
-}
-
-function getChangePercentByBaseline(value: unknown, baseline = chartCostBaseline.value) {
-  const numeric = Number(value)
-  if (!baseline || !Number.isFinite(numeric)) {
-    return null
-  }
-  return ((numeric - baseline) / baseline) * 100
-}
-
-function formatAxisChangeLabel(value: unknown, baseline = chartCostBaseline.value) {
-  const percent = getChangePercentByBaseline(value, baseline)
-  if (percent === null) {
-    return '--'
-  }
-  return `${percent > 0 ? '+' : ''}${formatNumber(percent)}%`
-}
-
-function formatPriceWithChange(value: unknown, digits: number, baseline = chartCostBaseline.value) {
-  const numeric = Number(value)
-  if (!Number.isFinite(numeric)) {
-    return '--'
-  }
-  const percent = getChangePercentByBaseline(numeric, baseline)
-  const priceText = formatNumber(numeric, digits)
-  if (percent === null) {
-    return priceText
-  }
-  return `${priceText}（${percent > 0 ? '+' : ''}${formatNumber(percent)}%）`
-}
-
-function formatValueWithBaselinePercent(value: unknown, digits: number, baseline: number | null) {
-  return formatPriceWithChange(value, digits, baseline)
-}
-
-function formatTooltipPointValue(value: unknown, digits: number) {
-  const numeric = Number(value)
-  return Number.isFinite(numeric) ? formatNumber(numeric, digits) : '--'
-}
-
-function formatDate(timestamp: number) {
-  const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) return '--'
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function formatEditableFundQuantity(value?: number | null) {
-  const numeric = Number(value ?? 0)
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    return ''
-  }
-  return numeric.toFixed(2)
-}
-
-function formatTradeQuantityInput(value?: number | null) {
-  const numeric = Number(value ?? 0)
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-    return ''
-  }
-  return numeric.toFixed(6).replace(/(?:\.0+|(\.\d*?)0+)$/, '$1')
-}
-
-function formatTencentTime(raw?: string) {
-  if (!raw || raw.length !== 14) return ''
-  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)} ${raw.slice(8, 10)}:${raw.slice(10, 12)}:${raw.slice(12, 14)}`
-}
-
-function resolveTradeAtPayload(
-  value: string,
-  timeSlot?: 'before_1500' | 'after_1500',
-) {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return ''
-  }
-
-  const time = timeSlot === 'after_1500'
-    ? '15:01:00'
-    : timeSlot === 'before_1500'
-      ? '14:59:00'
-      : '12:00:00'
-
-  return `${value}T${time}`
-}
-
-function formatNumber(value: number, digits = 2) {
-  if (!Number.isFinite(value)) return '--'
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(value)
-}
-
-function resolveLineChartBaseline(points: InvestmentChartPoint[], isFundTrendChart: boolean) {
-  if (isFundTrendChart) {
-    const firstPoint = points.find((point) => Number.isFinite(Number(point.value)))
-    const firstValue = Number(firstPoint?.value)
-    return Number.isFinite(firstValue) && firstValue > 0 ? firstValue : null
-  }
-
-  const costPrice = Number(chartCostBaseline.value)
-  return Number.isFinite(costPrice) && costPrice > 0 ? costPrice : null
-}
-
-function formatPercentValue(value: number, digits = 2) {
-  if (!Number.isFinite(value)) return '--'
-  return `${formatNumber(value * 100, digits)}%`
-}
-
-function formatCurrency(value: number) {
-  if (!Number.isFinite(value)) return '¥--'
-  const sign = value < 0 ? '-' : ''
-  return `${sign}¥${formatNumber(Math.abs(value))}`
-}
-
-function formatCompactCurrency(value: number) {
-  if (!Number.isFinite(value)) return '¥--'
-  const sign = value < 0 ? '-' : ''
-  const absoluteValue = Math.abs(value)
-  if (absoluteValue >= 10000) {
-    return `${sign}¥${formatNumber(absoluteValue / 10000, 1)}万`
-  }
-  return `${sign}¥${formatNumber(absoluteValue, 0)}`
-}
-
-function getNetTransactionAmount(entry: InvestmentTransaction) {
-  return Number(entry.amount) - Number(entry.feeAmount ?? 0) - Number(entry.taxAmount ?? 0)
-}
-
-function formatAmountLabel(entry: InvestmentTransaction) {
-  if (entry.settlementStatus === 'pending' && entry.tradeType === 'sell') {
-    return `预计到账 ${formatCurrency(getNetTransactionAmount(entry))}`
-  }
-  if (entry.settlementStatus === 'pending' && entry.tradeType === 'buy') {
-    return `申购金额 ${formatCurrency(Number(entry.amount))}`
-  }
-  if (entry.tradeType === 'sell') {
-    return `到账金额 ${formatCurrency(getNetTransactionAmount(entry))}`
-  }
-  return `金额 ${formatCurrency(Number(entry.amount))}`
-}
-
-function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
-  if (entry.tradeType === 'sell') {
-    const appliedDate = entry.settlementAppliedDate || '--'
-    const expectedDate = entry.settlementExpectedDate || appliedDate
-    const feeText = formatCurrency(Number(entry.feeAmount ?? 0))
-    const netAmountText = formatCurrency(getNetTransactionAmount(entry))
-    if (entry.settlementStatus === 'confirmed') {
-      return `基金减仓已按确认净值结算，到账 ${netAmountText}`
-    }
-    if (expectedDate === appliedDate) {
-      return `基金减仓申请已提交，预计手续费 ${feeText}，将按 ${appliedDate} 净值确认，预计到账 ${netAmountText}`
-    }
-    return `基金减仓申请已提交，预计手续费 ${feeText}，将按 ${appliedDate} 净值确认，预计 ${expectedDate} 到账 ${netAmountText}`
-  }
-
-  if (entry.settlementStatus === 'confirmed') {
-    return '基金加仓已按确认日净值确认，份额已更新'
-  }
-  const appliedDate = entry.settlementAppliedDate || '--'
-  const expectedDate = entry.settlementExpectedDate || appliedDate
-  if (expectedDate === appliedDate) {
-    return `基金加仓申请已提交，将按 ${appliedDate} 净值确认份额`
-  }
-  return `基金加仓申请已提交，将按 ${appliedDate} 净值确认，预计 ${expectedDate} 完成`
-}
+onMounted(() => {
+  loadDetail()
+})
 </script>
 
 <template>
@@ -2944,17 +539,17 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
       </section>
 
       <section class="investment-detail-actions" aria-label="持仓操作">
-        <button class="investment-detail-action-button buy" type="button" @click="openTradeModal('buy')">加仓</button>
-        <button class="investment-detail-action-button sell" type="button" :disabled="isPendingSubscription" @click="openTradeModal('sell')">减仓</button>
+        <button class="investment-detail-action-button buy" type="button" @click="tradeModalRef?.open('buy')">加仓</button>
+        <button class="investment-detail-action-button sell" type="button" :disabled="isPendingSubscription" @click="tradeModalRef?.open('sell')">减仓</button>
         <button
           class="investment-detail-action-button auto-invest"
           type="button"
           :disabled="!showAutoInvestSection"
-          @click="openAutoInvestModal()"
+          @click="autoInvestModalRef?.open()"
         >
           定投
         </button>
-        <button class="investment-detail-action-button edit" type="button" @click="openEditModal">修改</button>
+        <button class="investment-detail-action-button edit" type="button" @click="editModalRef?.open()">修改</button>
         <button class="investment-detail-action-button delete" type="button" :disabled="isDeletingPosition" @click="openDeleteModal">删除</button>
       </section>
 
@@ -3091,7 +686,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
             </div>
 
             <div class="investment-auto-invest-actions">
-              <button type="button" :disabled="isSavingAutoInvest" @click="openAutoInvestModal(plan)">修改</button>
+              <button type="button" :disabled="isSavingAutoInvest" @click="autoInvestModalRef?.open(plan)">修改</button>
               <button
                 type="button"
                 :disabled="isSavingAutoInvest"
@@ -3105,300 +700,50 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
         </div>
       </section>
 
-      <section class="investment-detail-transactions-wrap" aria-label="交易记录">
-        <header class="investment-detail-transactions-head">
-          <strong>交易记录</strong>
-          <span>{{ transactionCountText }}</span>
-        </header>
-
-      <section class="investment-detail-transactions-card">
-          <article
-            v-for="entry in transactionPageItems"
-            :key="entry.id"
-            :class="['investment-detail-transaction-item', { 'is-pending': entry.id > 0 && entry.settlementStatus === 'pending' }]"
-            :tabindex="entry.id > 0 && entry.settlementStatus === 'pending' ? 0 : undefined"
-            @click="openPendingTransactionModal(entry)"
-            @keydown.enter="openPendingTransactionModal(entry)"
-          >
-            <div class="investment-detail-transaction-left">
-              <strong>{{ getTradeTypeLabel(entry) }}</strong>
-              <span>{{ formatTradeTime(entry.tradeAt) }}</span>
-            </div>
-            <div class="investment-detail-transaction-right">
-              <span>{{ formatAmountLabel(entry) }}</span>
-              <AmountText
-                tag="strong"
-                :class="getTradeQuantityClass(entry.tradeType)"
-                tone="inherit"
-                :value="getTradeQuantityText(entry, detail.unitName || detail.position.unitName)"
-              />
-            </div>
-          </article>
-          <p v-if="transactionTotal === 0" class="investment-detail-empty">暂无交易记录</p>
-
-          <div v-if="hasTransactionPagination" class="investment-detail-transactions-pagination" aria-label="交易记录分页">
-            <button
-              class="investment-detail-transactions-pagination-button"
-              type="button"
-              :disabled="!canGoPrevTransactionPage || isLoadingTransactionPage"
-              @click="goToPrevTransactionPage"
-            >
-              上一页
-            </button>
-            <span class="investment-detail-transactions-pagination-summary">{{ transactionPaginationSummary }}</span>
-            <button
-              class="investment-detail-transactions-pagination-button"
-              type="button"
-              :disabled="!canGoNextTransactionPage || isLoadingTransactionPage"
-              @click="goToNextTransactionPage"
-            >
-              下一页
-            </button>
-          </div>
-        </section>
-      </section>
+      <TransactionList
+        :items="transactionPageItems"
+        :unit-name="detail.unitName || detail.position.unitName || ''"
+        :total="transactionTotal"
+        :current-page="currentTransactionPage"
+        :total-pages="totalTransactionPages"
+        :summary="transactionPaginationSummary"
+        :can-prev="canGoPrevTransactionPage"
+        :can-next="canGoNextTransactionPage"
+        :is-loading="isLoadingTransactionPage"
+        @prev="goToPrevTransactionPage"
+        @next="goToNextTransactionPage"
+        @open-pending="openPendingTransactionModal"
+      />
     </template>
 
-    <CommonModal
-      v-model="showTradeModal"
-      :title="tradeModalTitle"
-      size="compact"
-      :close-on-overlay="!isSubmitting"
-      @close="closeTradeModal"
-    >
-      <div class="investment-detail-modal-form">
-        <label class="investment-detail-modal-field">
-          <span>资产名称</span>
-          <input
-            class="investment-detail-field-control"
-            :value="detail?.name || detail?.position.productName || ''"
-            type="text"
-            readonly
-          />
-        </label>
+    <TradeModal
+      v-if="detail"
+      ref="tradeModalRef"
+      :detail="detail"
+      :funding-accounts="fundingAccounts"
+      @saved="loadDetail"
+      @feedback="showFeedback"
+    />
 
-        <SegmentedControl
-          v-if="showTradeInputMode"
-          v-model="tradeModeValue"
-          :options="tradeModeOptions"
-          label="加仓方式切换"
-        />
+    <EditPositionModal
+      v-if="detail"
+      ref="editModalRef"
+      :detail="detail"
+      :funding-accounts="fundingAccounts"
+      @saved="loadDetail"
+      @feedback="showFeedback"
+    />
 
-        <div :class="['investment-detail-modal-row', { 'single-column': isFundPosition }]">
-          <label class="investment-detail-modal-field">
-            <span>{{ tradePrimaryLabel }}</span>
-            <input
-              v-if="isFundPosition ? currentTradeAction === 'buy' : currentTradeAction !== 'buy' || tradeInputMode === 'amount'"
-              v-model="tradeAmount"
-              class="investment-detail-field-control"
-              type="number"
-              inputmode="decimal"
-              :placeholder="tradePrimaryPlaceholder"
-            />
-            <input
-              v-else
-              v-model="tradeQuantity"
-              class="investment-detail-field-control"
-              type="number"
-              inputmode="decimal"
-              :placeholder="tradePrimaryPlaceholder"
-            />
-            <div v-if="showTradeQuantityQuickTabs" class="investment-detail-quick-tabs" aria-label="赎回份额快捷填充">
-              <button
-                v-for="item in tradeQuantityQuickFillTabs"
-                :key="item.label"
-                :class="['investment-detail-quick-tab', { active: activeTradeQuantityQuickTab === item.label }]"
-                type="button"
-                @click="applyTradeQuantityQuickFill(item.value)"
-              >
-                {{ item.label }}
-              </button>
-            </div>
-          </label>
-
-          <label v-if="showTradePriceField" class="investment-detail-modal-field">
-            <span>成交价格</span>
-            <input
-              v-model="tradePrice"
-              class="investment-detail-field-control"
-              type="number"
-              inputmode="decimal"
-              placeholder="请输入价格"
-            />
-          </label>
-        </div>
-
-        <CommonSelect
-          v-model="tradeFundingAccountId"
-          :label="isFundPosition && currentTradeAction === 'buy' && tradeDividendType === 'cash' ? '申购及现金分红到账账户' : tradeAccountLabel"
-          :options="fundingAccountOptions"
-        />
-
-        <label v-if="isFundPosition && currentTradeAction === 'buy'" class="investment-detail-modal-field">
-          <span>分红方式</span>
-          <SegmentedControl
-            v-model="tradeDividendType"
-            :options="dividendTypeOptions"
-            label="基金分红方式"
-          />
-        </label>
-
-        <label class="investment-detail-modal-field">
-          <span>交易日期</span>
-          <input
-            v-model="tradeDate"
-            class="investment-detail-field-control"
-            type="date"
-          />
-        </label>
-
-        <label v-if="showTradeQuantityPreview" class="investment-detail-modal-field">
-          <span>数量</span>
-          <input class="investment-detail-field-control" :value="tradeQuantityPreview" type="text" readonly />
-        </label>
-
-        <label v-if="showTradeAmountPreview" class="investment-detail-modal-field">
-          <span>金额</span>
-          <input class="investment-detail-field-control" :value="tradeAmountPreview" type="text" readonly />
-        </label>
-
-        <label v-if="isFundPosition" class="investment-detail-modal-field">
-          <span>{{ currentTradeAction === 'buy' ? '申购时点' : '赎回时点' }}</span>
-          <SegmentedControl
-            v-model="tradeTimeSlot"
-            :options="tradeTimeSlotOptions"
-            label="基金交易时点"
-          />
-        </label>
-
-        <CommonSelect
-          v-if="showFundRedeemFeeSelector"
-          v-model="tradeFundFeeSelectValue"
-          label="手续费档位"
-          :options="tradeFundFeeSelectOptions"
-        />
-
-        <label v-if="showFundRedeemFeeSelector" class="investment-detail-modal-field">
-          <span>预计手续费</span>
-          <input class="investment-detail-field-control" :value="tradeFundFeeAmountPreview" type="text" readonly />
-        </label>
-
-        <label v-if="showFundRedeemFeeSelector" class="investment-detail-modal-field">
-          <span>预计到账</span>
-          <input class="investment-detail-field-control" :value="tradeFundNetAmountPreview" type="text" readonly />
-        </label>
-
-        <label class="investment-detail-modal-field">
-          <span>备注</span>
-          <textarea
-            v-model="tradeRemark"
-            class="investment-detail-textarea-control"
-            rows="1"
-            maxlength="200"
-            placeholder="选填"
-          ></textarea>
-        </label>
-
-        <p v-if="tradeError" class="investment-detail-modal-error">{{ tradeError }}</p>
-      </div>
-
-      <template #footer>
-        <div class="investment-detail-modal-actions">
-          <button v-if="editingTransaction" type="button" class="investment-detail-transaction-delete" :disabled="isSubmitting" @click="removePendingTransaction">删除</button>
-          <CommonButton variant="secondary" :disabled="isSubmitting" @click="closeTradeModal">
-            取消
-          </CommonButton>
-          <CommonButton variant="primary" :disabled="isSubmitting" @click="submitTrade">
-            {{ isSubmitting ? '提交中...' : editingTransaction ? '保存修改' : tradeModalTitle }}
-          </CommonButton>
-        </div>
-      </template>
-    </CommonModal>
-
-    <CommonModal
-      v-model="showAutoInvestModal"
-      :title="editingAutoInvestPlanId ? '修改定投计划' : '新增定投计划'"
-      size="compact"
-      :close-on-overlay="!isSavingAutoInvest"
-      @close="closeAutoInvestModal"
-    >
-      <div class="investment-detail-modal-form">
-        <label class="investment-detail-modal-field">
-          <span>资产名称</span>
-          <input
-            class="investment-detail-field-control"
-            :value="detail?.name || detail?.position.productName || ''"
-            type="text"
-            readonly
-          />
-        </label>
-
-        <CommonSelect
-          v-model="autoInvestFundingAccountId"
-          label="扣款账户"
-          :options="fundingAccountOptions"
-        />
-
-        <label class="investment-detail-modal-field">
-          <span>定投周期</span>
-          <SegmentedControl
-            v-model="autoInvestFrequency"
-            :options="autoInvestFrequencyOptions"
-            label="定投周期"
-          />
-        </label>
-
-        <div class="investment-detail-modal-row">
-          <label class="investment-detail-modal-field">
-            <span>定投金额</span>
-            <input
-              v-model="autoInvestAmount"
-              class="investment-detail-field-control"
-              type="number"
-              inputmode="decimal"
-              placeholder="请输入定投金额"
-            />
-          </label>
-
-          <label class="investment-detail-modal-field">
-            <span>下次执行日</span>
-            <input
-              v-model="autoInvestNextExecuteDate"
-              class="investment-detail-field-control"
-              type="date"
-            />
-          </label>
-        </div>
-
-        <label class="investment-detail-modal-field">
-          <span>备注</span>
-          <textarea
-            v-model="autoInvestRemark"
-            class="investment-detail-textarea-control"
-            rows="1"
-            maxlength="200"
-            placeholder="选填"
-          ></textarea>
-        </label>
-
-        <p class="investment-detail-description">
-          到期后系统会自动按计划金额生成一笔基金申购，默认按 15 点前规则提交。
-        </p>
-
-        <p v-if="autoInvestError" class="investment-detail-modal-error">{{ autoInvestError }}</p>
-      </div>
-
-      <template #footer>
-        <div class="investment-detail-modal-actions">
-          <CommonButton variant="secondary" :disabled="isSavingAutoInvest" @click="closeAutoInvestModal">
-            取消
-          </CommonButton>
-          <CommonButton variant="primary" :disabled="isSavingAutoInvest" @click="saveAutoInvestPlan">
-            {{ isSavingAutoInvest ? '保存中...' : '保存计划' }}
-          </CommonButton>
-        </div>
-      </template>
-    </CommonModal>
+    <AutoInvestModal
+      v-if="detail && currentPosition"
+      ref="autoInvestModalRef"
+      :position="currentPosition"
+      :asset-name="detail?.name || detail?.position.productName || ''"
+      :plans="autoInvestPlans"
+      :funding-accounts="fundingAccounts"
+      @saved="loadDetail"
+      @feedback="showFeedback"
+    />
 
     <CommonModal
       v-model="showDeleteModal"
@@ -3425,114 +770,7 @@ function getFundTransactionSubmitMessage(entry: InvestmentTransaction) {
         </div>
       </template>
     </CommonModal>
-
-    <CommonModal
-      v-model="showEditModal"
-      title="修改持仓"
-      size="compact"
-      :close-on-overlay="!isSubmitting"
-      @close="closeEditModal"
-    >
-      <div class="investment-detail-modal-form">
-        <label class="investment-detail-modal-field">
-          <span>资产名称</span>
-          <input
-            class="investment-detail-field-control"
-            :value="detail?.name || detail?.position.productName || ''"
-            type="text"
-            readonly
-          />
-        </label>
-
-        <label v-if="!isPendingSubscription" class="investment-detail-modal-field">
-          <span>当前价格</span>
-          <input
-            v-model="editPrice"
-            class="investment-detail-field-control investment-detail-number-control"
-            type="number"
-            inputmode="decimal"
-            placeholder="请输入当前价格"
-          />
-        </label>
-
-        <div v-if="!isPendingSubscription" class="investment-detail-modal-row">
-          <label class="investment-detail-modal-field">
-            <span>当前{{ currentUnitName }}</span>
-            <input
-              v-model="editHoldingQuantity"
-              class="investment-detail-field-control investment-detail-number-control"
-              type="number"
-              inputmode="decimal"
-              step="0.01"
-              placeholder="请输入当前份额"
-            />
-          </label>
-
-          <label class="investment-detail-modal-field">
-            <span>持仓成本价</span>
-            <input
-              v-model="editCostPrice"
-              class="investment-detail-field-control investment-detail-number-control"
-              type="number"
-              inputmode="decimal"
-              placeholder="请输入持仓成本价"
-            />
-          </label>
-        </div>
-
-        <label v-if="isFundPosition" class="investment-detail-modal-field">
-          <span>分红方式</span>
-          <SegmentedControl
-            v-model="editDividendType"
-            :options="dividendTypeOptions"
-            label="基金分红方式"
-          />
-        </label>
-
-        <CommonSelect
-          v-if="isFundPosition && editDividendType === 'cash'"
-          v-model="editDividendFundingAccountId"
-          label="现金分红到账账户"
-          :options="fundingAccountOptions"
-        />
-
-        <label class="investment-detail-switch-field">
-          <span>计入总资产</span>
-          <button
-            type="button"
-            :class="['investment-detail-switch', { active: editIncludeInNetWorth }]"
-            @click="editIncludeInNetWorth = !editIncludeInNetWorth"
-          >
-            <span></span>
-          </button>
-        </label>
-
-        <label class="investment-detail-modal-field">
-          <span>备注</span>
-          <textarea
-            v-model="editRemark"
-            class="investment-detail-textarea-control"
-            rows="1"
-            maxlength="200"
-            placeholder="选填"
-          ></textarea>
-        </label>
-
-        <p v-if="editError" class="investment-detail-modal-error">{{ editError }}</p>
-      </div>
-
-      <template #footer>
-        <div class="investment-detail-modal-actions">
-          <CommonButton variant="secondary" :disabled="isSubmitting" @click="closeEditModal">
-            取消
-          </CommonButton>
-          <CommonButton variant="primary" :disabled="isSubmitting" @click="submitEdit">
-            {{ isSubmitting ? '保存中...' : '保存修改' }}
-          </CommonButton>
-        </div>
-      </template>
-    </CommonModal>
   </section>
 </template>
 
-<style scoped lang="scss" src="./style.scss"></style>
+<style lang="scss" src="./style.scss"></style>

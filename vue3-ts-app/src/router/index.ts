@@ -6,6 +6,7 @@ import { financeRoutes } from './modules/finance'
 import { foodRoutes } from './modules/food'
 import { mainRoutes } from './modules/main'
 import { toolsRoutes } from './modules/tools'
+import { setupRoutePrefetch } from './prefetch'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -36,3 +37,6 @@ router.beforeEach((to) => {
 
   return { path: '/login', query: { redirect: to.fullPath } }
 })
+
+// 首屏渲染完成后在空闲时段后台预取全部路由 chunk，消除懒加载页面的首次点击延迟
+setupRoutePrefetch(router)
