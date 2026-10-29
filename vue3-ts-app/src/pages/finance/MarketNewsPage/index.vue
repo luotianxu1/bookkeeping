@@ -23,7 +23,7 @@ const categoryOptions: CategoryOption[] = [
 
 const activeCategory = ref<MarketNewsCategory>('all')
 const marketNews = ref<MarketNews | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isRefreshing = ref(false)
 const pageError = ref('')
 let requestId = 0

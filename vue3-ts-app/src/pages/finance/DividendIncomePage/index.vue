@@ -44,7 +44,7 @@ function formatAmount(value: number, digits = 2) {
 }
 
 const router = useRouter()
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isRefreshing = ref(false)
 const pageError = ref('')
 const expenseSaving = ref(false)
@@ -114,6 +114,7 @@ async function loadPageData() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看攒股收息'
+    isLoading.value = false
     return
   }
 

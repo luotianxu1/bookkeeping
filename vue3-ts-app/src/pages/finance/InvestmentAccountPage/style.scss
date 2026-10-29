@@ -76,7 +76,7 @@
 }
 
 .investment-search-field input::placeholder {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-weight: 500;
 }
 
@@ -90,7 +90,7 @@
   gap: var(--space-6);
   border: 0;
   border-radius: var(--radius-10);
-  background: #4f7df3;
+  background: var(--color-bg-blue-strong);
   color: var(--color-white);
   font-size: var(--font-size-14);
   font-weight: 700;
@@ -114,7 +114,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-12);
   background: var(--color-bg-card);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--color-shadow-soft);
   overflow-y: auto;
   z-index: 4;
 }
@@ -146,8 +146,8 @@
 }
 
 .investment-search-result-item.active {
-  border-color: rgba(29, 78, 216, 0.18);
-  background: linear-gradient(180deg, rgba(239, 246, 255, 0.92) 0%, rgba(219, 234, 254, 0.72) 100%);
+  border-color: var(--color-fund-profit-pill-border);
+  background: linear-gradient(180deg, var(--color-bg-brand-soft) 0%, var(--color-bg-brand-tint) 100%);
 }
 
 .investment-add-modal-field {
@@ -186,11 +186,11 @@
 }
 
 .investment-field-control::placeholder {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .investment-field-control:read-only {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-weight: 500;
 }
 
@@ -240,7 +240,7 @@
 }
 
 .investment-modal-button.primary {
-  background: #1d4ed8;
+  background: var(--color-brand);
   color: var(--color-white);
 }
 
@@ -485,7 +485,7 @@
 }
 
 .holding-list-amount > span {
-  color: #94a3b8;
+  color: var(--color-chart-axis);
   font-size: 9px;
   font-weight: 600;
   line-height: 1.2;
@@ -589,14 +589,14 @@
 .holding-card-right-top > span,
 .holding-value-line > span,
 .holding-panel-field > span {
-  color: #94a3b8;
+  color: var(--color-chart-axis);
   font-size: 9px;
   font-weight: 600;
   line-height: 1.2;
 }
 
 .holding-card-right-top > span {
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .holding-title {
@@ -648,7 +648,7 @@
 }
 
 .holding-sync-tag {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: 9px;
   font-weight: 500;
   line-height: 1;
@@ -767,7 +767,7 @@
 }
 
 .holding-summary-item > span {
-  color: #94a3b8;
+  color: var(--color-chart-axis);
   font-size: 9px;
   font-weight: 600;
   line-height: 1.2;
@@ -794,7 +794,7 @@
   gap: 8px;
   min-width: 0;
   padding: 8px 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-8);
   background: rgba(37, 99, 235, 0.08);
 }
 
@@ -805,7 +805,7 @@
   padding: 2px 6px;
   border-radius: var(--radius-pill);
   background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  color: var(--color-brand);
   font-size: 9px;
   font-weight: 700;
   line-height: 1.2;
@@ -934,7 +934,7 @@
 
 :global(:root[data-theme='dark']) .investment-modal-button.secondary {
   background: #182233;
-  color: #cbd5e1;
+  color: var(--color-border-soft-2);
 }
 
 :global(:root[data-theme='dark']) .investment-holding-card,
@@ -944,7 +944,7 @@
 }
 
 :global(:root[data-theme='dark']) .holding-list-amount > span {
-  color: #94a3b8;
+  color: var(--color-chart-axis);
 }
 
 :global(:root[data-theme='dark']) .holding-list-header {
@@ -957,22 +957,22 @@
 
 :global(:root[data-theme='dark']) .holding-list-metric :deep(.holding-pnl-rate.amount-text--neutral) {
   background: #182233;
-  color: #cbd5e1;
+  color: var(--color-border-soft-2);
 }
 
 :global(:root[data-theme='dark']) .holding-card-right-top > span,
 :global(:root[data-theme='dark']) .holding-value-line > span,
 :global(:root[data-theme='dark']) .holding-panel-field > span,
 :global(:root[data-theme='dark']) .holding-sync-tag {
-  color: #94a3b8;
+  color: var(--color-chart-axis);
 }
 
 :global(:root[data-theme='dark']) .holding-card-right-top > span {
-  color: #cbd5e1;
+  color: var(--color-border-soft-2);
 }
 
 :global(:root[data-theme='dark']) .holding-panel-value.is-secondary {
-  color: #cbd5e1;
+  color: var(--color-border-soft-2);
 }
 
 :global(:root[data-theme='dark']) .holding-pnl-rate {
@@ -988,12 +988,12 @@
 
 :global(:root[data-theme='dark']) .holding-dividend-badge {
   background: rgba(191, 219, 254, 0.2);
-  color: #eff6ff;
+  color: var(--color-bg-brand-soft);
   box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.16);
 }
 
 :global(:root[data-theme='dark']) .holding-dividend-text {
-  color: #f8fbff;
+  color: var(--color-bg-white-100);
 }
 
 :global(:root[data-theme='dark']) .holding-panel-field :deep(.holding-pnl-rate.amount-text--positive),
@@ -1004,7 +1004,7 @@
 :global(:root[data-theme='dark']) .holding-panel-field :deep(.holding-pnl-rate.amount-text--neutral),
 :global(:root[data-theme='dark']) .holding-summary-item :deep(.holding-pnl-rate.amount-text--neutral) {
   background: #182233;
-  color: #cbd5e1;
+  color: var(--color-border-soft-2);
 }
 
 :global(:root[data-theme='dark']) .holding-allocation-track {

@@ -94,7 +94,7 @@
 }
 
 .cash-asset-history-head span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -134,7 +134,7 @@
   min-height: 36px;
   padding: 0 14px;
   border: 1px solid rgba(29, 78, 216, 0.14);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(239, 246, 255, 0.88);
   color: var(--color-brand);
   font-size: var(--font-size-13);
@@ -283,7 +283,7 @@
 }
 
 .asset-edit-input::placeholder {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-weight: 500;
 }
 
@@ -311,7 +311,7 @@
 }
 
 .asset-edit-amount-input::placeholder {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-weight: 500;
 }
 

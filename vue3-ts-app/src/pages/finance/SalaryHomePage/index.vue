@@ -11,7 +11,7 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 import { formatSalaryCurrency, formatSalaryPercent } from '../salary-shared'
 
 const pageData = ref<SalaryOverview | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
@@ -25,6 +25,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看工资管理'
+    isLoading.value = false
     return
   }
 
@@ -69,11 +70,11 @@ function openFeedback(message: string, type: 'success' | 'error') {
       </div>
     </PageHeader>
 
-    <div v-if="isLoading" class="salary-loading-wrap">
+    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
+
+    <div v-else-if="isLoading" class="salary-loading-wrap">
       <CommonLoading text="工资数据加载中..." />
     </div>
-
-    <p v-else-if="pageError" class="salary-error-text">{{ pageError }}</p>
 
     <template v-else-if="pageData">
       <section class="salary-summary-card">

@@ -1,4 +1,5 @@
 .asset-card {
+  position: relative;
   min-height: 164px;
   display: flex;
   flex-direction: column;
@@ -8,6 +9,18 @@
   border-radius: var(--radius-20);
   background: var(--color-top-card-gradient);
   box-shadow: var(--color-top-card-shadow);
+}
+
+/* 氛围层：低透明度噪点，提升渐变卡质感。 */
+.asset-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 .asset-main {
@@ -63,7 +76,7 @@ h1 {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: var(--color-finance-home-ring-inner-bg);
+  background: var(--color-bg-brand-soft);
   display: grid;
   place-items: center;
   align-content: center;

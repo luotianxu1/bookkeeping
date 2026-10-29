@@ -45,7 +45,7 @@ const dayAnchor = ref(formatMonthValue(new Date()))
 const monthAnchor = ref(new Date().getFullYear())
 const yearAnchor = ref(new Date().getFullYear())
 const pageData = ref<FundProfitPage | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isDetailLoading = ref(false)
 const isCalendarLoading = ref(false)
 const isRefreshingPositions = ref(false)
@@ -321,6 +321,7 @@ async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean
   if (!currentUser) {
     pageError.value = '请先登录后查看基金收益'
     pageData.value = null
+    isLoading.value = false
     return
   }
 

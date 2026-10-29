@@ -26,7 +26,7 @@ const editingAccountId = ref<number | null>(null)
 const deletingAccount = ref<Account | null>(null)
 const accountItems = ref<Account[]>([])
 const cashAccountType = ref<AccountType | null>(null)
-const isLoadingAccounts = ref(false)
+const isLoadingAccounts = ref(true)
 const isSavingAccount = ref(false)
 const isDeletingAccount = ref(false)
 const accountListError = ref('')
@@ -206,6 +206,7 @@ async function loadCashAccounts() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     accountListError.value = '请先登录后查看账户'
+    isLoadingAccounts.value = false
     return
   }
 

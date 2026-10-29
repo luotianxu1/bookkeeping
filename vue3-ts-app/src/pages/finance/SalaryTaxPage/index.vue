@@ -12,7 +12,7 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 import { createRecentYearOptions, formatSalaryCurrency } from '../salary-shared'
 
 const pageData = ref<SalaryTaxPage | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
@@ -28,6 +28,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看工资税务'
+    isLoading.value = false
     return
   }
 
@@ -64,11 +65,11 @@ function handleYearChange(value: string) {
       />
     </PageHeader>
 
-    <div v-if="isLoading" class="salary-loading-wrap">
+    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
+
+    <div v-else-if="isLoading" class="salary-loading-wrap">
       <CommonLoading text="工资税务加载中..." />
     </div>
-
-    <p v-else-if="pageError" class="salary-error-text">{{ pageError }}</p>
 
     <template v-else-if="pageData">
       <section class="salary-summary-card">

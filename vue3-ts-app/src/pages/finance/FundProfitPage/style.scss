@@ -18,7 +18,7 @@
 .calendar-view-seg :deep(.segmented-control) {
   padding: 4px;
   border: 1px solid var(--color-fund-profit-seg-border);
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   background: var(--color-fund-profit-seg-bg);
 }
 
@@ -44,7 +44,7 @@
   left: 4px;
   height: calc(100% - 8px);
   width: calc((100% - 8px) / var(--count));
-  border-radius: 10px;
+  border-radius: var(--radius-8);
 }
 
 .fund-profit-message-error {
@@ -123,7 +123,7 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--color-fund-profit-pill-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-fund-profit-pill-bg);
   color: var(--color-brand);
   font-size: var(--font-size-12);
@@ -182,7 +182,7 @@
 }
 
 .summary-signal-pill--strong {
-  border-color: var(--color-fund-profit-signal-strong-border);
+  border-color: var(--color-fund-profit-status-day-border);
   background: var(--color-fund-profit-signal-strong-bg);
 }
 
@@ -191,7 +191,7 @@
 }
 
 .summary-hint {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-weight: 500;
 }
 
@@ -263,7 +263,7 @@
 .card-footnote,
 .empty-text {
   margin: 0;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
   line-height: 1.5;
@@ -294,7 +294,7 @@
 .calendar-legend-item i {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: inline-block;
 }
 
@@ -344,7 +344,7 @@
 .trend-profit-text.is-neutral,
 .trend-profit-text.is-muted,
 .trend-axis-label {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .trend-bar-track {
@@ -358,8 +358,8 @@
 .trend-bar-fill {
   width: calc(100% - 12px);
   min-width: 20px;
-  border-radius: 999px;
-  background: var(--color-text-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--color-chart-axis);
 }
 
 .trend-bar-fill.is-positive {
@@ -455,7 +455,7 @@
   display: inline-grid;
   place-items: center;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-fund-profit-calendar-nav-bg);
   color: var(--color-brand);
   font-size: var(--font-size-14);
@@ -467,7 +467,7 @@
   align-items: center;
   min-height: 24px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   white-space: nowrap;
 }
 
@@ -486,8 +486,8 @@
 }
 
 .calendar-status-pill.is-month {
-  border: 1px solid var(--color-fund-profit-status-month-border);
-  background: var(--color-fund-profit-status-month-bg);
+  border: 1px solid var(--color-fund-profit-status-day-border);
+  background: var(--color-fund-profit-status-day-bg);
 }
 
 .calendar-status-pill.is-month span {
@@ -520,7 +520,7 @@
 
 .weekday-row span {
   text-align: center;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: 11px;
   font-weight: 600;
 }
@@ -557,7 +557,7 @@
   align-content: center;
   justify-items: center;
   padding: 6px 4px;
-  border-radius: 10px;
+  border-radius: var(--radius-8);
   text-align: center;
   overflow: hidden;
 }
@@ -574,7 +574,7 @@
   align-content: center;
   justify-items: center;
   padding: 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   text-align: center;
   overflow: hidden;
 }
@@ -628,12 +628,12 @@
 
 .day-calendar-cell.is-positive,
 .period-card.is-positive {
-  background: var(--color-fund-profit-calendar-positive-bg);
+  background: var(--color-fund-profit-trend-up-bg);
 }
 
 .day-calendar-cell.is-negative,
 .period-card.is-negative {
-  background: var(--color-fund-profit-calendar-negative-bg);
+  background: var(--color-fund-profit-trend-down-bg);
 }
 
 .day-calendar-cell.is-neutral,
@@ -713,7 +713,7 @@
   min-width: 0;
   min-height: 20px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-fund-profit-code-chip-bg);
   color: var(--color-fund-profit-code-chip-color);
   font-size: 10px;
@@ -733,7 +733,7 @@
 
 .detail-main span,
 .detail-side span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: 11px;
   font-weight: 600;
 }
@@ -749,7 +749,7 @@
   min-height: 30px;
   padding: 0 14px;
   border: 1px solid var(--color-bg-soft-2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-fund-profit-filter-bg);
   color: var(--color-text-muted);
   font-size: var(--font-size-12);

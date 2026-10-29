@@ -8,6 +8,7 @@ import CommonSelect, { type CommonSelectOption } from '@/components/common/Commo
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
+import { readChartToken } from '@/utils/chart-theme'
 import { useTheme } from '@/utils/theme'
 import {
   getLatestAssetAccountSnapshots,
@@ -61,7 +62,7 @@ const yesterdaySnapshots = ref<SnapshotAccountItemView[]>([])
 const yesterdaySnapshotDate = ref('')
 const yesterdaySnapshotCurrentTotal = ref<number | null>(null)
 const yesterdaySnapshotChangeAmount = ref<number | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const snapshotError = ref('')
 const chartRef = ref<HTMLDivElement | null>(null)
@@ -253,7 +254,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
   const rootStyle = getComputedStyle(document.documentElement)
   const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
   const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
   const areaStart = rootStyle.getPropertyValue('--color-chart-brand-area-start').trim()
   const areaEnd = rootStyle.getPropertyValue('--color-chart-brand-area-end').trim()
   const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
@@ -439,6 +440,7 @@ async function loadTrend() {
     pageError.value = '请先登录后查看资产趋势'
     trend.value = null
     resetYesterdaySnapshots()
+    isLoading.value = false
     return
   }
 
@@ -766,25 +768,48 @@ function getAllocationDotStyle(item: AssetTrendAllocation) {
 }
 
 function getAccountTypeColors(value?: string | null) {
+  // 依赖 isDark 让取色在主题切换时重算
+  void isDark.value
   if (value === 'cash') {
-    return { fill: '#16A34A', track: isDark.value ? 'rgba(22, 101, 52, 0.24)' : '#ECFDF5' }
+    return {
+      fill: readChartToken('--color-success', '#16a34a'),
+      track: readChartToken('--color-bg-success-soft', '#ecfdf5'),
+    }
   }
   if (value === 'investment') {
-    return { fill: '#DC2626', track: isDark.value ? 'rgba(127, 29, 29, 0.24)' : '#FEF2F2' }
+    return {
+      fill: readChartToken('--color-danger', '#dc2626'),
+      track: readChartToken('--color-danger-soft', '#fef2f2'),
+    }
   }
   if (value === 'gold') {
-    return { fill: '#D97706', track: isDark.value ? 'rgba(120, 53, 15, 0.24)' : '#FFF7ED' }
+    return {
+      fill: readChartToken('--color-warning-strong', '#d97706'),
+      track: readChartToken('--color-warning-soft', '#fff7ed'),
+    }
   }
   if (value === 'other_asset') {
-    return { fill: '#2563EB', track: isDark.value ? '#18284D' : '#EFF6FF' }
+    return {
+      fill: readChartToken('--color-brand-strong', '#2563eb'),
+      track: readChartToken('--color-bg-brand-soft', '#eff6ff'),
+    }
   }
   if (value === 'debt' || value === 'liability' || value === 'other_liability' || value === 'credit_card') {
-    return { fill: '#7C3AED', track: isDark.value ? 'rgba(76, 29, 149, 0.24)' : '#F5F3FF' }
+    return {
+      fill: readChartToken('--color-purple', '#7c3aed'),
+      track: readChartToken('--color-bg-purple-soft', '#f3e8ff'),
+    }
   }
   if (value === 'human_relation') {
-    return { fill: '#EA580C', track: isDark.value ? 'rgba(124, 45, 18, 0.24)' : '#FFF7ED' }
+    return {
+      fill: readChartToken('--color-orange', '#c2410c'),
+      track: readChartToken('--color-warning-soft', '#fff7ed'),
+    }
   }
-  return { fill: '#64748B', track: isDark.value ? '#182233' : '#F1F5F9' }
+  return {
+    fill: readChartToken('--color-text-muted', '#64748b'),
+    track: readChartToken('--color-bg-neutral-soft', '#eef2f8'),
+  }
 }
 
 function formatCurrency(value?: number | null) {

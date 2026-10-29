@@ -33,7 +33,7 @@ const categoryModalTitle = computed(() => (editingCategory.value ? '修改食材
 const categories = ref<FoodCategory[]>([])
 const keyword = ref('')
 const pageError = ref('')
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const isManageMode = ref(false)
@@ -74,6 +74,7 @@ async function loadCategories() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看食材分类'
+    isLoading.value = false
     return
   }
 

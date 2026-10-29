@@ -26,7 +26,7 @@
   min-height: 32px;
   padding: 0 30px 0 10px;
   border: 1px solid var(--color-border-blue);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-card);
   box-shadow: var(--color-finance-card-shadow);
   color: var(--color-brand-strong);
@@ -98,7 +98,7 @@
   align-content: center;
   padding: 8px;
   border: 1px solid var(--color-border-blue);
-  border-radius: 8px;
+  border-radius: var(--radius-8);
   background: var(--color-bg-brand-soft);
   text-align: left;
 }
@@ -147,7 +147,7 @@
   gap: 5px;
   padding: 0 8px;
   border: 1px solid var(--color-border-blue);
-  border-radius: 12px;
+  border-radius: var(--radius-8);
   background: var(--color-bg-card);
   color: var(--color-finance-subtitle);
   box-shadow: none;
@@ -192,7 +192,7 @@
   min-height: 36px;
   padding: 0 14px;
   border: 1px solid var(--color-border-blue);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-brand-soft);
   color: var(--color-brand-strong);
   font-size: var(--font-size-13);
@@ -282,7 +282,7 @@
   height: 18px;
   flex: 0 0 auto;
   border: 1px solid var(--color-border-soft-2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-card);
 }
 

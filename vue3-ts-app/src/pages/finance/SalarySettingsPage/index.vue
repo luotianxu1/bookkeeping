@@ -15,7 +15,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const settings = ref<SalarySettings | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const pageError = ref('')
 const formError = ref('')
@@ -85,6 +85,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看工资设置'
+    isLoading.value = false
     return
   }
 
@@ -234,11 +235,11 @@ function openFeedback(message: string, type: 'success' | 'error') {
   <section class="salary-page" aria-label="工资设置">
     <PageHeader title="工资设置" back-to="/finance/salary" :prefer-back-to="true" />
 
-    <div v-if="isLoading" class="salary-loading-wrap">
+    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
+
+    <div v-else-if="isLoading" class="salary-loading-wrap">
       <CommonLoading text="工资设置加载中..." />
     </div>
-
-    <p v-else-if="pageError" class="salary-error-text">{{ pageError }}</p>
 
     <template v-else-if="settings">
       <section class="salary-card">

@@ -135,7 +135,7 @@
 .free-progress-track {
   height: 10px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-soft-2);
 }
 

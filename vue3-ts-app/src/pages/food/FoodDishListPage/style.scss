@@ -144,7 +144,7 @@
 }
 
 .dish-copy span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
 }
 
@@ -193,7 +193,7 @@
   min-height: 30px;
   padding: 0 10px;
   border: 1px solid var(--color-food-chip-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-food-chip-bg);
   color: var(--color-food-chip-text);
   font: inherit;

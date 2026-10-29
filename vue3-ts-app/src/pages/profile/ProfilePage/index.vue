@@ -153,7 +153,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 </script>
 
 <template>
-  <section class="profile-page" aria-label="我的页面">
+  <section class="profile-page stagger-in" aria-label="我的页面">
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"

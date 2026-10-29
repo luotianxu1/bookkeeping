@@ -38,7 +38,7 @@ const overview = ref<PhotographyOrderOverview | null>(null)
 const calendarBuckets = ref<PhotographyOrderOverviewBucket[]>([])
 const calendarOrders = ref<PhotographyOrder[]>([])
 const calendarActiveDate = ref<string | null>(resolveInitialDate())
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 
 const lineChartRef = ref<HTMLDivElement | null>(null)
@@ -142,6 +142,7 @@ async function loadOverview() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看订单总览'
+    isLoading.value = false
     return
   }
 
@@ -521,7 +522,7 @@ function renderLineChart() {
   const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
   const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
   const chartAxis = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const chartSplit = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const chartSplit = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
   const incomeColor = rootStyle.getPropertyValue('--color-danger').trim()
 
   const option: EChartsCoreOption = {
@@ -648,8 +649,8 @@ function handleResize() {
       </div>
     </section>
 
-    <CommonLoading v-if="isLoading" text="总览加载中..." />
-    <p v-else-if="pageError" class="overview-page-error">{{ pageError }}</p>
+    <p v-if="pageError" class="overview-page-error">{{ pageError }}</p>
+    <CommonLoading v-else-if="isLoading" text="总览加载中..." />
 
     <template v-else>
       <section class="overview-panel">

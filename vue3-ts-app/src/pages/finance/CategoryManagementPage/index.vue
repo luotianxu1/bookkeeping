@@ -38,7 +38,7 @@ const showColorPickerModal = ref(false)
 const showDeleteConfirmModal = ref(false)
 const editingCategory = ref<Category | null>(null)
 const deletingCategory = ref<Category | null>(null)
-const isLoadingCategories = ref(false)
+const isLoadingCategories = ref(true)
 const isSavingCategory = ref(false)
 const isDeletingCategory = ref(false)
 const categoryListError = ref('')
@@ -204,6 +204,7 @@ async function loadCategories() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     categoryListError.value = '请先登录后查看分类'
+    isLoadingCategories.value = false
     return
   }
 

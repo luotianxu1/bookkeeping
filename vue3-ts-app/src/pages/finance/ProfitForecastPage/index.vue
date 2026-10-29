@@ -16,7 +16,7 @@ type ProfitTone = 'positive' | 'negative' | 'neutral'
 
 const selectedAccountId = ref('all')
 const forecast = ref<FundProfitForecast | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 
 const emptyMetrics: ForecastMetrics = {
@@ -93,6 +93,7 @@ async function loadForecast() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看收益预测'
+    isLoading.value = false
     return
   }
 

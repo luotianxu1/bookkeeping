@@ -13,8 +13,9 @@ import {
   type Transaction,
 } from '@/api/modules/finance'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonEmpty from '@/components/common/CommonEmpty/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
@@ -39,7 +40,7 @@ const emptyOverview: FinanceOverview = {
 
 const overview = ref({ ...emptyOverview })
 const transactions = ref<Transaction[]>([])
-const isLoadingTransactions = ref(false)
+const isLoadingTransactions = ref(true)
 const transactionListError = ref('')
 const deletingId = ref<number | null>(null)
 const pendingDeleteTransaction = ref<DayTransaction | null>(null)
@@ -85,6 +86,7 @@ async function loadCashTransactions() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     transactionListError.value = '请先登录后查看收支记录'
+    isLoadingTransactions.value = false
     return
   }
 
@@ -267,7 +269,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 </script>
 
 <template>
-  <section class="finance-home-page" aria-label="财务首页">
+  <section class="finance-home-page stagger-in" aria-label="财务首页">
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -289,10 +291,14 @@ function showFeedback(message: string, type: 'success' | 'error') {
       <p v-if="transactionListError" class="records-message records-message-error">
         {{ transactionListError }}
       </p>
-      <CommonLoading v-else-if="isLoadingTransactions" />
-      <p v-else-if="dayGroups.length === 0" class="records-message">
-        暂无收支记录
-      </p>
+      <CommonSkeleton v-else-if="isLoadingTransactions" variant="list" :rows="3" />
+      <CommonEmpty
+        v-else-if="dayGroups.length === 0"
+        title="暂无收支记录"
+        description="本月现金账户还没有新记录，记一笔开始管理吧。"
+        action-text="记一笔"
+        @action="openExpenseEntryPage()"
+      />
 
       <template v-else>
         <TransactionDayCard

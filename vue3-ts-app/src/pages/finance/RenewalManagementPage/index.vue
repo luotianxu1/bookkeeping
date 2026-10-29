@@ -60,7 +60,7 @@ const summary = ref<RenewalSubscriptionSummary>({
   monthlyAmount: 0,
   dueThisMonthAmount: 0,
 })
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const isUpdatingStatus = ref(false)
 const isDeleting = ref(false)
@@ -215,6 +215,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看固定支出'
+    isLoading.value = false
     return
   }
 

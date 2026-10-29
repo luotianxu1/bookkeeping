@@ -1,7 +1,7 @@
 .day-card {
   overflow: hidden;
   border: 1px solid var(--color-finance-day-card-border);
-  border-radius: 18px;
+  border-radius: var(--radius-16);
   background: var(--color-finance-day-card-bg);
 }
 
@@ -30,7 +30,7 @@
   width: 7px;
   height: 7px;
   flex: 0 0 auto;
-  border-radius: 4px;
+  border-radius: var(--radius-8);
   background: var(--color-brand-strong);
 }
 
@@ -112,7 +112,7 @@
   position: relative;
   overflow: hidden;
   min-height: 48px;
-  border-radius: 12px;
+  border-radius: var(--radius-8);
 }
 
 .transaction-row-swipeable {
@@ -142,7 +142,7 @@
   width: 36px;
   height: 36px;
   flex: 0 0 auto;
-  border-radius: 12px;
+  border-radius: var(--radius-8);
 }
 
 .transaction-copy-main {

@@ -62,7 +62,7 @@
 .todo-tabs {
   padding: 4px;
   border: 1px solid var(--color-border-brand-soft);
-  border-radius: 16px;
+  border-radius: var(--radius-12);
   background: var(--color-bg-card);
   box-shadow: var(--color-shadow-soft);
 }
@@ -70,7 +70,7 @@
 .todo-tabs :deep(.segmented-control) {
   min-height: 42px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-8);
   background: transparent;
 }
 
@@ -79,7 +79,7 @@
   left: 0;
   width: calc(100% / var(--count));
   height: 100%;
-  border-radius: 12px;
+  border-radius: var(--radius-8);
 }
 
 .todo-tabs :deep(.segmented-control-item) {
@@ -100,7 +100,7 @@
   align-items: center;
   padding: 14px;
   border: 1px solid var(--color-border);
-  border-radius: 20px;
+  border-radius: var(--radius-16);
   background: var(--color-bg-card-glass);
   box-shadow: var(--color-shadow-soft);
 }
@@ -122,7 +122,7 @@
   width: 24px;
   height: 24px;
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius-8);
   background: var(--color-bg-card);
   color: var(--color-text-inverse);
   font-size: 14px;
@@ -157,14 +157,14 @@
 }
 
 .todo-card.completed .todo-card-top h3 {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   text-decoration: line-through;
 }
 
 .todo-chip {
   flex-shrink: 0;
   padding: 4px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-brand-soft);
   color: var(--color-brand);
   font-size: 11px;
@@ -199,7 +199,7 @@
 
 .todo-card.completed .todo-card-time,
 .todo-card.completed .todo-card-remark {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .todo-card-actions {
@@ -213,7 +213,7 @@
 .todo-action {
   min-height: 38px;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-card);
   color: var(--color-text-primary);
   font-size: 12px;
@@ -229,7 +229,7 @@
 .todo-message {
   margin: 0;
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--radius-16);
   background: var(--color-bg-card);
   text-align: center;
   color: var(--color-text-muted);
@@ -266,7 +266,7 @@
   min-height: 104px;
   padding: 14px;
   border: 1px solid var(--color-border);
-  border-radius: 16px;
+  border-radius: var(--radius-12);
   background: var(--color-bg-card-soft);
   color: var(--color-text-primary);
   font: inherit;

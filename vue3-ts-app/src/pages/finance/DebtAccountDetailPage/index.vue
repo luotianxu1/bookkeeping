@@ -50,7 +50,7 @@ const summary = ref<DebtAccountSummary>({
   recordCount: 0,
 })
 const records = ref<DebtRecord[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
@@ -167,11 +167,13 @@ async function loadDetail() {
 
   if (!currentUser) {
     pageError.value = '请先登录后查看债务详情'
+    isLoading.value = false
     return
   }
 
   if (!Number.isFinite(accountId.value) || accountId.value <= 0) {
     pageError.value = '债务账户不存在'
+    isLoading.value = false
     return
   }
 

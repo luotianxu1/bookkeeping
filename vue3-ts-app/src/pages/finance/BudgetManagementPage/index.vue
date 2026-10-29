@@ -20,7 +20,7 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 
 const currentBudget = ref<MonthlyBudget | null>(null)
 const budgets = ref<MonthlyBudget[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const pageError = ref('')
@@ -113,6 +113,7 @@ async function loadBudgets() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看预算'
+    isLoading.value = false
     return
   }
 

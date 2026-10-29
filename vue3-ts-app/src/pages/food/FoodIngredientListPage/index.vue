@@ -30,7 +30,7 @@ const ingredients = ref<FoodIngredient[]>([])
 const selectedCategoryId = ref<number | null>(null)
 const keyword = ref('')
 const pageError = ref('')
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isManageMode = ref(false)
 const isSaving = ref(false)
 const isDeleting = ref(false)
@@ -100,6 +100,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看食材列表'
+    isLoading.value = false
     return
   }
 

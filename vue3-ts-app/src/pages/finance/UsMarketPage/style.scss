@@ -49,7 +49,7 @@
 
 .premarket-heading time,
 .premarket-card > footer {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-11);
   font-variant-numeric: tabular-nums;
 }
@@ -97,7 +97,7 @@
 
 .premarket-index-grid article > header div span {
   overflow-wrap: anywhere;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-11);
   line-height: 1.4;
 }
@@ -208,7 +208,7 @@
 }
 
 .market-code {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -224,7 +224,7 @@
 
 .market-change {
   margin: 0;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-14);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -276,7 +276,7 @@
 
 .us-market-foot {
   margin-top: var(--space-6);
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-11, 11px);
   line-height: 1.6;
 }

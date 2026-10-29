@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import { useRouter } from 'vue-router'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
+import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getUsPremarket, type UsPremarketData, type UsPremarketIndex } from '@/api/modules/finance'
 import { useTheme } from '@/utils/theme'
@@ -72,6 +73,7 @@ const cards = reactive<IndexCard[]>(
 )
 
 const isRefreshing = ref(false)
+const isInitialLoading = ref(true)
 const premarketData = ref<UsPremarketData | null>(null)
 const premarketLoading = ref(false)
 const premarketError = ref('')
@@ -347,6 +349,7 @@ async function refresh() {
     ])
   } finally {
     isRefreshing.value = false
+    isInitialLoading.value = false
   }
 }
 
@@ -538,7 +541,9 @@ onBeforeUnmount(() => {
       <button type="button" @click="loadPremarket">重新加载</button>
     </div>
 
-    <div class="us-market-grid">
+    <CommonSkeleton v-if="isInitialLoading" variant="card" :rows="2" />
+
+    <div v-else class="us-market-grid">
       <article
         v-for="card in cards"
         :key="card.secid"

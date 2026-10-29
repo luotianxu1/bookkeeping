@@ -14,7 +14,7 @@ const monthlyIncomeInput = ref('')
 const monthlyExpenseInput = ref('')
 const withdrawalRateInput = ref('4')
 const expectedReturnInput = ref('4')
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 
 const currentUser = getStoredCurrentUser()
@@ -148,6 +148,7 @@ const dataPeriodText = computed(() => {
 async function loadEstimate() {
   if (!currentUser) {
     pageError.value = '请先登录后使用 Free 测算'
+    isLoading.value = false
     return
   }
 
@@ -244,12 +245,12 @@ onMounted(() => {
   <section class="free-estimate-page" aria-label="Free测算">
     <PageHeader title="Free测算" back-to="/finance/more-features" back-label="返回行情工具" :prefer-back-to="true" />
 
-    <CommonLoading v-if="isLoading && !hasEstimate" />
-
-    <section v-else-if="pageError" class="free-message free-message-error" role="alert">
+    <section v-if="pageError" class="free-message free-message-error" role="alert">
       <strong>{{ pageError }}</strong>
       <CommonButton v-if="currentUser" variant="secondary" size="sm" @click="loadEstimate">重新加载</CommonButton>
     </section>
+
+    <CommonLoading v-else-if="isLoading && !hasEstimate" />
 
     <template v-else-if="calculation && estimate">
       <section class="free-hero-card">

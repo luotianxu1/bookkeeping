@@ -10,7 +10,7 @@ const route = useRoute()
 const router = useRouter()
 
 const order = ref<FoodOrder | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const groupedDishes = computed(() => {
   if (!order.value) {
@@ -42,6 +42,7 @@ async function loadDetail() {
   const orderId = Number(route.params.orderId)
   if (!Number.isFinite(orderId)) {
     pageError.value = '菜单参数无效'
+    isLoading.value = false
     return
   }
 

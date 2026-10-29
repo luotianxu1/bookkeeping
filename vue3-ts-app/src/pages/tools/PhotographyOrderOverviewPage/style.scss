@@ -108,7 +108,7 @@
 .overview-stat-card strong.is-zero,
 .bucket-card-metrics b.is-zero,
 .overview-order-metrics strong.is-zero {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .calendar-weekdays,
@@ -126,7 +126,7 @@
 
 .calendar-weekdays span {
   text-align: center;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: 11px;
   font-weight: 600;
 }
@@ -161,7 +161,7 @@
   gap: 1px;
   padding: 0;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-8);
   background: transparent;
   cursor: pointer;
 }
@@ -185,7 +185,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 8px;
   font-weight: 700;
   line-height: 1;
@@ -207,7 +207,7 @@
 
 .bucket-card--calendar .calendar-day-lunar {
   height: 8px;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: 8px;
   font-weight: 500;
   line-height: 1;
@@ -220,7 +220,7 @@
   z-index: 1;
   width: 4px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-brand);
   transform: translateX(-50%);
 }
@@ -262,7 +262,7 @@
   left: 50%;
   width: 40px;
   height: 40px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-brand);
   transform: translate(-50%, -50%);
 }
@@ -348,7 +348,7 @@
 .type-dot {
   width: 10px;
   height: 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
 
@@ -397,7 +397,7 @@
   min-height: 24px;
   display: inline-grid;
   place-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: var(--font-size-11);
   font-weight: 700;
 }

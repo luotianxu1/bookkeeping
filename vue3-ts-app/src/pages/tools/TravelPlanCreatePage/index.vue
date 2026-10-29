@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonModal from '@/components/common/CommonModal/index.vue'
+import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   createTravelPlan,
@@ -43,6 +44,8 @@ const loadError = ref('')
 const showCompanionModal = ref(false)
 const companionKeyword = ref('')
 const existingCompanions = ref<ExistingCompanion[]>([])
+// 编辑模式需按 planId 加载旅行详情，加载期间显示骨架屏；新建模式不加载
+const isLoadingDetail = ref(isEditMode.value)
 
 const selectedCompanions = computed(() =>
   companionOptions.value.filter((item) => selectedCompanionIds.value.includes(item.value)),
@@ -66,6 +69,7 @@ async function initializePage() {
   if (isEditMode.value) {
     await loadPlanDetail()
   }
+  isLoadingDetail.value = false
 }
 
 async function loadContacts() {
@@ -190,7 +194,9 @@ async function submitCreate() {
   <section class="travel-create-page">
     <PageHeader :title="isEditMode ? '修改旅行' : '新增旅行'" back-to="/tools/travel-plans" back-label="返回旅行列表" />
 
-    <div class="travel-form">
+    <CommonSkeleton v-if="isLoadingDetail" variant="card" />
+
+    <div v-else class="travel-form">
       <label class="travel-field">
         <span class="travel-field-label">名称</span>
         <input v-model="formName" class="travel-input" type="text" placeholder="给这趟出行起个名字" />

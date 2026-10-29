@@ -116,7 +116,7 @@
   height: 22px;
   display: grid;
   place-items: center;
-  border-radius: 11px;
+  border-radius: var(--radius-8);
   background: var(--color-danger);
   color: var(--color-white);
   font-size: var(--font-size-14);

@@ -42,7 +42,7 @@ const router = useRouter()
 
 const isDark = computed(() => isDarkFoodPath(route.path))
 const categories = ref<FoodCategory[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const pageError = ref('')
 const feedbackVisible = ref(false)
@@ -88,6 +88,7 @@ async function loadCategories() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后新增菜品'
+    isLoading.value = false
     return
   }
 

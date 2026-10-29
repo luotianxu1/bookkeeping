@@ -1,3 +1,9 @@
+/* 金额统一等宽数字：列表刷新时数字宽度不跳动。 */
+.amount-text {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
 .amount-text--positive {
   color: var(--color-danger);
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatAmount } from '@/utils/format'
+import { readChartToken } from '@/utils/chart-theme'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -47,7 +48,7 @@ const detailCurrentPage = ref(1)
 const expandedBreakdownKey = ref('')
 const breakdownDetailCurrentPage = ref(1)
 const analysis = ref<TransactionAnalysis | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const requestSerial = ref(0)
 const { isDark } = useTheme()
@@ -73,10 +74,16 @@ const integerCurrencyFormatter = new Intl.NumberFormat('zh-CN', {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
 })
-const toneColorMap: Record<'income' | 'expense' | 'surplus', string> = {
-  income: '#F43F5E',
-  expense: '#10B981',
-  surplus: '#2563EB',
+function getToneColor(metric: 'income' | 'expense' | 'surplus'): string {
+  // 依赖 isDark 让模板/配置在主题切换时重算取色
+  void isDark.value
+  if (metric === 'income') {
+    return readChartToken('--color-danger', '#f43f5e')
+  }
+  if (metric === 'expense') {
+    return readChartToken('--color-success', '#10b981')
+  }
+  return readChartToken('--color-brand-strong', '#2563eb')
 }
 const emptySummary = {
   income: 0,
@@ -714,7 +721,7 @@ async function syncCharts() {
 function buildPieOption(): EChartsCoreOption {
   const rootStyle = getComputedStyle(document.documentElement)
   const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
   const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
   const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
   const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
@@ -767,7 +774,7 @@ function buildPieOption(): EChartsCoreOption {
           value: item.amount,
           name: item.categoryName,
           itemStyle: {
-            color: item.categoryColor || '#CBD5E1',
+            color: item.categoryColor || readChartToken('--color-chart-axis-strong', '#cbd5e1'),
           },
         })),
       },
@@ -779,18 +786,18 @@ function buildLineOption(): EChartsCoreOption {
   const rootStyle = getComputedStyle(document.documentElement)
   const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
   const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
   const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
   const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
   const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
   const metric = activeMetric.value
-  const color = toneColorMap[metric]
+  const color = getToneColor(metric)
   const data = (analysis.value?.trendPoints ?? []).map((point) => Number(point[metric] ?? 0))
   const seriesData = metric === 'surplus'
     ? data.map((value) => ({
       value,
       itemStyle: {
-        color: value >= 0 ? toneColorMap.income : toneColorMap.expense,
+        color: value >= 0 ? getToneColor('income') : getToneColor('expense'),
         borderRadius: value >= 0 ? [6, 6, 0, 0] : [0, 0, 6, 6],
       },
     }))
@@ -1009,7 +1016,7 @@ function formatDateTime(value: string) {
               :aria-expanded="isBreakdownExpanded(item)"
               @click="toggleBreakdownItem(item)"
             >
-              <span class="breakdown-left" :style="{ color: item.categoryColor || '#475569' }">
+              <span class="breakdown-left" :style="{ color: item.categoryColor || 'var(--color-text-tertiary)' }">
                 <CategoryIcon
                   :icon="item.categoryIcon"
                   :color="item.categoryColor"
@@ -1018,7 +1025,7 @@ function formatDateTime(value: string) {
                 />
                 <strong>{{ item.categoryName }}</strong>
               </span>
-              <span class="breakdown-right" :style="{ color: item.categoryColor || '#475569' }">
+              <span class="breakdown-right" :style="{ color: item.categoryColor || 'var(--color-text-tertiary)' }">
                 <span class="breakdown-summary">
                   {{ item.percent.toFixed(2) }}%&nbsp;
                   <AmountText tag="span" :value="formatAmount(item.amount)" />
@@ -1028,7 +1035,7 @@ function formatDateTime(value: string) {
               </span>
             </button>
             <div class="breakdown-track">
-              <span :style="{ width: `${item.percent}%`, background: item.categoryColor || '#CBD5E1' }"></span>
+              <span :style="{ width: `${item.percent}%`, background: item.categoryColor || 'var(--color-chart-axis-strong)' }"></span>
             </div>
             <div v-if="isBreakdownExpanded(item)" class="breakdown-detail" aria-label="分类收支明细">
               <p v-if="expandedBreakdownTransactions.length === 0" class="card-empty">当前分类暂无对应记录</p>

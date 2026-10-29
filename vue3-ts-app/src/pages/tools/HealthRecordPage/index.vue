@@ -3,7 +3,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonEmpty from '@/components/common/CommonEmpty/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
+import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getWeightRecords, saveWeightRecord, type WeightRecord } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -15,6 +17,8 @@ const remarkInput = ref('')
 const records = ref<WeightRecord[]>([])
 const saving = ref(false)
 const errorMessage = ref('')
+// 首屏记录加载中，完成后显示趋势图与历史列表
+const isLoading = ref(true)
 
 let echartsLib: (typeof import('echarts')) | null = null
 let chart: ECharts | null = null
@@ -37,6 +41,7 @@ onMounted(async () => {
   const user = getStoredCurrentUser()
   if (!user) {
     errorMessage.value = '请先登录后再打卡'
+    isLoading.value = false
     return
   }
 
@@ -49,6 +54,8 @@ onMounted(async () => {
     await renderChart()
   } catch (error) {
     errorMessage.value = (error as Error).message || '加载记录失败，请稍后再试'
+  } finally {
+    isLoading.value = false
   }
 
   window.addEventListener('resize', handleResize)
@@ -193,13 +200,23 @@ async function onSubmit() {
         <h2 class="record-chart-title">体重趋势</h2>
         <span v-if="latestBodyFat != null" class="record-chart-bodyfat">体脂 {{ latestBodyFat }}%</span>
       </div>
-      <div v-show="timeline.length > 0" ref="chartRef" class="record-chart"></div>
-      <p v-if="timeline.length === 0" class="record-empty">还没有打卡记录，保存第一条后这里会展示趋势图</p>
+      <template v-if="isLoading">
+        <CommonSkeleton variant="card" />
+      </template>
+      <template v-else>
+        <div v-show="timeline.length > 0" ref="chartRef" class="record-chart"></div>
+        <p v-if="timeline.length === 0" class="record-empty">还没有打卡记录，保存第一条后这里会展示趋势图</p>
+      </template>
     </section>
 
     <section class="record-list" aria-label="历史记录">
       <h2 class="record-list-title">最近记录</h2>
-      <p v-if="records.length === 0" class="record-empty">暂无记录</p>
+      <CommonSkeleton v-if="isLoading" variant="list" :rows="3" />
+      <CommonEmpty
+        v-else-if="records.length === 0"
+        title="暂无记录"
+        description="在上方完成第一次体重打卡，趋势图会自动生成。"
+      />
       <div v-for="item in records" :key="item.id" class="record-item">
         <span class="record-item-date">{{ item.recordDate }}</span>
         <span class="record-item-weight">

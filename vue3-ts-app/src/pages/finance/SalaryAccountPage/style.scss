@@ -18,7 +18,7 @@
   height: 28px;
   min-height: 28px;
   padding: 0 24px 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: var(--font-size-12);
   line-height: 1;
 }

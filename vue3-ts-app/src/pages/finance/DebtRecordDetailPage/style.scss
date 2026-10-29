@@ -71,7 +71,7 @@
 
 .debt-record-detail-status {
   padding: 6px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-warning-soft);
   color: var(--color-warning-strong);
   font-size: var(--font-size-12);
@@ -130,7 +130,7 @@
 .debt-record-detail-progress-track {
   height: 8px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-border-soft);
 }
 

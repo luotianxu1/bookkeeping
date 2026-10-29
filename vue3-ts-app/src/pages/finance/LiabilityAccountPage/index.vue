@@ -59,7 +59,7 @@ const summary = ref<LiabilityAccountSummary>({
   accountCount: 0,
   recordCount: 0,
 })
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isManageMode = ref(false)
 const pageError = ref('')
 const showFeedbackModal = ref(false)
@@ -253,6 +253,7 @@ async function loadLiabilityPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看负债账户'
+    isLoading.value = false
     return
   }
 

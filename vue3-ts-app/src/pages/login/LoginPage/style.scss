@@ -297,7 +297,7 @@
   height: var(--space-20);
   flex: 0 0 auto;
   margin: 0 var(--space-10) 0 var(--space-16);
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .input-shell input {
@@ -314,7 +314,7 @@
 }
 
 .input-shell input::placeholder {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .password-toggle {
@@ -325,7 +325,7 @@
   margin-right: var(--space-4);
   place-items: center;
   border-radius: var(--radius-10);
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   background: transparent;
 }
 
@@ -474,7 +474,7 @@
   justify-content: center;
   gap: var(--space-4);
   margin: var(--space-36) 0 0;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-11);
 }
 

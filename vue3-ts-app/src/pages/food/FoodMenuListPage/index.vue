@@ -14,7 +14,7 @@ const router = useRouter()
 
 const orders = ref<FoodOrder[]>([])
 const keyword = ref('')
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isDeleting = ref(false)
 const isManageMode = ref(false)
 const pageError = ref('')
@@ -47,6 +47,7 @@ async function loadOrders() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看菜单列表'
+    isLoading.value = false
     return
   }
 

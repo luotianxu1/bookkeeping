@@ -24,7 +24,7 @@ type LiquidationRow = {
 
 const route = useRoute()
 const router = useRouter()
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const account = ref<Account | null>(null)
 const positions = ref<InvestmentPosition[]>([])
@@ -108,10 +108,12 @@ async function loadLiquidations() {
 
   if (!currentUser) {
     pageError.value = '请先登录后查看清仓明细'
+    isLoading.value = false
     return
   }
   if (!selectedAccountId.value) {
     pageError.value = '投资账户不存在'
+    isLoading.value = false
     return
   }
 

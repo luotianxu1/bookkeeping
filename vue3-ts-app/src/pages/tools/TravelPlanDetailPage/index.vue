@@ -141,7 +141,7 @@ const routeMapRef = ref<HTMLDivElement | null>(null)
 const overviewMapMessage = ref('')
 const routeMapMessage = ref('')
 const detail = ref<TravelPlanDetail | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSearchingLocation = ref(false)
 const isCalculatingRoute = ref(false)
 const isSavingItinerary = ref(false)
@@ -742,6 +742,7 @@ async function loadDetail(silent = false) {
   const preferredDayIndex = activeDayIndex.value
   if (!currentUser || Number.isNaN(planId)) {
     loadError.value = '请先登录后查看旅行详情'
+    isLoading.value = false
     return
   }
 

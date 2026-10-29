@@ -13,10 +13,11 @@ import {
   type TransactionType,
 } from '@/api/modules/finance'
 import CommonBottomSheet from '@/components/common/CommonBottomSheet/index.vue'
+import CommonEmpty from '@/components/common/CommonEmpty/index.vue'
 import BackToTopButton from '@/components/common/BackToTopButton/index.vue'
 import CommonConfirmSheet from '@/components/common/CommonConfirmSheet/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/components/common/CommonLoading/index.vue'
+import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import CommonOptionSheet from '@/components/common/CommonOptionSheet/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -57,7 +58,7 @@ const totalItems = ref(0)
 const summaryIncomeTotal = ref(0)
 const summaryExpenseTotal = ref(0)
 const summaryBalanceTotal = ref(0)
-const isLoadingTransactions = ref(false)
+const isLoadingTransactions = ref(true)
 const transactionListError = ref('')
 const deletingId = ref<number | null>(null)
 const pendingDeleteTransaction = ref<DayTransaction | null>(null)
@@ -245,6 +246,7 @@ async function loadCashTransactions() {
     summaryExpenseTotal.value = 0
     summaryBalanceTotal.value = 0
     transactionListError.value = '请先登录后查看收支记录'
+    isLoadingTransactions.value = false
     return
   }
 
@@ -557,10 +559,14 @@ function accountLabel(account: Account) {
       <p v-if="transactionListError" class="transaction-list-message transaction-list-message-error">
         {{ transactionListError }}
       </p>
-      <CommonLoading v-else-if="isLoadingTransactions" />
-      <p v-else-if="dayGroups.length === 0" class="transaction-list-message">
-        暂无收支记录
-      </p>
+      <CommonSkeleton v-else-if="isLoadingTransactions" variant="list" :rows="3" />
+      <CommonEmpty
+        v-else-if="dayGroups.length === 0"
+        title="暂无收支记录"
+        description="当前筛选条件下还没有记录，记一笔试试。"
+        action-text="记一笔"
+        @action="router.push('/finance/entry/expense')"
+      />
 
       <template v-else>
         <TransactionDayCard

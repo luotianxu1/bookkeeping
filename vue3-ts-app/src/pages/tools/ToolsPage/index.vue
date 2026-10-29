@@ -23,7 +23,7 @@ const toolItems: ToolItem[] = [
 </script>
 
 <template>
-  <section class="tools-page" aria-label="工具页面">
+  <section class="tools-page stagger-in" aria-label="工具页面">
     <section class="tools-grid" aria-label="工具入口">
       <component
         v-for="item in toolItems"

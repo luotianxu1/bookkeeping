@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
+import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   getGlobalMarketKline,
@@ -50,6 +51,7 @@ const quote = ref<GlobalMarketQuote | null>(null)
 const klineItems = ref<GlobalMarketKLineItem[]>([])
 const selectedPeriod = ref<string>('')
 const isRefreshing = ref(false)
+const isInitialLoading = ref(true)
 const loadError = ref('')
 
 const isLinePeriod = computed(() => selectedPeriod.value === 'm1')
@@ -116,6 +118,7 @@ async function refresh() {
     loadError.value = error instanceof Error ? error.message : '行情加载失败'
   } finally {
     isRefreshing.value = false
+    isInitialLoading.value = false
   }
 }
 
@@ -271,6 +274,10 @@ onBeforeUnmount(() => {
       <button type="button" @click="refresh">重新加载</button>
     </div>
 
+    <div v-else-if="isInitialLoading" class="detail-loading">
+      <CommonSkeleton variant="card" />
+    </div>
+
     <article v-if="quote" class="quote-card" :class="toneClass(quote)">
       <header class="quote-card-head">
         <span class="quote-name">{{ quote.name }}</span>
@@ -311,7 +318,7 @@ onBeforeUnmount(() => {
         </div>
       </header>
       <div ref="chartEl" class="kline-chart" />
-      <p v-if="!loadError && klineItems.length === 0 && !isRefreshing" class="kline-empty">
+      <p v-if="!loadError && !isInitialLoading && klineItems.length === 0 && !isRefreshing" class="kline-empty">
         暂无K线数据
       </p>
     </section>

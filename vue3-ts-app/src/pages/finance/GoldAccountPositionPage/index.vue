@@ -40,7 +40,7 @@ import { allAccountIconOptions } from '@/data/account-icons'
 const route = useRoute()
 const router = useRouter()
 
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSavingPosition = ref(false)
 const isDeletingPosition = ref(false)
 const isLoadingPositionDetail = ref(false)
@@ -206,6 +206,7 @@ async function loadGoldPosition() {
 
   if (!currentUser) {
     pageError.value = '请先登录后查看黄金持仓'
+    isLoading.value = false
     return
   }
 

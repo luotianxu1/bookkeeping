@@ -14,7 +14,7 @@ import { ApiError } from '@/api/request'
 const joinInviteCode = ref('')
 const pageMessage = ref('')
 const errorMessage = ref('')
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isCreating = ref(false)
 const isJoining = ref(false)
 const unbindingMemberId = ref<number | null>(null)

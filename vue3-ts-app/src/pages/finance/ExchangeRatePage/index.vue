@@ -23,7 +23,7 @@ const toCurrency = ref('CNY')
 const fromAmount = ref('100.00')
 const rate = ref(0)
 const exchangeRateError = ref('')
-const isLoadingRate = ref(false)
+const isLoadingRate = ref(true)
 const updatedAt = ref('')
 let requestId = 0
 

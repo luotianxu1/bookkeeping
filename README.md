@@ -8,21 +8,22 @@
 .
 ├── vue3-ts-app/                 # Vue 3 + TypeScript 前端
 │   ├── src/
-│   │   ├── api/                 # Axios 请求封装与业务 API
+│   │   ├── api/                 # Axios 请求封装（request.ts 含 withCredentials/401 处理）与业务 API
 │   │   ├── components/          # 通用组件与 App Shell
-│   │   ├── pages/               # 页面：登录、财务、工具、餐饮等
-│   │   ├── router/              # 路由模块
+│   │   ├── pages/               # 页面：登录、财务、工具、餐饮等；大型页面拆分为目录（如 InvestmentDetailPage/）
+│   │   ├── router/              # 路由模块（全部懒加载 + prefetch.ts 空闲预取）
 │   │   ├── styles/              # 全局样式
 │   │   ├── types/               # TypeScript 类型
-│   │   └── utils/               # 工具函数
+│   │   └── utils/               # 工具函数（format.ts 金额格式化、transaction-day-groups.ts 等）
 │   ├── package.json
 │   ├── pnpm-lock.yaml
 │   └── vite.config.ts
 ├── spring-cloud-bookkeeping/    # Spring Boot 后端 Maven 多模块
-│   ├── common/                  # 公共 DTO、JWT、安全与通用逻辑
+│   ├── common/                  # 公共 DTO、JWT、安全组件与通用逻辑
+│   │   └── src/main/resources/config/common-base.yml   # 各服务共享的基础配置
 │   ├── auth-service/            # 认证、用户、家庭管理，端口 8081
 │   ├── finance-service/         # 账户、流水、投资、工资等，端口 8082
-│   ├── tool-service/            # 联系人、待办、摄影订单、日历等，端口 8083
+│   ├── tool-service/            # 联系人、待办、摄影订单、日历、高德代理等，端口 8083
 │   ├── food-service/            # 食材、菜品、菜单、点餐等，端口 8084
 │   └── pom.xml
 └── database/                    # MySQL 建表与变更脚本，按数字顺序执行
@@ -123,18 +124,36 @@ done
 
 ## 后端启动
 
-后端配置通过环境变量读取数据库密码和 JWT 密钥：
+### 环境变量
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
+| `JWT_SECRET` | **是（必填）** | JWT 签名密钥，至少 32 字节；**所有服务必须一致**。未设置时服务启动直接失败（配置中无默认值） |
 | `DB_PASSWORD` | 是 | MySQL `root` 用户密码 |
-| `JWT_SECRET` | 建议填写 | JWT 签名密钥，所有服务必须一致 |
+| `INTERNAL_API_KEY` | 生产必填 | 服务间内部接口（`/api/internal/**`）鉴权密钥，**四个服务必须同值**；本地开发有默认值 `dev-internal-key` |
+| `AMAP_WEB_SERVICE_KEY` | 按需 | 高德 Web 服务 key，tool-service 用于路线/地点代理；前端不再直调高德 |
+| `AUTH_COOKIE_SECURE` | https 部署时设 `true` | 登录 Cookie 加 `Secure` 标记 |
+| `KNIFE4J_PRODUCTION` | 生产建议 `true` | 设为 `true` 关闭 Knife4j 在线文档 |
 
-命令行启动前先设置环境变量：
+### 共享配置
+
+datasource、JWT secret、knife4j 等公共配置统一放在：
+
+```text
+spring-cloud-bookkeeping/common/src/main/resources/config/common-base.yml
+```
+
+各服务 `application.yml` 通过 `spring.config.import: classpath:config/common-base.yml` 引入；服务本地同名配置优先级更高，可按需覆盖。修改数据库连接/JWT 时只改这一处。
+
+### 命令行启动
 
 ```bash
 export DB_PASSWORD='你的MySQL密码'
 export JWT_SECRET='change-this-to-a-long-secret-key-at-least-32-bytes'
+# 生产环境追加：
+export INTERNAL_API_KEY='随机长随机串-四服务同值'
+export AUTH_COOKIE_SECURE=true
+export KNIFE4J_PRODUCTION=true
 ```
 
 安装公共依赖并编译：
@@ -176,7 +195,7 @@ ToolServiceApplication
 FoodServiceApplication
 ```
 
-每个启动配置都需要带环境变量：
+每个启动配置都需要带环境变量。`.idea/runConfigurations/` 中已提交预置好环境变量的运行配置（`JWT_SECRET`、`DB_PASSWORD`，tool-service 另有 `AMAP_WEB_SERVICE_KEY`），直接使用即可；若自行新建配置，至少要设置：
 
 ```text
 DB_PASSWORD=你的MySQL密码
@@ -184,6 +203,8 @@ JWT_SECRET=change-this-to-a-long-secret-key-at-least-32-bytes
 ```
 
 本机的 `.idea/workspace.xml` 已被 `.gitignore` 忽略，可以保存个人 Run Configuration，不会提交到 GitHub。
+
+注意：IDEA 与命令行 Maven 共用 `target/classes`。若遇到 `NoClassDefFoundError`（尤其是类名无包前缀），先用 `mvn clean compile` 重建，再在 IDEA 里 Build → Rebuild Project——增量编译可能残留损坏的 class 文件。
 
 ## 前端启动
 
@@ -249,6 +270,35 @@ VITE_FOOD_API_BASE_URL=/food-api
 ```
 
 如果使用 Vite 代理，建议使用 `/auth-api`、`/finance-api` 这类相对路径。
+
+## 鉴权与安全
+
+### 登录态：httpOnly Cookie
+
+JWT 通过 `access_token` httpOnly Cookie（`SameSite=Lax`）随请求携带，**不再存 localStorage**，可防 XSS 窃取：
+
+- 登录成功由 auth-service `Set-Cookie` 下发；登出接口清除 Cookie；
+- 前端 `request.ts` 全局 `withCredentials: true`，开发环境依赖 Vite 代理（同源）无需 CORS 凭证配置；
+- 通过 Cloudflare Tunnel 等 https 环境访问时设置 `AUTH_COOKIE_SECURE=true`；
+- 前后端必须同站部署（同域名或经同一入口代理），否则 Cookie 无法随 API 请求发送。
+
+### 用户数据隔离
+
+后端公共模块的 `UserIdentityScopeFilter` 统一从 JWT 注入用户身份并覆盖请求参数中的 userId，写操作强制归属本人，读操作默认本家庭范围；伪造他人 userId 的请求会被拒绝。**旧版 token（无 userId claim）一律视为未认证**，前端会收到 401 并跳转登录，属预期行为。
+
+### 登录/注册限流
+
+- 登录：同 IP 15 分钟窗口内连续失败会返回 429；
+- 注册：同 IP 每 15 分钟最多 10 次；
+- 注册接口对已存在用户名仍执行等价校验流程，不泄露用户名是否存在。
+
+### 服务间内部接口
+
+跨服务调用（如摄影订单入账）走 `/api/internal/**`，由 `InternalApiKeyFilter` 校验 `X-Internal-Key` 请求头，不使用 JWT。生产环境务必设置 `INTERNAL_API_KEY` 并保证四服务同值，否则使用默认弱密钥 `dev-internal-key`。
+
+### 第三方 API 代理
+
+前端不直连高德等第三方服务：地图路线/地点搜索经 tool-service 的 `/api/tool/amap/*` 代理（参数白名单 + 坐标格式校验），key 只保存在服务端环境变量 `AMAP_WEB_SERVICE_KEY` 中。
 
 ## 外网访问（Cloudflare Tunnel）
 
@@ -329,17 +379,35 @@ Access denied for user 'root'@'localhost'
 
 通常是 `DB_PASSWORD` 没有设置，或密码和本机 MySQL 不一致。
 
-### 401 后跳回登录页
+### 后端启动提示 Could not resolve placeholder 'JWT_SECRET'
 
-前端会在请求返回 `401` 时清理本地 JWT，并弹出登录提示或跳转到登录页。确认：
+`JWT_SECRET` 现为必填项（配置中无默认值），为四个服务的运行配置都设置该环境变量。
 
-- `auth-service` 已启动
-- 4 个后端服务使用同一个 `JWT_SECRET`
-- 浏览器本地存储中的旧 token 已清理
+### 登录后接口 401
+
+确认：
+
+- `auth-service` 已启动，且 4 个后端服务使用同一个 `JWT_SECRET`；
+- 前后端同站访问（走 Vite 代理或同一域名），Cookie 才能随请求携带；
+- https 访问时已设置 `AUTH_COOKIE_SECURE=true`；
+- 旧版本登录留下的 localStorage token 已失效属预期——重新登录即可，系统会自动改用 Cookie。
+
+### NoClassDefFoundError / 类名无包前缀的 ClassNotFoundException
+
+IDEA 增量编译可能把损坏的 class 写进 `target/classes`（字节码内含 "Unresolved compilation problems"）。执行 `mvn clean compile`，并在 IDEA 中 Build → Rebuild Project。
 
 ### food-service 包名
 
 `food-service` 的 Java 包名目前是 `com.example.tool`，这是现有代码结构，不要只改包名。若要重命名，需要同步调整所有引用、扫描路径和启动类。
+
+### 生产部署检查清单
+
+- [ ] 四服务均设置 `JWT_SECRET`（同值，≥32 字节）与 `DB_PASSWORD`
+- [ ] 四服务设置 `INTERNAL_API_KEY`（同值，替换默认弱密钥）
+- [ ] https 环境设置 `AUTH_COOKIE_SECURE=true`
+- [ ] 设置 `KNIFE4J_PRODUCTION=true` 关闭接口文档
+- [ ] tool-service 设置 `AMAP_WEB_SERVICE_KEY`（用到地图功能时）
+- [ ] 前后端经同一域名入口暴露（Cookie 依赖同站）
 
 ## Git
 

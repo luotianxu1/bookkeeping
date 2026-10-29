@@ -12,7 +12,7 @@
   gap: var(--space-10);
   padding: 16px;
   border: 1px solid var(--color-border-blue);
-  border-radius: 22px;
+  border-radius: var(--radius-16);
   background: var(--color-top-card-gradient);
   box-shadow: var(--color-finance-card-shadow);
 }
@@ -38,7 +38,7 @@
 .anniversary-tabs {
   padding: 4px;
   border: 1px solid var(--color-border-brand-soft);
-  border-radius: 16px;
+  border-radius: var(--radius-12);
   background: var(--color-bg-card);
   box-shadow: var(--color-shadow-soft);
 }
@@ -46,7 +46,7 @@
 .anniversary-tabs :deep(.segmented-control) {
   min-height: 42px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-8);
   background: transparent;
 }
 
@@ -55,7 +55,7 @@
   left: 0;
   width: calc(100% / var(--count));
   height: 100%;
-  border-radius: 12px;
+  border-radius: var(--radius-8);
 }
 
 .anniversary-tabs :deep(.segmented-control-item) {
@@ -67,7 +67,7 @@
 .anniversary-message {
   margin: 0;
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--radius-16);
   background: var(--color-bg-card);
   text-align: center;
   color: var(--color-text-muted);
@@ -90,7 +90,7 @@
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--color-border);
-  border-radius: 20px;
+  border-radius: var(--radius-16);
   background: var(--color-bg-card-glass);
   box-shadow: var(--color-shadow-soft);
 }
@@ -134,7 +134,7 @@
 .anniversary-chip {
   flex-shrink: 0;
   padding: 4px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 700;
 }
@@ -161,7 +161,7 @@
 
 .anniversary-card-note {
   font-size: 12px;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .anniversary-card-remark {
@@ -179,7 +179,7 @@
 .anniversary-action {
   min-height: 38px;
   border: 1px solid var(--color-border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-card);
   color: var(--color-text-primary);
   font-size: 12px;
@@ -216,7 +216,7 @@
   min-height: 88px;
   padding: 14px;
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   background: var(--color-bg-card-soft);
   color: var(--color-text-primary);
   font-size: 14px;
@@ -226,7 +226,7 @@
 }
 
 .anniversary-remark-field textarea::placeholder {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .anniversary-remark-field textarea:focus {

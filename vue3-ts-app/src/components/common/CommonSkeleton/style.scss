@@ -1,0 +1,76 @@
+/* 公共骨架屏：低透明度微光扫过，只动 background-position。 */
+.common-skeleton {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+}
+
+.skeleton-avatar {
+  width: var(--space-36);
+  height: var(--space-36);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.skeleton-lines {
+  flex: 1;
+  display: grid;
+  gap: var(--space-8);
+}
+
+.skeleton-card {
+  display: grid;
+  gap: var(--space-12);
+  padding: var(--space-16);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-16);
+  background: var(--color-bg-card);
+}
+
+.skeleton-bar {
+  height: 12px;
+  border-radius: var(--radius-pill);
+}
+
+.skeleton-bar--title {
+  width: 62%;
+}
+
+.skeleton-bar--wide {
+  width: 88%;
+}
+
+.skeleton-bar--half {
+  width: 44%;
+}
+
+.skeleton-avatar,
+.skeleton-bar {
+  background: linear-gradient(
+    100deg,
+    var(--color-bg-soft) 38%,
+    var(--color-bg-soft-2) 50%,
+    var(--color-bg-soft) 62%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+
+  to {
+    background-position: -120% 0;
+  }
+}

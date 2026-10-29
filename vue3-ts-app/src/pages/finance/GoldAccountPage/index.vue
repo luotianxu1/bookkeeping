@@ -40,7 +40,7 @@ const showCreateAccountModal = ref(false)
 const showDeleteConfirmModal = ref(false)
 const editingAccountId = ref<number | null>(null)
 const deletingAccount = ref<Account | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSavingAccount = ref(false)
 const isDeletingAccount = ref(false)
 const pageError = ref('')
@@ -197,6 +197,7 @@ async function loadGoldAccount() {
 
   if (!currentUser) {
     pageError.value = '请先登录后查看黄金账户'
+    isLoading.value = false
     return
   }
 

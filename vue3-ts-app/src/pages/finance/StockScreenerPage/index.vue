@@ -7,6 +7,8 @@ import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
+import { readChartToken } from '@/utils/chart-theme'
+import { useTheme } from '@/utils/theme'
 import {
   getLimitUpDownStatistics,
   getMarketStatus,
@@ -85,7 +87,7 @@ const limitStatistics = ref<LimitUpDownStatistics | null>(null)
 const marketStatus = ref<MarketStatus | null>(null)
 const activeLimitTab = ref<'up' | 'down'>('up')
 const results = ref<StockScreenItem[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isLimitStatisticsLoading = ref(false)
 const isMarketStatusLoading = ref(false)
 const isLoadingMore = ref(false)
@@ -603,13 +605,16 @@ async function renderKline(key: string) {
   const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
   const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
   const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
+  // 红涨绿跌：颜色走全局令牌，随明暗主题切换。
+  const upColor = readChartToken('--color-danger', '#dc2626')
+  const downColor = readChartToken('--color-success', '#16a34a')
   const dates = points.map((point) => point.label)
   const candleData = points.map((point) => [point.open, point.close, point.low, point.high])
   // 成交量柱子跟随当日 K 线红涨绿跌：收盘 ≥ 开盘为红，否则为绿。
   const volumeData = points.map((point) => ({
     value: point.volume ?? 0,
-    itemStyle: { color: point.close >= point.open ? '#DC2626' : '#16A34A' },
+    itemStyle: { color: point.close >= point.open ? upColor : downColor },
   }))
   // 默认展示最近半个月（约 10 个交易日）的行情，K线与成交量共用同一 dataZoom 保持横轴对应。
   const defaultSpan = 10
@@ -682,10 +687,10 @@ async function renderKline(key: string) {
         data: candleData,
         barWidth: '60%',
         itemStyle: {
-          color: '#DC2626',
-          color0: '#16A34A',
-          borderColor: '#DC2626',
-          borderColor0: '#16A34A',
+          color: upColor,
+          color0: downColor,
+          borderColor: upColor,
+          borderColor0: downColor,
         },
       },
       {
@@ -700,6 +705,15 @@ async function renderKline(key: string) {
   }, true)
   requestAnimationFrame(() => chart?.resize())
 }
+
+// 主题切换时重建当前展开的 K 线图，让蜡烛红绿跟随令牌换色。
+const { isDark } = useTheme()
+watch(isDark, () => {
+  const key = expandedKey.value
+  if (key && klineCache.has(key)) {
+    void renderKline(key)
+  }
+})
 
 function setKlineContainer(key: string, el: Element | null) {
   if (el instanceof HTMLElement) {

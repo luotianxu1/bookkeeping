@@ -21,7 +21,7 @@
 }
 
 .travel-field-label {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -30,7 +30,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: #2563eb;
+  color: var(--color-brand-strong);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -39,10 +39,10 @@
 .travel-input,
 .travel-textarea {
   width: 100%;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  background: #fff;
-  color: #0f172a;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
   font-size: 13px;
   font-weight: 500;
   box-sizing: border-box;
@@ -68,7 +68,7 @@
 }
 
 .date-separator {
-  color: #94a3b8;
+  color: var(--color-chart-axis);
   text-align: center;
 }
 
@@ -84,10 +84,10 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid #dbe4f0;
-  border-radius: 999px;
-  background: #fff;
-  color: #0f172a;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -98,22 +98,22 @@
   height: 26px;
   display: inline-grid;
   place-items: center;
-  border-radius: 999px;
-  background: #ffedd5;
-  color: #ea580c;
+  border-radius: var(--radius-pill);
+  background: var(--color-warning-soft);
+  color: var(--color-orange);
   font-size: 12px;
   font-weight: 700;
 }
 
 .travel-error {
   margin: 10px 0 0;
-  color: #dc2626;
+  color: var(--color-danger);
   font-size: 12px;
 }
 
 .travel-tip {
   margin: 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -123,9 +123,9 @@
   height: 48px;
   margin-top: 12px;
   border: 0;
-  border-radius: 16px;
-  background: #1d4ed8;
-  color: #fff;
+  border-radius: var(--radius-12);
+  background: var(--color-brand);
+  color: var(--color-text-inverse);
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -157,9 +157,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-card);
   text-align: left;
   cursor: pointer;
 }
@@ -169,15 +169,15 @@
   height: 28px;
   display: inline-grid;
   place-items: center;
-  border-radius: 999px;
-  background: #eff6ff;
-  color: #2563eb;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-strong);
   font-size: 12px;
   font-weight: 700;
 }
 
 .companion-search-name {
-  color: #0f172a;
+  color: var(--color-text-primary);
   font-size: 13px;
   font-weight: 600;
 }

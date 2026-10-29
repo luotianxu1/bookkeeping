@@ -34,7 +34,7 @@
 }
 
 .card-head span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -82,12 +82,12 @@
 }
 
 .market-item :deep(em.amount-text--neutral) {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .market-foot {
   margin: 0;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }

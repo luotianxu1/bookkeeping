@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonEmpty from '@/components/common/CommonEmpty/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -12,7 +13,7 @@ import {
 } from '@/api/modules/finance'
 
 const tasks = ref<ScheduledTask[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isRefreshing = ref(false)
 const executingTaskKey = ref('')
 const pageError = ref('')
@@ -155,7 +156,11 @@ async function executeTask(task: ScheduledTask) {
         </footer>
       </article>
 
-      <p v-if="tasks.length === 0" class="task-message">暂无今日计划任务</p>
+      <CommonEmpty
+        v-if="tasks.length === 0"
+        title="暂无今日计划任务"
+        description="在财务页设置的周期任务会在当天出现在这里。"
+      />
     </section>
   </section>
 </template>

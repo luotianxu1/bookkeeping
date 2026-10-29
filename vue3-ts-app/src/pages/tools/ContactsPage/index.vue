@@ -24,7 +24,7 @@ type ContactDisplayCard = Contact & ContactCardPreset & {
 }
 
 const contacts = ref<Contact[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const pageError = ref('')

@@ -10,7 +10,7 @@ const route = useRoute()
 
 const isDark = computed(() => isDarkFoodPath(route.path))
 const dish = ref<FoodDish | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 
 onMounted(() => {
@@ -21,6 +21,7 @@ async function loadDetail() {
   const dishId = Number(route.params.dishId)
   if (!Number.isFinite(dishId)) {
     pageError.value = '菜品参数无效'
+    isLoading.value = false
     return
   }
 

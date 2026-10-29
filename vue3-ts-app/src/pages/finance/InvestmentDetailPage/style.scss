@@ -11,7 +11,7 @@
   border: 1px solid var(--color-border-blue);
   border-radius: var(--radius-20);
   background: var(--color-top-card-gradient);
-  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
+  box-shadow: var(--color-finance-card-shadow);
 }
 
 .investment-detail-summary-head {
@@ -74,7 +74,7 @@
 }
 
 .investment-detail-summary-side span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -151,7 +151,7 @@
   gap: 8px;
   min-width: 0;
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   background: rgba(37, 99, 235, 0.08);
 }
 
@@ -162,7 +162,7 @@
   padding: 2px 8px;
   border-radius: var(--radius-pill);
   background: rgba(37, 99, 235, 0.14);
-  color: #1d4ed8;
+  color: var(--color-brand);
   font-size: 10px;
   font-weight: 700;
   line-height: 1.2;
@@ -200,24 +200,24 @@
 .investment-detail-action-button:disabled {
   border-color: var(--color-border);
   background: var(--color-bg-card-soft);
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   box-shadow: none;
   cursor: not-allowed;
 }
 
 .investment-detail-action-button.buy {
   color: var(--color-brand);
-  border-color: #bfdbfe;
+  border-color: var(--color-bg-sky-grad-2);
 }
 
 .investment-detail-action-button.sell {
-  color: #dc2626;
-  border-color: #fecaca;
+  color: var(--color-danger);
+  border-color: var(--color-danger-soft);
 }
 
 .investment-detail-action-button.auto-invest {
-  color: #2563eb;
-  border-color: #bfdbfe;
+  color: var(--color-brand-strong);
+  border-color: var(--color-bg-sky-grad-2);
 }
 
 .investment-detail-action-button.edit {
@@ -226,7 +226,7 @@
 
 .investment-detail-action-button.delete {
   color: var(--color-danger);
-  border-color: #fecaca;
+  border-color: var(--color-danger-soft);
 }
 
 .investment-detail-message {
@@ -274,7 +274,7 @@
 }
 
 .investment-detail-card-head span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -314,7 +314,7 @@
   display: grid;
   place-items: center;
   margin: 0;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 600;
 }
@@ -331,7 +331,7 @@
 }
 
 .investment-detail-grid-item span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -355,9 +355,9 @@
   display: grid;
   gap: var(--space-8);
   padding: var(--space-12);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-14);
-  background: #f8fbff;
+  background: var(--color-bg-white-100);
 }
 
 .investment-detail-dividend-top {
@@ -379,7 +379,7 @@
 }
 
 .investment-detail-dividend-title span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -404,7 +404,7 @@
 }
 
 .investment-detail-dividend-grid span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -464,14 +464,14 @@
 }
 
 .investment-auto-invest-main span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
 
 .investment-auto-invest-status {
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: var(--font-size-12);
   font-style: normal;
   font-weight: 700;
@@ -479,7 +479,7 @@
 
 .investment-auto-invest-status.is-active {
   background: rgba(37, 99, 235, 0.12);
-  color: #2563eb;
+  color: var(--color-brand-strong);
 }
 
 .investment-auto-invest-status.is-paused {
@@ -489,7 +489,7 @@
 
 .investment-auto-invest-status.is-cancelled {
   background: rgba(148, 163, 184, 0.16);
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .investment-auto-invest-grid {
@@ -504,7 +504,7 @@
 }
 
 .investment-auto-invest-grid span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -557,7 +557,7 @@
 }
 
 .investment-detail-transactions-head span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -604,7 +604,7 @@
 }
 
 .investment-detail-transaction-left span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -641,7 +641,7 @@
   min-height: 44px;
   padding: 0 14px;
   border: 1px solid rgba(29, 78, 216, 0.14);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(239, 246, 255, 0.88);
   color: var(--color-brand);
   font-size: var(--font-size-13);
@@ -692,19 +692,19 @@
   min-width: 52px;
   height: 28px;
   padding: 0 12px;
-  border: 1px solid #dbeafe;
-  border-radius: 999px;
-  background: #eff6ff;
-  color: #2563eb;
+  border: 1px solid var(--color-bg-brand-tint);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-brand-soft);
+  color: var(--color-brand-strong);
   font-size: var(--font-size-12);
   font-weight: 700;
   transition: all 160ms ease;
 }
 
 .investment-detail-quick-tab.active {
-  border-color: #2563eb;
-  background: #2563eb;
-  color: #fff;
+  border-color: var(--color-brand-strong);
+  background: var(--color-brand-strong);
+  color: var(--color-text-inverse);
 }
 
 .investment-detail-modal-field > span,
@@ -750,7 +750,7 @@
 
 .investment-detail-field-control:read-only,
 .investment-detail-textarea-control:read-only {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-weight: 500;
 }
 
@@ -774,8 +774,8 @@
   align-items: center;
   padding: 3px;
   border: 0;
-  border-radius: 999px;
-  background: #cbd5e1;
+  border-radius: var(--radius-pill);
+  background: var(--color-border-soft-2);
   transition: background 180ms ease;
 }
 
@@ -813,9 +813,9 @@
   min-height: 40px;
   padding: 0 14px;
   border: 1px solid rgba(185, 28, 28, 0.2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(254, 242, 242, 0.9);
-  color: #b91c1c;
+  color: var(--color-danger);
   font: inherit;
   font-weight: 700;
 }
@@ -836,12 +836,12 @@
 
 :global(:root[data-theme='dark']) .investment-detail-dividend-reminder-badge {
   background: rgba(191, 219, 254, 0.2);
-  color: #eff6ff;
+  color: var(--color-bg-brand-soft);
   box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.16);
 }
 
 :global(:root[data-theme='dark']) .investment-detail-dividend-reminder-text {
-  color: #f8fbff;
+  color: var(--color-bg-white-100);
 }
 
 :global(:root[data-theme='dark']) .investment-detail-dividend-item {
@@ -852,12 +852,12 @@
 
 :global(:root[data-theme='dark']) .investment-detail-dividend-title strong,
 :global(:root[data-theme='dark']) .investment-detail-dividend-grid strong {
-  color: #f8fafc;
+  color: var(--color-bg-page);
 }
 
 :global(:root[data-theme='dark']) .investment-detail-dividend-title span,
 :global(:root[data-theme='dark']) .investment-detail-dividend-grid span {
-  color: #94a3b8;
+  color: var(--color-chart-axis);
 }
 
 :global(:root[data-theme='dark']) .investment-detail-dividend-status {
@@ -872,12 +872,12 @@
 
 .investment-detail-page.is-dark .investment-detail-dividend-title strong,
 .investment-detail-page.is-dark .investment-detail-dividend-grid strong {
-  color: #f8fafc;
+  color: var(--color-bg-page);
 }
 
 .investment-detail-page.is-dark .investment-detail-dividend-title span,
 .investment-detail-page.is-dark .investment-detail-dividend-grid span {
-  color: #94a3b8;
+  color: var(--color-chart-axis);
 }
 
 .investment-detail-page.is-dark .investment-detail-dividend-status {
@@ -885,18 +885,18 @@
 }
 
 .investment-detail-page.is-dark .investment-detail-action-button {
-  border-color: #334155;
+  border-color: var(--color-text-secondary);
   background: #162033;
   box-shadow: 0 8px 20px rgba(2, 6, 23, 0.22);
 }
 
 .investment-detail-page.is-dark .investment-detail-action-button.edit {
-  color: #cbd5e1;
+  color: var(--color-border-soft-2);
 }
 
 .investment-detail-page.is-dark .investment-detail-action-button:disabled {
   border-color: #253045;
   background: #101826;
-  color: #64748b;
+  color: var(--color-text-muted);
   box-shadow: none;
 }

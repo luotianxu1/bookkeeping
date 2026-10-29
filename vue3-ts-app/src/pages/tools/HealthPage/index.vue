@@ -6,6 +6,7 @@ import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
+import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import {
@@ -49,6 +50,8 @@ const FAT_PER_KG: [number, number] = [0.8, 1]
 const weightInput = ref('65')
 const activeActivity = ref<ActivityKey>('light')
 const latestWeight = ref<number | null>(null)
+// 首屏数据（上次打卡体重/身体档案）加载中，完成后显示真实数据
+const isLoadingInitial = ref(true)
 
 // 身体数据（性别/年龄/身高）：保存后体重打卡时自动按 BMI 估算体脂率。
 const gender = ref('male')
@@ -123,6 +126,7 @@ const nutrientCards = computed(() => {
 onMounted(async () => {
   const user = getStoredCurrentUser()
   if (!user) {
+    isLoadingInitial.value = false
     return
   }
 
@@ -149,6 +153,8 @@ onMounted(async () => {
   } catch {
     // 档案加载失败不打断页面，保存时会再校验
   }
+
+  isLoadingInitial.value = false
 })
 
 async function onSaveProfile() {
@@ -222,7 +228,8 @@ function goRecords() {
     <section class="health-record-card" aria-label="体重打卡入口">
       <div class="health-record-info">
         <h2>体重打卡</h2>
-        <p>最新体重：{{ latestWeight === null ? '暂无记录' : `${latestWeight}kg` }}</p>
+        <CommonSkeleton v-if="isLoadingInitial" variant="list" :rows="1" />
+        <p v-else>最新体重：{{ latestWeight === null ? '暂无记录' : `${latestWeight}kg` }}</p>
       </div>
       <CommonButton size="sm" @click="goRecords">去打卡</CommonButton>
     </section>

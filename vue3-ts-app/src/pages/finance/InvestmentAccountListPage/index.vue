@@ -70,7 +70,7 @@ const summary = ref<InvestmentSummary>({
   cumulativeProfitRate: 0,
   lastSyncedAt: null,
 })
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isManageMode = ref(false)
 const pageError = ref('')
 const showFeedbackModal = ref(false)
@@ -166,6 +166,7 @@ async function loadInvestmentAccounts() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看投资账户'
+    isLoading.value = false
     return
   }
 

@@ -16,7 +16,7 @@ const route = useRoute()
 const account = ref<Account | null>(null)
 const principalRecord = ref<DebtRecord | null>(null)
 const repaymentRecords = ref<DebtRecord[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 let requestVersion = 0
 
@@ -48,10 +48,12 @@ async function loadDetail() {
 
   if (!currentUser) {
     pageError.value = '请先登录后查看债务项详情'
+    isLoading.value = false
     return
   }
   if (!Number.isInteger(accountId.value) || accountId.value <= 0 || !Number.isInteger(recordId.value) || recordId.value <= 0) {
     pageError.value = '债务项不存在'
+    isLoading.value = false
     return
   }
 

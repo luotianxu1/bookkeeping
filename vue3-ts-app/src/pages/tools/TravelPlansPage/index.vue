@@ -15,7 +15,7 @@ type FilterTab = 'traveling' | 'completed'
 const router = useRouter()
 const activeTab = ref<FilterTab>('traveling')
 const plans = ref<TravelPlan[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isEditing = ref(false)
 const isDeleting = ref(false)
 const loadError = ref('')
@@ -70,6 +70,7 @@ async function loadPlans() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     loadError.value = '请先登录后查看旅行管理'
+    isLoading.value = false
     return
   }
 

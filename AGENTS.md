@@ -21,7 +21,7 @@ pnpm build            # vue-tsc -b && vite build
 - API proxy routes: `/auth-api` → 8081, `/finance-api` → 8082, `/tool-api` → 8083, `/food-api` → 8084
 - Uses `postcss-pxtorem` for mobile viewport scaling
 - API client: `src/api/request.ts` — exports per-service instances (`authRequest`, `financeRequest`, etc.)
-- Auth: JWT stored client-side, 401 triggers redirect to login
+- Auth: JWT in httpOnly cookie (`access_token`, `SameSite=Lax`), `withCredentials: true` in request.ts; 401 clears credentials and redirects to login. Token is NOT stored in localStorage.
 
 ## Backend (Spring Boot 3.3.5 + Java 17)
 

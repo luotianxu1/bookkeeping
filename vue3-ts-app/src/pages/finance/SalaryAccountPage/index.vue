@@ -31,7 +31,7 @@ import {
 
 const route = useRoute()
 const pageData = ref<SalaryAccountPage | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const pageError = ref('')
 const formError = ref('')
@@ -86,6 +86,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看工资账户'
+    isLoading.value = false
     return
   }
 
@@ -279,11 +280,11 @@ function formatInterestSettlementDate(value?: string | null) {
       />
     </PageHeader>
 
-    <div v-if="isLoading" class="salary-loading-wrap">
+    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
+
+    <div v-else-if="isLoading" class="salary-loading-wrap">
       <CommonLoading text="账户数据加载中..." />
     </div>
-
-    <p v-else-if="pageError" class="salary-error-text">{{ pageError }}</p>
 
     <template v-else-if="pageData">
       <section class="salary-summary-card">

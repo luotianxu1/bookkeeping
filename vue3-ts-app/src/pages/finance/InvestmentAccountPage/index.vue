@@ -52,7 +52,7 @@ const activeTab = ref('A股')
 const holdingViewMode = ref<HoldingViewMode>('card')
 const showAddModal = ref(false)
 const showAccountSettingsModal = ref(false)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const isSavingAccountSettings = ref(false)
 const pageError = ref('')
@@ -341,11 +341,13 @@ async function loadInvestmentData() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看投资详情'
+    isLoading.value = false
     return
   }
 
   if (!selectedAccountId.value) {
     pageError.value = '投资账户不存在'
+    isLoading.value = false
     return
   }
 

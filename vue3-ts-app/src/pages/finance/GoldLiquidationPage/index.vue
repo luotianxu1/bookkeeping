@@ -13,7 +13,7 @@ import {
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 const route = useRoute()
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const liquidation = ref<GoldLiquidation>({
   cumulativeWeight: 0,
@@ -59,6 +59,7 @@ async function loadLiquidations() {
 
   if (!currentUser) {
     pageError.value = '请先登录后查看清仓记录'
+    isLoading.value = false
     return
   }
 

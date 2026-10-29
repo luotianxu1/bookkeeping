@@ -67,7 +67,7 @@ const summary = ref<DebtAccountSummary>({
   accountCount: 0,
   recordCount: 0,
 })
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isManageMode = ref(false)
 const pageError = ref('')
 const showFeedbackModal = ref(false)
@@ -206,6 +206,7 @@ async function loadDebtPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看债务账户'
+    isLoading.value = false
     return
   }
 

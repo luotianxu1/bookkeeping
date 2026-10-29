@@ -34,7 +34,7 @@ const tabOptions = [
 
 const activeTab = ref<AnniversaryTab>('month')
 const anniversaries = ref<Anniversary[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const pageError = ref('')
@@ -115,6 +115,7 @@ async function loadAnniversaries() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看纪念日'
+    isLoading.value = false
     return
   }
 

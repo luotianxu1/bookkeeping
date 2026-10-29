@@ -180,7 +180,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
   const rootStyle = getComputedStyle(document.documentElement)
   const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
   const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-chart-split').trim()
+  const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
   const lineColor = rootStyle.getPropertyValue('--color-chart-gold').trim()
   const areaStart = rootStyle.getPropertyValue('--color-chart-gold-area-start').trim()
   const areaEnd = rootStyle.getPropertyValue('--color-chart-gold-area-end').trim()

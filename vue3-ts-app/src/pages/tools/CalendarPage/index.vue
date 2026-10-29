@@ -28,7 +28,7 @@ const monthAnchor = ref(resolveInitialMonth())
 const yearAnchor = ref(resolveInitialYear())
 const selectedDate = ref<string | null>(resolveInitialSelectedDate())
 const overview = ref<CalendarOverview | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const hasLoadedOnce = ref(false)
 let requestSerial = 0
@@ -52,6 +52,7 @@ async function loadOverview() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看日历'
+    isLoading.value = false
     return
   }
 

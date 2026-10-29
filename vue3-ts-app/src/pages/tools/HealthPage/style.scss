@@ -12,7 +12,7 @@
   gap: var(--space-12);
   padding: 16px;
   border: 1px solid var(--color-border-blue);
-  border-radius: 22px;
+  border-radius: var(--radius-16);
   background: var(--color-top-card-gradient);
   box-shadow: var(--color-finance-card-shadow);
 }
@@ -80,7 +80,7 @@
 .health-message {
   margin: 0;
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--radius-16);
   background: var(--color-bg-card);
   text-align: center;
   color: var(--color-text-muted);
@@ -93,7 +93,7 @@
   gap: 6px;
   padding: 16px;
   border: 1px solid var(--color-border-brand-soft);
-  border-radius: 22px;
+  border-radius: var(--radius-16);
   background: var(--color-bg-card-muted);
   box-shadow: var(--color-shadow-soft);
 }
@@ -135,7 +135,7 @@
   gap: 6px;
   padding: 14px;
   border: 1px solid var(--color-border);
-  border-radius: 20px;
+  border-radius: var(--radius-16);
   background: var(--color-bg-card-glass);
   box-shadow: var(--color-shadow-soft);
 }
@@ -170,7 +170,7 @@
   gap: 4px;
   padding: 14px 16px;
   border: 1px solid var(--color-border);
-  border-radius: 18px;
+  border-radius: var(--radius-16);
   background: var(--color-bg-card-glass);
 }
 
@@ -188,7 +188,7 @@
   gap: 12px;
   padding: 14px 16px;
   border: 1px solid var(--color-border-brand-soft);
-  border-radius: 22px;
+  border-radius: var(--radius-16);
   background: var(--color-top-card-gradient);
   box-shadow: var(--color-finance-card-shadow);
 }

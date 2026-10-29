@@ -33,7 +33,7 @@ const dishes = ref<FoodDish[]>([])
 const currentCategoryId = ref<number | null>(null)
 const keyword = ref('')
 const pageError = ref('')
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSubmitting = ref(false)
 const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
@@ -116,6 +116,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看菜品列表'
+    isLoading.value = false
     return
   }
 

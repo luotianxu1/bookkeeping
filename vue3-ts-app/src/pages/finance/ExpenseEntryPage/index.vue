@@ -81,7 +81,7 @@ const accountSelectOptions = computed<ExpenseInlineSelectOption[]>(() => (
 const entryTime = ref(formatDateTimeLocal(new Date()))
 const note = ref('')
 const amountInput = ref('0.00')
-const loading = ref(false)
+const loading = ref(true)
 const saving = ref(false)
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')

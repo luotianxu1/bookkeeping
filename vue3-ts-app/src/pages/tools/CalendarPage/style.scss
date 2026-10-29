@@ -26,7 +26,7 @@
 .calendar-period-arrow {
   width: 28px;
   height: 28px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--color-text-muted);
   font-size: var(--font-size-18);
   font-weight: 700;
@@ -89,7 +89,7 @@
 .calendar-weekdays span,
 .mini-weekdays span {
   text-align: center;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: 11px;
   font-weight: 600;
 }
@@ -107,7 +107,7 @@
   align-content: center;
   gap: 1px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-8);
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -127,7 +127,7 @@
 }
 
 .calendar-day-lunar {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: 8px;
   font-weight: 500;
   line-height: 1;
@@ -153,7 +153,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 8px;
   font-weight: 700;
   line-height: 1;
@@ -180,7 +180,7 @@
   left: 50%;
   width: 40px;
   height: 40px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-brand);
   transform: translate(-50%, -50%);
 }
@@ -205,7 +205,7 @@
 .calendar-day-dot {
   width: 4px;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-brand);
 }
 
@@ -264,12 +264,12 @@
 }
 
 .calendar-note-side b.is-past {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
 }
 
 .calendar-empty {
   margin: 0;
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -284,7 +284,7 @@
   gap: 5px;
   padding: 8px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   background: var(--color-bg-card);
   text-align: left;
   cursor: pointer;
@@ -312,7 +312,7 @@
 }
 
 .mini-month-head span {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: 9px;
   font-weight: 600;
 }
@@ -372,7 +372,7 @@
   bottom: 0;
   width: 3px;
   height: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   transform: translateX(-50%);
 }
 
@@ -394,7 +394,7 @@
   min-height: 14px;
   justify-self: center;
   align-items: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-brand);
   color: var(--color-text-inverse);
   font-weight: 700;

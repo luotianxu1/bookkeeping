@@ -19,7 +19,7 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 import { createRecentYearOptions, dateToMonthInput, formatSalaryCurrency, monthInputToDate } from '../salary-shared'
 
 const pageData = ref<SalaryMonthPage | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const pageError = ref('')
 const formError = ref('')
@@ -50,6 +50,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看工资明细'
+    isLoading.value = false
     return
   }
 
@@ -165,11 +166,11 @@ function openFeedback(message: string, type: 'success' | 'error') {
       />
     </PageHeader>
 
-    <div v-if="isLoading" class="salary-loading-wrap">
+    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
+
+    <div v-else-if="isLoading" class="salary-loading-wrap">
       <CommonLoading text="工资明细加载中..." />
     </div>
-
-    <p v-else-if="pageError" class="salary-error-text">{{ pageError }}</p>
 
     <template v-else-if="pageData">
       <section class="salary-summary-card">

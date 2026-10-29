@@ -174,7 +174,7 @@
   height: 28px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: var(--radius-12);
   background: var(--color-brand);
   color: var(--color-white);
   font-size: var(--font-size-13);

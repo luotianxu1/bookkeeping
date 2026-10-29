@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonEmpty from '@/components/common/CommonEmpty/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -58,7 +59,7 @@ const orders = ref<PhotographyOrder[]>([])
 const cashAccounts = ref<Account[]>([])
 const expandedOrderId = ref<number | null>(null)
 
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const isUpdating = ref(false)
 const isCollecting = ref(false)
@@ -197,6 +198,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看摄影订单'
+    isLoading.value = false
     return
   }
 
@@ -677,7 +679,11 @@ function buildCurrentMonth() {
     <CommonFeedback v-model="feedbackVisible" :message="feedbackMessage" :type="feedbackType" />
 
     <p v-if="pageError" class="orders-page-error">{{ pageError }}</p>
-    <p v-else-if="filteredOrders.length === 0" class="orders-empty">暂无摄影订单</p>
+    <CommonEmpty
+      v-else-if="!isBusy && filteredOrders.length === 0"
+      title="暂无摄影订单"
+      description="点击右下角按钮创建第一笔摄影订单。"
+    />
 
     <section v-else class="orders-list" aria-label="摄影订单列表">
       <article

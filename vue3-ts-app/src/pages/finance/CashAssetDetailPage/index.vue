@@ -38,7 +38,7 @@ const transactions = ref<ApiTransaction[]>([])
 const currentPage = ref(1)
 const totalPages = ref(1)
 const totalItems = ref(0)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isLoadingTransactions = ref(false)
 const pageError = ref('')
 const historyError = ref('')
@@ -185,10 +185,12 @@ async function loadDetail() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看资产详情'
+    isLoading.value = false
     return
   }
   if (!Number.isFinite(accountId.value) || accountId.value <= 0) {
     pageError.value = '账户不存在'
+    isLoading.value = false
     return
   }
 

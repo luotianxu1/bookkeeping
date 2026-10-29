@@ -18,7 +18,7 @@ import { getFoodDishListPath, getFoodDishMenuPath, getFoodMenuDetailPath, getFoo
 const router = useRouter()
 
 const homeData = ref<FoodHomeData | null>(null)
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
@@ -47,6 +47,7 @@ async function loadPage() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看餐饮页面'
+    isLoading.value = false
     return
   }
 
@@ -146,7 +147,7 @@ function resolveManagementPath(card: Pick<FoodManagementCard, 'key' | 'path'>) {
 </script>
 
 <template>
-  <section class="food-home-page" aria-label="餐饮首页">
+  <section class="food-home-page stagger-in" aria-label="餐饮首页">
     <CommonLoading v-if="isLoading" text="餐饮页面加载中..." />
 
     <template v-if="!pageError && homeData">

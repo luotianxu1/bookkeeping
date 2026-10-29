@@ -3,6 +3,7 @@ import { formatAmount } from '@/utils/format'
 // 账户管理页：还原 Pencil「账户管理」画板中的总览、账户分组和新增按钮。
 import { computed, onMounted, ref, watch } from 'vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonEmpty from '@/components/common/CommonEmpty/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -59,7 +60,7 @@ const accountTypes = ref<AccountType[]>([])
 const accounts = ref<Account[]>([])
 const overviewTotalAssets = ref<number | null>(null)
 const contacts = ref<Contact[]>([])
-const isLoadingAccounts = ref(false)
+const isLoadingAccounts = ref(true)
 const isLoadingAccountTypes = ref(false)
 const isLoadingContacts = ref(false)
 const isSavingAccount = ref(false)
@@ -485,6 +486,7 @@ async function loadAccounts() {
     accountListError.value = '请先登录后查看账户'
     accounts.value = []
     overviewTotalAssets.value = null
+    isLoadingAccounts.value = false
     return
   }
 
@@ -715,9 +717,13 @@ function isZeroAmount(value: number) {
       {{ accountListError }}
     </p>
     <CommonLoading v-else-if="isLoadingAccounts" />
-    <p v-else-if="accountGroups.length === 0" class="account-list-message">
-      {{ selectedFamilyView.kind === 'total' ? '当前家庭暂无账户' : '暂无账户' }}
-    </p>
+    <CommonEmpty
+      v-else-if="accountGroups.length === 0"
+      :title="selectedFamilyView.kind === 'total' ? '当前家庭暂无账户' : '暂无账户'"
+      description="添加一个现金或投资账户，开始记录每笔收支。"
+      action-text="新增账户"
+      @action="openCreateAccountModal()"
+    />
 
     <div v-else class="account-groups">
       <AccountGroupCard

@@ -2,6 +2,7 @@
 // 全球行情页：通过后端代理展示全球品种实时行情（东方财富统一主源），按「股指」「商品·外汇·利率」分组展示。
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
+import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getGlobalMarketQuotes, type GlobalMarketQuote } from '@/api/modules/finance'
 
@@ -122,7 +123,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else-if="!loadError && !hasAnyQuote" class="global-market-placeholder" aria-live="polite">
-      行情加载中…
+      <CommonSkeleton variant="card" />
     </div>
 
     <template v-else>

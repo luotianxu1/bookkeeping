@@ -28,7 +28,7 @@ const router = useRouter()
 const accounts = ref<Account[]>([])
 const contacts = ref<Contact[]>([])
 const debtRecords = ref<DebtRecord[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 
 const contactMap = computed(() => new Map(contacts.value.map((contact) => [contact.id, contact])))
@@ -84,6 +84,7 @@ async function loadHistory() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看债务明细'
+    isLoading.value = false
     return
   }
 

@@ -69,7 +69,7 @@
   justify-content: center;
   padding: 0;
   border: 1px solid var(--color-border-blue);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-blue-soft);
   color: var(--color-brand-strong);
 }
@@ -136,7 +136,7 @@
 }
 
 .account-item-subtitle {
-  color: var(--color-text-subtle);
+  color: var(--color-chart-axis);
   font-size: var(--font-size-12);
   font-weight: 500;
 }
@@ -160,7 +160,7 @@
 .account-item-chevron {
   width: 8px;
   height: 8px;
-  border-top: 1.5px solid var(--color-text-subtle);
-  border-right: 1.5px solid var(--color-text-subtle);
+  border-top: 1.5px solid var(--color-chart-axis);
+  border-right: 1.5px solid var(--color-chart-axis);
   transform: rotate(45deg);
 }

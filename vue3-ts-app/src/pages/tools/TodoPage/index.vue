@@ -31,7 +31,7 @@ const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
 
 const activeTab = ref<TodoTab>('today')
 const todoItems = ref<TodoItem[]>([])
-const isLoading = ref(false)
+const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const updatingTodoId = ref<number | null>(null)
@@ -111,6 +111,7 @@ async function loadTodoItems() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看待办事项'
+    isLoading.value = false
     return
   }
 

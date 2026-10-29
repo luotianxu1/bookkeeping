@@ -56,7 +56,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const { isDark } = useTheme()
-const isLoading = ref(false)
+const isLoading = ref(true)
 const pageError = ref('')
 const detail = ref<InvestmentAssetDetail | null>(null)
 const transactions = ref<InvestmentTransaction[]>([])
@@ -333,6 +333,7 @@ function mergeDetail(partial: Partial<InvestmentAssetDetail>) {
 async function loadDetail() {
   if (!positionId.value) {
     pageError.value = '投资资产不存在'
+    isLoading.value = false
     return
   }
 
