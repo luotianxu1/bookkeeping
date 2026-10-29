@@ -1,0 +1,125 @@
+/* 行情中心紧凑方块阵：港股/美股/ETF/黄金分组页与 A 股核心指数共用。
+   全局类（mkt- 前缀防冲突），由 market/index.vue 以非 scoped 方式引入，
+   两个页面禁止在各自 scoped 样式里重复定义，避免拷贝走样。 */
+.mkt-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: var(--space-4);
+}
+
+.mkt-tile {
+  display: flex;
+  min-height: 48px; /* 骨架方块（空内容）的高度兜底 */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-10);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease-out,
+    transform 0.15s ease-out;
+
+  &:hover {
+    border-color: var(--color-border-soft-2);
+    transform: translateY(-2px);
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--color-ring-focus);
+    outline-offset: 1px;
+  }
+}
+
+.mkt-tile-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--font-size-11);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mkt-tile-price {
+  font-size: var(--font-size-12);
+  font-weight: 800;
+  line-height: 1.1;
+
+  &.up {
+    color: var(--color-danger);
+  }
+
+  &.down {
+    color: var(--color-success);
+  }
+}
+
+.mkt-tile-pct {
+  font-size: var(--font-size-11);
+  font-weight: 700;
+
+  &.up {
+    color: var(--color-danger);
+  }
+
+  &.down {
+    color: var(--color-success);
+  }
+}
+
+/* 入场错峰：40ms 步进，截断 12 档 */
+@media (prefers-reduced-motion: no-preference) {
+  .mkt-tile {
+    animation: mkt-tile-in 0.36s ease-out both;
+    animation-delay: var(--rise-delay, 0ms);
+  }
+}
+
+@keyframes mkt-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 骨架方块 */
+.mkt-tile-skel {
+  background: linear-gradient(90deg, var(--color-bg-soft) 25%, var(--color-bg-card) 50%, var(--color-bg-soft) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-flow 1.4s ease infinite;
+}
+
+@keyframes skeleton-flow {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* 窄屏固定 3 列（与各 tab 视觉节奏一致） */
+@media (max-width: 520px) {
+  .mkt-tiles {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mkt-tile,
+  .mkt-tile-skel {
+    animation: none;
+  }
+}
