@@ -49,6 +49,10 @@ export function login(params: LoginParams) {
   return requestPost<LoginResult, LoginParams>(authRequest, '/api/auth/login', params)
 }
 
+export function logout() {
+  return requestPost<null>(authRequest, '/api/auth/logout')
+}
+
 export function register(params: RegisterParams) {
   return requestPost<null, RegisterParams>(authRequest, '/api/auth/register', params)
 }

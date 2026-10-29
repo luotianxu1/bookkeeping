@@ -6,8 +6,7 @@ import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
-import { deleteCurrentAccount, getCurrentUser, getFamilyOverview, type CurrentUser } from '@/api/modules/auth'
-import { clearStoredToken } from '@/utils/auth-token'
+import { deleteCurrentAccount, getCurrentUser, getFamilyOverview, logout as logoutApi, type CurrentUser } from '@/api/modules/auth'
 import { stopGoldPriceAutoRefresh } from '@/utils/gold-price-cache'
 import {
   clearStoredCurrentUser,
@@ -98,7 +97,12 @@ async function goMenu(path?: string) {
 
 async function logout() {
   stopGoldPriceAutoRefresh()
-  clearStoredToken()
+  try {
+    // 让服务端清除 httpOnly Cookie；失败也照常清理本地状态
+    await logoutApi()
+  } catch {
+    // 忽略登出接口异常
+  }
   clearStoredCurrentUser()
   await router.push('/login')
 }
@@ -128,7 +132,6 @@ async function confirmDeleteAccount() {
   try {
     await deleteCurrentAccount()
     stopGoldPriceAutoRefresh()
-    clearStoredToken()
     clearStoredCurrentUser()
     showDeleteAccountModal.value = false
     showFeedback('账号已注销', 'success')

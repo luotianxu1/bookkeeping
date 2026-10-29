@@ -9,15 +9,20 @@ import com.example.auth.dto.RegisterRequest;
 import com.example.auth.model.UserAccount;
 import com.example.auth.security.JwtService;
 import com.example.auth.security.LoginRateLimiter;
+import com.example.auth.security.RegisterRateLimiter;
 import com.example.auth.service.AuthService;
 import com.example.common.result.Result;
+import com.example.common.security.JwtTokenAuthenticationFilter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,16 +40,27 @@ public class AuthController {
     private final AuthService authService;
     private final JwtService jwtService;
     private final LoginRateLimiter loginRateLimiter;
+    private final RegisterRateLimiter registerRateLimiter;
 
-    public AuthController(AuthService authService, JwtService jwtService, LoginRateLimiter loginRateLimiter) {
+    /** https 部署时通过环境变量 AUTH_COOKIE_SECURE=true 开启 Secure 标记 */
+    @Value("${auth.cookie.secure:false}")
+    private boolean cookieSecure;
+
+    public AuthController(
+        AuthService authService,
+        JwtService jwtService,
+        LoginRateLimiter loginRateLimiter,
+        RegisterRateLimiter registerRateLimiter
+    ) {
         this.authService = authService;
         this.jwtService = jwtService;
         this.loginRateLimiter = loginRateLimiter;
+        this.registerRateLimiter = registerRateLimiter;
     }
 
     @PostMapping("/login")
-    @Operation(summary = "用户登录", description = "使用用户名和密码登录，返回 JWT 访问令牌")
-    public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    @Operation(summary = "用户登录", description = "使用用户名和密码登录，返回 JWT 访问令牌并写入 httpOnly Cookie")
+    public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         String rateLimitKey = request.username().toLowerCase() + "|" + httpRequest.getRemoteAddr();
         if (loginRateLimiter.isBlocked(rateLimitKey)) {
             return Result.<LoginResponse>fail().code(429).message("登录尝试次数过多，请 15 分钟后再试");
@@ -57,12 +73,36 @@ public class AuthController {
         loginRateLimiter.clear(rateLimitKey);
         authService.markLoginSuccess(user.id());
         String token = jwtService.generateToken(user.username(), user.id());
+        writeTokenCookie(httpResponse, token, jwtService.getExpirationSeconds());
         return Result.ok(new LoginResponse(token, "Bearer", jwtService.getExpirationSeconds()));
     }
 
+    @PostMapping("/logout")
+    @Operation(summary = "用户登出", description = "清除登录 Cookie")
+    public Result<Void> logout(HttpServletResponse httpResponse) {
+        writeTokenCookie(httpResponse, "", 0);
+        return Result.<Void>ok().message("已登出");
+    }
+
+    private void writeTokenCookie(HttpServletResponse response, String token, long maxAgeSeconds) {
+        ResponseCookie cookie = ResponseCookie.from(JwtTokenAuthenticationFilter.ACCESS_TOKEN_COOKIE, token)
+            .httpOnly(true)
+            .secure(cookieSecure)
+            .path("/")
+            .sameSite("Lax")
+            .maxAge(maxAgeSeconds)
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
     @PostMapping("/register")
-    @Operation(summary = "用户注册", description = "使用用户名和密码注册新用户")
-    public Result<Void> register(@Valid @RequestBody RegisterRequest request) {
+    @Operation(summary = "用户注册", description = "使用用户名和密码注册新用户（IP 限流，防批量枚举）")
+    public Result<Void> register(@Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
+        String rateLimitKey = "register|" + httpRequest.getRemoteAddr();
+        if (registerRateLimiter.isBlocked(rateLimitKey)) {
+            return Result.<Void>fail().code(429).message("注册尝试过于频繁，请 15 分钟后再试");
+        }
+        registerRateLimiter.record(rateLimitKey);
         authService.register(request);
         return Result.<Void>ok().message("注册成功");
     }
@@ -99,8 +139,10 @@ public class AuthController {
 
     @DeleteMapping("/account")
     @Operation(summary = "注销当前账号", description = "停用当前登录账号，并按规则处理家庭归属")
-    public Result<Void> deleteAccount(@AuthenticationPrincipal String username) {
+    public Result<Void> deleteAccount(@AuthenticationPrincipal String username, HttpServletResponse httpResponse) {
         authService.deleteAccount(username);
+        // 账号已停用，立即清除登录 Cookie
+        writeTokenCookie(httpResponse, "", 0);
         return Result.<Void>ok().message("账号已注销");
     }
 

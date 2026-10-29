@@ -3,7 +3,6 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCurrentUser, login } from '@/api/modules/auth'
 import { ApiError } from '@/api/request'
-import { clearStoredToken, setStoredToken } from '@/utils/auth-token'
 import { clearStoredCurrentUser, setStoredCurrentUser } from '@/utils/current-user'
 import { initializeGoldPriceCache } from '@/utils/gold-price-cache'
 
@@ -43,13 +42,10 @@ async function submitLogin() {
 
   isSubmitting.value = true
   try {
-    const result = await login({
+    // 登录成功后 JWT 由服务端写入 httpOnly Cookie，前端不接触令牌本体
+    await login({
       username: account.value.trim(),
       password: password.value,
-    })
-    setStoredToken({
-      accessToken: result.accessToken,
-      tokenType: result.tokenType,
     })
     const currentUser = await getCurrentUser()
     setStoredCurrentUser(currentUser)
@@ -58,7 +54,6 @@ async function submitLogin() {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     await router.push(redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/')
   } catch (error) {
-    clearStoredToken()
     clearStoredCurrentUser()
     errorMessage.value = error instanceof ApiError ? error.message : '登录失败，请稍后再试'
   } finally {

@@ -56,7 +56,10 @@ function compareTransactions(left: ApiTransaction, right: ApiTransaction, sortOr
   if (leftTime !== rightTime) {
     return (leftTime - rightTime) * direction
   }
-  return (Number(left.id ?? 0) - Number(right.id ?? 0)) * direction
+  // 优先使用后端真实主键 sourceId，聚合展示记录可能没有合成 id
+  const leftId = Number(left.sourceId ?? left.id ?? 0)
+  const rightId = Number(right.sourceId ?? right.id ?? 0)
+  return (leftId - rightId) * direction
 }
 
 function compareDayKeys(leftDayKey: string, rightDayKey: string, sortOrder: TransactionSortOrder) {

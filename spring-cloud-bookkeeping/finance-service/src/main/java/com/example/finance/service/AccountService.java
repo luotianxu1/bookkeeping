@@ -86,6 +86,7 @@ public class AccountService {
     private final RenewalSubscriptionMapper renewalSubscriptionMapper;
     private final GoldPriceService goldPriceService;
     private final JdbcTemplate jdbcTemplate;
+    private final ToolServiceClient toolServiceClient;
     private final FamilyScopeChecker familyScopeChecker;
 
     public AccountService(
@@ -102,6 +103,7 @@ public class AccountService {
         RenewalSubscriptionMapper renewalSubscriptionMapper,
         GoldPriceService goldPriceService,
         JdbcTemplate jdbcTemplate,
+        ToolServiceClient toolServiceClient,
         FamilyScopeChecker familyScopeChecker
     ) {
         this.accountMapper = accountMapper;
@@ -117,6 +119,7 @@ public class AccountService {
         this.renewalSubscriptionMapper = renewalSubscriptionMapper;
         this.goldPriceService = goldPriceService;
         this.jdbcTemplate = jdbcTemplate;
+        this.toolServiceClient = toolServiceClient;
         this.familyScopeChecker = familyScopeChecker;
     }
 
@@ -349,27 +352,8 @@ public class AccountService {
     }
 
     private long countPhotographyOrderAccountReferences(Long accountId) {
-        if (accountId == null) {
-            return 0L;
-        }
-        try {
-            Integer tableCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'photography_orders'",
-                Integer.class
-            );
-            if (tableCount == null || tableCount <= 0) {
-                return 0L;
-            }
-            Long referenceCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM photography_orders WHERE deposit_account_id = ? OR final_account_id = ?",
-                Long.class,
-                accountId,
-                accountId
-            );
-            return referenceCount == null ? 0L : referenceCount;
-        } catch (Exception ignored) {
-            return 0L;
-        }
+        // 摄影订单表归 tool-service 所有，引用计数通过内部接口查询（失败 fail-open 返回 0）
+        return toolServiceClient.countPhotographyOrderAccountReferences(accountId);
     }
 
     private AccountTypeEntity requireAccountType(Long accountTypeId) {

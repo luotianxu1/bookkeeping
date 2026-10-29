@@ -1,7 +1,7 @@
 // 应用路由入口：聚合各业务模块路由并创建路由实例。
 import { createRouter, createWebHistory } from 'vue-router'
 import type { AppSection } from '@/types/navigation'
-import { getStoredToken } from '@/utils/auth-token'
+import { getStoredCurrentUser } from '@/utils/current-user'
 import { financeRoutes } from './modules/finance'
 import { foodRoutes } from './modules/food'
 import { mainRoutes } from './modules/main'
@@ -20,7 +20,9 @@ export const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: () => (getStoredToken() ? '/finance' : '/login'),
+      // JWT 在 httpOnly Cookie 中无法直接读取，以本地缓存的用户信息作为会话标记；
+      // 真实有效性由接口 401 兜底（清缓存并跳登录）
+      redirect: () => (getStoredCurrentUser() ? '/finance' : '/login'),
     },
     ...financeRoutes,
     ...foodRoutes,
@@ -31,7 +33,7 @@ export const router = createRouter({
 
 // 未登录一律重定向到登录页并携带回跳地址，受保护页面不渲染
 router.beforeEach((to) => {
-  if (to.name === 'login' || to.name === 'register' || getStoredToken()) {
+  if (to.name === 'login' || to.name === 'register' || getStoredCurrentUser()) {
     return true
   }
 

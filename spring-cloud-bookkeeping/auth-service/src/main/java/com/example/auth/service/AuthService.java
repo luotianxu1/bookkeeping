@@ -35,11 +35,14 @@ public class AuthService {
     private final UserMapper userMapper;
     private final FamilyMapper familyMapper;
     private final SecureRandom secureRandom = new SecureRandom();
+    /** 防时序枚举用的基准 BCrypt 哈希（"timing-equalizer"），启动时生成一次 */
+    private final String dummyHash;
 
     public AuthService(PasswordEncoder passwordEncoder, UserMapper userMapper, FamilyMapper familyMapper) {
         this.passwordEncoder = passwordEncoder;
         this.userMapper = userMapper;
         this.familyMapper = familyMapper;
+        this.dummyHash = passwordEncoder.encode("timing-equalizer");
     }
 
     public Optional<UserAccount> authenticate(String login, String password) {
@@ -56,8 +59,11 @@ public class AuthService {
     public void register(RegisterRequest request) {
         String normalizedUsername = request.username().trim();
         if (existsByUsername(normalizedUsername)) {
+            // 防时序枚举：重名时也执行等价 BCrypt 运算，使响应时间与正常注册一致
+            passwordEncoder.matches("timing-equalizer", dummyHash);
             throw new IllegalArgumentException("用户名已存在");
         }
+        passwordEncoder.matches("timing-equalizer", dummyHash);
 
         UserEntity entity = new UserEntity();
         entity.setUsername(normalizedUsername);

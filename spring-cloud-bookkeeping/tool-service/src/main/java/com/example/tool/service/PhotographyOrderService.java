@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.example.common.security.FamilyScopeChecker;
 import com.example.common.security.SecurityUtils;
+import com.example.tool.client.FinanceClient;
 import com.example.tool.dto.PhotographyOrderCollectFinalRequest;
 import com.example.tool.dto.PhotographyOrderOverviewBucketResponse;
 import com.example.tool.dto.PhotographyOrderOverviewResponse;
@@ -12,16 +13,8 @@ import com.example.tool.dto.PhotographyOrderOverviewTrendPointResponse;
 import com.example.tool.dto.PhotographyOrderOverviewTypeStatResponse;
 import com.example.tool.dto.PhotographyOrderRequest;
 import com.example.tool.dto.PhotographyOrderResponse;
-import com.example.tool.entity.AccountEntity;
-import com.example.tool.entity.AccountTypeEntity;
-import com.example.tool.entity.CategoryEntity;
 import com.example.tool.entity.PhotographyOrderEntity;
-import com.example.tool.entity.TransactionEntity;
-import com.example.tool.mapper.AccountMapper;
-import com.example.tool.mapper.AccountTypeMapper;
-import com.example.tool.mapper.CategoryMapper;
 import com.example.tool.mapper.PhotographyOrderMapper;
-import com.example.tool.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -59,13 +52,6 @@ public class PhotographyOrderService {
     private static final String OVERVIEW_VIEW_CALENDAR = "calendar";
     private static final String OVERVIEW_VIEW_MONTH = "month";
     private static final String OVERVIEW_VIEW_YEAR = "year";
-    private static final String CASH_ACCOUNT_TYPE_CODE = "cash";
-    private static final String CATEGORY_TYPE_INCOME = "income";
-    private static final String PHOTOGRAPHY_CATEGORY_NAME = "摄影收入";
-    private static final String TRANSACTION_TYPE_INCOME = "income";
-    private static final String TRANSACTION_STATUS_NORMAL = "normal";
-    private static final String TRANSACTION_STATUS_VOIDED = "voided";
-    private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final DateTimeFormatter NO_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
     private static final Set<String> ORDER_TYPES = Set.of(
         "first_birthday",
@@ -78,27 +64,18 @@ public class PhotographyOrderService {
     );
 
     private final PhotographyOrderMapper photographyOrderMapper;
-    private final AccountMapper accountMapper;
-    private final AccountTypeMapper accountTypeMapper;
-    private final CategoryMapper categoryMapper;
-    private final TransactionMapper transactionMapper;
+    private final FinanceClient financeClient;
     private final CalendarService calendarService;
     private final FamilyScopeChecker familyScopeChecker;
 
     public PhotographyOrderService(
         PhotographyOrderMapper photographyOrderMapper,
-        AccountMapper accountMapper,
-        AccountTypeMapper accountTypeMapper,
-        CategoryMapper categoryMapper,
-        TransactionMapper transactionMapper,
+        FinanceClient financeClient,
         CalendarService calendarService,
         FamilyScopeChecker familyScopeChecker
     ) {
         this.photographyOrderMapper = photographyOrderMapper;
-        this.accountMapper = accountMapper;
-        this.accountTypeMapper = accountTypeMapper;
-        this.categoryMapper = categoryMapper;
-        this.transactionMapper = transactionMapper;
+        this.financeClient = financeClient;
         this.calendarService = calendarService;
         this.familyScopeChecker = familyScopeChecker;
     }
@@ -176,20 +153,18 @@ public class PhotographyOrderService {
         entity.setSortOrder(request.getSortOrder() == null ? 0 : request.getSortOrder());
 
         if (depositAmount.compareTo(BigDecimal.ZERO) > 0) {
-            AccountEntity depositAccount = requireCashAccount(request.getUserId(), request.getDepositAccountId());
-            CategoryEntity incomeCategory = requirePhotographyIncomeCategory(request.getUserId());
+            FinanceClient.CashAccountView depositAccount = requireCashAccount(request.getUserId(), request.getDepositAccountId());
             LocalDateTime depositReceivedAt = LocalDateTime.now();
-            TransactionEntity depositTransaction = createIncomeTransaction(
+            Long depositTransactionId = financeClient.createPhotographyIncome(
                 request.getUserId(),
-                depositAccount,
-                incomeCategory,
+                depositAccount.id(),
                 depositAmount,
                 depositReceivedAt,
                 buildTransactionTitle(orderType, "订金"),
                 buildTransactionRemark(orderType, entity.getAddress(), entity.getRemark())
             );
-            entity.setDepositAccountId(depositAccount.getId());
-            entity.setDepositTransactionId(depositTransaction.getId());
+            entity.setDepositAccountId(depositAccount.id());
+            entity.setDepositTransactionId(depositTransactionId);
             entity.setDepositReceivedAt(depositReceivedAt);
         }
 
@@ -217,21 +192,19 @@ public class PhotographyOrderService {
                 throw new IllegalArgumentException("已入账订金不可修改");
             }
         } else if (depositAmount.compareTo(BigDecimal.ZERO) > 0) {
-            AccountEntity depositAccount = requireCashAccount(request.getUserId(), request.getDepositAccountId());
-            CategoryEntity incomeCategory = requirePhotographyIncomeCategory(request.getUserId());
+            FinanceClient.CashAccountView depositAccount = requireCashAccount(request.getUserId(), request.getDepositAccountId());
             LocalDateTime depositReceivedAt = LocalDateTime.now();
-            TransactionEntity depositTransaction = createIncomeTransaction(
+            Long depositTransactionId = financeClient.createPhotographyIncome(
                 request.getUserId(),
-                depositAccount,
-                incomeCategory,
+                depositAccount.id(),
                 depositAmount,
                 depositReceivedAt,
                 buildTransactionTitle(orderType, "订金"),
                 buildTransactionRemark(orderType, request.getAddress(), request.getRemark())
             );
             entity.setDepositAmount(depositAmount);
-            entity.setDepositAccountId(depositAccount.getId());
-            entity.setDepositTransactionId(depositTransaction.getId());
+            entity.setDepositAccountId(depositAccount.id());
+            entity.setDepositTransactionId(depositTransactionId);
             entity.setDepositReceivedAt(depositReceivedAt);
         } else {
             entity.setDepositAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
@@ -283,21 +256,19 @@ public class PhotographyOrderService {
             : entity.getFinalAmount().setScale(2, RoundingMode.HALF_UP);
 
         if (finalAmount.compareTo(BigDecimal.ZERO) > 0) {
-            AccountEntity finalAccount = requireCashAccount(request.getUserId(), request.getFinalAccountId());
-            CategoryEntity incomeCategory = requirePhotographyIncomeCategory(request.getUserId());
+            FinanceClient.CashAccountView finalAccount = requireCashAccount(request.getUserId(), request.getFinalAccountId());
             LocalDateTime occurredAt = request.getOccurredAt() == null ? LocalDateTime.now() : request.getOccurredAt();
-            TransactionEntity finalTransaction = createIncomeTransaction(
+            Long finalTransactionId = financeClient.createPhotographyIncome(
                 request.getUserId(),
-                finalAccount,
-                incomeCategory,
+                finalAccount.id(),
                 finalAmount,
                 occurredAt,
                 buildTransactionTitle(entity.getOrderType(), "尾款"),
                 buildTransactionRemark(entity.getOrderType(), entity.getAddress(), entity.getRemark())
             );
-            entity.setFinalAccountId(finalAccount.getId());
-            entity.setFinalTransactionId(finalTransaction.getId());
-            entity.setFinalReceivedAt(finalTransaction.getOccurredAt());
+            entity.setFinalAccountId(finalAccount.id());
+            entity.setFinalTransactionId(finalTransactionId);
+            entity.setFinalReceivedAt(occurredAt);
         } else {
             entity.setFinalReceivedAt(request.getOccurredAt() == null ? LocalDateTime.now() : request.getOccurredAt());
         }
@@ -407,115 +378,20 @@ public class PhotographyOrderService {
         return entity;
     }
 
-    private AccountEntity requireCashAccount(Long userId, Long accountId) {
+    private FinanceClient.CashAccountView requireCashAccount(Long userId, Long accountId) {
         if (accountId == null) {
             throw new IllegalArgumentException("请选择现金账户");
         }
-
-        AccountEntity account = accountMapper.selectById(accountId);
-        if (account == null || !userId.equals(account.getUserId())) {
-            throw new IllegalArgumentException("现金账户不存在");
-        }
-
-        AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
-        if (accountType == null || !CASH_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
-            throw new IllegalArgumentException("请选择有效的现金账户");
-        }
-
-        if (!"active".equals(account.getStatus())) {
-            throw new IllegalArgumentException("请选择可用的现金账户");
-        }
-
-        return account;
-    }
-
-    private CategoryEntity requirePhotographyIncomeCategory(Long userId) {
-        List<CategoryEntity> categories = categoryMapper.selectList(new LambdaQueryWrapper<CategoryEntity>()
-            .eq(CategoryEntity::getType, CATEGORY_TYPE_INCOME)
-            .eq(CategoryEntity::getName, PHOTOGRAPHY_CATEGORY_NAME)
-            .eq(CategoryEntity::getStatus, "active")
-            .and(query -> query
-                .eq(CategoryEntity::getUserId, userId)
-                .or()
-                .isNull(CategoryEntity::getUserId))
-            .orderByDesc(CategoryEntity::getUserId)
-            .orderByAsc(CategoryEntity::getSortOrder)
-            .last("LIMIT 1"));
-
-        if (!categories.isEmpty()) {
-            return categories.get(0);
-        }
-
-        CategoryEntity category = new CategoryEntity();
-        category.setUserId(userId);
-        category.setName(PHOTOGRAPHY_CATEGORY_NAME);
-        category.setType(CATEGORY_TYPE_INCOME);
-        category.setIcon("camera");
-        category.setColor("#1D4ED8");
-        category.setSystem(false);
-        category.setSortOrder(30);
-        category.setStatus("active");
-        category.setRemark("摄影订单产生的收入");
-        categoryMapper.insert(category);
-        return category;
-    }
-
-    private TransactionEntity createIncomeTransaction(
-        Long userId,
-        AccountEntity account,
-        CategoryEntity category,
-        BigDecimal amount,
-        LocalDateTime occurredAt,
-        String title,
-        String remark
-    ) {
-        TransactionEntity transaction = new TransactionEntity();
-        transaction.setTransactionNo(generateTransactionNo());
-        transaction.setUserId(userId);
-        transaction.setType(TRANSACTION_TYPE_INCOME);
-        transaction.setAmount(amount);
-        transaction.setCurrencyCode(DEFAULT_CURRENCY_CODE);
-        transaction.setAccountId(account.getId());
-        transaction.setCategoryId(category.getId());
-        transaction.setTitle(title);
-        transaction.setRemark(trimNullable(remark));
-        transaction.setOccurredAt(occurredAt == null ? LocalDateTime.now() : occurredAt);
-        transaction.setStatus(TRANSACTION_STATUS_NORMAL);
-        transactionMapper.insert(transaction);
-
-        accountMapper.addBalance(account.getId(), amount);
-        return transaction;
+        // 归属/类型/状态校验由 finance-service 内部接口完成（账户表归 finance 所有）
+        return financeClient.requireCashAccount(userId, accountId);
     }
 
     private void rollbackLinkedTransaction(Long transactionId, Long userId) {
         if (transactionId == null) {
             return;
         }
-
-        TransactionEntity transaction = transactionMapper.selectById(transactionId);
-        if (transaction == null) {
-            throw new IllegalArgumentException("关联流水不存在");
-        }
-        if (!userId.equals(transaction.getUserId())) {
-            throw new IllegalArgumentException("无权处理该关联流水");
-        }
-        if (!TRANSACTION_STATUS_NORMAL.equals(transaction.getStatus())) {
-            return;
-        }
-
-        AccountEntity account = accountMapper.selectById(transaction.getAccountId());
-        if (account == null || !userId.equals(account.getUserId())) {
-            throw new IllegalArgumentException("关联现金账户不存在");
-        }
-
-        // 原子扣减，余额不足（含并发下被扣空）直接失败
-        int updated = accountMapper.subtractBalanceIfSufficient(account.getId(), transaction.getAmount());
-        if (updated == 0) {
-            throw new IllegalArgumentException("删除后账户余额不足");
-        }
-
-        transaction.setStatus(TRANSACTION_STATUS_VOIDED);
-        transactionMapper.updateById(transaction);
+        // 作废关联流水并原子扣回余额，逻辑在 finance-service 内部接口完成
+        financeClient.voidPhotographyIncome(transactionId, userId);
     }
 
     private String buildTransactionTitle(String orderType, String suffix) {
@@ -554,11 +430,6 @@ public class PhotographyOrderService {
     private String generateOrderNo() {
         return "PHOTO" + LocalDateTime.now().format(NO_TIME_FORMATTER)
             + UUID.randomUUID().toString().replace("-", "").substring(0, 4).toUpperCase();
-    }
-
-    private String generateTransactionNo() {
-        return "IN" + LocalDateTime.now().format(NO_TIME_FORMATTER)
-            + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
     }
 
     private String trimNullable(String value) {
@@ -932,17 +803,17 @@ public class PhotographyOrderService {
             return List.of();
         }
 
-        Map<Long, AccountEntity> accountMap = loadAccountMap(entities);
+        Map<Long, String> accountNames = loadAccountNames(entities);
         return entities.stream()
             .sorted(Comparator
                 .comparing(PhotographyOrderEntity::getShootAt, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(PhotographyOrderEntity::getSortOrder, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(PhotographyOrderEntity::getId, Comparator.nullsLast(Comparator.reverseOrder())))
-            .map(entity -> toResponse(entity, accountMap))
+            .map(entity -> toResponse(entity, accountNames))
             .toList();
     }
 
-    private Map<Long, AccountEntity> loadAccountMap(List<PhotographyOrderEntity> entities) {
+    private Map<Long, String> loadAccountNames(List<PhotographyOrderEntity> entities) {
         Set<Long> accountIds = entities.stream()
             .flatMap(entity -> Stream.of(entity.getDepositAccountId(), entity.getFinalAccountId()))
             .filter(id -> id != null)
@@ -952,11 +823,11 @@ public class PhotographyOrderService {
             return Collections.emptyMap();
         }
 
-        return accountMapper.selectByIds(accountIds).stream()
-            .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
+        Long userId = entities.get(0).getUserId();
+        return financeClient.loadAccountNames(userId, accountIds);
     }
 
-    private PhotographyOrderResponse toResponse(PhotographyOrderEntity entity, Map<Long, AccountEntity> accountMap) {
+    private PhotographyOrderResponse toResponse(PhotographyOrderEntity entity, Map<Long, String> accountNames) {
         PhotographyOrderResponse response = new PhotographyOrderResponse();
         response.setId(entity.getId());
         response.setOrderNo(entity.getOrderNo());
@@ -969,11 +840,11 @@ public class PhotographyOrderService {
         response.setDepositAmount(entity.getDepositAmount());
         response.setFinalAmount(entity.getFinalAmount());
         response.setDepositAccountId(entity.getDepositAccountId());
-        response.setDepositAccountName(resolveAccountName(accountMap, entity.getDepositAccountId()));
+        response.setDepositAccountName(resolveAccountName(accountNames, entity.getDepositAccountId()));
         response.setDepositTransactionId(entity.getDepositTransactionId());
         response.setDepositReceivedAt(entity.getDepositReceivedAt());
         response.setFinalAccountId(entity.getFinalAccountId());
-        response.setFinalAccountName(resolveAccountName(accountMap, entity.getFinalAccountId()));
+        response.setFinalAccountName(resolveAccountName(accountNames, entity.getFinalAccountId()));
         response.setFinalTransactionId(entity.getFinalTransactionId());
         response.setFinalReceivedAt(entity.getFinalReceivedAt());
         response.setAddress(entity.getAddress());
@@ -984,11 +855,10 @@ public class PhotographyOrderService {
         return response;
     }
 
-    private String resolveAccountName(Map<Long, AccountEntity> accountMap, Long accountId) {
+    private String resolveAccountName(Map<Long, String> accountNames, Long accountId) {
         if (accountId == null) {
             return null;
         }
-        AccountEntity account = accountMap.get(accountId);
-        return account == null ? null : account.getName();
+        return accountNames.get(accountId);
     }
 }

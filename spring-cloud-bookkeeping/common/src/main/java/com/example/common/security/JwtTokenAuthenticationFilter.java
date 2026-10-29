@@ -19,6 +19,9 @@ import java.util.List;
 @Component
 public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
 
+    /** 登录时由 auth-service 写入的 httpOnly cookie 名称 */
+    public static final String ACCESS_TOKEN_COOKIE = "access_token";
+
     private final JwtTokenService jwtTokenService;
     private final UserStatusChecker userStatusChecker;
 
@@ -33,13 +36,12 @@ public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
         HttpServletResponse response,
         FilterChain filterChain
     ) throws ServletException, IOException {
-        String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
+        String token = resolveToken(request);
+        if (token == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String token = authorization.substring(7);
         try {
             Claims claims = jwtTokenService.parse(token);
             String username = claims.getSubject();
@@ -64,5 +66,24 @@ public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /** Authorization 头优先（兼容旧客户端），其次 httpOnly cookie */
+    private String resolveToken(HttpServletRequest request) {
+        String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (authorization != null && authorization.startsWith("Bearer ")) {
+            return authorization.substring(7);
+        }
+
+        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (jakarta.servlet.http.Cookie cookie : cookies) {
+                if (ACCESS_TOKEN_COOKIE.equals(cookie.getName()) && cookie.getValue() != null
+                    && !cookie.getValue().isBlank()) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
     }
 }

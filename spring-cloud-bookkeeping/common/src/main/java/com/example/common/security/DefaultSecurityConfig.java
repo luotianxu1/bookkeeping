@@ -19,6 +19,7 @@ public class DefaultSecurityConfig {
     public SecurityFilterChain defaultSecurityFilterChain(
         HttpSecurity http,
         JwtTokenAuthenticationFilter jwtTokenAuthenticationFilter,
+        InternalApiKeyFilter internalApiKeyFilter,
         SecurityErrorWriter securityErrorWriter,
         ObjectMapper objectMapper,
         FamilyScopeChecker familyScopeChecker
@@ -37,6 +38,8 @@ public class DefaultSecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // 内部服务间接口不走 JWT，由 InternalApiKeyFilter 用 X-Internal-Key 鉴权
+                .requestMatchers("/api/internal/**").permitAll()
                 .requestMatchers(
                     "/actuator/health",
                     "/error",
@@ -49,6 +52,7 @@ public class DefaultSecurityConfig {
                 ).permitAll()
                 .anyRequest().authenticated()
             )
+            .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAfter(userIdentityScopeFilter, JwtTokenAuthenticationFilter.class)
             .build();

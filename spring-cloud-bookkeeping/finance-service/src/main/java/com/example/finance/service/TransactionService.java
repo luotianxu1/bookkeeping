@@ -1,6 +1,7 @@
 package com.example.finance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.finance.dto.MergedTransactionRow;
 import com.example.finance.dto.TransactionAnalysisCategoryBreakdownResponse;
 import com.example.finance.dto.TransactionAnalysisPeriodSummaryResponse;
 import com.example.finance.dto.TransactionAnalysisResponse;
@@ -139,26 +140,50 @@ public class TransactionService {
         int normalizedPageSize = normalizePageSize(pageSize);
         int normalizedPage = page == null || page < 1 ? 1 : page;
         Set<Long> cashAccountIds = cashOnly ? loadCashAccountIds(userIds) : null;
-        List<TransactionResponse> transactions = cashOnly && cashAccountIds.isEmpty()
-            ? List.of()
-            : loadMergedTransactions(userIds, type, accountId, startDate, endDate, cashAccountIds);
-        transactions = sortTransactions(transactions, sortOrder);
+        boolean emptyResult = (cashAccountIds != null && cashAccountIds.isEmpty())
+            || userIds == null || userIds.isEmpty();
 
-        int total = transactions.size();
-        int totalPages = total == 0 ? 1 : (int) Math.ceil((double) total / normalizedPageSize);
+        LocalDateTime startTime = startDate == null ? null : startDate.atStartOfDay();
+        LocalDateTime endTime = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+
+        long total = 0;
+        BigDecimal incomeTotal = BigDecimal.ZERO;
+        BigDecimal expenseTotal = BigDecimal.ZERO;
+        List<TransactionResponse> items = List.of();
+
+        // 排序、过滤、分页全部下推数据库：UNION ALL 三表后由 SQL 完成 ORDER BY + LIMIT，
+        // 仅对当页数据批量补齐账户/分类信息，避免全量加载内存后排序分页
+        if (!emptyResult) {
+            total = transactionMapper.countMerged(userIds, type, accountId, startTime, endTime, cashAccountIds);
+            if (total > 0) {
+                Map<String, Object> sums = transactionMapper.sumMerged(
+                    userIds, type, accountId, startTime, endTime, cashAccountIds);
+                incomeTotal = toBigDecimal(sums.get("incomeTotal"));
+                expenseTotal = toBigDecimal(sums.get("expenseTotal"));
+
+                int totalPages = (int) Math.ceil((double) total / normalizedPageSize);
+                int resolvedPage = Math.min(normalizedPage, totalPages);
+                int offset = Math.min((resolvedPage - 1) * normalizedPageSize, (int) total);
+                List<MergedTransactionRow> rows = transactionMapper.selectMergedPage(
+                    userIds, type, accountId, startTime, endTime, cashAccountIds,
+                    sortOrder, offset, normalizedPageSize);
+                items = toMergedRowResponses(rows);
+            }
+        }
+
+        int totalInt = (int) total;
+        int totalPages = totalInt == 0 ? 1 : (int) Math.ceil((double) totalInt / normalizedPageSize);
         int resolvedPage = Math.min(normalizedPage, totalPages);
-        int fromIndex = Math.min((resolvedPage - 1) * normalizedPageSize, total);
-        int toIndex = Math.min(fromIndex + normalizedPageSize, total);
 
         TransactionPageResponse response = new TransactionPageResponse();
-        response.setItems(transactions.subList(fromIndex, toIndex));
-        response.setTotal(total);
+        response.setItems(items);
+        response.setTotal(totalInt);
         response.setPage(resolvedPage);
         response.setPageSize(normalizedPageSize);
         response.setTotalPages(totalPages);
-        response.setIncomeTotal(sumAmounts(transactions, TYPE_INCOME));
-        response.setExpenseTotal(sumAmounts(transactions, TYPE_EXPENSE));
-        response.setBalanceTotal(response.getIncomeTotal().subtract(response.getExpenseTotal()));
+        response.setIncomeTotal(incomeTotal);
+        response.setExpenseTotal(expenseTotal);
+        response.setBalanceTotal(incomeTotal.subtract(expenseTotal));
         return response;
     }
 
@@ -618,6 +643,123 @@ public class TransactionService {
             .toList();
     }
 
+    /**
+     * 将 UNION 分页查询的宽行转换为响应：仅对当页数据批量补齐账户/分类信息。
+     */
+    private List<TransactionResponse> toMergedRowResponses(List<MergedTransactionRow> rows) {
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+
+        Set<Long> accountIds = new java.util.HashSet<>();
+        Set<Long> categoryIds = new java.util.HashSet<>();
+        for (MergedTransactionRow row : rows) {
+            if (row.getDisplayAccountId() != null) accountIds.add(row.getDisplayAccountId());
+            if (row.getOriginAccountId() != null) accountIds.add(row.getOriginAccountId());
+            if (row.getFundingAccountId() != null) accountIds.add(row.getFundingAccountId());
+            if (row.getFromAccountId() != null) accountIds.add(row.getFromAccountId());
+            if (row.getToAccountId() != null) accountIds.add(row.getToAccountId());
+            if (row.getCategoryId() != null) categoryIds.add(row.getCategoryId());
+        }
+        Map<Long, AccountEntity> accounts = accountIds.isEmpty()
+            ? Collections.emptyMap()
+            : accountMapper.selectByIds(accountIds).stream().collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
+        Map<Long, CategoryEntity> categories = categoryIds.isEmpty()
+            ? Collections.emptyMap()
+            : categoryMapper.selectByIds(categoryIds).stream().collect(Collectors.toMap(CategoryEntity::getId, Function.identity()));
+
+        return rows.stream()
+            .map(row -> toMergedRowResponse(row, accounts, categories))
+            .toList();
+    }
+
+    private TransactionResponse toMergedRowResponse(
+        MergedTransactionRow row,
+        Map<Long, AccountEntity> accounts,
+        Map<Long, CategoryEntity> categories
+    ) {
+        TransactionResponse response = new TransactionResponse();
+        // 仅真实流水暴露 id；聚合展示记录定位必须使用 sourceType + sourceId
+        response.setId(SOURCE_TRANSACTION.equals(row.getSourceType()) ? row.getSourceId() : null);
+        response.setSourceId(row.getSourceId());
+        response.setSourceType(row.getSourceType());
+        response.setUserId(row.getUserId());
+        response.setType(row.getType());
+        response.setAmount(row.getAmount());
+        response.setCurrencyCode(row.getCurrencyCode());
+        response.setOccurredAt(row.getOccurredAt());
+        response.setStatus(row.getStatus());
+        response.setCreatedAt(row.getCreatedAt());
+        response.setUpdatedAt(row.getUpdatedAt());
+        response.setRemark(row.getRemark());
+
+        AccountEntity displayAccount = row.getDisplayAccountId() == null
+            ? null : accounts.get(row.getDisplayAccountId());
+        AccountEntity originAccount = row.getOriginAccountId() == null
+            ? null : accounts.get(row.getOriginAccountId());
+
+        if (SOURCE_DEBT_RECORD.equals(row.getSourceType())) {
+            boolean isRepayment = DEBT_RECORD_TYPE_REPAYMENT.equalsIgnoreCase(row.getRecordType());
+            AccountEntity fundingAccount = row.getFundingAccountId() == null
+                ? null : accounts.get(row.getFundingAccountId());
+            response.setTransactionNo("DEBT-" + row.getSourceId());
+            response.setAccountId(row.getDisplayAccountId());
+            response.setAccountName(fundingAccount == null
+                ? (originAccount == null ? null : originAccount.getName())
+                : fundingAccount.getName());
+            response.setCategoryName(buildDebtCategoryName(row.getDirection(), isRepayment));
+            response.setCategoryIcon("债");
+            response.setCategoryColor(CATEGORY_COLOR_DEBT);
+            response.setTitle(buildDebtRecordTitle(originAccount, row.getDirection(), row.getRecordType()));
+            return response;
+        }
+
+        if (SOURCE_HUMAN_RELATION_RECORD.equals(row.getSourceType())) {
+            boolean incoming = HUMAN_RELATION_DIRECTION_INCOMING.equals(row.getDirection());
+            AccountEntity fundingAccount = row.getFundingAccountId() == null
+                ? null : accounts.get(row.getFundingAccountId());
+            response.setTransactionNo("HUMAN-" + row.getSourceId());
+            response.setAccountId(row.getDisplayAccountId());
+            response.setAccountName(fundingAccount == null
+                ? (originAccount == null ? null : originAccount.getName())
+                : fundingAccount.getName());
+            response.setCategoryName(incoming ? "人情收到" : "人情送出");
+            response.setCategoryIcon("礼");
+            response.setCategoryColor(CATEGORY_COLOR_HUMAN_RELATION);
+            response.setTitle(buildHumanRelationRecordTitle(originAccount, row.getDirection()));
+            return response;
+        }
+
+        response.setTransactionNo(row.getTransactionNo());
+        response.setTitle(row.getTitle());
+        response.setAccountId(row.getDisplayAccountId());
+        response.setAccountName(displayAccount == null ? null : displayAccount.getName());
+        CategoryEntity category = row.getCategoryId() == null ? null : categories.get(row.getCategoryId());
+        response.setCategoryId(row.getCategoryId());
+        response.setCategoryName(category == null ? null : category.getName());
+        response.setCategoryIcon(category == null ? null : category.getIcon());
+        response.setCategoryColor(category == null ? null : category.getColor());
+        response.setFromAccountId(row.getFromAccountId());
+        response.setFromAccountName(row.getFromAccountId() == null
+            ? null
+            : accounts.get(row.getFromAccountId()) == null ? null : accounts.get(row.getFromAccountId()).getName());
+        response.setToAccountId(row.getToAccountId());
+        response.setToAccountName(row.getToAccountId() == null
+            ? null
+            : accounts.get(row.getToAccountId()) == null ? null : accounts.get(row.getToAccountId()).getName());
+        return response;
+    }
+
+    private BigDecimal toBigDecimal(Object value) {
+        if (value instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (value instanceof Number number) {
+            return BigDecimal.valueOf(number.doubleValue());
+        }
+        return BigDecimal.ZERO;
+    }
+
     private List<DebtRecordEntity> loadDebtRecords(Long userId, String type, Long accountId) {
         if (StringUtils.hasText(type) && !TYPE_EXPENSE.equals(type) && !TYPE_INCOME.equals(type)) {
             return List.of();
@@ -771,7 +913,9 @@ public class TransactionService {
         AccountEntity fundingAccount
     ) {
         TransactionResponse response = new TransactionResponse();
-        response.setId(entity.getId() == null ? null : -entity.getId());
+        // 非 transaction 来源不提供合成 id：前端定位记录必须使用 sourceType + sourceId，
+        // 避免负数/偏移 id 被误当作流水 id 传给 DELETE /finance/transactions/{id}
+        response.setId(null);
         response.setSourceId(entity.getId());
         response.setSourceType(SOURCE_DEBT_RECORD);
         response.setTransactionNo("DEBT-" + entity.getId());
@@ -796,9 +940,13 @@ public class TransactionService {
     }
 
     private String buildDebtRecordTitle(AccountEntity account, DebtRecordEntity entity) {
+        return buildDebtRecordTitle(account, entity.getDirection(), entity.getRecordType());
+    }
+
+    private String buildDebtRecordTitle(AccountEntity account, String direction, String recordType) {
         String accountName = account == null ? "债务账户" : account.getName();
-        boolean isRepayment = DEBT_RECORD_TYPE_REPAYMENT.equalsIgnoreCase(entity.getRecordType());
-        String directionLabel = buildDebtActionLabel(entity.getDirection(), isRepayment);
+        boolean isRepayment = DEBT_RECORD_TYPE_REPAYMENT.equalsIgnoreCase(recordType);
+        String directionLabel = buildDebtActionLabel(direction, isRepayment);
         return accountName + " · " + directionLabel;
     }
 
@@ -829,7 +977,8 @@ public class TransactionService {
         AccountEntity fundingAccount
     ) {
         TransactionResponse response = new TransactionResponse();
-        response.setId(entity.getId() == null ? null : -1000000L - entity.getId());
+        // 同上：非 transaction 来源不提供合成 id
+        response.setId(null);
         response.setSourceId(entity.getId());
         response.setSourceType(SOURCE_HUMAN_RELATION_RECORD);
         response.setTransactionNo("HUMAN-" + entity.getId());
@@ -855,8 +1004,12 @@ public class TransactionService {
     }
 
     private String buildHumanRelationRecordTitle(AccountEntity account, HumanRelationRecordEntity entity) {
+        return buildHumanRelationRecordTitle(account, entity.getDirection());
+    }
+
+    private String buildHumanRelationRecordTitle(AccountEntity account, String direction) {
         String accountName = account == null ? "人情账户" : account.getName();
-        String directionLabel = HUMAN_RELATION_DIRECTION_INCOMING.equals(entity.getDirection()) ? "收到" : "送出";
+        String directionLabel = HUMAN_RELATION_DIRECTION_INCOMING.equals(direction) ? "收到" : "送出";
         return accountName + " · " + directionLabel;
     }
 
@@ -916,14 +1069,6 @@ public class TransactionService {
             .filter(transaction -> !transaction.getOccurredAt().isBefore(startTime) && transaction.getOccurredAt().isBefore(endTime))
             .sorted(transactionComparator())
             .toList();
-    }
-
-    private List<TransactionResponse> sortTransactions(List<TransactionResponse> transactions, String sortOrder) {
-        Comparator<TransactionResponse> comparator = transactionComparator();
-        if ("asc".equalsIgnoreCase(sortOrder)) {
-            comparator = comparator.reversed();
-        }
-        return transactions.stream().sorted(comparator).toList();
     }
 
     private TransactionAnalysisSummaryResponse buildSummary(List<TransactionResponse> transactions) {

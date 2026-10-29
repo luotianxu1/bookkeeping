@@ -1,5 +1,4 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
-import { clearStoredToken, getStoredToken } from '@/utils/auth-token'
 import { clearStoredCurrentUser } from '@/utils/current-user'
 import { getApiBaseUrl, type ApiService } from './api-base-url'
 
@@ -44,14 +43,8 @@ export function createRequest(options: RequestOptions = {}) {
     const instance = axios.create({
         baseURL: options.baseURL ?? getApiBaseUrl(options.service),
         timeout: options.timeout ?? 10000,
-    })
-
-    instance.interceptors.request.use((config) => {
-        const token = getStoredToken()
-        if (token) {
-            config.headers.Authorization = `${token.tokenType} ${token.accessToken}`
-        }
-        return config
+        // JWT 由 httpOnly Cookie 携带，同源代理下浏览器自动附带；显式开启以兼容绝对地址配置
+        withCredentials: true,
     })
 
     instance.interceptors.response.use(
@@ -59,7 +52,6 @@ export function createRequest(options: RequestOptions = {}) {
         (error: AxiosError) => {
             const status = error.response?.status
             if (status === 401) {
-                clearStoredToken()
                 clearStoredCurrentUser()
                 if (window.location.pathname !== '/login') {
                     // 凭证失效：清空后跳登录页并携带回跳地址（动态引入避免循环依赖）

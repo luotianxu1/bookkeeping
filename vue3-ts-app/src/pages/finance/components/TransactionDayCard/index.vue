@@ -92,8 +92,12 @@ function rowStyle(transaction: DayGroup['transactions'][number]) {
   }
 }
 
+// 仅真实流水支持滑动删除/编辑：债务、人情等聚合展示记录没有流水 id，
+// 后端已不再为其下发合成 id，误删会打到 DELETE /finance/transactions/{id}
 function canSwipeDelete(transaction: DayGroup['transactions'][number]) {
-  return props.showDelete && Boolean(transaction.id)
+  return props.showDelete
+    && transaction.sourceType === 'transaction'
+    && Boolean(transaction.id)
 }
 
 function canEditTransaction(transaction: DayGroup['transactions'][number]) {

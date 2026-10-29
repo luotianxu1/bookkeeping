@@ -20,6 +20,7 @@ import {
   updateTravelPlanExpense,
   updateTravelPlanItinerary,
 } from '@/api/modules/tool'
+import { getApiBaseUrl } from '@/api/api-base-url'
 import { getStoredCurrentUser } from '@/utils/current-user'
 
 type DetailTab = 'overview' | 'route' | 'expense'
@@ -154,7 +155,8 @@ const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 
 const amapWebJsKey = String(import.meta.env.VITE_AMAP_WEB_JS_KEY ?? '').trim()
-const amapWebServiceKey = String(import.meta.env.VITE_AMAP_WEB_SERVICE_KEY ?? import.meta.env.VITE_AMAP_WEB_JS_KEY ?? '').trim()
+// 路线规划 / 地点搜索的 Key 保存在 tool-service，前端经 /tool-api 代理调用
+const amapProxyBaseUrl = `${getApiBaseUrl('tool').replace(/\/$/, '')}/api/tool/amap`
 let overviewMapInstance: AMapInstance | null = null
 let routeMapInstance: AMapInstance | null = null
 
@@ -1252,21 +1254,20 @@ async function calculateTransportRoute() {
     return
   }
 
-  const path = selectedTransportMode.value === 'driving'
-    ? 'https://restapi.amap.com/v3/direction/driving'
+  const mode = selectedTransportMode.value === 'driving'
+    ? 'driving'
     : selectedTransportMode.value === 'walking'
-      ? 'https://restapi.amap.com/v3/direction/walking'
-      : 'https://restapi.amap.com/v4/direction/bicycling'
+      ? 'walking'
+      : 'bicycling'
 
   const params = new URLSearchParams({
-    key: amapWebServiceKey,
     origin: `${originLng},${originLat}`,
     destination: `${destinationLng},${destinationLat}`,
   })
 
   try {
     isCalculatingRoute.value = true
-    const response = await fetch(`${path}?${params.toString()}`)
+    const response = await fetch(`${amapProxyBaseUrl}/direction?mode=${mode}&${params.toString()}`)
     const payload = await response.json() as {
       status?: string
       errcode?: number | string
@@ -1362,14 +1363,8 @@ function selectExpenseTitleOption(option: ExpenseTitleOption) {
 }
 
 async function loadAmapSearchResults(keyword: string) {
-  if (!amapWebServiceKey) {
-    searchResults.value = []
-    return
-  }
-
   const currentRequest = ++searchRequestSequence
   const query = new URLSearchParams({
-    key: amapWebServiceKey,
     keywords: keyword,
     offset: '8',
     page: '1',
@@ -1378,7 +1373,7 @@ async function loadAmapSearchResults(keyword: string) {
 
   try {
     isSearchingLocation.value = true
-    const response = await fetch(`https://restapi.amap.com/v3/place/text?${query.toString()}`)
+    const response = await fetch(`${amapProxyBaseUrl}/place/text?${query.toString()}`)
     const payload = await response.json() as {
       status?: string
       info?: string
