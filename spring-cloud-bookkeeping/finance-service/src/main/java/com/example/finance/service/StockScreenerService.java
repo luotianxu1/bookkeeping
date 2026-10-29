@@ -6,6 +6,7 @@ import com.example.finance.dto.StockScreenPageResponse;
 import com.example.finance.dto.StockScreenRunResponse;
 import com.example.finance.entity.StockScreenRunEntity;
 import com.example.finance.entity.StockScreenSnapshotEntity;
+import com.example.finance.market.KlineService;
 import com.example.finance.mapper.StockScreenRunMapper;
 import com.example.finance.mapper.StockScreenSnapshotMapper;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -79,7 +80,6 @@ public class StockScreenerService {
     private final AtomicBoolean scanRunning = new AtomicBoolean(false);
     private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
     private final String stockListApiUrl;
-    private final String dailyKLineApiUrl;
     private final Set<LocalDate> marketClosedDates;
 
     public StockScreenerService(
@@ -87,7 +87,6 @@ public class StockScreenerService {
         StockScreenSnapshotMapper snapshotMapper,
         ObjectMapper objectMapper,
         @Value("${finance.stock-screener.stock-list-api-url:https://push2delay.eastmoney.com/api/qt/clist/get}") String stockListApiUrl,
-        @Value("${finance.stock-screener.daily-kline-api-url:https://quotes.sina.cn/cn/api/jsonp_v2.php}") String dailyKLineApiUrl,
         @Value("${finance.stock-screener.fetch-concurrency:12}") Integer fetchConcurrency,
         @Value("${finance.stock-screener.connect-timeout-millis:3000}") Integer connectTimeoutMillis,
         @Value("${finance.stock-screener.read-timeout-millis:5000}") Integer readTimeoutMillis,
@@ -97,7 +96,6 @@ public class StockScreenerService {
         this.snapshotMapper = snapshotMapper;
         this.objectMapper = objectMapper;
         this.stockListApiUrl = stockListApiUrl;
-        this.dailyKLineApiUrl = dailyKLineApiUrl;
         this.marketClosedDates = Arrays.stream(marketClosedDates.split(","))
             .map(String::trim)
             .filter(value -> !value.isEmpty())
@@ -430,19 +428,11 @@ public class StockScreenerService {
         Exception lastError = null;
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
-                String variable = "_" + symbol;
-                String url = dailyKLineApiUrl
-                    + "/var%20" + variable + "=/CN_MarketDataService.getKLineData"
-                    + "?symbol=" + symbol + "&scale=240&ma=no&datalen=" + K_LINE_COUNT;
-                String body = fetchText(url, "https://finance.sina.com.cn/");
-                int start = body.indexOf('[');
-                int end = body.lastIndexOf(']');
-                if (start < 0 || end <= start) {
-                    return List.of();
-                }
-                JsonNode rows = objectMapper.readTree(body.substring(start, end + 1));
+                // 复用行情中心（global 页）的日K通道：新浪 CN_MarketDataService（KlineService.sinaKline），
+                // 与详情页 K 线同源同封装，仅保留重试与排序
+                List<Map<String, Object>> rows = KlineService.sinaKline(symbol, K_LINE_COUNT, "240");
                 List<DailyBar> bars = new ArrayList<>();
-                for (JsonNode row : rows) {
+                for (Map<String, Object> row : rows) {
                     DailyBar bar = toDailyBar(row);
                     if (bar != null) {
                         bars.add(bar);
@@ -1005,14 +995,16 @@ public class StockScreenerService {
             .body(String.class);
     }
 
-    private DailyBar toDailyBar(JsonNode row) {
+    /** 行情中心 KlineService 行（中文键，值为 Double/Long）→ 选股器日K条 */
+    private DailyBar toDailyBar(Map<String, Object> row) {
         try {
-            LocalDate date = LocalDate.parse(row.path("day").asText());
-            BigDecimal open = new BigDecimal(row.path("open").asText());
-            BigDecimal high = new BigDecimal(row.path("high").asText());
-            BigDecimal low = new BigDecimal(row.path("low").asText());
-            BigDecimal close = new BigDecimal(row.path("close").asText());
-            long volume = new BigDecimal(row.path("volume").asText("0")).longValue();
+            // 兼容可能带时间的日期串（日K正常为纯日期），截取前 10 位
+            LocalDate date = LocalDate.parse(String.valueOf(row.get("日期")).substring(0, 10));
+            BigDecimal open = BigDecimal.valueOf(((Number) row.get("开盘")).doubleValue());
+            BigDecimal high = BigDecimal.valueOf(((Number) row.get("最高")).doubleValue());
+            BigDecimal low = BigDecimal.valueOf(((Number) row.get("最低")).doubleValue());
+            BigDecimal close = BigDecimal.valueOf(((Number) row.get("收盘")).doubleValue());
+            long volume = row.get("成交量") instanceof Number n ? n.longValue() : 0L;
             if (open.signum() <= 0 || high.signum() <= 0 || low.signum() <= 0 || close.signum() <= 0 || volume <= 0) {
                 return null;
             }

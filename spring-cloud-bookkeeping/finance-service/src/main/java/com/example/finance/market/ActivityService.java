@@ -220,6 +220,7 @@ public final class ActivityService {
         List<Double> percents = new ArrayList<>();
         int[] limitUp = {0};
         int[] limitDown = {0};
+        int[] limitBroken = {0};
         Map<String, List<Map<String, Object>>> detail = Map.of("up", new ArrayList<>(), "down", new ArrayList<>());
         for (Future<JsonNode> future : futures) {
             JsonNode rows;
@@ -254,6 +255,11 @@ public final class ActivityService {
                     row.put("pct", c);
                     row.put("amount", orZero(MarketUtils.parseDouble(it.path("amount").asText(""))));
                     detail.get(state).add(row);
+                } else if (state == null && trade > 0 && settle > 0
+                    && "up".equals(limitState(symbol, it.path("name").asText(""),
+                        orZero(MarketUtils.parseDouble(it.path("high").asText(""))), settle))) {
+                    // 盘中最高价触及涨停价但现价未封住 → 炸板
+                    limitBroken[0]++;
                 }
             }
         }
@@ -263,6 +269,7 @@ public final class ActivityService {
         Map<String, Object> result = aggregate(percents);
         result.put("limit_up", limitUp[0]);
         result.put("limit_down", limitDown[0]);
+        result.put("limit_broken", limitBroken[0]);
         result.put("_limit_detail", detail);
         return result;
     }
@@ -390,6 +397,7 @@ public final class ActivityService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("limit_up", raw.getOrDefault("limit_up", 0));
         out.put("limit_down", raw.getOrDefault("limit_down", 0));
+        out.put("limit_broken", raw.getOrDefault("limit_broken", 0));
         out.put("up", detail.getOrDefault("up", List.of()));
         out.put("down", detail.getOrDefault("down", List.of()));
         return out;

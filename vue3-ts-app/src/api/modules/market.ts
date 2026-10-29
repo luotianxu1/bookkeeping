@@ -62,6 +62,7 @@ export interface DetailQuote {
   代码: string
   名称: string
   最新价: number | null
+  开盘: number | null
   涨跌额: number | null
   涨跌幅: number | null
   最高: number | null

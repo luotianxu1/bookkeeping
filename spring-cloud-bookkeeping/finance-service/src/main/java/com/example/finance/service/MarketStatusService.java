@@ -1,49 +1,53 @@
 package com.example.finance.service;
 
 import com.example.finance.dto.MarketStatusResponse;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import com.example.finance.market.ActivityService;
+import com.example.finance.market.SinaClient;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+/**
+ * 大盘状态：数据源与行情中心（global 页）统一 ——
+ * <ul>
+ *   <li>指数行情：新浪批量行情（{@link SinaClient#batchQuotes}，hq.sinajs.cn）</li>
+ *   <li>涨跌家数：全市场口径统计（{@link ActivityService#marketActivity}，新浪 hs_a 分页，自带 60s 缓存）</li>
+ * </ul>
+ * 不再依赖东方财富 ulist 接口。30s 内存缓存，失败回退旧缓存。
+ */
 @Service
 public class MarketStatusService {
 
     private static final ZoneId MARKET_ZONE = ZoneId.of("Asia/Shanghai");
     private static final long CACHE_MILLIS = 30_000L;
-    private static final Set<String> MARKET_BREADTH_CODES = Set.of("000001", "399001", "899050");
+    /** 参与情绪评分的指数（平均涨跌幅），口径与东财版一致 */
     private static final Set<String> SCORE_CODES = Set.of("000001", "399001", "399006", "000300");
+    /** 成交额合计口径：沪 + 深 + 北（对齐原东财 f6 合计） */
+    private static final Set<String> TURNOVER_CODES = Set.of("000001", "399001", "899050");
+    /**
+     * 指数清单（新浪代码 → 默认名）。大盘状态口径需要深证成指，
+     * 独立于行情中心 SINA_INDEX_CODES（那里已按需求移除深证成指）。
+     */
+    private static final List<String[]> INDEX_CODES = List.of(
+        new String[]{"sh000001", "上证指数"},
+        new String[]{"sz399001", "深证成指"},
+        new String[]{"sz399006", "创业板指"},
+        new String[]{"sh000688", "科创50"},
+        new String[]{"bj899050", "北证50"},
+        new String[]{"sh000300", "沪深300"}
+    );
 
-    private final ObjectMapper objectMapper;
-    private final RestClient restClient;
-    private final String indexApiUrl;
     private final AtomicReference<CachedStatus> cache = new AtomicReference<>();
-
-    public MarketStatusService(
-        ObjectMapper objectMapper,
-        @Value("${finance.market-status.index-api-url:https://push2delay.eastmoney.com/api/qt/ulist.np/get}") String indexApiUrl
-    ) {
-        this.objectMapper = objectMapper;
-        this.indexApiUrl = indexApiUrl;
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(2000);
-        requestFactory.setReadTimeout(3500);
-        this.restClient = RestClient.builder().requestFactory(requestFactory).build();
-    }
 
     public MarketStatusResponse getMarketStatus() {
         long now = System.currentTimeMillis();
@@ -63,47 +67,47 @@ public class MarketStatusService {
         }
     }
 
-    private MarketStatusResponse fetchMarketStatus() throws Exception {
-        String url = indexApiUrl
-            + "?fltt=2&invt=2"
-            + "&fields=f12,f13,f14,f2,f3,f4,f5,f6,f104,f105,f106"
-            + "&secids=1.000001,0.399001,0.399006,1.000688,0.899050,1.000300";
-        String body = restClient.get()
-            .uri(URI.create(url))
-            .header("User-Agent", "Mozilla/5.0")
-            .header("Referer", "https://quote.eastmoney.com/")
-            .retrieve()
-            .body(String.class);
-        JsonNode rows = objectMapper.readTree(body).path("data").path("diff");
-        if (!rows.isArray() || rows.isEmpty()) {
+    private MarketStatusResponse fetchMarketStatus() {
+        // 指数行情：新浪批量行情（行情中心同款通道，一次请求取全 6 个指数）
+        List<String> codes = INDEX_CODES.stream().map(c -> c[0]).toList();
+        Map<String, List<String>> fieldsByCode = SinaClient.batchQuotes(codes);
+
+        List<MarketStatusResponse.IndexQuote> indices = new ArrayList<>();
+        Map<String, MarketStatusResponse.IndexQuote> quoteByCode = new LinkedHashMap<>();
+        BigDecimal turnover = BigDecimal.ZERO;
+        for (String[] def : INDEX_CODES) {
+            List<String> fields = fieldsByCode.get(def[0]);
+            SinaClient.QuoteRow row = fields == null ? null : SinaClient.quoteRow(def[0], fields, def[1]);
+            if (row == null) {
+                continue;
+            }
+            MarketStatusResponse.IndexQuote quote = new MarketStatusResponse.IndexQuote();
+            quote.setCode(String.valueOf(row.get("代码")));
+            quote.setName(String.valueOf(row.get("名称")));
+            quote.setValue(toBigDecimal(row.get("最新价")));
+            quote.setChange(toBigDecimal(row.get("涨跌额")));
+            quote.setChangePercent(toBigDecimal(row.get("涨跌幅")));
+            indices.add(quote);
+            quoteByCode.put(quote.getCode(), quote);
+
+            if (TURNOVER_CODES.contains(quote.getCode()) && row.get("成交额") instanceof Number amt) {
+                turnover = turnover.add(BigDecimal.valueOf(amt.doubleValue()));
+            }
+        }
+        if (indices.isEmpty()) {
             throw new IllegalStateException("大盘行情格式异常");
         }
 
-        List<MarketStatusResponse.IndexQuote> indices = new ArrayList<>();
-        int advanceCount = 0;
-        int declineCount = 0;
-        int flatCount = 0;
-        BigDecimal turnover = BigDecimal.ZERO;
-        for (JsonNode row : rows) {
-            String code = row.path("f12").asText("");
-            MarketStatusResponse.IndexQuote quote = new MarketStatusResponse.IndexQuote();
-            quote.setCode(code);
-            quote.setName(row.path("f14").asText("指数"));
-            quote.setValue(decimal(row.path("f2")));
-            quote.setChange(decimal(row.path("f4")));
-            quote.setChangePercent(decimal(row.path("f3")));
-            indices.add(quote);
-
-            if (MARKET_BREADTH_CODES.contains(code)) {
-                advanceCount += integer(row.path("f104"));
-                declineCount += integer(row.path("f105"));
-                flatCount += integer(row.path("f106"));
-                turnover = turnover.add(decimal(row.path("f6")));
-            }
+        // 涨跌家数：全市场口径（新浪 hs_a 分页统计）；sample 为 0 说明统计不可用，触发缓存回退
+        Map<String, Object> activity = ActivityService.marketActivity("a");
+        int sample = ((Number) activity.getOrDefault("sample", 0)).intValue();
+        if (sample <= 0) {
+            throw new IllegalStateException("涨跌家数统计不可用");
         }
+        int advanceCount = ((Number) activity.getOrDefault("up", 0)).intValue();
+        int declineCount = ((Number) activity.getOrDefault("down", 0)).intValue();
+        int flatCount = ((Number) activity.getOrDefault("flat", 0)).intValue();
 
-        Map<String, MarketStatusResponse.IndexQuote> quoteByCode = indices.stream()
-            .collect(Collectors.toMap(MarketStatusResponse.IndexQuote::getCode, item -> item));
         double indexScore = SCORE_CODES.stream()
             .map(quoteByCode::get)
             .filter(item -> item != null && item.getChangePercent() != null)
@@ -125,7 +129,7 @@ public class MarketStatusService {
         response.setAdvanceRatio(BigDecimal.valueOf(advanceRatio * 100).setScale(2, RoundingMode.HALF_UP));
         response.setTurnover(turnover.setScale(0, RoundingMode.HALF_UP));
         response.setUpdatedAt(LocalDateTime.now(MARKET_ZONE));
-        response.setSource("东方财富公开行情");
+        response.setSource("新浪公开行情");
         response.setIndices(indices);
         return response;
     }
@@ -146,19 +150,11 @@ public class MarketStatusService {
         return new MarketRegime("balanced", "震荡分化", "neutral", "指数和个股表现分化，适合精选形态信号。");
     }
 
-    private BigDecimal decimal(JsonNode node) {
-        if (node == null || node.isMissingNode() || node.isNull()) {
-            return BigDecimal.ZERO;
+    private BigDecimal toBigDecimal(Object value) {
+        if (value instanceof Number n) {
+            return BigDecimal.valueOf(n.doubleValue());
         }
-        try {
-            return new BigDecimal(node.asText("0"));
-        } catch (NumberFormatException ex) {
-            return BigDecimal.ZERO;
-        }
-    }
-
-    private int integer(JsonNode node) {
-        return decimal(node).intValue();
+        return BigDecimal.ZERO;
     }
 
     private record MarketRegime(String key, String label, String tone, String summary) {

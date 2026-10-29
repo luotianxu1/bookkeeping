@@ -53,7 +53,7 @@ const depth = ref<DetailData['depth']>(null)
 const valuation = ref<DetailData['valuation']>(null)
 const extra = ref<ExtraInfo | null>(null) // 资金流向/公告/分红（仅A股）
 const f10 = ref<F10Data | null>(null) // 财务指标/十大股东/融资融券（仅A股）
-const scale = ref('240') // 周期模式：trend=分时，其余为新浪 K 线周期（秒），240 = 日K
+const scale = ref('trend') // 周期模式：默认分时，其余为新浪 K 线周期（秒），240 = 日K
 const klineScale = ref('240') // 当前 kline 实际加载的周期（分时模式不改动 K 线数据）
 const trendData = ref<TrendData | null>(null)
 
@@ -191,57 +191,102 @@ const trendEmptyHint = computed(() => {
   return '暂无分时数据'
 })
 
-async function load(): Promise<void> {
-  // 切换标的或初始进入时，当前周期可能在新标的不提供（如外汇无分时），回退日K；
+/**
+ * 加载图表数据。
+ * @param silent 静默模式：不触发整页骨架屏，旧图表保留原地等待新数据替换。
+ *               仅在切换周期时使用；切换标的/首次进入仍走完整加载。
+ */
+async function load(silent = false): Promise<void> {
+  // 切换标的或初始进入时，当前周期可能在新标的不提供（如外汇无分时），回退分时/日K；
   // 修改 scale 会触发 watch(scale, load) 重新加载，此处直接返回避免重复请求
   if (!PERIODS.value.some((p) => p.value === scale.value)) {
-    scale.value = '240'
+    scale.value = PERIODS.value.some((p) => p.value === 'trend') ? 'trend' : '240'
     return
   }
   if (scale.value === 'trend') {
-    await loadTrend()
+    await loadTrend(silent)
     return
   }
-  loading.value = true
-  error.value = ''
+  await loadKline(silent)
+}
+
+/** 头部行情快照：独立于图表周期加载，永远是今日实时数据（含五档/估值） */
+async function loadHeader(): Promise<void> {
   try {
-    const data = await getDetail(kind.value, code.value, scale.value, 250)
+    const data = await getDetail(kind.value, code.value, '240', 5)
     quote.value = data.quote
-    kline.value = data.kline
-    symbol.value = data.symbol
     depth.value = data.depth
     valuation.value = data.valuation
+    symbol.value = data.symbol
+  } catch {
+    // 头部快照失败不阻塞图表；分时合成行情会兜底
+  }
+}
+
+/** 图表 K 线：只取序列，不携带头部行情 */
+async function loadKline(silent = false): Promise<void> {
+  if (!silent) loading.value = true
+  try {
+    const data = await getKline(kind.value, code.value, scale.value, 250)
+    kline.value = data.kline
     klineScale.value = scale.value
-    // 默认显示最近 120 根，可滚动/缩放浏览更早历史
-    viewCount.value = Math.min(data.kline.length, 120)
+    // 分钟K默认展示范围：60/30分为最近一周（5 个交易日），15/5分为今天；
+    // 日/周/月K默认最近 120 根。更早历史仍可拖拽平移/双指缩放查看
+    let vc = Math.min(data.kline.length, 120)
+    const minuteDays =
+      scale.value === '60' || scale.value === '30' ? 5 : scale.value === '15' || scale.value === '5' ? 1 : 0
+    if (minuteDays > 0 && data.kline.length) {
+      const seen = new Set<string>()
+      let count = 0
+      for (let i = data.kline.length - 1; i >= 0; i--) {
+        const day = data.kline[i]['日期'].slice(0, 10)
+        if (!seen.has(day)) {
+          if (seen.size >= minuteDays) break
+          seen.add(day)
+        }
+        count++
+      }
+      vc = count
+    }
+    viewCount.value = vc
     endOffset.value = 0
     exhausted.value = false
     selDate.value = null
+    error.value = ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message || '详情加载失败' : '详情加载失败'
+    // 静默模式下保留旧图表，仅在没有旧数据时才展示错误
+    if (!kline.value.length)
+      error.value = e instanceof Error ? e.message || '详情加载失败' : '详情加载失败'
   } finally {
     loading.value = false
   }
 }
 
-async function loadTrend(): Promise<void> {
-  loading.value = true
-  error.value = ''
+async function loadTrend(silent = false): Promise<void> {
+  if (!silent) loading.value = true
   selDate.value = null
   selIdx.value = null
   trendDayIdx.value = -1
   try {
     trendData.value = await getTrend(kind.value, code.value)
+    if (trendData.value) symbol.value = trendData.value.symbol
+    error.value = ''
   } catch (e) {
-    error.value = e instanceof Error ? e.message || '分时加载失败' : '分时加载失败'
+    // 静默模式下保留旧分时图，仅在没有旧数据时才展示错误
+    if (!trendData.value)
+      error.value = e instanceof Error ? e.message || '分时加载失败' : '分时加载失败'
   } finally {
     loading.value = false
   }
 }
 
 watch(() => [kind.value, code.value], load)
-watch(scale, load)
+/** 切换周期只静默重渲染图表：不触发整页骨架屏，旧图保留原地替换 */
+watch(scale, () => load(true))
+/** 头部实时快照：随标的切换加载一次，与图表周期无关 */
+watch(() => [kind.value, code.value], loadHeader)
 onMounted(load)
+onMounted(loadHeader)
 
 /** 扩展信息（资金流向/公告/分红）只在切换标时加载一次，与周期切换无关 */
 async function loadExtra(): Promise<void> {
@@ -288,10 +333,20 @@ const stmtTab = ref<StmtKey>('income')
 async function loadStatements(): Promise<void> {
   try {
     statements.value = await getStatements(kind.value, code.value)
+    // 当前选中的报表若没有数据，自动切到第一张有数据的报表
+    if (statements.value && !statements.value[stmtTab.value]) {
+      const first = STMT_TABS.find((t) => statements.value?.[t.key])
+      if (first) stmtTab.value = first.key
+    }
   } catch {
     statements.value = null
   }
 }
+
+/** 三张报表是否至少有一张有数据；没有则整个区块不渲染 */
+const hasStatements = computed(
+  () => !!statements.value && STMT_TABS.some((t) => !!statements.value?.[t.key]),
+)
 watch(() => [kind.value, code.value], loadStatements)
 onMounted(loadStatements)
 
@@ -405,14 +460,34 @@ const flowSumAvg = computed(() => {
   return `日均 ${avg >= 0 ? '+' : ''}${avg.toFixed(2)}%`
 })
 
-/* ---------- 头部行情：实时数据优先，缺失回退最后一根K线 ---------- */
-const displayName = computed(() => quote.value?.['名称'] || code.value)
-const lastPoint = computed(() => kline.value[kline.value.length - 1] ?? null)
-const price = computed(() => quote.value?.['最新价'] ?? lastPoint.value?.['收盘'] ?? null)
-const changeAmt = computed(() => quote.value?.['涨跌额'] ?? null)
-const changePct = computed(
-  () => quote.value?.['涨跌幅'] ?? lastPoint.value?.['涨跌幅'] ?? null,
-)
+/* ---------- 头部行情：实时数据优先，其次分时合成，缺失回退最后一根K线 ---------- */
+
+/** 分时数据合成的行情兜底：默认周期是分时时 detail 接口不返回 quote */
+const trendQuote = computed<Record<string, number | string> | null>(() => {
+  const t = trendData.value
+  if (!t || !t.points.length || t.prev_close === null) return null
+  const prices = t.points.map((p) => p.price)
+  const last = prices[prices.length - 1]!
+  const prev = t.prev_close
+  return {
+    '名称': t.name,
+    '最新价': last,
+    '开盘': prices[0]!,
+    '涨跌额': last - prev,
+    '涨跌幅': prev !== 0 ? ((last - prev) / prev) * 100 : 0,
+    '最高': Math.max(...prices),
+    '最低': Math.min(...prices),
+    '成交量': t.points.reduce((acc, p) => acc + p.volume, 0),
+  }
+})
+
+/** 头部行情取数：detail 实时快照 → 分时合成 */
+const headQuote = computed(() => quote.value ?? trendQuote.value)
+
+const displayName = computed(() => headQuote.value?.['名称'] || code.value)
+const price = computed(() => (headQuote.value?.['最新价'] as number | undefined) ?? null)
+const changeAmt = computed(() => (headQuote.value?.['涨跌额'] as number | undefined) ?? null)
+const changePct = computed(() => (headQuote.value?.['涨跌幅'] as number | undefined) ?? null)
 const suffix = computed(() => {
   if (kind.value === 'index' || kind.value === 'stock') {
     return `.${symbol.value.slice(0, 2).toUpperCase()}`
@@ -440,16 +515,13 @@ function vol(v: number | null | undefined): string {
 const PERIOD_NOTE: Record<string, string> = { '240': '日线', week: '周线', month: '月线' }
 
 const stats = computed(() => {
-  const q = quote.value
-  const last = lastPoint.value
-  // 仅日K的最后一根代表当日；周/月K与分钟K的最后一根不代表当日
-  const daily = klineScale.value === '240'
-  const fb = daily ? last : null
+  // 头部统计永远取今日实时快照（或分时合成），与底部图表周期无关
+  const q = headQuote.value
   return [
-    { label: '今开', text: daily && last ? f2(last['开盘']) : '—' },
-    { label: '最高', text: f2(q?.['最高'] ?? fb?.['最高']) },
-    { label: '最低', text: f2(q?.['最低'] ?? fb?.['最低']) },
-    { label: '成交量', text: vol(q?.['成交量'] ?? fb?.['成交量']) },
+    { label: '今开', text: f2(q?.['开盘']) },
+    { label: '最高', text: f2(q?.['最高']) },
+    { label: '最低', text: f2(q?.['最低']) },
+    { label: '成交量', text: vol(q?.['成交量']) },
     { label: '成交额', text: amt(q?.['成交额']) },
   ]
 })
@@ -486,13 +558,6 @@ function maSeriesLocal(closes: number[], n: number): (number | null)[] {
     out.push(i >= n - 1 ? sum / n : null)
   }
   return out
-}
-
-function dateLabel(day: string): string {
-  // 周/月K与日K的日期字段都是纯日期；分钟K带时间
-  return scale.value === '60' || scale.value === '30' || scale.value === '15' || scale.value === '5'
-    ? day.slice(5, 16)
-    : day.slice(5, 10)
 }
 
 /** 单根K线的几何信息 */
@@ -576,19 +641,33 @@ const chart = computed(() => {
     return { y: y(v), label: f2(v) }
   })
   const last = pts[n - 1]
-  // 横坐标刻度：均匀取 9 个；日K/周K/月K在跨年（及首刻度）处带年份，分钟K保持原样
-  const withYear = scale.value === '240' || scale.value === 'week' || scale.value === 'month'
+  // 横轴刻度按标签实测宽度配置（10px 字号下数字≈7px/字符，标签 + 间距必须 < 刻度间距）：
+  // 分钟K "10-29 14:00"≈71px → 3 个刻度（间距 152px）；周K "24-01-31"≈46px → 4 个（101px）；
+  // 月K "22-09"≈30px → 5 个（76px）；日K "10-18"/"26-05"≈30px → 6 个（61px），跨年处缩为 YY-MM
+  const sc = scale.value
+  const isMinute = sc === '60' || sc === '30' || sc === '15' || sc === '5'
+  const tickN = isMinute ? 3 : sc === 'week' ? 4 : sc === 'month' ? 5 : 6
   let prevYear = ''
-  const xTicks = Array.from({ length: 9 }, (_, t) => {
-    const i = Math.round((t / 8) * (n - 1))
+  const xTicks = Array.from({ length: tickN }, (_, t) => {
+    const i = Math.round((t / (tickN - 1)) * (n - 1))
     const day = pts[i]['日期']
-    const year = day.slice(0, 4)
-    const showYear = withYear && (t === 0 || year !== prevYear)
-    prevYear = year
+    let label: string
+    if (isMinute) {
+      label = day.slice(5, 16) // "2026-10-29 15:00" → "10-29 15:00"
+    } else if (sc === 'week') {
+      label = day.slice(2, 10) // "2024-01-31" → "24-01-31"（自带年份）
+    } else if (sc === 'month') {
+      label = day.slice(2, 7) // "2022-09-06" → "22-09"
+    } else {
+      const year = day.slice(0, 4)
+      const showYear = t === 0 || year !== prevYear
+      prevYear = year
+      label = showYear ? day.slice(2, 7) : day.slice(5, 10) // "26-05" / "10-18"
+    }
     return {
       x: PAD.left + step * (i + 0.5),
-      label: showYear ? `${year}-${dateLabel(day)}` : dateLabel(day),
-      anchor: t === 0 ? 'start' : t === 8 ? 'end' : 'middle',
+      label,
+      anchor: t === 0 ? 'start' : t === tickN - 1 ? 'end' : 'middle',
     }
   })
   return {
@@ -786,7 +865,7 @@ const subCharts = computed(() => {
 })
 
 /* ---------- 分时折线图（价格线 + 均价线 + 昨收基准，涨跌空间以昨收对称） ---------- */
-const TREND_PAD = { top: 12, right: 48, bottom: 22, left: 34 }
+const TREND_PAD = { top: 12, right: 48, bottom: 22, left: 40 }
 
 const trendChart = computed(() => {
   const av = activeTrend.value
@@ -857,16 +936,17 @@ const trendChart = computed(() => {
     return {
       y: y(v),
       label: f2(v),
-      pct: pctV === null ? '' : `${pctV > 0 ? '+' : ''}${pctV.toFixed(2)}%`,
+      pct: pctV === null ? '' : `${pctV > 0 ? '+' : ''}${pctV.toFixed(1)}%`,
       side: pctV === null || pctV === 0 ? '' : pctV > 0 ? 'up' : 'down',
     }
   })
-  const xTicks = Array.from({ length: 9 }, (_, k) => {
-    const i = Math.round((k / 8) * (n - 1))
+  // 5 个刻度（首尾 start/end 对齐，中间居中），避免 9 个在 360 宽坐标系里挤成一团
+  const xTicks = Array.from({ length: 5 }, (_, k) => {
+    const i = Math.round((k / 4) * (n - 1))
     return {
       x: x(i),
       label: pts[i].time,
-      anchor: k === 0 ? 'start' : k === 8 ? 'end' : 'middle',
+      anchor: k === 0 ? 'start' : k === 4 ? 'end' : 'middle',
     }
   })
   return {
@@ -1060,8 +1140,28 @@ let dragX = 0
 let dragOffset = 0
 let dragMoved = false
 
+/* 双指捏合缩放（触屏）：双指按下进入缩放，距离拉大=放大（看更少根数） */
+const activePointers = new Map<number, number>()
+let pinching = false
+let pinchBaseDist = 0
+let pinchBaseCount = 0
+
+function pinchDistance(): number {
+  const xs = [...activePointers.values()]
+  return Math.abs(xs[0] - xs[1])
+}
+
 function onPointerDown(e: PointerEvent): void {
-  if (kline.value.length < 2) return
+  activePointers.set(e.pointerId, e.clientX)
+  if (activePointers.size === 2 && kline.value.length >= 2) {
+    // 第二根手指落下：终止拖拽，以当前距离/根数为基准进入捏合缩放
+    pinching = true
+    dragging.value = false
+    pinchBaseDist = pinchDistance()
+    pinchBaseCount = viewCount.value || kline.value.length
+    return
+  }
+  if (activePointers.size > 1 || kline.value.length < 2) return
   dragX = e.clientX
   dragOffset = endOffset.value
   dragMoved = false
@@ -1070,6 +1170,17 @@ function onPointerDown(e: PointerEvent): void {
 }
 
 function onPointerMove(e: PointerEvent): void {
+  if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, e.clientX)
+  if (pinching && activePointers.size >= 2) {
+    const dist = pinchDistance()
+    if (dist > 10 && pinchBaseDist > 0) {
+      const len = kline.value.length
+      const count = Math.round(pinchBaseCount * (pinchBaseDist / dist))
+      viewCount.value = Math.min(len, Math.max(20, count))
+      endOffset.value = clampOffset(endOffset.value)
+    }
+    return
+  }
   if (!dragging.value || !chartEl.value) return
   if (Math.abs(e.clientX - dragX) > 4) dragMoved = true
   const rect = chartEl.value.getBoundingClientRect()
@@ -1080,6 +1191,8 @@ function onPointerMove(e: PointerEvent): void {
 }
 
 function onPointerUp(e: PointerEvent): void {
+  activePointers.delete(e.pointerId)
+  if (activePointers.size < 2) pinching = false
   dragging.value = false
   ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
 }
@@ -1147,11 +1260,6 @@ function openSibling(code2: string): void {
       <!-- K线图（蜡烛图：影线=最高/最低，实体=开盘/收盘，涨红跌绿） -->
       <section class="chart-card" aria-label="K线走势">
         <div class="chart-head">
-          <div class="head-left">
-            <h2>K线图</h2>
-            <span v-if="scale !== 'trend'" class="chart-hint">滚轮滚动历史 · 拖拽平移 · Ctrl+滚轮缩放</span>
-            <span v-else-if="activeTrend" class="chart-hint">{{ activeTrend.hint }}</span>
-          </div>
           <button
             v-if="endOffset > 0"
             class="reset-btn"
@@ -1217,7 +1325,7 @@ function openSibling(code2: string): void {
             <svg class="trend-svg" :viewBox="`0 0 ${W} ${H}`" role="img" aria-label="分时走势图，点击查看某一分钟的详情" @click="onTrendSelect">
               <g class="gridlines">
                 <line v-for="g in trendChart.grid" :key="'l' + g.y" :x1="TREND_PAD.left" :x2="W - PAD.right" :y1="g.y" :y2="g.y" />
-                <text v-for="g in trendChart.grid" :key="'p' + g.y" class="grid-label num" :x="W - PAD.right + 8" :y="g.y + 4">
+                <text v-for="g in trendChart.grid" :key="'p' + g.y" class="grid-label num" :x="W - 4" :y="g.y + 4" text-anchor="end">
                   {{ g.label }}
                 </text>
                 <template v-for="g in trendChart.grid" :key="'c' + g.y">
@@ -1271,7 +1379,7 @@ function openSibling(code2: string): void {
               <svg class="sub-svg" :viewBox="`0 0 ${W} ${SUB_H}`" role="img" :aria-label="sc.label + '分时副图'">
                 <g class="gridlines">
                   <line v-for="g in sc.grid" :key="'tg' + g.y" :x1="TREND_PAD.left" :x2="W - PAD.right" :y1="g.y" :y2="g.y" />
-                  <text v-for="g in sc.grid" :key="'ts' + g.y" class="grid-label num" :x="W - PAD.right + 8" :y="g.y + 4">
+                  <text v-for="g in sc.grid" :key="'ts' + g.y" class="grid-label num" :x="W - 4" :y="g.y + 4" text-anchor="end">
                     {{ g.label }}
                   </text>
                 </g>
@@ -1364,14 +1472,14 @@ function openSibling(code2: string): void {
           >
             <g class="gridlines">
               <line v-for="g in chart.grid" :key="g.y" :x1="PAD.left" :x2="W - PAD.right" :y1="g.y" :y2="g.y" />
-              <text v-for="g in chart.grid" :key="'t' + g.y" class="grid-label num" :x="W - PAD.right + 8" :y="g.y + 4">
+              <text v-for="g in chart.grid" :key="'t' + g.y" class="grid-label num" :x="W - 4" :y="g.y + 4" text-anchor="end">
                 {{ g.label }}
               </text>
             </g>
             <!-- 最新价虚线 -->
             <g class="last-line" :class="chart.lastUp ? 'up' : 'down'">
               <line :x1="PAD.left" :x2="W - PAD.right" :y1="chart.lastY" :y2="chart.lastY" />
-              <text class="num" :x="W - PAD.right + 8" :y="chart.lastY + 4">{{ chart.lastLabel }}</text>
+              <text class="num" :x="W - 4" :y="chart.lastY + 4" text-anchor="end">{{ chart.lastLabel }}</text>
             </g>
             <g class="candles">
               <template v-for="c in chart.candles" :key="c.key">
@@ -1441,7 +1549,7 @@ function openSibling(code2: string): void {
             <svg class="sub-svg" :viewBox="`0 0 ${W} ${SUB_H}`" role="img" :aria-label="sc.label + '副图'">
               <g class="gridlines">
                 <line v-for="g in sc.grid" :key="'sg' + g.y" :x1="SUB_PAD.left" :x2="W - SUB_PAD.right" :y1="g.y" :y2="g.y" />
-                <text v-for="g in sc.grid" :key="'s' + g.y" class="grid-label num" :x="W - SUB_PAD.right + 8" :y="g.y + 4">
+                <text v-for="g in sc.grid" :key="'s' + g.y" class="grid-label num" :x="W - 4" :y="g.y + 4" text-anchor="end">
                   {{ g.label }}
                 </text>
               </g>
@@ -1831,8 +1939,8 @@ function openSibling(code2: string): void {
         </div>
       </section>
 
-      <!-- 三大财务报表（A股）：利润表/资产负债表/现金流量表 -->
-      <section v-if="statements" class="kline-section">
+      <!-- 三大财务报表（A股）：利润表/资产负债表/现金流量表；无数据整块不显示 -->
+      <section v-if="hasStatements" class="kline-section">
         <div class="spot-head">
           <h2>财务报表</h2>
           <span class="spot-note num">单位：万元 · 最近 5 个报告期 · 新浪</span>
@@ -2025,24 +2133,6 @@ function openSibling(code2: string): void {
   gap: var(--space-8);
   flex-wrap: wrap;
   margin-bottom: var(--space-8);
-
-  h2 {
-    margin: 0;
-    color: var(--color-text-primary);
-    font-size: var(--font-size-16);
-    font-weight: 700;
-  }
-}
-
-.head-left {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-8);
-}
-
-.chart-hint {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-11);
 }
 
 .reset-btn {
@@ -2072,7 +2162,8 @@ function openSibling(code2: string): void {
 
 .kline-svg {
   cursor: grab;
-  touch-action: pan-y;
+  /* none：触摸手势完全交给图表（单指拖拽平移 + 双指捏合缩放），不触发页面滚动/缩放 */
+  touch-action: none;
   user-select: none;
 
   &.grabbing {
@@ -2349,31 +2440,37 @@ function openSibling(code2: string): void {
 
 .periods {
   display: flex;
-  flex-wrap: wrap; /* 窄屏周期按钮多，允许换行避免横向溢出 */
-  gap: var(--space-4);
+  flex-wrap: nowrap; /* 一行排开，放不下时容器内横滑 */
+  gap: var(--space-2);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .period-btn {
   min-height: 32px;
-  padding: 0 var(--space-12);
+  flex: 0 0 auto;
+  padding: 0 var(--space-8);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
+  border: none;
   color: var(--color-text-muted);
   font: inherit;
   font-size: var(--font-size-11);
   cursor: pointer;
-  transition:
-    color 0.15s ease-out,
-    border-color 0.15s ease-out;
+  transition: color 0.15s ease-out;
 
   &:hover {
     color: var(--color-text-primary);
   }
 
+  /* 选中态只改文字颜色，不加底色/描边 */
   &.active {
     color: var(--color-brand);
-    border-color: var(--color-brand);
+    font-weight: 700;
   }
 
   &:focus-visible {
@@ -2398,8 +2495,8 @@ function openSibling(code2: string): void {
   left: var(--space-16);
   z-index: 1;
   display: flex;
-  gap: var(--space-14);
-  font-size: var(--font-size-11);
+  gap: var(--space-8);
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
@@ -2483,10 +2580,10 @@ function openSibling(code2: string): void {
   stroke-dasharray: 3 5;
 }
 
+/* 注意：这里不能写 text-anchor，否则 CSS 会覆盖模板里的 anchor 属性（首尾 start/end、中间 middle） */
 .grid-label {
   fill: var(--color-text-muted);
-  font-size: var(--font-size-12);
-  text-anchor: start;
+  font-size: 10px;
 }
 
 /* 蜡烛：涨红跌绿（A股惯例），每根独立着色 */
@@ -2529,14 +2626,13 @@ function openSibling(code2: string): void {
 }
 
 .last-line text {
-  font-size: var(--font-size-12);
-  text-anchor: start;
+  font-size: 10px;
+  fill: var(--color-text-muted);
 }
 
 .date-label {
   fill: var(--color-text-muted);
-  font-size: var(--font-size-12);
-  text-anchor: start;
+  font-size: 10px;
 }
 
 /* 分时折线图 */

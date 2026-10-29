@@ -240,7 +240,7 @@ public final class SinaClient {
                 row.put("成交额", null);
                 return row;
             }
-            // A 股 / ETF: f0名称 f2昨收 f3最新 f4高 f5低 f8成交量 f9成交额
+            // A 股 / ETF: f0名称 f1今开 f2昨收 f3最新 f4高 f5低 f8成交量 f9成交额
             if (f.size() < 10 || f.get(3).isEmpty()) {
                 return null;
             }
@@ -250,6 +250,7 @@ public final class SinaClient {
             row.put("代码", code.substring(2));
             row.put("名称", f.get(0).isEmpty() ? defaultName : f.get(0));
             row.put("最新价", last);
+            row.put("开盘", parseNum(f.get(1)));
             row.put("涨跌额", last != null && prev != null ? round3(last - prev) : null);
             row.put("涨跌幅", last != null && prev != null && prev != 0 ? round3((last - prev) / prev * 100) : null);
             row.put("最高", parseNum(f.get(4)));
