@@ -1,57 +1,11 @@
 // 财务业务路由模块：承载财务首页、分析、记账和账户相关页面。
 import type { RouteRecordRaw } from 'vue-router'
-import FinancePage from '@/pages/finance/FinancePage/index.vue'
-import TransactionListPage from '@/pages/finance/TransactionListPage/index.vue'
-import AnalysisPage from '@/pages/finance/AnalysisPage/index.vue'
-import InvestmentTrendPage from '@/pages/finance/InvestmentTrendPage/index.vue'
-import MoreFeaturesPage from '@/pages/finance/MoreFeaturesPage/index.vue'
-import ExchangeRatePage from '@/pages/finance/ExchangeRatePage/index.vue'
-import GoldPricePage from '@/pages/finance/GoldPricePage/index.vue'
-import UsMarketPage from '@/pages/finance/UsMarketPage/index.vue'
-import GlobalMarketPage from '@/pages/finance/GlobalMarketPage/index.vue'
-import GlobalMarketDetailPage from '@/pages/finance/GlobalMarketDetailPage/index.vue'
-import MarketNewsPage from '@/pages/finance/MarketNewsPage/index.vue'
-import StockScreenerPage from '@/pages/finance/StockScreenerPage/index.vue'
-import GoldAccountPage from '@/pages/finance/GoldAccountPage/index.vue'
-import GoldAccountPositionPage from '@/pages/finance/GoldAccountPositionPage/index.vue'
-import GoldLiquidationPage from '@/pages/finance/GoldLiquidationPage/index.vue'
-import ProfitForecastPage from '@/pages/finance/ProfitForecastPage/index.vue'
-import FundProfitPage from '@/pages/finance/FundProfitPage/index.vue'
-import BreakEvenForecastPage from '@/pages/finance/BreakEvenForecastPage/index.vue'
-import DividendIncomePage from '@/pages/finance/DividendIncomePage/index.vue'
-import DividendForecastPage from '@/pages/finance/DividendForecastPage/index.vue'
-import FreeEstimatePage from '@/pages/finance/FreeEstimatePage/index.vue'
-import BudgetManagementPage from '@/pages/finance/BudgetManagementPage/index.vue'
-import RenewalManagementPage from '@/pages/finance/RenewalManagementPage/index.vue'
-import ExpenseEntryPage from '@/pages/finance/ExpenseEntryPage/index.vue'
-import CategoryManagementPage from '@/pages/finance/CategoryManagementPage/index.vue'
-import AccountManagementPage from '@/pages/finance/AccountManagementPage/index.vue'
-import CashAccountPage from '@/pages/finance/CashAccountPage/index.vue'
-import CashAssetDetailPage from '@/pages/finance/CashAssetDetailPage/index.vue'
-import DebtAccountPage from '@/pages/finance/DebtAccountPage/index.vue'
-import DebtAccountHistoryPage from '@/pages/finance/DebtAccountHistoryPage/index.vue'
-import DebtAccountDetailPage from '@/pages/finance/DebtAccountDetailPage/index.vue'
-import DebtRecordDetailPage from '@/pages/finance/DebtRecordDetailPage/index.vue'
-import LiabilityAccountPage from '@/pages/finance/LiabilityAccountPage/index.vue'
-import LiabilityAccountDetailPage from '@/pages/finance/LiabilityAccountDetailPage/index.vue'
-import HumanRelationAccountPage from '@/pages/finance/HumanRelationAccountPage/index.vue'
-import HumanRelationAccountDetailPage from '@/pages/finance/HumanRelationAccountDetailPage/index.vue'
-import InvestmentAccountListPage from '@/pages/finance/InvestmentAccountListPage/index.vue'
-import InvestmentAccountPage from '@/pages/finance/InvestmentAccountPage/index.vue'
-import InvestmentLiquidationPage from '@/pages/finance/InvestmentLiquidationPage/index.vue'
-import InvestmentDetailPage from '@/pages/finance/InvestmentDetailPage/index.vue'
-import SalaryHomePage from '@/pages/finance/SalaryHomePage/index.vue'
-import SalarySettingsPage from '@/pages/finance/SalarySettingsPage/index.vue'
-import SalaryRecordPage from '@/pages/finance/SalaryRecordPage/index.vue'
-import SalaryAccountPage from '@/pages/finance/SalaryAccountPage/index.vue'
-import SalaryCashPage from '@/pages/finance/SalaryCashPage/index.vue'
-import SalaryTaxPage from '@/pages/finance/SalaryTaxPage/index.vue'
 
 export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance',
     name: 'finance',
-    component: FinancePage,
+    component: () => import('@/pages/finance/FinancePage/index.vue'),
     meta: {
       section: 'finance',
       title: '财务首页',
@@ -60,7 +14,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/transactions',
     name: 'finance-transactions',
-    component: TransactionListPage,
+    component: () => import('@/pages/finance/TransactionListPage/index.vue'),
     meta: {
       section: 'finance',
       title: '收支列表',
@@ -69,7 +23,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/analysis',
     name: 'finance-analysis',
-    component: AnalysisPage,
+    component: () => import('@/pages/finance/AnalysisPage/index.vue'),
     meta: {
       section: 'finance',
       title: '收支分析',
@@ -78,7 +32,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/more-features',
     name: 'finance-more-features',
-    component: MoreFeaturesPage,
+    component: () => import('@/pages/finance/MoreFeaturesPage/index.vue'),
     meta: {
       section: 'finance',
       title: '更多功能',
@@ -87,7 +41,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/trend',
     name: 'finance-trend',
-    component: InvestmentTrendPage,
+    component: () => import('@/pages/finance/InvestmentTrendPage/index.vue'),
     meta: {
       section: 'finance',
       title: '资产趋势',
@@ -96,7 +50,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/gold-price',
     name: 'finance-gold-price',
-    component: GoldPricePage,
+    component: () => import('@/pages/finance/GoldPricePage/index.vue'),
     meta: {
       section: 'finance',
       title: '金价',
@@ -105,7 +59,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/market-news',
     name: 'finance-market-news',
-    component: MarketNewsPage,
+    component: () => import('@/pages/finance/MarketNewsPage/index.vue'),
     meta: {
       section: 'finance',
       title: '市场快讯',
@@ -114,7 +68,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/stock-screener',
     name: 'finance-stock-screener',
-    component: StockScreenerPage,
+    component: () => import('@/pages/finance/StockScreenerPage/index.vue'),
     meta: {
       section: 'finance',
       title: 'A股选股',
@@ -123,7 +77,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/us-market',
     name: 'finance-us-market',
-    component: UsMarketPage,
+    component: () => import('@/pages/finance/UsMarketPage/index.vue'),
     meta: {
       section: 'finance',
       title: '美股行情',
@@ -132,7 +86,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/global-market',
     name: 'finance-global-market',
-    component: GlobalMarketPage,
+    component: () => import('@/pages/finance/GlobalMarketPage/index.vue'),
     meta: {
       section: 'finance',
       title: '全球行情',
@@ -141,7 +95,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/global-market/:symbol',
     name: 'finance-global-market-detail',
-    component: GlobalMarketDetailPage,
+    component: () => import('@/pages/finance/GlobalMarketDetailPage/index.vue'),
     meta: {
       section: 'finance',
       title: '全球行情详情',
@@ -150,7 +104,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/profit-forecast',
     name: 'finance-profit-forecast',
-    component: ProfitForecastPage,
+    component: () => import('@/pages/finance/ProfitForecastPage/index.vue'),
     meta: {
       section: 'finance',
       title: '收益预测',
@@ -159,7 +113,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/fund-profit',
     name: 'finance-fund-profit',
-    component: FundProfitPage,
+    component: () => import('@/pages/finance/FundProfitPage/index.vue'),
     meta: {
       section: 'finance',
       title: '基金收益',
@@ -168,7 +122,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/break-even-forecast',
     name: 'finance-break-even-forecast',
-    component: BreakEvenForecastPage,
+    component: () => import('@/pages/finance/BreakEvenForecastPage/index.vue'),
     meta: {
       section: 'finance',
       title: '回本预测',
@@ -177,7 +131,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/dividend-income',
     name: 'finance-dividend-income',
-    component: DividendIncomePage,
+    component: () => import('@/pages/finance/DividendIncomePage/index.vue'),
     meta: {
       section: 'finance',
       title: '攒股收息',
@@ -186,7 +140,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/dividend-forecast',
     name: 'finance-dividend-forecast',
-    component: DividendForecastPage,
+    component: () => import('@/pages/finance/DividendForecastPage/index.vue'),
     meta: {
       section: 'finance',
       title: '收息预测',
@@ -195,7 +149,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/free-estimate',
     name: 'finance-free-estimate',
-    component: FreeEstimatePage,
+    component: () => import('@/pages/finance/FreeEstimatePage/index.vue'),
     meta: {
       section: 'finance',
       title: 'Free测算',
@@ -204,7 +158,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/budgets',
     name: 'finance-budgets',
-    component: BudgetManagementPage,
+    component: () => import('@/pages/finance/BudgetManagementPage/index.vue'),
     meta: {
       section: 'finance',
       title: '预算管理',
@@ -213,7 +167,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/renewals',
     name: 'finance-renewals',
-    component: RenewalManagementPage,
+    component: () => import('@/pages/finance/RenewalManagementPage/index.vue'),
     meta: {
       section: 'finance',
       title: '固定支出',
@@ -222,7 +176,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/salary',
     name: 'finance-salary',
-    component: SalaryHomePage,
+    component: () => import('@/pages/finance/SalaryHomePage/index.vue'),
     meta: {
       section: 'finance',
       title: '工资管理',
@@ -231,7 +185,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/salary/settings',
     name: 'finance-salary-settings',
-    component: SalarySettingsPage,
+    component: () => import('@/pages/finance/SalarySettingsPage/index.vue'),
     meta: {
       section: 'finance',
       title: '工资设置',
@@ -240,7 +194,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/salary/records',
     name: 'finance-salary-records',
-    component: SalaryRecordPage,
+    component: () => import('@/pages/finance/SalaryRecordPage/index.vue'),
     meta: {
       section: 'finance',
       title: '工资明细',
@@ -249,7 +203,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/salary/cash',
     name: 'finance-salary-cash',
-    component: SalaryCashPage,
+    component: () => import('@/pages/finance/SalaryCashPage/index.vue'),
     meta: {
       section: 'finance',
       title: '现金账户',
@@ -258,7 +212,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/salary/accounts/:accountType',
     name: 'finance-salary-account',
-    component: SalaryAccountPage,
+    component: () => import('@/pages/finance/SalaryAccountPage/index.vue'),
     meta: {
       section: 'finance',
       title: '工资账户',
@@ -267,7 +221,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/salary/tax',
     name: 'finance-salary-tax',
-    component: SalaryTaxPage,
+    component: () => import('@/pages/finance/SalaryTaxPage/index.vue'),
     meta: {
       section: 'finance',
       title: '工资税务',
@@ -276,7 +230,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/exchange-rate',
     name: 'finance-exchange-rate',
-    component: ExchangeRatePage,
+    component: () => import('@/pages/finance/ExchangeRatePage/index.vue'),
     meta: {
       section: 'finance',
       title: '汇率换算',
@@ -285,7 +239,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/entry/expense',
     name: 'finance-entry-expense',
-    component: ExpenseEntryPage,
+    component: () => import('@/pages/finance/ExpenseEntryPage/index.vue'),
     meta: {
       section: 'finance',
       title: '记一笔-支出',
@@ -294,7 +248,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/categories',
     name: 'finance-categories',
-    component: CategoryManagementPage,
+    component: () => import('@/pages/finance/CategoryManagementPage/index.vue'),
     meta: {
       section: 'finance',
       title: '分类管理',
@@ -303,7 +257,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts',
     name: 'finance-accounts',
-    component: AccountManagementPage,
+    component: () => import('@/pages/finance/AccountManagementPage/index.vue'),
     meta: {
       section: 'finance',
       title: '账户管理',
@@ -312,7 +266,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/cash',
     name: 'finance-accounts-cash',
-    component: CashAccountPage,
+    component: () => import('@/pages/finance/CashAccountPage/index.vue'),
     meta: {
       section: 'finance',
       title: '现金账户',
@@ -321,7 +275,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/cash/:accountId',
     name: 'finance-accounts-cash-detail',
-    component: CashAssetDetailPage,
+    component: () => import('@/pages/finance/CashAssetDetailPage/index.vue'),
     meta: {
       section: 'finance',
       title: '现金资产详情',
@@ -330,7 +284,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/debt',
     name: 'finance-accounts-debt',
-    component: DebtAccountPage,
+    component: () => import('@/pages/finance/DebtAccountPage/index.vue'),
     meta: {
       section: 'finance',
       title: '债务账户',
@@ -339,7 +293,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/debt/history',
     name: 'finance-accounts-debt-history',
-    component: DebtAccountHistoryPage,
+    component: () => import('@/pages/finance/DebtAccountHistoryPage/index.vue'),
     meta: {
       section: 'finance',
       title: '已结清明细',
@@ -348,7 +302,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/debt/:accountId/record/:recordId',
     name: 'finance-accounts-debt-record-detail',
-    component: DebtRecordDetailPage,
+    component: () => import('@/pages/finance/DebtRecordDetailPage/index.vue'),
     meta: {
       section: 'finance',
       title: '债务项详情',
@@ -357,7 +311,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/debt/:accountId',
     name: 'finance-accounts-debt-detail',
-    component: DebtAccountDetailPage,
+    component: () => import('@/pages/finance/DebtAccountDetailPage/index.vue'),
     meta: {
       section: 'finance',
       title: '债务详情',
@@ -366,7 +320,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/liability',
     name: 'finance-accounts-liability',
-    component: LiabilityAccountPage,
+    component: () => import('@/pages/finance/LiabilityAccountPage/index.vue'),
     meta: {
       section: 'finance',
       title: '负债账户',
@@ -375,7 +329,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/liability/:accountId',
     name: 'finance-accounts-liability-detail',
-    component: LiabilityAccountDetailPage,
+    component: () => import('@/pages/finance/LiabilityAccountDetailPage/index.vue'),
     meta: {
       section: 'finance',
       title: '负债详情',
@@ -384,7 +338,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/human-relation',
     name: 'finance-accounts-human-relation',
-    component: HumanRelationAccountPage,
+    component: () => import('@/pages/finance/HumanRelationAccountPage/index.vue'),
     meta: {
       section: 'finance',
       title: '人情账户',
@@ -393,7 +347,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/human-relation/:accountId',
     name: 'finance-accounts-human-relation-detail',
-    component: HumanRelationAccountDetailPage,
+    component: () => import('@/pages/finance/HumanRelationAccountDetailPage/index.vue'),
     meta: {
       section: 'finance',
       title: '人情详情',
@@ -402,7 +356,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/gold',
     name: 'finance-accounts-gold',
-    component: GoldAccountPage,
+    component: () => import('@/pages/finance/GoldAccountPage/index.vue'),
     meta: {
       section: 'finance',
       title: '黄金账户',
@@ -411,7 +365,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/gold/position',
     name: 'finance-accounts-gold-position',
-    component: GoldAccountPositionPage,
+    component: () => import('@/pages/finance/GoldAccountPositionPage/index.vue'),
     meta: {
       section: 'finance',
       title: '黄金账户持仓',
@@ -420,7 +374,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/gold/liquidation',
     name: 'finance-accounts-gold-liquidation',
-    component: GoldLiquidationPage,
+    component: () => import('@/pages/finance/GoldLiquidationPage/index.vue'),
     meta: {
       section: 'finance',
       title: '清仓记录',
@@ -429,7 +383,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/investment',
     name: 'finance-accounts-investment',
-    component: InvestmentAccountListPage,
+    component: () => import('@/pages/finance/InvestmentAccountListPage/index.vue'),
     meta: {
       section: 'finance',
       title: '投资账户',
@@ -438,7 +392,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/investment/:accountId/liquidations',
     name: 'finance-accounts-investment-liquidations',
-    component: InvestmentLiquidationPage,
+    component: () => import('@/pages/finance/InvestmentLiquidationPage/index.vue'),
     meta: {
       section: 'finance',
       title: '清仓明细',
@@ -447,7 +401,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/investment/:accountId',
     name: 'finance-accounts-investment-account-detail',
-    component: InvestmentAccountPage,
+    component: () => import('@/pages/finance/InvestmentAccountPage/index.vue'),
     meta: {
       section: 'finance',
       title: '投资详情',
@@ -456,7 +410,7 @@ export const financeRoutes: RouteRecordRaw[] = [
   {
     path: '/finance/accounts/investment/detail',
     name: 'finance-accounts-investment-detail',
-    component: InvestmentDetailPage,
+    component: () => import('@/pages/finance/InvestmentDetailPage/index.vue'),
     meta: {
       section: 'finance',
       title: '投资资产详情',

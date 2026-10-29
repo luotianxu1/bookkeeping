@@ -1,6 +1,8 @@
 package com.example.finance.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.example.finance.dto.AccountRequest;
 import com.example.finance.dto.AccountResponse;
 import com.example.finance.dto.AccountSortOrderRequest;
@@ -84,6 +86,7 @@ public class AccountService {
     private final RenewalSubscriptionMapper renewalSubscriptionMapper;
     private final GoldPriceService goldPriceService;
     private final JdbcTemplate jdbcTemplate;
+    private final FamilyScopeChecker familyScopeChecker;
 
     public AccountService(
         AccountMapper accountMapper,
@@ -98,7 +101,8 @@ public class AccountService {
         TransactionMapper transactionMapper,
         RenewalSubscriptionMapper renewalSubscriptionMapper,
         GoldPriceService goldPriceService,
-        JdbcTemplate jdbcTemplate
+        JdbcTemplate jdbcTemplate,
+        FamilyScopeChecker familyScopeChecker
     ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
@@ -113,6 +117,7 @@ public class AccountService {
         this.renewalSubscriptionMapper = renewalSubscriptionMapper;
         this.goldPriceService = goldPriceService;
         this.jdbcTemplate = jdbcTemplate;
+        this.familyScopeChecker = familyScopeChecker;
     }
 
     public List<AccountResponse> list(Long userId, Long accountTypeId, String status) {
@@ -132,6 +137,9 @@ public class AccountService {
         if (account == null) {
             return Optional.empty();
         }
+        // 归属校验：本人或同家庭成员可读
+        familyScopeChecker.requireReadable(
+            SecurityUtils.requireCurrentUserId(), account.getUserId(), "账户不存在");
         return Optional.of(toResponse(account, loadAccountType(account.getAccountTypeId())));
     }
 
@@ -224,6 +232,9 @@ public class AccountService {
         if (entity == null) {
             return Optional.empty();
         }
+        // 归属校验：request.userId 已被过滤器覆盖为 token 身份
+        familyScopeChecker.requireSelf(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "账户不存在");
 
         AccountTypeEntity accountType = requireAccountType(request.getAccountTypeId());
         validateContactRequired(accountType, request.getContactId());
@@ -253,6 +264,9 @@ public class AccountService {
         if (account == null) {
             return false;
         }
+        // 归属校验：只有本人可以删除账户（会级联删除其全部财务数据）
+        familyScopeChecker.requireSelf(
+            SecurityUtils.requireCurrentUserId(), account.getUserId(), "账户不存在");
 
         AccountTypeEntity accountType = loadAccountType(account.getAccountTypeId());
         if (accountType != null && CASH_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {

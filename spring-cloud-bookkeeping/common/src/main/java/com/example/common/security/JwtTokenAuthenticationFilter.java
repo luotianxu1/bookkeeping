@@ -20,9 +20,11 @@ import java.util.List;
 public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenService jwtTokenService;
+    private final UserStatusChecker userStatusChecker;
 
-    public JwtTokenAuthenticationFilter(JwtTokenService jwtTokenService) {
+    public JwtTokenAuthenticationFilter(JwtTokenService jwtTokenService, UserStatusChecker userStatusChecker) {
         this.jwtTokenService = jwtTokenService;
+        this.userStatusChecker = userStatusChecker;
     }
 
     @Override
@@ -41,13 +43,21 @@ public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
         try {
             Claims claims = jwtTokenService.parse(token);
             String username = claims.getSubject();
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                    username,
-                    null,
-                    List.of(new SimpleGrantedAuthority("ROLE_USER"))
-                );
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+            Number userIdClaim = claims.get("userId", Number.class);
+            // 旧格式 token（无 userId claim）不建立认证，引导客户端重新登录
+            if (username != null && userIdClaim != null
+                && SecurityContextHolder.getContext().getAuthentication() == null) {
+                long userId = userIdClaim.longValue();
+                // 已注销/禁用的用户即使持有未过期 token 也拒绝认证（30 秒内生效）
+                if (userStatusChecker.isActive(userId)) {
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                        username,
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                    );
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    request.setAttribute(SecurityUtils.USER_ID_ATTRIBUTE, userId);
+                }
             }
         } catch (JwtException ignored) {
             SecurityContextHolder.clearContext();

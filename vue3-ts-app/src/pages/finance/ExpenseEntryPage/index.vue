@@ -96,9 +96,14 @@ const keypadRows = [
 ]
 
 const amountDisplay = computed(() => `${amountInput.value}`)
-const transactionType = computed<TransactionType>(() => (entryType.value === '收入' ? 'income' : 'expense'))
+const transactionType = computed<TransactionType>(() => {
+  if (entryType.value === '收入') return 'income'
+  if (entryType.value === '转账') return 'transfer'
+  return 'expense'
+})
 const selectedCategory = computed(() => categories.value.find((category) => category.id === activeCategoryId.value))
 const selectedAccount = computed(() => accountOptions.value.find((account) => account.id === accountId.value))
+const transferOutSelectedAccount = computed(() => accountOptions.value.find((account) => account.id === transferOutAccount.value))
 const isEditing = computed(() => editingTransactionId.value !== null)
 const backTo = computed(() => parseRouteText(route.query.redirect) || '/finance')
 const accountSelectValue = computed<ExpenseInlineSelectValue>({
@@ -136,13 +141,19 @@ const transferInSelectValue = computed<ExpenseInlineSelectValue>({
         : null
   },
 })
-const canSave = computed(() => (
-  entryType.value !== '转账' &&
-  !saving.value &&
-  Number(amountInput.value) > 0 &&
-  accountId.value !== null &&
-  activeCategoryId.value !== null
-))
+const canSave = computed(() => {
+  if (saving.value || Number(amountInput.value) <= 0) {
+    return false
+  }
+  if (entryType.value === '转账') {
+    return (
+      transferOutAccount.value !== null &&
+      transferInAccount.value !== null &&
+      transferOutAccount.value !== transferInAccount.value
+    )
+  }
+  return accountId.value !== null && activeCategoryId.value !== null
+})
 
 onMounted(() => {
   applyRouteEntryType()
@@ -238,25 +249,33 @@ async function loadCashAccounts() {
 async function loadCategories() {
   const previousParentId = activeParentCategoryId.value
   const previousCategoryId = activeCategoryId.value
+  // 转账不需要分类，分类类型只可能是支出或收入
+  const categoryType: 'expense' | 'income' = transactionType.value === 'income' ? 'income' : 'expense'
   categories.value = await getCategories({
     userId: currentUserId.value,
-    type: transactionType.value,
+    type: categoryType,
     status: 'active',
   })
   syncSelectedCategories(previousParentId, previousCategoryId)
 }
 
 async function saveTransaction() {
-  if (entryType.value === '转账') {
-    showFeedback('转账稍后实现，请先记录支出或收入', 'error')
+  const amount = Number(amountInput.value)
+  if (amount <= 0) {
+    showFeedback('请输入大于0的金额', 'error')
     return
   }
+
+  if (entryType.value === '转账') {
+    await saveTransferTransaction(amount)
+    return
+  }
+
   if (!canSave.value || accountId.value === null || activeCategoryId.value === null) {
     showFeedback('请填写金额、账户和分类', 'error')
     return
   }
 
-  const amount = Number(amountInput.value)
   if (transactionType.value === 'expense' && selectedAccount.value && amount > Number(selectedAccount.value.currentBalance)) {
     showFeedback('账户余额不足', 'error')
     return
@@ -286,6 +305,52 @@ async function saveTransaction() {
       amountInput.value = '0.00'
       note.value = ''
       showFeedback('新增成功', 'success')
+      await loadCashAccounts()
+    }
+  } catch (error) {
+    showFeedback(errorMessage(error), 'error')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function saveTransferTransaction(amount: number) {
+  if (transferOutAccount.value === null || transferInAccount.value === null) {
+    showFeedback('请选择转出账户和转入账户', 'error')
+    return
+  }
+  if (transferOutAccount.value === transferInAccount.value) {
+    showFeedback('转出账户和转入账户不能相同', 'error')
+    return
+  }
+  if (transferOutSelectedAccount.value && amount > Number(transferOutSelectedAccount.value.currentBalance)) {
+    showFeedback('转出账户余额不足', 'error')
+    return
+  }
+
+  saving.value = true
+  closeFeedback()
+
+  try {
+    const payload = {
+      userId: currentUserId.value,
+      type: 'transfer' as TransactionType,
+      amount,
+      currencyCode: 'CNY',
+      fromAccountId: transferOutAccount.value,
+      toAccountId: transferInAccount.value,
+      remark: note.value.trim() || null,
+      occurredAt: entryTime.value,
+    }
+
+    if (isEditing.value && editingTransactionId.value) {
+      await updateTransaction(editingTransactionId.value, payload)
+      showFeedback('修改成功', 'success')
+    } else {
+      await createTransaction(payload)
+      amountInput.value = '0.00'
+      note.value = ''
+      showFeedback('转账成功', 'success')
       await loadCashAccounts()
     }
   } catch (error) {
@@ -536,6 +601,26 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
           :disabled="loading || accountSelectOptions.length === 0"
         />
       </div>
+      <div class="expense-divider"></div>
+      <div class="expense-info-row">
+        <span>时间</span>
+        <CommonDateTimePicker
+          v-model="entryTime"
+          class="expense-time-control"
+          label="选择时间"
+        />
+      </div>
+      <div class="expense-divider"></div>
+      <label class="expense-info-row expense-note-input-wrap">
+        <span>备注</span>
+        <input
+          v-model="note"
+          class="expense-note-input"
+          type="text"
+          placeholder="输入备注内容"
+          aria-label="输入转账备注"
+        />
+      </label>
     </section>
 
     <section class="expense-keypad" aria-label="数字键盘">

@@ -121,4 +121,9 @@ export function stopGoldPriceAutoRefresh() {
     window.clearInterval(refreshTimer)
     refreshTimer = null
   }
+  document.removeEventListener('visibilitychange', refreshVisiblePrimaryPrice)
+  // 重置状态，保证下次登录时 startGoldPriceAutoRefresh 能重新启动定时器
+  state.hasStarted = false
+  state.price = null
+  state.lastError = ''
 }

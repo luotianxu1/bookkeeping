@@ -2,6 +2,7 @@ package com.example.common.exception;
 
 import com.example.common.result.Result;
 import com.example.common.result.ResultCodeEnum;
+import com.example.common.security.UserIdentityMissingException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +48,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Result<Void>> handleIllegalArgument(IllegalArgumentException ex) {
         return ResponseEntity.badRequest().body(Result.<Void>build(null, ResultCodeEnum.BAD_REQUEST).message(ex.getMessage()));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Result<Void>> handleIllegalState(IllegalStateException ex) {
+        return ResponseEntity.badRequest().body(Result.<Void>build(null, ResultCodeEnum.BAD_REQUEST).message(ex.getMessage()));
+    }
+
+    @ExceptionHandler(UserIdentityMissingException.class)
+    public ResponseEntity<Result<Void>> handleUserIdentityMissing(UserIdentityMissingException ex) {
+        return ResponseEntity
+            .status(HttpStatus.UNAUTHORIZED)
+            .body(Result.<Void>fail().code(401).message(ex.getMessage()));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

@@ -1,17 +1,11 @@
 // 主导航路由模块：承载底部 Tab 的非财务入口页面。
 import type { RouteRecordRaw } from 'vue-router'
-import LoginPage from '@/pages/login/LoginPage/index.vue'
-import RegisterPage from '@/pages/login/RegisterPage/index.vue'
-import IconManagementPage from '@/pages/profile/IconManagementPage/index.vue'
-import ProfileFamilyPage from '@/pages/profile/ProfileFamilyPage/index.vue'
-import ProfilePage from '@/pages/profile/ProfilePage/index.vue'
-import TaskManagementPage from '@/pages/profile/TaskManagementPage/index.vue'
 
 export const mainRoutes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'login',
-    component: LoginPage,
+    component: () => import('@/pages/login/LoginPage/index.vue'),
     meta: {
       section: 'finance',
       title: '登录',
@@ -20,7 +14,7 @@ export const mainRoutes: RouteRecordRaw[] = [
   {
     path: '/register',
     name: 'register',
-    component: RegisterPage,
+    component: () => import('@/pages/login/RegisterPage/index.vue'),
     meta: {
       section: 'finance',
       title: '注册',
@@ -29,7 +23,7 @@ export const mainRoutes: RouteRecordRaw[] = [
   {
     path: '/profile',
     name: 'profile',
-    component: ProfilePage,
+    component: () => import('@/pages/profile/ProfilePage/index.vue'),
     meta: {
       section: 'profile',
       title: '我的',
@@ -38,7 +32,7 @@ export const mainRoutes: RouteRecordRaw[] = [
   {
     path: '/profile/family-members',
     name: 'profile-family-members',
-    component: ProfileFamilyPage,
+    component: () => import('@/pages/profile/ProfileFamilyPage/index.vue'),
     meta: {
       section: 'profile',
       title: '绑定家庭成员',
@@ -47,7 +41,7 @@ export const mainRoutes: RouteRecordRaw[] = [
   {
     path: '/profile/task-management',
     name: 'profile-task-management',
-    component: TaskManagementPage,
+    component: () => import('@/pages/profile/TaskManagementPage/index.vue'),
     meta: {
       section: 'profile',
       title: '任务管理',
@@ -56,7 +50,7 @@ export const mainRoutes: RouteRecordRaw[] = [
   {
     path: '/profile/icon-management',
     name: 'profile-icon-management',
-    component: IconManagementPage,
+    component: () => import('@/pages/profile/IconManagementPage/index.vue'),
     meta: {
       section: 'profile',
       title: '图标管理',

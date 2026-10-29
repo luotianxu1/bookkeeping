@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 @Service
@@ -21,20 +22,40 @@ public class ScheduledTaskRunService {
     private static final int MAX_MESSAGE_LENGTH = 1000;
 
     private final ScheduledTaskRunMapper scheduledTaskRunMapper;
+    /** 同一任务（taskName::triggerName）在 JVM 内互斥，防止并发手动触发重复执行 */
+    private final ConcurrentHashMap<String, Object> taskLocks = new ConcurrentHashMap<>();
 
     public ScheduledTaskRunService(ScheduledTaskRunMapper scheduledTaskRunMapper) {
         this.scheduledTaskRunMapper = scheduledTaskRunMapper;
     }
 
     public void run(String taskName, String triggerName, Supplier<String> action) {
-        ScheduledTaskRunEntity run = start(taskName, triggerName);
-        try {
-            String resultMessage = action.get();
-            finish(run, STATUS_SUCCESS, resultMessage, null);
-        } catch (Exception ex) {
-            finish(run, STATUS_FAILED, null, ex.getMessage());
-            throw ex;
+        String lockKey = trim(taskName) + "::" + trim(triggerName);
+        Object lock = taskLocks.computeIfAbsent(lockKey, key -> new Object());
+        synchronized (lock) {
+            if (hasRecentActiveRun(taskName, triggerName)) {
+                throw new IllegalStateException("任务正在执行，请稍后刷新状态");
+            }
+            ScheduledTaskRunEntity run = start(taskName, triggerName);
+            try {
+                String resultMessage = action.get();
+                finish(run, STATUS_SUCCESS, resultMessage, null);
+            } catch (Exception ex) {
+                finish(run, STATUS_FAILED, null, ex.getMessage());
+                throw ex;
+            }
         }
+    }
+
+    /** 存在 30 分钟内启动且未结束的运行记录时视为仍在执行（超时视为异常残留，不阻塞后续执行） */
+    private boolean hasRecentActiveRun(String taskName, String triggerName) {
+        Long count = scheduledTaskRunMapper.selectCount(new LambdaQueryWrapper<ScheduledTaskRunEntity>()
+            .eq(ScheduledTaskRunEntity::getTaskName, trim(taskName))
+            .eq(ScheduledTaskRunEntity::getTriggerName, trim(triggerName))
+            .eq(ScheduledTaskRunEntity::getStatus, STATUS_RUNNING)
+            .isNull(ScheduledTaskRunEntity::getFinishedAt)
+            .ge(ScheduledTaskRunEntity::getStartedAt, LocalDateTime.now().minusMinutes(30)));
+        return count != null && count > 0;
     }
 
     public boolean hasSuccessfulRunBetween(

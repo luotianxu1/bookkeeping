@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount } from '@/utils/format'
 // 投资账户详情页：展示单个投资账户的汇总、持仓列表和新增持仓。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -1042,13 +1043,6 @@ function getDividendReminderText(position: InvestmentPosition) {
     return `${dateText} 分红`
   }
   return `${dateText} · ${perUnit.toFixed(4)}/${position.unitName || '份'}`
-}
-
-function formatAmount(value: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
 }
 
 function toApiDateTime(date: Date) {

@@ -2,6 +2,8 @@ package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.example.tool.dto.PhotographyOrderCollectFinalRequest;
 import com.example.tool.dto.PhotographyOrderOverviewBucketResponse;
 import com.example.tool.dto.PhotographyOrderOverviewResponse;
@@ -81,6 +83,7 @@ public class PhotographyOrderService {
     private final CategoryMapper categoryMapper;
     private final TransactionMapper transactionMapper;
     private final CalendarService calendarService;
+    private final FamilyScopeChecker familyScopeChecker;
 
     public PhotographyOrderService(
         PhotographyOrderMapper photographyOrderMapper,
@@ -88,7 +91,8 @@ public class PhotographyOrderService {
         AccountTypeMapper accountTypeMapper,
         CategoryMapper categoryMapper,
         TransactionMapper transactionMapper,
-        CalendarService calendarService
+        CalendarService calendarService,
+        FamilyScopeChecker familyScopeChecker
     ) {
         this.photographyOrderMapper = photographyOrderMapper;
         this.accountMapper = accountMapper;
@@ -96,6 +100,7 @@ public class PhotographyOrderService {
         this.categoryMapper = categoryMapper;
         this.transactionMapper = transactionMapper;
         this.calendarService = calendarService;
+        this.familyScopeChecker = familyScopeChecker;
     }
 
     public List<PhotographyOrderResponse> list(Long userId, String status, String keyword, String shootDate) {
@@ -123,6 +128,8 @@ public class PhotographyOrderService {
         if (entity == null) {
             return Optional.empty();
         }
+        familyScopeChecker.requireReadable(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "订单不存在");
         return toResponses(List.of(entity)).stream().findFirst();
     }
 
@@ -476,9 +483,7 @@ public class PhotographyOrderService {
         transaction.setStatus(TRANSACTION_STATUS_NORMAL);
         transactionMapper.insert(transaction);
 
-        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
-        account.setCurrentBalance(currentBalance.add(amount));
-        accountMapper.updateById(account);
+        accountMapper.addBalance(account.getId(), amount);
         return transaction;
     }
 
@@ -503,14 +508,12 @@ public class PhotographyOrderService {
             throw new IllegalArgumentException("关联现金账户不存在");
         }
 
-        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
-        BigDecimal nextBalance = currentBalance.subtract(transaction.getAmount());
-        if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
+        // 原子扣减，余额不足（含并发下被扣空）直接失败
+        int updated = accountMapper.subtractBalanceIfSufficient(account.getId(), transaction.getAmount());
+        if (updated == 0) {
             throw new IllegalArgumentException("删除后账户余额不足");
         }
 
-        account.setCurrentBalance(nextBalance);
-        accountMapper.updateById(account);
         transaction.setStatus(TRANSACTION_STATUS_VOIDED);
         transactionMapper.updateById(transaction);
     }

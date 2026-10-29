@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount } from '@/utils/format'
 // 黄金账户持仓页：对接黄金聚合查询接口，并补充持仓新增、修改、删除能力。
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -779,13 +780,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
   feedbackMessage.value = message
   feedbackType.value = type
   showFeedbackModal.value = true
-}
-
-function formatAmount(value: number | null | undefined) {
-  return Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }
 
 function formatSummaryWeight(value: number | null | undefined) {

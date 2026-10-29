@@ -49,5 +49,20 @@ export default defineConfig({
         allowedHosts: ['luotianxu.dpdns.org'],
         proxy: apiProxy,
     },
+    build: {
+        rollupOptions: {
+            output: {
+                // vendor 依赖与业务代码分离；echarts 体积大单独拆，便于浏览器缓存
+                manualChunks(id: string) {
+                    if (id.includes('node_modules')) {
+                        if (id.includes('echarts') || id.includes('zrender')) {
+                            return 'echarts'
+                        }
+                        return 'vendor'
+                    }
+                },
+            },
+        },
+    },
     plugins: [vue()],
 })

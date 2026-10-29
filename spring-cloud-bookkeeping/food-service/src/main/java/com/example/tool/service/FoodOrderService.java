@@ -1,6 +1,8 @@
 package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.example.tool.dto.FoodOrderCreateRequest;
 import com.example.tool.dto.FoodOrderResponse;
 import com.example.tool.entity.FoodCategoryEntity;
@@ -29,17 +31,20 @@ public class FoodOrderService {
     private final FoodOrderMapper foodOrderMapper;
     private final FoodOrderItemMapper foodOrderItemMapper;
     private final FoodDomainSupport foodDomainSupport;
+    private final FamilyScopeChecker familyScopeChecker;
 
     public FoodOrderService(
         FoodDishMapper foodDishMapper,
         FoodOrderMapper foodOrderMapper,
         FoodOrderItemMapper foodOrderItemMapper,
-        FoodDomainSupport foodDomainSupport
+        FoodDomainSupport foodDomainSupport,
+        FamilyScopeChecker familyScopeChecker
     ) {
         this.foodDishMapper = foodDishMapper;
         this.foodOrderMapper = foodOrderMapper;
         this.foodOrderItemMapper = foodOrderItemMapper;
         this.foodDomainSupport = foodDomainSupport;
+        this.familyScopeChecker = familyScopeChecker;
     }
 
     public List<FoodOrderResponse> listOrders(Long userId, String keyword) {
@@ -65,6 +70,8 @@ public class FoodOrderService {
         if (entity == null) {
             return Optional.empty();
         }
+        familyScopeChecker.requireReadable(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "菜单不存在");
 
         List<FoodOrderItemEntity> items = foodOrderItemMapper.selectList(new LambdaQueryWrapper<FoodOrderItemEntity>()
             .eq(FoodOrderItemEntity::getOrderId, id)
@@ -79,6 +86,8 @@ public class FoodOrderService {
         if (entity == null) {
             return false;
         }
+        familyScopeChecker.requireSelf(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "菜单不存在");
 
         foodOrderItemMapper.delete(new LambdaQueryWrapper<FoodOrderItemEntity>()
             .eq(FoodOrderItemEntity::getOrderId, id));

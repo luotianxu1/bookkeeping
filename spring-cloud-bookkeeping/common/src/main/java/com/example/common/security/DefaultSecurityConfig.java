@@ -1,5 +1,6 @@
 package com.example.common.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -18,8 +19,12 @@ public class DefaultSecurityConfig {
     public SecurityFilterChain defaultSecurityFilterChain(
         HttpSecurity http,
         JwtTokenAuthenticationFilter jwtTokenAuthenticationFilter,
-        SecurityErrorWriter securityErrorWriter
+        SecurityErrorWriter securityErrorWriter,
+        ObjectMapper objectMapper,
+        FamilyScopeChecker familyScopeChecker
     ) throws Exception {
+        UserIdentityScopeFilter userIdentityScopeFilter =
+            new UserIdentityScopeFilter(objectMapper, familyScopeChecker, securityErrorWriter);
         return http
             .csrf(csrf -> csrf.disable())
             .formLogin(form -> form.disable())
@@ -45,6 +50,7 @@ public class DefaultSecurityConfig {
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtTokenAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(userIdentityScopeFilter, JwtTokenAuthenticationFilter.class)
             .build();
     }
 }

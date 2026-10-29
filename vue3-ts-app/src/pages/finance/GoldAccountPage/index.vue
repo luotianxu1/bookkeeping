@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount } from '@/utils/format'
 // 黄金账户页：展示黄金账户汇总，并支持黄金账户列表增删改查。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -433,13 +434,6 @@ function buildSummary(items: GoldAccountHolding[], cumulativeProfit: number): Go
     profitRate: purchaseTotal > 0 ? (estimatedProfit / purchaseTotal) * 100 : 0,
     cumulativeProfit: Number(cumulativeProfit ?? 0),
   }
-}
-
-function formatAmount(value: number | null | undefined) {
-  return Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }
 
 function formatCompactWeight(value: number | null | undefined) {

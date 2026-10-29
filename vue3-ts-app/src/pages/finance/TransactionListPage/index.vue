@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCnyAmount as formatAmount } from '@/utils/format'
 // 收支列表页：还原 Pencil「收支列表页」画板中的筛选与日期分组流水。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -427,15 +428,6 @@ function formatInputDate(date: Date) {
 function formatShortDate(value: string) {
   const [, month, day] = value.split('-')
   return month && day ? `${month}.${day}` : value
-}
-
-function formatAmount(value: number) {
-  return value.toLocaleString('zh-CN', {
-    style: 'currency',
-    currency: 'CNY',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }
 
 function formatPositiveAmount(value: number) {

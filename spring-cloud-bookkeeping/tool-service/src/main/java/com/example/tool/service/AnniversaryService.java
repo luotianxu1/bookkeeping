@@ -1,6 +1,8 @@
 package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.example.tool.dto.AnniversaryRequest;
 import com.example.tool.dto.AnniversaryResponse;
 import com.example.tool.entity.AnniversaryEntity;
@@ -25,9 +27,11 @@ public class AnniversaryService {
     private static final Set<String> VALID_SCOPES = Set.of(SCOPE_ALL, SCOPE_MONTH, SCOPE_EXPIRED);
 
     private final AnniversaryMapper anniversaryMapper;
+    private final FamilyScopeChecker familyScopeChecker;
 
-    public AnniversaryService(AnniversaryMapper anniversaryMapper) {
+    public AnniversaryService(AnniversaryMapper anniversaryMapper, FamilyScopeChecker familyScopeChecker) {
         this.anniversaryMapper = anniversaryMapper;
+        this.familyScopeChecker = familyScopeChecker;
     }
 
     public List<AnniversaryResponse> list(Long userId, String scope, String keyword) {
@@ -51,7 +55,13 @@ public class AnniversaryService {
     }
 
     public Optional<AnniversaryResponse> getById(Long id) {
-        return Optional.ofNullable(anniversaryMapper.selectById(id)).map(this::toResponse);
+        AnniversaryEntity entity = anniversaryMapper.selectById(id);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        familyScopeChecker.requireReadable(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "纪念日不存在");
+        return Optional.of(toResponse(entity));
     }
 
     public AnniversaryResponse create(AnniversaryRequest request) {

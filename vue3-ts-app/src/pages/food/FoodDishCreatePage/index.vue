@@ -20,8 +20,21 @@ import {
 } from '../shared'
 
 type EditableIngredient = {
+  uid: number
   ingredientName: string
   amount: string
+}
+
+type EditableStep = {
+  uid: number
+  text: string
+}
+
+// 行级自增 uid：保证删除中间行时 v-for 复用正确的组件状态
+let rowUidCounter = 0
+function nextRowUid() {
+  rowUidCounter += 1
+  return rowUidCounter
 }
 
 const route = useRoute()
@@ -42,14 +55,14 @@ const tasteTags = ref('')
 const description = ref('')
 const cookMinutes = ref('45')
 const ingredients = ref<EditableIngredient[]>([
-  { ingredientName: '牛腩', amount: '500g' },
-  { ingredientName: '番茄', amount: '2个' },
-  { ingredientName: '洋葱 / 调味料', amount: '适量' },
+  { uid: nextRowUid(), ingredientName: '牛腩', amount: '500g' },
+  { uid: nextRowUid(), ingredientName: '番茄', amount: '2个' },
+  { uid: nextRowUid(), ingredientName: '洋葱 / 调味料', amount: '适量' },
 ])
-const steps = ref<string[]>([
-  '牛肉焯水后沥干，番茄切块，洋葱切丝备用。',
-  '锅中翻炒洋葱和番茄，加入牛肉和清水，小火炖煮 30 分钟。',
-  '加入盐和黑胡椒调味，收汁后装盘，可搭配米饭或意面。',
+const steps = ref<EditableStep[]>([
+  { uid: nextRowUid(), text: '牛肉焯水后沥干，番茄切块，洋葱切丝备用。' },
+  { uid: nextRowUid(), text: '锅中翻炒洋葱和番茄，加入牛肉和清水，小火炖煮 30 分钟。' },
+  { uid: nextRowUid(), text: '加入盐和黑胡椒调味，收汁后装盘，可搭配米饭或意面。' },
 ])
 
 const selectedCategory = computed(() => categories.value.find((item) => item.id === categoryId.value) ?? null)
@@ -95,7 +108,7 @@ async function loadCategories() {
 }
 
 function addIngredientRow() {
-  ingredients.value.push({ ingredientName: '', amount: '' })
+  ingredients.value.push({ uid: nextRowUid(), ingredientName: '', amount: '' })
 }
 
 function removeIngredientRow(index: number) {
@@ -103,7 +116,7 @@ function removeIngredientRow(index: number) {
 }
 
 function addStepRow() {
-  steps.value.push('')
+  steps.value.push({ uid: nextRowUid(), text: '' })
 }
 
 function removeStepRow(index: number) {
@@ -130,7 +143,7 @@ async function saveDish() {
     }))
     .filter((item) => item.ingredientName && item.amount)
 
-  const normalizedSteps = steps.value.map((item) => item.trim()).filter(Boolean)
+  const normalizedSteps = steps.value.map((item) => item.text.trim()).filter(Boolean)
 
   if (normalizedIngredients.length === 0 || normalizedSteps.length === 0) {
     showFeedback('请至少填写一项食材和一个步骤', 'error')
@@ -230,10 +243,10 @@ function showFeedback(message: string, type: 'success' | 'error') {
           <button type="button" class="ghost-link" @click="addIngredientRow">添加一项</button>
         </div>
 
-        <div v-for="(item, index) in ingredients" :key="`ingredient-${index}`" class="mini-row">
+        <div v-for="item in ingredients" :key="item.uid" class="mini-row">
           <input v-model.trim="item.ingredientName" type="text" placeholder="食材名称" />
           <input v-model.trim="item.amount" type="text" placeholder="数量" />
-          <button type="button" class="row-remove" @click="removeIngredientRow(index)">
+          <button type="button" class="row-remove" @click="removeIngredientRow(ingredients.indexOf(item))">
             删除
           </button>
         </div>
@@ -245,10 +258,10 @@ function showFeedback(message: string, type: 'success' | 'error') {
           <button type="button" class="ghost-link" @click="addStepRow">添加步骤</button>
         </div>
 
-        <div v-for="(_, index) in steps" :key="`step-${index}`" class="step-box">
+        <div v-for="(item, index) in steps" :key="item.uid" class="step-box">
           <span>{{ index + 1 }}</span>
-          <textarea v-model.trim="steps[index]" rows="2" placeholder="填写步骤内容"></textarea>
-          <button type="button" class="row-remove step-remove" @click="removeStepRow(index)">
+          <textarea v-model.trim="item.text" rows="2" placeholder="填写步骤内容"></textarea>
+          <button type="button" class="row-remove step-remove" @click="removeStepRow(steps.indexOf(item))">
             删除
           </button>
         </div>

@@ -1,6 +1,8 @@
 package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.example.tool.dto.ContactRequest;
 import com.example.tool.dto.ContactResponse;
 import com.example.tool.entity.ContactEntity;
@@ -18,9 +20,11 @@ public class ContactService {
     private static final String ALL_STATUS = "all";
 
     private final ContactMapper contactMapper;
+    private final FamilyScopeChecker familyScopeChecker;
 
-    public ContactService(ContactMapper contactMapper) {
+    public ContactService(ContactMapper contactMapper, FamilyScopeChecker familyScopeChecker) {
         this.contactMapper = contactMapper;
+        this.familyScopeChecker = familyScopeChecker;
     }
 
     public List<ContactResponse> list(Long userId, String status, String keyword) {
@@ -46,7 +50,13 @@ public class ContactService {
     }
 
     public Optional<ContactResponse> getById(Long id) {
-        return Optional.ofNullable(contactMapper.selectById(id)).map(this::toResponse);
+        ContactEntity entity = contactMapper.selectById(id);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        familyScopeChecker.requireReadable(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "联系人不存在");
+        return Optional.of(toResponse(entity));
     }
 
     public ContactResponse create(ContactRequest request) {
@@ -64,6 +74,9 @@ public class ContactService {
         if (entity == null) {
             return Optional.empty();
         }
+        // request.userId 已被过滤器覆盖为 token 身份，这里校验资源归属
+        familyScopeChecker.requireSelf(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "联系人不存在");
 
         validatePhoneUnique(request.getUserId(), request.getPhone(), id);
         fillEntity(entity, request);
@@ -73,6 +86,12 @@ public class ContactService {
     }
 
     public boolean delete(Long id) {
+        ContactEntity entity = contactMapper.selectById(id);
+        if (entity == null) {
+            return false;
+        }
+        familyScopeChecker.requireSelf(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "联系人不存在");
         return contactMapper.deleteById(id) > 0;
     }
 

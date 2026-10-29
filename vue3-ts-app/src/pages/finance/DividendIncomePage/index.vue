@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount as formatNumberAmount } from '@/utils/format'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -36,6 +37,10 @@ type ExpenseCoverageItem = FixedExpenseItem & {
   coveredAmount: number
   coveredPercent: number
   status: 'covered' | 'partial' | 'pending'
+}
+
+function formatAmount(value: number, digits = 2) {
+  return formatNumberAmount(Math.abs(value), digits)
 }
 
 const router = useRouter()
@@ -177,13 +182,6 @@ function amountTone(value: number) {
   if (value > 0) return 'positive'
   if (value < 0) return 'negative'
   return 'neutral'
-}
-
-function formatAmount(value: number, digits = 2) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Math.abs(value))
 }
 
 function formatSignedCurrency(value: number) {
@@ -417,7 +415,6 @@ async function removeExpenseItem(id: number) {
     pageError.value = error instanceof Error ? error.message : '删除固定支出失败'
   }
 }
-
 </script>
 
 <template>

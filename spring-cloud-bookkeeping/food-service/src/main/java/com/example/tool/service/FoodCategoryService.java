@@ -1,6 +1,8 @@
 package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.example.tool.dto.FoodCategoryRequest;
 import com.example.tool.dto.FoodCategoryResponse;
 import com.example.tool.entity.FoodCategoryEntity;
@@ -18,10 +20,16 @@ public class FoodCategoryService {
 
     private final FoodCategoryMapper foodCategoryMapper;
     private final FoodDomainSupport foodDomainSupport;
+    private final FamilyScopeChecker familyScopeChecker;
 
-    public FoodCategoryService(FoodCategoryMapper foodCategoryMapper, FoodDomainSupport foodDomainSupport) {
+    public FoodCategoryService(
+        FoodCategoryMapper foodCategoryMapper,
+        FoodDomainSupport foodDomainSupport,
+        FamilyScopeChecker familyScopeChecker
+    ) {
         this.foodCategoryMapper = foodCategoryMapper;
         this.foodDomainSupport = foodDomainSupport;
+        this.familyScopeChecker = familyScopeChecker;
     }
 
     public List<FoodCategoryResponse> listCategories(Long userId, String categoryType, String keyword, String status) {
@@ -74,6 +82,8 @@ public class FoodCategoryService {
         if (entity == null) {
             return false;
         }
+        familyScopeChecker.requireSelf(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "分类不存在");
 
         foodDomainSupport.validateCategoryCanDelete(entity);
         foodCategoryMapper.deleteById(id);

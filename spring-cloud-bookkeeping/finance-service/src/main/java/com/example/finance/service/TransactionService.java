@@ -47,6 +47,7 @@ public class TransactionService {
 
     private static final String TYPE_EXPENSE = "expense";
     private static final String TYPE_INCOME = "income";
+    private static final String TYPE_TRANSFER = "transfer";
     private static final String SOURCE_TRANSACTION = "transaction";
     private static final String SOURCE_DEBT_RECORD = "debt_record";
     private static final String SOURCE_HUMAN_RELATION_RECORD = "human_relation_record";
@@ -117,12 +118,11 @@ public class TransactionService {
      * 口径与流水页（/finance/transactions 本月统计）保持一致。
      */
     public List<TransactionResponse> listMergedCashTransactions(Collection<Long> userIds, LocalDate startDate, LocalDate endDate) {
-        List<TransactionResponse> transactions = loadMergedTransactions(userIds, null, null);
         Set<Long> cashAccountIds = loadCashAccountIds(userIds);
-        transactions = transactions.stream()
-            .filter(transaction -> transaction.getAccountId() != null && cashAccountIds.contains(transaction.getAccountId()))
-            .toList();
-        return filterTransactionsByDateRange(transactions, startDate, endDate);
+        if (cashAccountIds.isEmpty()) {
+            return List.of();
+        }
+        return loadMergedTransactions(userIds, null, null, startDate, endDate, cashAccountIds);
     }
 
     public TransactionPageResponse page(
@@ -138,14 +138,10 @@ public class TransactionService {
     ) {
         int normalizedPageSize = normalizePageSize(pageSize);
         int normalizedPage = page == null || page < 1 ? 1 : page;
-        List<TransactionResponse> transactions = loadMergedTransactions(userIds, type, accountId);
-        if (cashOnly) {
-            Set<Long> cashAccountIds = loadCashAccountIds(userIds);
-            transactions = transactions.stream()
-                .filter(transaction -> transaction.getAccountId() != null && cashAccountIds.contains(transaction.getAccountId()))
-                .toList();
-        }
-        transactions = filterTransactionsByDateRange(transactions, startDate, endDate);
+        Set<Long> cashAccountIds = cashOnly ? loadCashAccountIds(userIds) : null;
+        List<TransactionResponse> transactions = cashOnly && cashAccountIds.isEmpty()
+            ? List.of()
+            : loadMergedTransactions(userIds, type, accountId, startDate, endDate, cashAccountIds);
         transactions = sortTransactions(transactions, sortOrder);
 
         int total = transactions.size();
@@ -209,7 +205,11 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse create(TransactionRequest request) {
-        String type = requireIncomeOrExpense(request.getType());
+        String type = normalizeTransactionType(request.getType());
+        if (TYPE_TRANSFER.equals(type)) {
+            return createTransfer(request);
+        }
+
         AccountEntity account = requireCashAccount(request.getUserId(), request.getAccountId());
         CategoryEntity category = requireCategory(request.getUserId(), request.getCategoryId(), type);
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
@@ -230,33 +230,80 @@ public class TransactionService {
 
         updateAccountBalance(account, type, amount);
 
-        return toTransactionResponse(transactionMapper.selectById(entity.getId()), account, category);
+        return toTransactionResponse(transactionMapper.selectById(entity.getId()), account, category, null, null);
+    }
+
+    @Transactional
+    public TransactionResponse createTransfer(TransactionRequest request) {
+        AccountEntity fromAccount = requireTransferAccounts(request);
+        AccountEntity toAccount = requireCashAccount(request.getUserId(), request.getToAccountId());
+        BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
+
+        TransactionEntity entity = new TransactionEntity();
+        entity.setTransactionNo(generateTransactionNo(TYPE_TRANSFER));
+        entity.setUserId(request.getUserId());
+        entity.setType(TYPE_TRANSFER);
+        entity.setAmount(amount);
+        entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+        entity.setFromAccountId(fromAccount.getId());
+        entity.setToAccountId(toAccount.getId());
+        entity.setTitle(buildTransferTitle(request, fromAccount, toAccount));
+        entity.setRemark(request.getRemark());
+        entity.setOccurredAt(request.getOccurredAt());
+        entity.setStatus(DEFAULT_STATUS);
+        transactionMapper.insert(entity);
+
+        transferAccountBalance(fromAccount, toAccount, amount);
+
+        return toTransactionResponse(transactionMapper.selectById(entity.getId()), null, null, fromAccount, toAccount);
     }
 
     @Transactional
     public TransactionResponse update(Long id, TransactionRequest request) {
         TransactionEntity transaction = requireEditableTransaction(id, request.getUserId());
-        AccountEntity originalAccount = requireOwnedAccount(request.getUserId(), transaction.getAccountId());
-        String type = requireIncomeOrExpense(request.getType());
-        AccountEntity account = requireCashAccount(request.getUserId(), request.getAccountId());
-        CategoryEntity category = requireCategory(request.getUserId(), request.getCategoryId(), type);
+        String newType = normalizeTransactionType(request.getType());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
 
-        rollbackAccountBalance(originalAccount, transaction.getType(), transaction.getAmount());
-        AccountEntity targetAccount = originalAccount.getId().equals(account.getId()) ? originalAccount : account;
-        updateAccountBalance(targetAccount, type, amount);
+        // 先回滚旧流水对账户余额的影响
+        rollbackTransactionBalances(transaction);
 
-        transaction.setType(type);
+        if (TYPE_TRANSFER.equals(newType)) {
+            AccountEntity fromAccount = requireTransferAccounts(request);
+            AccountEntity toAccount = requireCashAccount(request.getUserId(), request.getToAccountId());
+
+            transaction.setType(TYPE_TRANSFER);
+            transaction.setAmount(amount);
+            transaction.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+            transaction.setAccountId(null);
+            transaction.setCategoryId(null);
+            transaction.setFromAccountId(fromAccount.getId());
+            transaction.setToAccountId(toAccount.getId());
+            transaction.setTitle(buildTransferTitle(request, fromAccount, toAccount));
+            transaction.setRemark(request.getRemark());
+            transaction.setOccurredAt(request.getOccurredAt());
+            transactionMapper.updateById(transaction);
+
+            transferAccountBalance(fromAccount, toAccount, amount);
+            return toTransactionResponse(transactionMapper.selectById(transaction.getId()), null, null, fromAccount, toAccount);
+        }
+
+        AccountEntity account = requireCashAccount(request.getUserId(), request.getAccountId());
+        CategoryEntity category = requireCategory(request.getUserId(), request.getCategoryId(), newType);
+
+        transaction.setType(newType);
         transaction.setAmount(amount);
         transaction.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
-        transaction.setAccountId(targetAccount.getId());
+        transaction.setAccountId(account.getId());
         transaction.setCategoryId(category.getId());
+        transaction.setFromAccountId(null);
+        transaction.setToAccountId(null);
         transaction.setTitle(buildTitle(request, category));
         transaction.setRemark(request.getRemark());
         transaction.setOccurredAt(request.getOccurredAt());
         transactionMapper.updateById(transaction);
 
-        return toTransactionResponse(transactionMapper.selectById(transaction.getId()), targetAccount, category);
+        updateAccountBalance(account, newType, amount);
+        return toTransactionResponse(transactionMapper.selectById(transaction.getId()), account, category, null, null);
     }
 
     @Transactional
@@ -266,22 +313,62 @@ public class TransactionService {
             return false;
         }
 
-        AccountEntity account = accountMapper.selectById(transaction.getAccountId());
-        if (account == null || !userId.equals(account.getUserId())) {
-            return false;
-        }
-
-        rollbackAccountBalance(account, transaction.getType(), transaction.getAmount());
+        rollbackTransactionBalances(transaction);
         transaction.setStatus(VOIDED_STATUS);
         transactionMapper.updateById(transaction);
         return true;
     }
 
-    private String requireIncomeOrExpense(String type) {
-        if (!TYPE_EXPENSE.equals(type) && !TYPE_INCOME.equals(type)) {
-            throw new IllegalArgumentException("当前只支持支出和收入");
+    private String normalizeTransactionType(String type) {
+        if (TYPE_EXPENSE.equals(type) || TYPE_INCOME.equals(type) || TYPE_TRANSFER.equals(type)) {
+            return type;
         }
-        return type;
+        throw new IllegalArgumentException("流水类型仅支持支出、收入或转账");
+    }
+
+    private AccountEntity requireTransferAccounts(TransactionRequest request) {
+        if (request.getFromAccountId() == null || request.getToAccountId() == null) {
+            throw new IllegalArgumentException("请选择转出账户和转入账户");
+        }
+        if (request.getFromAccountId().equals(request.getToAccountId())) {
+            throw new IllegalArgumentException("转出账户和转入账户不能相同");
+        }
+        return requireCashAccount(request.getUserId(), request.getFromAccountId());
+    }
+
+    private void transferAccountBalance(AccountEntity fromAccount, AccountEntity toAccount, BigDecimal amount) {
+        updateAccountBalance(fromAccount, TYPE_EXPENSE, amount);
+        updateAccountBalance(toAccount, TYPE_INCOME, amount);
+    }
+
+    /**
+     * 回滚一条流水对账户余额的影响（支持支出/收入/转账），用于修改前撤销或删除时作废。
+     */
+    private void rollbackTransactionBalances(TransactionEntity transaction) {
+        BigDecimal amount = transaction.getAmount() == null ? BigDecimal.ZERO : transaction.getAmount();
+        if (TYPE_TRANSFER.equals(transaction.getType())) {
+            if (transaction.getFromAccountId() == null || transaction.getToAccountId() == null) {
+                throw new IllegalArgumentException("转账流水缺少转出或转入账户");
+            }
+            AccountEntity fromAccount = requireOwnedAccount(transaction.getUserId(), transaction.getFromAccountId());
+            AccountEntity toAccount = requireOwnedAccount(transaction.getUserId(), transaction.getToAccountId());
+            updateAccountBalance(fromAccount, TYPE_INCOME, amount);
+            updateAccountBalance(toAccount, TYPE_EXPENSE, amount);
+            return;
+        }
+
+        AccountEntity account = requireOwnedAccount(transaction.getUserId(), transaction.getAccountId());
+        rollbackAccountBalance(account, transaction.getType(), amount);
+    }
+
+    private String buildTransferTitle(TransactionRequest request, AccountEntity fromAccount, AccountEntity toAccount) {
+        if (StringUtils.hasText(request.getTitle())) {
+            return request.getTitle();
+        }
+        if (StringUtils.hasText(request.getRemark())) {
+            return request.getRemark().length() > 120 ? request.getRemark().substring(0, 120) : request.getRemark();
+        }
+        return fromAccount.getName() + "转入" + toAccount.getName();
     }
 
     private String normalizePeriod(String period) {
@@ -365,31 +452,36 @@ public class TransactionService {
     }
 
     private void updateAccountBalance(AccountEntity account, String type, BigDecimal amount) {
-        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
-        BigDecimal nextBalance = TYPE_INCOME.equals(type)
-            ? currentBalance.add(amount)
-            : currentBalance.subtract(amount);
-        if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
+        // 原子更新：读-改-写竞态会导致丢失更新/超扣，判断与写入必须在数据库一次完成
+        int updated = TYPE_INCOME.equals(type)
+            ? accountMapper.addBalance(account.getId(), amount)
+            : accountMapper.subtractBalanceIfSufficient(account.getId(), amount);
+        if (updated == 0) {
             throw new IllegalArgumentException("账户余额不足");
         }
-        account.setCurrentBalance(nextBalance);
-        accountMapper.updateById(account);
+        account.setCurrentBalance((TYPE_INCOME.equals(type)
+            ? currentBalanceOf(account).add(amount)
+            : currentBalanceOf(account).subtract(amount)));
     }
 
     private void rollbackAccountBalance(AccountEntity account, String type, BigDecimal amount) {
-        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
-        BigDecimal nextBalance = TYPE_INCOME.equals(type)
-            ? currentBalance.subtract(amount)
-            : currentBalance.add(amount);
-        if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
+        int updated = TYPE_INCOME.equals(type)
+            ? accountMapper.subtractBalanceIfSufficient(account.getId(), amount)
+            : accountMapper.addBalance(account.getId(), amount);
+        if (updated == 0) {
             throw new IllegalArgumentException("删除后账户余额不足");
         }
-        account.setCurrentBalance(nextBalance);
-        accountMapper.updateById(account);
+        account.setCurrentBalance((TYPE_INCOME.equals(type)
+            ? currentBalanceOf(account).subtract(amount)
+            : currentBalanceOf(account).add(amount)));
+    }
+
+    private BigDecimal currentBalanceOf(AccountEntity account) {
+        return account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
     }
 
     private String generateTransactionNo(String type) {
-        String prefix = TYPE_INCOME.equals(type) ? "IN" : "EX";
+        String prefix = TYPE_INCOME.equals(type) ? "IN" : TYPE_TRANSFER.equals(type) ? "TR" : "EX";
         String timePart = LocalDateTime.now().format(TRANSACTION_NO_TIME_FORMAT);
         String randomPart = UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
         return prefix + timePart + randomPart;
@@ -402,22 +494,39 @@ public class TransactionService {
         return Math.min(pageSize, MAX_PAGE_SIZE);
     }
 
-    private List<TransactionResponse> loadMergedTransactions(Collection<Long> userIds, String type, Long accountId) {
+    private List<TransactionResponse> loadMergedTransactions(
+        Collection<Long> userIds,
+        String type,
+        Long accountId,
+        LocalDate startDate,
+        LocalDate endDate,
+        Set<Long> cashAccountIds
+    ) {
         if (userIds == null || userIds.isEmpty()) {
             return List.of();
         }
+        LocalDateTime startTime = startDate == null ? null : startDate.atStartOfDay();
+        LocalDateTime endTime = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+        if (cashAccountIds != null && cashAccountIds.isEmpty()) {
+            return List.of();
+        }
 
+        // 日期区间与现金账户过滤下推到 SQL，避免全表加载后内存过滤
         LambdaQueryWrapper<TransactionEntity> wrapper = new LambdaQueryWrapper<TransactionEntity>()
             .in(TransactionEntity::getUserId, userIds)
             .eq(StringUtils.hasText(type), TransactionEntity::getType, type)
             .eq(accountId != null, TransactionEntity::getAccountId, accountId)
+            .ge(startTime != null, TransactionEntity::getOccurredAt, startTime)
+            .lt(endTime != null, TransactionEntity::getOccurredAt, endTime)
+            .in(cashAccountIds != null, TransactionEntity::getAccountId, cashAccountIds)
             .eq(TransactionEntity::getStatus, DEFAULT_STATUS)
             .orderByDesc(TransactionEntity::getOccurredAt)
             .orderByDesc(TransactionEntity::getId);
 
         List<TransactionEntity> transactions = transactionMapper.selectList(wrapper);
-        List<DebtRecordEntity> debtRecords = loadDebtRecords(userIds, type, accountId);
-        List<HumanRelationRecordEntity> humanRelationRecords = loadHumanRelationRecords(userIds, type, accountId);
+        List<DebtRecordEntity> debtRecords = loadDebtRecords(userIds, type, accountId, startTime, endTime, cashAccountIds);
+        List<HumanRelationRecordEntity> humanRelationRecords =
+            loadHumanRelationRecords(userIds, type, accountId, startTime, endTime, cashAccountIds);
         return mergeResponses(transactions, debtRecords, humanRelationRecords);
     }
 
@@ -434,6 +543,14 @@ public class TransactionService {
             .map(TransactionEntity::getAccountId)
             .filter(id -> id != null)
             .collect(Collectors.toSet());
+        accountIds.addAll(transactions.stream()
+            .map(TransactionEntity::getFromAccountId)
+            .filter(id -> id != null)
+            .collect(Collectors.toSet()));
+        accountIds.addAll(transactions.stream()
+            .map(TransactionEntity::getToAccountId)
+            .filter(id -> id != null)
+            .collect(Collectors.toSet()));
         accountIds.addAll(debtRecords.stream()
             .map(DebtRecordEntity::getAccountId)
             .filter(id -> id != null)
@@ -466,7 +583,9 @@ public class TransactionService {
             .map(transaction -> toTransactionResponse(
                 transaction,
                 transaction.getAccountId() == null ? null : accounts.get(transaction.getAccountId()),
-                transaction.getCategoryId() == null ? null : categories.get(transaction.getCategoryId())
+                transaction.getCategoryId() == null ? null : categories.get(transaction.getCategoryId()),
+                transaction.getFromAccountId() == null ? null : accounts.get(transaction.getFromAccountId()),
+                transaction.getToAccountId() == null ? null : accounts.get(transaction.getToAccountId())
             ))
             .toList();
         List<TransactionResponse> debtResponses = debtRecords.stream()
@@ -521,7 +640,14 @@ public class TransactionService {
         return debtRecordMapper.selectList(wrapper);
     }
 
-    private List<DebtRecordEntity> loadDebtRecords(Collection<Long> userIds, String type, Long accountId) {
+    private List<DebtRecordEntity> loadDebtRecords(
+        Collection<Long> userIds,
+        String type,
+        Long accountId,
+        LocalDateTime startTime,
+        LocalDateTime endTime,
+        Set<Long> cashAccountIds
+    ) {
         if (userIds == null || userIds.isEmpty()) {
             return List.of();
         }
@@ -532,6 +658,9 @@ public class TransactionService {
         LambdaQueryWrapper<DebtRecordEntity> wrapper = new LambdaQueryWrapper<DebtRecordEntity>()
             .in(DebtRecordEntity::getUserId, userIds)
             .eq(accountId != null, DebtRecordEntity::getFundingAccountId, accountId)
+            .ge(startTime != null, DebtRecordEntity::getOccurredAt, startTime)
+            .lt(endTime != null, DebtRecordEntity::getOccurredAt, endTime)
+            .in(cashAccountIds != null, DebtRecordEntity::getFundingAccountId, cashAccountIds)
             .eq(DebtRecordEntity::getDirection, DEBT_DIRECTION_PAYABLE)
             .eq(DebtRecordEntity::getStatus, DEBT_RECORD_ACTIVE_STATUS)
             .orderByDesc(DebtRecordEntity::getOccurredAt)
@@ -567,7 +696,14 @@ public class TransactionService {
         return humanRelationRecordMapper.selectList(wrapper);
     }
 
-    private List<HumanRelationRecordEntity> loadHumanRelationRecords(Collection<Long> userIds, String type, Long accountId) {
+    private List<HumanRelationRecordEntity> loadHumanRelationRecords(
+        Collection<Long> userIds,
+        String type,
+        Long accountId,
+        LocalDateTime startTime,
+        LocalDateTime endTime,
+        Set<Long> cashAccountIds
+    ) {
         if (userIds == null || userIds.isEmpty()) {
             return List.of();
         }
@@ -578,6 +714,9 @@ public class TransactionService {
         LambdaQueryWrapper<HumanRelationRecordEntity> wrapper = new LambdaQueryWrapper<HumanRelationRecordEntity>()
             .in(HumanRelationRecordEntity::getUserId, userIds)
             .eq(accountId != null, HumanRelationRecordEntity::getFundingAccountId, accountId)
+            .ge(startTime != null, HumanRelationRecordEntity::getOccurredAt, startTime)
+            .lt(endTime != null, HumanRelationRecordEntity::getOccurredAt, endTime)
+            .in(cashAccountIds != null, HumanRelationRecordEntity::getFundingAccountId, cashAccountIds)
             .eq(HumanRelationRecordEntity::getStatus, HUMAN_RELATION_RECORD_ACTIVE_STATUS)
             .orderByDesc(HumanRelationRecordEntity::getOccurredAt)
             .orderByDesc(HumanRelationRecordEntity::getId);
@@ -591,7 +730,13 @@ public class TransactionService {
         return humanRelationRecordMapper.selectList(wrapper);
     }
 
-    private TransactionResponse toTransactionResponse(TransactionEntity entity, AccountEntity account, CategoryEntity category) {
+    private TransactionResponse toTransactionResponse(
+        TransactionEntity entity,
+        AccountEntity account,
+        CategoryEntity category,
+        AccountEntity fromAccount,
+        AccountEntity toAccount
+    ) {
         TransactionResponse response = new TransactionResponse();
         response.setId(entity.getId());
         response.setSourceId(entity.getId());
@@ -607,6 +752,10 @@ public class TransactionService {
         response.setCategoryName(category == null ? null : category.getName());
         response.setCategoryIcon(category == null ? null : category.getIcon());
         response.setCategoryColor(category == null ? null : category.getColor());
+        response.setFromAccountId(entity.getFromAccountId());
+        response.setFromAccountName(fromAccount == null ? null : fromAccount.getName());
+        response.setToAccountId(entity.getToAccountId());
+        response.setToAccountName(toAccount == null ? null : toAccount.getName());
         response.setTitle(entity.getTitle());
         response.setRemark(entity.getRemark());
         response.setOccurredAt(entity.getOccurredAt());
@@ -766,24 +915,6 @@ public class TransactionService {
             .filter(transaction -> transaction.getOccurredAt() != null)
             .filter(transaction -> !transaction.getOccurredAt().isBefore(startTime) && transaction.getOccurredAt().isBefore(endTime))
             .sorted(transactionComparator())
-            .toList();
-    }
-
-    private List<TransactionResponse> filterTransactionsByDateRange(
-        List<TransactionResponse> transactions,
-        LocalDate startDate,
-        LocalDate endDate
-    ) {
-        LocalDateTime startTime = startDate == null ? null : startDate.atStartOfDay();
-        LocalDateTime endTime = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
-        if (startTime == null && endTime == null) {
-            return transactions;
-        }
-
-        return transactions.stream()
-            .filter(transaction -> transaction.getOccurredAt() != null)
-            .filter(transaction -> startTime == null || !transaction.getOccurredAt().isBefore(startTime))
-            .filter(transaction -> endTime == null || transaction.getOccurredAt().isBefore(endTime))
             .toList();
     }
 

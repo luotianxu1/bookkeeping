@@ -440,7 +440,7 @@ export interface UsPremarketData {
   indices: UsPremarketIndex[]
 }
 
-export type TransactionType = 'expense' | 'income'
+export type TransactionType = 'expense' | 'income' | 'transfer'
 
 export interface Transaction {
   id: number
@@ -457,6 +457,10 @@ export interface Transaction {
   categoryName?: string | null
   categoryIcon?: string | null
   categoryColor?: string | null
+  fromAccountId?: number | null
+  fromAccountName?: string | null
+  toAccountId?: number | null
+  toAccountName?: string | null
   title: string
   remark?: string | null
   occurredAt: string
@@ -743,8 +747,14 @@ export interface CreateTransactionParams {
   type: TransactionType
   amount: number
   currencyCode?: string
-  accountId: number
-  categoryId: number
+  // 收支流水必填；转账流水不传
+  accountId?: number
+  // 收支流水必填；转账流水不传
+  categoryId?: number
+  // 转账流水必填
+  fromAccountId?: number
+  // 转账流水必填
+  toAccountId?: number
   title?: string
   remark?: string | null
   occurredAt: string

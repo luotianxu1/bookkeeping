@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount } from '@/utils/format'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -68,10 +69,6 @@ const summaryMetricMap: Record<SummaryTab, 'income' | 'expense' | 'surplus'> = {
   支出: 'expense',
   结余: 'surplus',
 }
-const currencyFormatter = new Intl.NumberFormat('zh-CN', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
 const integerCurrencyFormatter = new Intl.NumberFormat('zh-CN', {
   minimumFractionDigits: 0,
   maximumFractionDigits: 0,
@@ -850,10 +847,6 @@ function buildLineOption(): EChartsCoreOption {
       },
     ],
   }
-}
-
-function formatAmount(value: number) {
-  return currencyFormatter.format(Number(value ?? 0))
 }
 
 function formatIntegerAmount(value: number) {

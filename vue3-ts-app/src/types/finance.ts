@@ -1,5 +1,5 @@
 // 财务页面类型：描述资产概览、日期分组和交易流水的数据结构。
-export type TransactionType = 'income' | 'expense'
+export type TransactionType = 'income' | 'expense' | 'transfer'
 
 export type Transaction = {
   /** 流水 ID。 */

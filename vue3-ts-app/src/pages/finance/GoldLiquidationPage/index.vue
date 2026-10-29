@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount } from '@/utils/format'
 // 黄金清仓记录页：通过后端接口展示累计收益和清仓明细。
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
@@ -82,13 +83,6 @@ async function loadLiquidations() {
       isLoading.value = false
     }
   }
-}
-
-function formatAmount(value: number | null | undefined) {
-  return Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }
 
 function formatWeight(value: number | null | undefined) {

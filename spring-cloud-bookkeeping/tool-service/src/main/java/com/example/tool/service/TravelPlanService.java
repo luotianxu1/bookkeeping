@@ -1,6 +1,8 @@
 package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.example.tool.dto.TravelPlanCompanionRequest;
 import com.example.tool.dto.TravelPlanCompanionResponse;
 import com.example.tool.dto.TravelPlanDayRequest;
@@ -81,6 +83,7 @@ public class TravelPlanService {
     private final TravelPlanItineraryMapper travelPlanItineraryMapper;
     private final TravelPlanExpenseMapper travelPlanExpenseMapper;
     private final ContactMapper contactMapper;
+    private final FamilyScopeChecker familyScopeChecker;
 
     public TravelPlanService(
         TravelPlanMapper travelPlanMapper,
@@ -88,7 +91,8 @@ public class TravelPlanService {
         TravelPlanDayMapper travelPlanDayMapper,
         TravelPlanItineraryMapper travelPlanItineraryMapper,
         TravelPlanExpenseMapper travelPlanExpenseMapper,
-        ContactMapper contactMapper
+        ContactMapper contactMapper,
+        FamilyScopeChecker familyScopeChecker
     ) {
         this.travelPlanMapper = travelPlanMapper;
         this.travelPlanCompanionMapper = travelPlanCompanionMapper;
@@ -96,6 +100,7 @@ public class TravelPlanService {
         this.travelPlanItineraryMapper = travelPlanItineraryMapper;
         this.travelPlanExpenseMapper = travelPlanExpenseMapper;
         this.contactMapper = contactMapper;
+        this.familyScopeChecker = familyScopeChecker;
     }
 
     public List<TravelPlanResponse> list(Long userId, String status, String keyword) {
@@ -148,6 +153,8 @@ public class TravelPlanService {
         if (entity == null) {
             return Optional.empty();
         }
+        familyScopeChecker.requireReadable(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "旅行不存在");
         return Optional.of(buildDetail(entity));
     }
 
@@ -156,6 +163,8 @@ public class TravelPlanService {
         if (entity == null) {
             return Optional.empty();
         }
+        familyScopeChecker.requireReadable(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "旅行不存在");
         return Optional.of(buildDetail(entity).getOverview());
     }
 

@@ -2,7 +2,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { AppSection } from '@/types/navigation'
 import { getStoredToken } from '@/utils/auth-token'
-import { showAuthPrompt } from '@/utils/auth-prompt'
 import { financeRoutes } from './modules/finance'
 import { foodRoutes } from './modules/food'
 import { mainRoutes } from './modules/main'
@@ -29,11 +28,11 @@ export const router = createRouter({
   ],
 })
 
+// 未登录一律重定向到登录页并携带回跳地址，受保护页面不渲染
 router.beforeEach((to) => {
   if (to.name === 'login' || to.name === 'register' || getStoredToken()) {
     return true
   }
 
-  showAuthPrompt(to.fullPath)
-  return true
+  return { path: '/login', query: { redirect: to.fullPath } }
 })

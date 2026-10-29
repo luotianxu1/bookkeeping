@@ -1,6 +1,8 @@
 package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.example.tool.dto.TodoItemRequest;
 import com.example.tool.dto.TodoItemResponse;
 import com.example.tool.dto.TodoItemStatusRequest;
@@ -28,9 +30,11 @@ public class TodoItemService {
     private static final Set<String> VALID_STATUSES = Set.of(STATUS_PENDING, STATUS_COMPLETED);
 
     private final TodoItemMapper todoItemMapper;
+    private final FamilyScopeChecker familyScopeChecker;
 
-    public TodoItemService(TodoItemMapper todoItemMapper) {
+    public TodoItemService(TodoItemMapper todoItemMapper, FamilyScopeChecker familyScopeChecker) {
         this.todoItemMapper = todoItemMapper;
+        this.familyScopeChecker = familyScopeChecker;
     }
 
     public List<TodoItemResponse> list(Long userId, String status, String dueScope, String keyword) {
@@ -57,7 +61,13 @@ public class TodoItemService {
     }
 
     public Optional<TodoItemResponse> getById(Long id) {
-        return Optional.ofNullable(todoItemMapper.selectById(id)).map(this::toResponse);
+        TodoItemEntity entity = todoItemMapper.selectById(id);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        familyScopeChecker.requireReadable(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "待办事项不存在");
+        return Optional.of(toResponse(entity));
     }
 
     public TodoItemResponse create(TodoItemRequest request) {

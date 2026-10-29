@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount } from '@/utils/format'
 // 账户管理页：还原 Pencil「账户管理」画板中的总览、账户分组和新增按钮。
 import { computed, onMounted, ref, watch } from 'vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
@@ -635,13 +636,6 @@ function toggleAccountGroup(group: AccountGroup) {
     [groupStorageKey]: !(collapsedGroupState.value[groupStorageKey] ?? false),
   }
   persistCollapsedGroupState()
-}
-
-function formatAmount(value: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
 }
 
 function toNumber(value: unknown) {

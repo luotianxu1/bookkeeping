@@ -8,6 +8,7 @@ import CommonModal from '@/components/common/CommonModal/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import { deleteCurrentAccount, getCurrentUser, getFamilyOverview, type CurrentUser } from '@/api/modules/auth'
 import { clearStoredToken } from '@/utils/auth-token'
+import { stopGoldPriceAutoRefresh } from '@/utils/gold-price-cache'
 import {
   clearStoredCurrentUser,
   getStoredCurrentUser,
@@ -96,6 +97,7 @@ async function goMenu(path?: string) {
 }
 
 async function logout() {
+  stopGoldPriceAutoRefresh()
   clearStoredToken()
   clearStoredCurrentUser()
   await router.push('/login')
@@ -125,6 +127,7 @@ async function confirmDeleteAccount() {
 
   try {
     await deleteCurrentAccount()
+    stopGoldPriceAutoRefresh()
     clearStoredToken()
     clearStoredCurrentUser()
     showDeleteAccountModal.value = false

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount as formatNumberAmount } from '@/utils/format'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/components/common/CommonButton/index.vue'
@@ -47,6 +48,10 @@ type InvestmentAccountCard = {
 type DeleteTarget = {
   id: number
   name: string
+}
+
+function formatAmount(value: number, digits = 2) {
+  return formatNumberAmount(Math.abs(value), digits)
 }
 
 const router = useRouter()
@@ -354,13 +359,6 @@ function formatMetricValue(value: number | null | undefined, isRate: boolean) {
     return `${formatMetricAmount(value)}%`
   }
   return formatMetricAmount(value)
-}
-
-function formatAmount(value: number, digits = 2) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Math.abs(value))
 }
 
 function formatMetricAmount(value: number, digits = 2) {

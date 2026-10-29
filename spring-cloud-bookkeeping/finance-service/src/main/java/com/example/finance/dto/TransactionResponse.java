@@ -22,6 +22,11 @@ public class TransactionResponse {
     private String categoryName;
     private String categoryIcon;
     private String categoryColor;
+    // 转账流水专用：转出/转入账户
+    private Long fromAccountId;
+    private String fromAccountName;
+    private Long toAccountId;
+    private String toAccountName;
     private String title;
     private String remark;
     private LocalDateTime occurredAt;

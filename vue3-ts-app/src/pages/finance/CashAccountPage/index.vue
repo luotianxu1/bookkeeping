@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount } from '@/utils/format'
 // 现金账户页：支持管理模式切换与新增账户弹窗。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -246,13 +247,6 @@ function toAccountItem(account: Account) {
 function openDetail(path?: string) {
   if (!path || isManageMode.value) return
   router.push(path)
-}
-
-function formatAmount(value: number) {
-  return value.toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {

@@ -1,6 +1,8 @@
 package com.example.tool.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.example.tool.dto.FoodDishRequest;
 import com.example.tool.dto.FoodDishResponse;
 import com.example.tool.entity.FoodCategoryEntity;
@@ -25,17 +27,20 @@ public class FoodDishService {
     private final FoodDishIngredientMapper foodDishIngredientMapper;
     private final FoodDishStepMapper foodDishStepMapper;
     private final FoodDomainSupport foodDomainSupport;
+    private final FamilyScopeChecker familyScopeChecker;
 
     public FoodDishService(
         FoodDishMapper foodDishMapper,
         FoodDishIngredientMapper foodDishIngredientMapper,
         FoodDishStepMapper foodDishStepMapper,
-        FoodDomainSupport foodDomainSupport
+        FoodDomainSupport foodDomainSupport,
+        FamilyScopeChecker familyScopeChecker
     ) {
         this.foodDishMapper = foodDishMapper;
         this.foodDishIngredientMapper = foodDishIngredientMapper;
         this.foodDishStepMapper = foodDishStepMapper;
         this.foodDomainSupport = foodDomainSupport;
+        this.familyScopeChecker = familyScopeChecker;
     }
 
     public List<FoodDishResponse> listDishes(Long userId, Long categoryId, String status, String keyword) {
@@ -68,6 +73,8 @@ public class FoodDishService {
         if (entity == null) {
             return Optional.empty();
         }
+        familyScopeChecker.requireReadable(
+            SecurityUtils.requireCurrentUserId(), entity.getUserId(), "菜品不存在");
 
         Map<Long, FoodCategoryEntity> categoryMap = foodDomainSupport.getCategoryMap(entity.getUserId());
         List<FoodDishIngredientEntity> ingredients = foodDishIngredientMapper.selectList(new LambdaQueryWrapper<FoodDishIngredientEntity>()

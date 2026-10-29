@@ -29,16 +29,16 @@ public class TransactionEntity {
     @TableField("currency_code")
     private String currencyCode;
 
-    @TableField("account_id")
+    @TableField(value = "account_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long accountId;
 
-    @TableField("category_id")
+    @TableField(value = "category_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long categoryId;
 
-    @TableField("from_account_id")
+    @TableField(value = "from_account_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long fromAccountId;
 
-    @TableField("to_account_id")
+    @TableField(value = "to_account_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long toAccountId;
 
     private String title;

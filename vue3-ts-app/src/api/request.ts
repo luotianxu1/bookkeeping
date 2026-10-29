@@ -1,6 +1,5 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
 import { clearStoredToken, getStoredToken } from '@/utils/auth-token'
-import { showAuthPrompt } from '@/utils/auth-prompt'
 import { clearStoredCurrentUser } from '@/utils/current-user'
 import { getApiBaseUrl, type ApiService } from './api-base-url'
 
@@ -63,7 +62,11 @@ export function createRequest(options: RequestOptions = {}) {
                 clearStoredToken()
                 clearStoredCurrentUser()
                 if (window.location.pathname !== '/login') {
-                    showAuthPrompt(window.location.pathname + window.location.search)
+                    // 凭证失效：清空后跳登录页并携带回跳地址（动态引入避免循环依赖）
+                    const redirect = window.location.pathname + window.location.search
+                    void import('@/router').then(({ router }) => {
+                        void router.push({ path: '/login', query: { redirect } })
+                    })
                 }
             }
 
@@ -159,7 +162,6 @@ export default request
 
 export const authRequest = createRequest({ service: 'auth' })
 export const financeRequest = createRequest({ service: 'finance' })
-export const adminRequest = createRequest({ service: 'admin' })
 export const toolRequest = createRequest({ service: 'tool' })
 export const foodRequest = createRequest({ service: 'food' })
 

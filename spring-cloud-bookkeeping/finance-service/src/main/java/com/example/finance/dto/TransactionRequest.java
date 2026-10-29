@@ -25,11 +25,17 @@ public class TransactionRequest {
     @Size(min = 3, max = 3, message = "币种编码必须为3个字符")
     private String currencyCode;
 
-    @NotNull(message = "账户不能为空")
+    // 收支流水必填；转账流水为空，改用 fromAccountId/toAccountId
     private Long accountId;
 
-    @NotNull(message = "分类不能为空")
+    // 收支流水必填；转账流水为空
     private Long categoryId;
+
+    // 转出账户ID；转账流水必填
+    private Long fromAccountId;
+
+    // 转入账户ID；转账流水必填
+    private Long toAccountId;
 
     @Size(max = 120, message = "标题不能超过120个字符")
     private String title;

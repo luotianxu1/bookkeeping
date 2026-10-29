@@ -3751,13 +3751,13 @@ public class InvestmentService {
     }
 
     private void deductFundingAccount(AccountEntity account, BigDecimal amount) {
-        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
-        BigDecimal nextBalance = currentBalance.subtract(defaultZero(amount).setScale(2, RoundingMode.HALF_UP));
-        if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
+        BigDecimal netAmount = defaultZero(amount).setScale(2, RoundingMode.HALF_UP);
+        // 原子更新，避免并发下丢失更新/超扣
+        int updated = accountMapper.subtractBalanceIfSufficient(account.getId(), netAmount);
+        if (updated == 0) {
             throw new IllegalArgumentException("资金账户余额不足");
         }
-        account.setCurrentBalance(nextBalance);
-        accountMapper.updateById(account);
+        account.setCurrentBalance(currentBalanceOf(account).subtract(netAmount));
     }
 
     private void creditFundingAccount(AccountEntity account, BigDecimal amount) {
@@ -3765,9 +3765,12 @@ public class InvestmentService {
         if (netAmount.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("到账金额不能小于0");
         }
-        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
-        account.setCurrentBalance(currentBalance.add(netAmount).setScale(2, RoundingMode.HALF_UP));
-        accountMapper.updateById(account);
+        accountMapper.addBalance(account.getId(), netAmount);
+        account.setCurrentBalance(currentBalanceOf(account).add(netAmount).setScale(2, RoundingMode.HALF_UP));
+    }
+
+    private BigDecimal currentBalanceOf(AccountEntity account) {
+        return account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
     }
 
     private InvestmentPositionEntity requirePosition(InvestmentTransactionRequest request) {

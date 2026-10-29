@@ -8,12 +8,14 @@ import com.example.auth.dto.LoginResponse;
 import com.example.auth.dto.RegisterRequest;
 import com.example.auth.model.UserAccount;
 import com.example.auth.security.JwtService;
+import com.example.auth.security.LoginRateLimiter;
 import com.example.auth.service.AuthService;
 import com.example.common.result.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -32,21 +34,29 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtService jwtService;
+    private final LoginRateLimiter loginRateLimiter;
 
-    public AuthController(AuthService authService, JwtService jwtService) {
+    public AuthController(AuthService authService, JwtService jwtService, LoginRateLimiter loginRateLimiter) {
         this.authService = authService;
         this.jwtService = jwtService;
+        this.loginRateLimiter = loginRateLimiter;
     }
 
     @PostMapping("/login")
     @Operation(summary = "用户登录", description = "使用用户名和密码登录，返回 JWT 访问令牌")
-    public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+    public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        String rateLimitKey = request.username().toLowerCase() + "|" + httpRequest.getRemoteAddr();
+        if (loginRateLimiter.isBlocked(rateLimitKey)) {
+            return Result.<LoginResponse>fail().code(429).message("登录尝试次数过多，请 15 分钟后再试");
+        }
         UserAccount user = authService.authenticate(request.username(), request.password()).orElse(null);
         if (user == null) {
+            loginRateLimiter.recordFailure(rateLimitKey);
             return Result.<LoginResponse>fail().code(401).message("用户名或密码错误");
         }
+        loginRateLimiter.clear(rateLimitKey);
         authService.markLoginSuccess(user.id());
-        String token = jwtService.generateToken(user.username());
+        String token = jwtService.generateToken(user.username(), user.id());
         return Result.ok(new LoginResponse(token, "Bearer", jwtService.getExpirationSeconds()));
     }
 

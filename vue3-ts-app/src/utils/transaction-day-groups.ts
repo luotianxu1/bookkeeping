@@ -92,10 +92,16 @@ function formatTransactionTime(value: string) {
 }
 
 function transactionSubtitle(transaction: ApiTransaction) {
-  const category = transaction.categoryName ?? (transaction.type === 'income' ? '收入' : '支出')
+  const category = transaction.categoryName ?? transactionTypeLabel(transaction)
   return [transaction.accountName, category, formatTransactionTime(transaction.occurredAt)]
     .filter(Boolean)
     .join(' · ')
+}
+
+function transactionTypeLabel(transaction: ApiTransaction) {
+  if (transaction.type === 'income') return '收入'
+  if (transaction.type === 'transfer') return '转账'
+  return '支出'
 }
 
 function formatDayKey(transaction: ApiTransaction) {
@@ -129,6 +135,9 @@ function isSameDate(left: Date, right: Date) {
 }
 
 function signedAmount(transaction: ApiTransaction) {
+  if (transaction.type === 'transfer') {
+    return `¥${formatAmount(Number(transaction.amount))}`
+  }
   const sign = transaction.type === 'income' ? '+' : '-'
   return `${sign} ¥${formatAmount(Number(transaction.amount))}`
 }

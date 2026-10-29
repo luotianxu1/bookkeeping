@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount } from '@/utils/format'
 // 投资清仓明细页：展示指定投资账户已清仓的股票和基金持仓。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -182,13 +183,6 @@ function getProductTypeLabel(position: InvestmentPosition) {
 
 function getProductCode(position: InvestmentPosition) {
   return position.productSymbol || position.market || '--'
-}
-
-function formatAmount(value: number | null | undefined, digits = 2) {
-  return Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  })
 }
 
 function formatCurrency(value: number | null | undefined) {

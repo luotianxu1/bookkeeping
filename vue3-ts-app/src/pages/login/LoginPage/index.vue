@@ -36,7 +36,7 @@ async function submitLogin() {
 
   errorMessage.value = ''
   successMessage.value = ''
-  if (!account.value.trim() || !password.value.trim()) {
+  if (!account.value.trim() || !password.value) {
     errorMessage.value = '请输入账号和密码'
     return
   }
@@ -45,7 +45,7 @@ async function submitLogin() {
   try {
     const result = await login({
       username: account.value.trim(),
-      password: password.value.trim(),
+      password: password.value,
     })
     setStoredToken({
       accessToken: result.accessToken,
@@ -54,7 +54,9 @@ async function submitLogin() {
     const currentUser = await getCurrentUser()
     setStoredCurrentUser(currentUser)
     await initializeGoldPriceCache()
-    await router.push('/')
+    // 登录成功后回到被拦截前的页面（redirect 由路由守卫写入）
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    await router.push(redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/')
   } catch (error) {
     clearStoredToken()
     clearStoredCurrentUser()

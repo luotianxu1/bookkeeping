@@ -86,13 +86,13 @@ public class TransactionController {
     }
 
     @PostMapping
-    @Operation(summary = "新增支出或收入")
+    @Operation(summary = "新增支出、收入或转账")
     public Result<TransactionResponse> create(@Valid @RequestBody TransactionRequest request) {
         return Result.ok(transactionService.create(request));
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "修改支出或收入")
+    @Operation(summary = "修改支出、收入或转账")
     public Result<TransactionResponse> update(
         @PathVariable("id") Long id,
         @Valid @RequestBody TransactionRequest request

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatAmount } from '@/utils/format'
 // 财务首页：组合资产总览、统计入口和收支明细列表。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -207,13 +208,6 @@ function isWithinRecentWeek(value: string) {
   start.setDate(start.getDate() - 6)
 
   return date.getTime() >= start.getTime() && date.getTime() <= now.getTime()
-}
-
-function formatAmount(value: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value)
 }
 
 function formatPercent(value: number) {

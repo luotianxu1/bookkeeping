@@ -1,20 +1,11 @@
 // 餐饮业务路由模块：承载餐饮首页、菜单、菜品和食材相关页面。
 import type { RouteRecordRaw } from 'vue-router'
-import FoodCategoryListPage from '@/pages/food/FoodCategoryListPage/index.vue'
-import FoodDishCreatePage from '@/pages/food/FoodDishCreatePage/index.vue'
-import FoodDishDetailPage from '@/pages/food/FoodDishDetailPage/index.vue'
-import FoodDishListPage from '@/pages/food/FoodDishListPage/index.vue'
-import FoodHomePage from '@/pages/food/FoodHomePage/index.vue'
-import FoodIngredientCategoryPage from '@/pages/food/FoodIngredientCategoryPage/index.vue'
-import FoodIngredientListPage from '@/pages/food/FoodIngredientListPage/index.vue'
-import FoodMenuDetailPage from '@/pages/food/FoodMenuDetailPage/index.vue'
-import FoodMenuListPage from '@/pages/food/FoodMenuListPage/index.vue'
 
 export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food',
     name: 'food',
-    component: FoodHomePage,
+    component: () => import('@/pages/food/FoodHomePage/index.vue'),
     meta: {
       section: 'food',
       title: '餐饮',
@@ -23,7 +14,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/menu',
     name: 'food-menu',
-    component: FoodMenuListPage,
+    component: () => import('@/pages/food/FoodMenuListPage/index.vue'),
     meta: {
       section: 'food',
       title: '菜单列表',
@@ -32,7 +23,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/menu/:orderId',
     name: 'food-menu-detail',
-    component: FoodMenuDetailPage,
+    component: () => import('@/pages/food/FoodMenuDetailPage/index.vue'),
     meta: {
       section: 'food',
       title: '菜单详情',
@@ -41,7 +32,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/dishes',
     name: 'food-dishes',
-    component: FoodDishListPage,
+    component: () => import('@/pages/food/FoodDishListPage/index.vue'),
     meta: {
       section: 'food',
       title: '菜品列表',
@@ -50,7 +41,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/dishes/new',
     name: 'food-dishes-new',
-    component: FoodDishCreatePage,
+    component: () => import('@/pages/food/FoodDishCreatePage/index.vue'),
     meta: {
       section: 'food',
       title: '新增菜品',
@@ -59,7 +50,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/dishes/:dishId',
     name: 'food-dishes-detail',
-    component: FoodDishDetailPage,
+    component: () => import('@/pages/food/FoodDishDetailPage/index.vue'),
     meta: {
       section: 'food',
       title: '菜品详情',
@@ -68,7 +59,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/categories',
     name: 'food-categories',
-    component: FoodCategoryListPage,
+    component: () => import('@/pages/food/FoodCategoryListPage/index.vue'),
     meta: {
       section: 'food',
       title: '菜品分类',
@@ -77,7 +68,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/categories/new',
     name: 'food-categories-new',
-    component: FoodCategoryListPage,
+    component: () => import('@/pages/food/FoodCategoryListPage/index.vue'),
     meta: {
       section: 'food',
       title: '新增菜品分类',
@@ -86,7 +77,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/ingredients',
     name: 'food-ingredients',
-    component: FoodIngredientListPage,
+    component: () => import('@/pages/food/FoodIngredientListPage/index.vue'),
     meta: {
       section: 'food',
       title: '食材列表',
@@ -95,7 +86,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/ingredient-categories',
     name: 'food-ingredient-categories',
-    component: FoodIngredientCategoryPage,
+    component: () => import('@/pages/food/FoodIngredientCategoryPage/index.vue'),
     meta: {
       section: 'food',
       title: '食材分类',
@@ -104,7 +95,7 @@ export const foodRoutes: RouteRecordRaw[] = [
   {
     path: '/food/ingredient-categories/new',
     name: 'food-ingredient-categories-new',
-    component: FoodIngredientCategoryPage,
+    component: () => import('@/pages/food/FoodIngredientCategoryPage/index.vue'),
     meta: {
       section: 'food',
       title: '新增食材分类',

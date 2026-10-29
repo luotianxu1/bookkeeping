@@ -21,22 +21,21 @@ async function submitRegister() {
   }
 
   const trimmedUsername = username.value.trim()
-  const trimmedPassword = password.value.trim()
-  const trimmedConfirmPassword = confirmPassword.value.trim()
 
   errorMessage.value = ''
 
-  if (!trimmedUsername || !trimmedPassword || !trimmedConfirmPassword) {
+  // 密码不做 trim：空格属于有效密码字符
+  if (!trimmedUsername || !password.value || !confirmPassword.value) {
     errorMessage.value = '请输入用户名和密码'
     return
   }
 
-  if (trimmedPassword.length < 6) {
+  if (password.value.length < 6) {
     errorMessage.value = '密码长度不能少于 6 位'
     return
   }
 
-  if (trimmedPassword !== trimmedConfirmPassword) {
+  if (password.value !== confirmPassword.value) {
     errorMessage.value = '两次输入的密码不一致'
     return
   }
@@ -45,7 +44,7 @@ async function submitRegister() {
   try {
     await register({
       username: trimmedUsername,
-      password: trimmedPassword,
+      password: password.value,
     })
 
     await router.push({

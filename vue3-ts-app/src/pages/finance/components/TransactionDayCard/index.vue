@@ -51,7 +51,9 @@ function transactionAmount(transaction: DayGroup['transactions'][number]) {
 }
 
 function transactionTone(transaction: DayGroup['transactions'][number]) {
-  return transaction.type === 'expense' ? 'negative' : 'positive'
+  if (transaction.type === 'expense') return 'negative'
+  if (transaction.type === 'transfer') return 'neutral'
+  return 'positive'
 }
 
 function amountNumber(value: string) {
