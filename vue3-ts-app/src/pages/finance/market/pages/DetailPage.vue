@@ -280,7 +280,7 @@ async function loadTrend(silent = false): Promise<void> {
   }
 }
 
-watch(() => [kind.value, code.value], load)
+watch(() => [kind.value, code.value], () => load())
 /** 切换周期只静默重渲染图表：不触发整页骨架屏，旧图保留原地替换 */
 watch(scale, () => load(true))
 /** 头部实时快照：随标的切换加载一次，与图表周期无关 */
@@ -329,6 +329,8 @@ const STMT_TABS: { key: StmtKey; label: string }[] = [
   { key: 'cashflow', label: '现金流量表' },
 ]
 const stmtTab = ref<StmtKey>('income')
+/** 当前选中报表的非空视图，模板里 v-if 收窄用 */
+const curStatements = computed(() => statements.value?.[stmtTab.value] ?? null)
 
 async function loadStatements(): Promise<void> {
   try {
@@ -484,7 +486,7 @@ const trendQuote = computed<Record<string, number | string> | null>(() => {
 /** 头部行情取数：detail 实时快照 → 分时合成 */
 const headQuote = computed(() => quote.value ?? trendQuote.value)
 
-const displayName = computed(() => headQuote.value?.['名称'] || code.value)
+const displayName = computed(() => String(headQuote.value?.['名称'] || code.value))
 const price = computed(() => (headQuote.value?.['最新价'] as number | undefined) ?? null)
 const changeAmt = computed(() => (headQuote.value?.['涨跌额'] as number | undefined) ?? null)
 const changePct = computed(() => (headQuote.value?.['涨跌幅'] as number | undefined) ?? null)
@@ -518,11 +520,11 @@ const stats = computed(() => {
   // 头部统计永远取今日实时快照（或分时合成），与底部图表周期无关
   const q = headQuote.value
   return [
-    { label: '今开', text: f2(q?.['开盘']) },
-    { label: '最高', text: f2(q?.['最高']) },
-    { label: '最低', text: f2(q?.['最低']) },
-    { label: '成交量', text: vol(q?.['成交量']) },
-    { label: '成交额', text: amt(q?.['成交额']) },
+    { label: '今开', text: f2(q?.['开盘'] as number | null | undefined) },
+    { label: '最高', text: f2(q?.['最高'] as number | null | undefined) },
+    { label: '最低', text: f2(q?.['最低'] as number | null | undefined) },
+    { label: '成交量', text: vol(q?.['成交量'] as number | null | undefined) },
+    { label: '成交额', text: amt(q?.['成交额'] as number | null | undefined) },
   ]
 })
 
@@ -1220,7 +1222,7 @@ function openSibling(code2: string): void {
   <div class="detail-page">
     <p v-if="error" class="error-box" role="alert">
       详情加载失败：{{ error }}
-      <button class="retry" type="button" @click="load">重试</button>
+      <button class="retry" type="button" @click="load()">重试</button>
     </p>
 
     <!-- 骨架屏 -->
@@ -1957,16 +1959,16 @@ function openSibling(code2: string): void {
             {{ t.label }}
           </button>
         </div>
-        <div v-if="statements[stmtTab]" class="table-wrap">
+        <div v-if="curStatements" class="table-wrap">
           <table class="stmt-table">
             <thead>
               <tr>
                 <th class="stmt-label-col">科目</th>
-                <th v-for="p in statements[stmtTab]!.periods" :key="p" class="num">{{ p }}</th>
+                <th v-for="p in curStatements.periods" :key="p" class="num">{{ p }}</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="r in statements[stmtTab]!.rows" :key="r.label" :class="{ 'stmt-key': isKeyRow(r.label) }">
+              <tr v-for="r in curStatements.rows" :key="r.label" :class="{ 'stmt-key': isKeyRow(r.label) }">
                 <td>{{ r.label }}</td>
                 <td v-for="(v, i) in r.vals" :key="i" class="num">
                   {{ v === null ? '—' : v.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) }}
