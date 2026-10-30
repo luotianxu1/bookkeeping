@@ -4,21 +4,21 @@
 
 Monorepo with two independent components:
 
-- `vue3-ts-app/` — Vue 3 mobile-first frontend
-- `spring-cloud-bookkeeping/` — Spring Cloud Java backend (Maven multi-module)
+- `web/` — Vue 3 mobile-first frontend
+- `life-hub/` — Spring Boot Java backend (Maven multi-module: common + auth-service + app-service)
 - `database/` — MySQL schema files (numbered for sequential migration)
 
 ## Frontend (Vue 3 + TypeScript)
 
 ```bash
-cd vue3-ts-app
+cd web
 pnpm install          # pnpm 9.12.1 required
 pnpm dev              # Vite dev server on 0.0.0.0
 pnpm build            # vue-tsc -b && vite build
 ```
 
 - Path alias: `@` → `/src`
-- API proxy routes: `/auth-api` → 8081, `/finance-api` → 8082, `/tool-api` → 8083, `/food-api` → 8084
+- API proxy routes: `/auth-api` → 8081, `/finance-api` / `/tool-api` / `/food-api` → 8082（前缀保留仅为兼容，三个都打业务服务）
 - Uses `postcss-pxtorem` for mobile viewport scaling
 - API client: `src/api/request.ts` — exports per-service instances (`authRequest`, `financeRequest`, etc.)
 - Auth: JWT in httpOnly cookie (`access_token`, `SameSite=Lax`), `withCredentials: true` in request.ts; 401 clears credentials and redirects to login. Token is NOT stored in localStorage.
@@ -26,7 +26,7 @@ pnpm build            # vue-tsc -b && vite build
 ## Backend (Spring Boot 3.3.5 + Java 17)
 
 ```bash
-cd spring-cloud-bookkeeping
+cd life-hub
 mvn clean install     # builds all modules
 mvn clean install -pl common,auth-service   # single module
 ```
@@ -34,20 +34,15 @@ mvn clean install -pl common,auth-service   # single module
 | Module | Port | Purpose |
 | --- | --- | --- |
 | auth-service | 8081 | JWT auth, user/family management |
-| finance-service | 8082 | Accounts, transactions, investments |
-| tool-service | 8083 | Contacts, todos, photography orders, calendar |
-| food-service | 8084 | Food categories, dishes, orders |
+| app-service | 8082 | 全部业务：finance（账户/交易/投资/行情）+ tools（contacts/todos/photography/calendar，`/api/tools/*`）+ food（`/api/tools/food/*`） |
 
+- 2026-10: 项目更名 life-hub（原 spring-cloud-bookkeeping），前端目录更名 web/（原 vue3-ts-app）。tool-service / food-service 已合并进业务服务并整体更名 app-service（原 finance-service；包名 `com.example.app`/主类 `AppServiceApplication`）。历史备份在 `life-hub/data/backup-20261029/`。跨服务 Client（`FinanceClient` / `ToolServiceClient`）已改为同 JVM 本地调用；internal 接口与 X-Internal-Key 鉴权保留为兼容入口。数据库与 tunnel 名保留 `bookkeeping` 不变。
 - All services share one MySQL database: `bookkeeping_app`
 - Database: MySQL 8.0+, charset utf8mb4
 - Schema migrations: run `database/` files in numeric order (001, 002, ...)
 - JWT secret must match across all services (`app.jwt.secret` in application.yml)
 - Knife4j enabled for API docs at `/doc.html` on each service
 - Uses Lombok for boilerplate reduction
-
-## Gotcha: Food Service Package Name
-
-`food-service` Java code uses package `com.example.tool` (not `com.example.food`). This appears to be a copy-paste artifact. Don't rename without updating all references.
 
 ## Database
 
@@ -61,12 +56,12 @@ mysql -u root -p bookkeeping_app < database/002_create_account_types.mysql.sql
 
 ## Testing
 
-- Backend: minimal (only `tool-service/src/test/` exists). Run: `mvn test -pl tool-service`
+- Backend: no tests yet（原 tool-service 的过时测试已随合并删除）
 - Frontend: no test framework configured
 
 ## Environment Variables (Frontend)
 
-In `vue3-ts-app/.env` or shell:
+In `web/.env` or shell:
 
 - `VITE_API_BASE_URL` — default API base (fallback: <http://localhost:8081>)
 - `VITE_AUTH_API_BASE_URL`, `VITE_FINANCE_API_BASE_URL`, `VITE_TOOL_API_BASE_URL`, `VITE_FOOD_API_BASE_URL`

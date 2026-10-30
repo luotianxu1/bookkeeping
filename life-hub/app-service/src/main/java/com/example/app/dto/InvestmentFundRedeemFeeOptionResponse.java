@@ -1,0 +1,11 @@
+package com.example.app.dto;
+
+import lombok.Data;
+
+import java.math.BigDecimal;
+
+@Data
+public class InvestmentFundRedeemFeeOptionResponse {
+    private String label;
+    private BigDecimal feeRate;
+}

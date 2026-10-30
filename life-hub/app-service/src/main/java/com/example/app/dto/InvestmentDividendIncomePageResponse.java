@@ -1,0 +1,15 @@
+package com.example.app.dto;
+
+import lombok.Data;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Data
+public class InvestmentDividendIncomePageResponse {
+    private Long userId;
+    private InvestmentDividendIncomeSummaryResponse summary;
+    private List<InvestmentDividendIncomeItemResponse> items;
+    private List<InvestmentFixedExpenseResponse> fixedExpenses;
+    private LocalDateTime updatedAt;
+}

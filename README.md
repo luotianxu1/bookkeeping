@@ -1,12 +1,12 @@
-# Bookkeeping
+# Life Hub
 
-家庭记账与生活工具项目，包含 Vue 3 移动端前端、Spring Boot 多服务后端和 MySQL 初始化脚本。
+个人生活管理项目：记账、投资行情、实用工具（待办/摄影/旅行/健康）、餐饮管理。包含 Vue 3 移动端前端、Spring Boot 双服务后端（认证 + 业务）和 MySQL 初始化脚本。
 
 ## 项目结构
 
 ```text
 .
-├── vue3-ts-app/                 # Vue 3 + TypeScript 前端
+├── web/                         # Vue 3 + TypeScript 前端
 │   ├── src/
 │   │   ├── api/                 # Axios 请求封装（request.ts 含 withCredentials/401 处理）与业务 API
 │   │   ├── components/          # 通用组件与 App Shell
@@ -18,13 +18,11 @@
 │   ├── package.json
 │   ├── pnpm-lock.yaml
 │   └── vite.config.ts
-├── spring-cloud-bookkeeping/    # Spring Boot 后端 Maven 多模块
+├── life-hub/                    # Spring Boot 后端 Maven 多模块
 │   ├── common/                  # 公共 DTO、JWT、安全组件与通用逻辑
 │   │   └── src/main/resources/config/common-base.yml   # 各服务共享的基础配置
 │   ├── auth-service/            # 认证、用户、家庭管理，端口 8081
-│   ├── finance-service/         # 账户、流水、投资、工资等，端口 8082
-│   ├── tool-service/            # 联系人、待办、摄影订单、日历、高德代理等，端口 8083
-│   ├── food-service/            # 食材、菜品、菜单、点餐等，端口 8084
+│   ├── app-service/             # 全部业务：财务（含投资/行情）、工具、餐饮，端口 8082
 │   └── pom.xml
 └── database/                    # MySQL 建表与变更脚本，按数字顺序执行
 ```
@@ -66,18 +64,14 @@
 | 服务 | 模块 | 端口 | 说明 |
 | --- | --- | --- | --- |
 | 认证服务 | `auth-service` | `8081` | 登录、注册、JWT、用户/家庭管理 |
-| 财务服务 | `finance-service` | `8082` | 账户、记账、预算、投资、工资等 |
-| 工具服务 | `tool-service` | `8083` | 联系人、待办、摄影订单、纪念日、旅行计划等 |
-| 餐饮服务 | `food-service` | `8084` | 食材、菜品、菜单、订单等 |
-| 前端 | `vue3-ts-app` | `5173` | Vite 开发服务 |
+| 业务服务 | `app-service` | `8082` | 财务（账户/记账/预算/投资/行情/工资）+ 工具（联系人/待办/摄影/旅行/健康）+ 餐饮（`/api/tools/food/*`） |
+| 前端 | `web` | `5173` | Vite 开发服务 |
 
 每个后端服务启动后，Knife4j 文档地址为：
 
 ```text
 http://localhost:8081/doc.html
 http://localhost:8082/doc.html
-http://localhost:8083/doc.html
-http://localhost:8084/doc.html
 ```
 
 ## 环境要求
@@ -130,8 +124,8 @@ done
 | --- | --- | --- |
 | `JWT_SECRET` | **是（必填）** | JWT 签名密钥，至少 32 字节；**所有服务必须一致**。未设置时服务启动直接失败（配置中无默认值） |
 | `DB_PASSWORD` | 是 | MySQL `root` 用户密码 |
-| `INTERNAL_API_KEY` | 生产必填 | 服务间内部接口（`/api/internal/**`）鉴权密钥，**四个服务必须同值**；本地开发有默认值 `dev-internal-key` |
-| `AMAP_WEB_SERVICE_KEY` | 按需 | 高德 Web 服务 key，tool-service 用于路线/地点代理；前端不再直调高德 |
+| `INTERNAL_API_KEY` | 生产必填 | 服务间内部接口（`/api/internal/**`）鉴权密钥，**两服务必须同值**；本地开发有默认值 `dev-internal-key` |
+| `AMAP_WEB_SERVICE_KEY` | 按需 | 高德 Web 服务 key，app-service 用于路线/地点代理；前端不再直调高德 |
 | `AUTH_COOKIE_SECURE` | https 部署时设 `true` | 登录 Cookie 加 `Secure` 标记 |
 | `KNIFE4J_PRODUCTION` | 生产建议 `true` | 设为 `true` 关闭 Knife4j 在线文档 |
 
@@ -140,7 +134,7 @@ done
 datasource、JWT secret、knife4j 等公共配置统一放在：
 
 ```text
-spring-cloud-bookkeeping/common/src/main/resources/config/common-base.yml
+life-hub/common/src/main/resources/config/common-base.yml
 ```
 
 各服务 `application.yml` 通过 `spring.config.import: classpath:config/common-base.yml` 引入；服务本地同名配置优先级更高，可按需覆盖。修改数据库连接/JWT 时只改这一处。
@@ -159,17 +153,15 @@ export KNIFE4J_PRODUCTION=true
 安装公共依赖并编译：
 
 ```bash
-cd "/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping"
+cd "/Users/luotianxu/Documents/New project/life-hub"
 mvn clean install -DskipTests
 ```
 
-分别启动 4 个服务：
+分别启动 2 个服务：
 
 ```bash
 mvn -pl auth-service spring-boot:run
-mvn -pl finance-service spring-boot:run
-mvn -pl tool-service spring-boot:run
-mvn -pl food-service spring-boot:run
+mvn -pl app-service spring-boot:run
 ```
 
 也可以指定公共模块一起构建：
@@ -183,19 +175,17 @@ mvn clean install -pl common,auth-service -DskipTests
 建议用 IntelliJ IDEA 打开后端目录：
 
 ```text
-/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping
+/Users/luotianxu/Documents/New project/life-hub
 ```
 
 确认 Maven 导入完成后，运行以下 Spring Boot 配置：
 
 ```text
 AuthServiceApplication
-FinanceServiceApplication
-ToolServiceApplication
-FoodServiceApplication
+AppServiceApplication
 ```
 
-每个启动配置都需要带环境变量。`.idea/runConfigurations/` 中已提交预置好环境变量的运行配置（`JWT_SECRET`、`DB_PASSWORD`，tool-service 另有 `AMAP_WEB_SERVICE_KEY`），直接使用即可；若自行新建配置，至少要设置：
+每个启动配置都需要带环境变量。`.idea/runConfigurations/` 中已提交预置好环境变量的运行配置（`JWT_SECRET`、`DB_PASSWORD`，app-service 另有 `AMAP_WEB_SERVICE_KEY`），直接使用即可；若自行新建配置，至少要设置：
 
 ```text
 DB_PASSWORD=你的MySQL密码
@@ -211,7 +201,7 @@ JWT_SECRET=change-this-to-a-long-secret-key-at-least-32-bytes
 安装依赖：
 
 ```bash
-cd "/Users/luotianxu/Documents/New project/vue3-ts-app"
+cd "/Users/luotianxu/Documents/New project/web"
 pnpm install
 ```
 
@@ -247,19 +237,19 @@ Vite 已配置本地代理：
 | --- | --- |
 | `/auth-api` | `http://localhost:8081` |
 | `/finance-api` | `http://localhost:8082` |
-| `/tool-api` | `http://localhost:8083` |
-| `/food-api` | `http://localhost:8084` |
+| `/tool-api` | `http://localhost:8082` |
+| `/food-api` | `http://localhost:8082` |
 | `/api-proxy` | `http://localhost:8081` |
 
 前端请求封装位于：
 
 ```text
-vue3-ts-app/src/api/request.ts
+web/src/api/request.ts
 ```
 
 ## 前端环境变量
 
-可在 `vue3-ts-app/.env`、`.env.development` 或 shell 中配置：
+可在 `web/.env`、`.env.development` 或 shell 中配置：
 
 ```text
 VITE_API_BASE_URL=http://localhost:8081
@@ -294,11 +284,13 @@ JWT 通过 `access_token` httpOnly Cookie（`SameSite=Lax`）随请求携带，*
 
 ### 服务间内部接口
 
-跨服务调用（如摄影订单入账）走 `/api/internal/**`，由 `InternalApiKeyFilter` 校验 `X-Internal-Key` 请求头，不使用 JWT。生产环境务必设置 `INTERNAL_API_KEY` 并保证四服务同值，否则使用默认弱密钥 `dev-internal-key`。
+跨服务调用（如摄影订单入账）走 `/api/internal/**`，由 `InternalApiKeyFilter` 校验 `X-Internal-Key` 请求头，不使用 JWT。生产环境务必设置 `INTERNAL_API_KEY` 并保证两服务同值，否则使用默认弱密钥 `dev-internal-key`。
+
+> 说明：2026-10 服务合并后，原 tool/food 与 finance 同属 app-service，`FinanceClient`/`ToolServiceClient` 已是同 JVM 本地调用；internal 接口作为兼容入口保留。
 
 ### 第三方 API 代理
 
-前端不直连高德等第三方服务：地图路线/地点搜索经 tool-service 的 `/api/tool/amap/*` 代理（参数白名单 + 坐标格式校验），key 只保存在服务端环境变量 `AMAP_WEB_SERVICE_KEY` 中。
+前端不直连高德等第三方服务：地图路线/地点搜索经 app-service 的 `/api/tool/amap/*` 代理（参数白名单 + 坐标格式校验），key 只保存在服务端环境变量 `AMAP_WEB_SERVICE_KEY` 中。
 
 ## 外网访问（Cloudflare Tunnel）
 
@@ -326,14 +318,14 @@ https://luotianxu.dpdns.org  →  http://localhost:4173（Vite preview）
 
 ```bash
 # 启动隧道（需先启动前端 preview 和后端服务）
-pnpm tunnel                     # 在 vue3-ts-app 目录下
-cloudflared tunnel run bookkeeping   # 或直接用 cloudflared
+pnpm tunnel                     # 在 web 目录下
+cloudflared tunnel run bookkeeping   # 或直接用 cloudflared（隧道名仍为 bookkeeping，不影响功能）
 
 # 查看隧道状态
 cloudflared tunnel list
 ```
 
-API 请求无需单独暴露：前端页面经 Vite 代理（`/auth-api` 等）转发到本地 8081-8084，隧道只暴露 4173 一个入口。
+API 请求无需单独暴露：前端页面经 Vite 代理（`/auth-api` 等）转发到本地 8081-8082，隧道只暴露 4173 一个入口。
 
 开机自启（可选）：
 
@@ -356,14 +348,14 @@ cloudflared tunnel --url http://localhost:4173 --protocol http2
 后端目前测试较少，可按模块运行：
 
 ```bash
-cd "/Users/luotianxu/Documents/New project/spring-cloud-bookkeeping"
-mvn test -pl tool-service
+cd "/Users/luotianxu/Documents/New project/life-hub"
+mvn test -pl app-service
 ```
 
 前端当前未配置专门的测试框架，可使用类型检查和构建验证：
 
 ```bash
-cd "/Users/luotianxu/Documents/New project/vue3-ts-app"
+cd "/Users/luotianxu/Documents/New project/web"
 pnpm build
 ```
 
@@ -387,7 +379,7 @@ Access denied for user 'root'@'localhost'
 
 确认：
 
-- `auth-service` 已启动，且 4 个后端服务使用同一个 `JWT_SECRET`；
+- `auth-service` 已启动，且两个后端服务使用同一个 `JWT_SECRET`；
 - 前后端同站访问（走 Vite 代理或同一域名），Cookie 才能随请求携带；
 - https 访问时已设置 `AUTH_COOKIE_SECURE=true`；
 - 旧版本登录留下的 localStorage token 已失效属预期——重新登录即可，系统会自动改用 Cookie。
@@ -396,17 +388,17 @@ Access denied for user 'root'@'localhost'
 
 IDEA 增量编译可能把损坏的 class 写进 `target/classes`（字节码内含 "Unresolved compilation problems"）。执行 `mvn clean compile`，并在 IDEA 中 Build → Rebuild Project。
 
-### food-service 包名
+### 服务与包结构（2026-10 合并更名后）
 
-`food-service` 的 Java 包名目前是 `com.example.tool`，这是现有代码结构，不要只改包名。若要重命名，需要同步调整所有引用、扫描路径和启动类。
+后端只有 `auth-service`（认证）与 `app-service`（全部业务，原 finance-service/tool-service/food-service 合并更名而来）。业务包结构：财务 `com.example.app`、工具 `com.example.tool`（路由 `/api/tools/*`）、餐饮 `com.example.food`（路由 `/api/tools/food/*`）。前端目录为 `web/`（原 `vue3-ts-app`）。
 
 ### 生产部署检查清单
 
-- [ ] 四服务均设置 `JWT_SECRET`（同值，≥32 字节）与 `DB_PASSWORD`
-- [ ] 四服务设置 `INTERNAL_API_KEY`（同值，替换默认弱密钥）
+- [ ] 两服务均设置 `JWT_SECRET`（同值，≥32 字节）与 `DB_PASSWORD`
+- [ ] 两服务设置 `INTERNAL_API_KEY`（同值，替换默认弱密钥）
 - [ ] https 环境设置 `AUTH_COOKIE_SECURE=true`
 - [ ] 设置 `KNIFE4J_PRODUCTION=true` 关闭接口文档
-- [ ] tool-service 设置 `AMAP_WEB_SERVICE_KEY`（用到地图功能时）
+- [ ] app-service 设置 `AMAP_WEB_SERVICE_KEY`（用到地图功能时）
 - [ ] 前后端经同一域名入口暴露（Cookie 依赖同站）
 
 ## Git
