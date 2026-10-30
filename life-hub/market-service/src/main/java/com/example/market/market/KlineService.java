@@ -106,13 +106,80 @@ public final class KlineService {
         }
     }
 
-    /** 海外 K 线（腾讯 newfqkline，day/week/month） */
+    /** 海外 K 线（腾讯 newfqkline，day/week/month）；腾讯无K线历史的标的（qqq）走纳斯达克官方 */
     public static List<Map<String, Object>> klineOverseas(String kind, String code, int datalen, String period) {
+        // 腾讯 usQQQ（纳指100ETF-Invesco）几乎无K线历史（实测日K仅2根），
+        // 纳指100 的K线改用纳斯达克官方 QQQ historical（口径与详情页报价一致，均为 QQQ 美元价）
+        if (kind.equals("us") && NASDAQ_HISTORY_CODES.contains(code.toLowerCase())) {
+            List<Map<String, Object>> daily = nasdaqDailyKline("QQQ", "etf", datalen);
+            if (period.equals("week") || period.equals("month")) {
+                return aggregate(daily, period);
+            }
+            return daily;
+        }
         String sym = tencentSymbol(kind, code);
         if (sym == null) {
             return List.of();
         }
         return tencentKline(sym, datalen, period);
+    }
+
+    /** 腾讯无K线历史、需走纳斯达克官方 historical 的美股代码（详情短代码） */
+    private static final Set<String> NASDAQ_HISTORY_CODES = Set.of("qqq");
+
+    /** 纳斯达克官方日K缓存：symbol → (到期时间戳, 数据)，10 分钟 TTL，避免详情页反复拉 10 年历史 */
+    private static final Map<String, Object[]> NASDAQ_DAILY_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 纳斯达克官方日K（api.nasdaq.com historical）：data.tradesTable.rows[]，
+     * 行结构 {date:"MM/DD/YYYY", open/high/low/close, volume:"38,251,580"}，周K/月K由调用方聚合。
+     */
+    public static List<Map<String, Object>> nasdaqDailyKline(String symbol, String assetClass, int datalen) {
+        String cacheKey = symbol + ":" + assetClass;
+        Object[] cached = NASDAQ_DAILY_CACHE.get(cacheKey);
+        if (cached != null && System.currentTimeMillis() < (long) cached[0]) {
+            return (List<Map<String, Object>>) cached[1];
+        }
+        // 覆盖 datalen 根交易日所需日历日（约 ×2.2 含节假日/休市），限 10 年
+        long days = Math.min((long) Math.ceil(datalen * 2.2) + 30, 3660);
+        String from = LocalDate.now().minusDays(days).format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String to = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String url = "https://api.nasdaq.com/api/quote/" + symbol + "/historical?assetclass=" + assetClass
+            + "&fromdate=" + from + "&todate=" + to + "&limit=" + Math.min(datalen + 60, 9999);
+        JsonNode rows;
+        try {
+            TrendService.HttpRequestHelper helper = new TrendService.HttpRequestHelper();
+            rows = helper.getJson(url, MarketConfig.NASDAQ_HEADERS, 15)
+                .path("data").path("tradesTable").path("rows");
+        } catch (Exception e) {
+            return List.of();
+        }
+        if (!rows.isArray() || rows.isEmpty()) {
+            return List.of();
+        }
+        DateTimeFormatter mdY = DateTimeFormatter.ofPattern("MM/dd/yyyy");
+        List<Map<String, Object>> out = new ArrayList<>();
+        Double prevClose = null;
+        for (JsonNode r : rows) {
+            try {
+                String date = LocalDate.parse(r.path("date").asText().trim(), mdY)
+                    .format(DateTimeFormatter.ISO_LOCAL_DATE);
+                double open = Double.parseDouble(r.path("open").asText().replace(",", ""));
+                double high = Double.parseDouble(r.path("high").asText().replace(",", ""));
+                double low = Double.parseDouble(r.path("low").asText().replace(",", ""));
+                double close = Double.parseDouble(r.path("close").asText().replace(",", ""));
+                long volume = MarketUtils.parseLongSafe(r.path("volume").asText("0"));
+                out.add(MarketUtils.klineRow(date, open, high, low, close, volume, prevClose));
+                prevClose = close;
+            } catch (Exception ignored) {
+                // 跳过异常行
+            }
+        }
+        // 官方返回按日期倒序，统一为升序（与其他 K 线源一致）
+        java.util.Collections.reverse(out);
+        NASDAQ_DAILY_CACHE.put(cacheKey, new Object[]{
+            System.currentTimeMillis() + 600_000L, java.util.Collections.unmodifiableList(out)});
+        return out;
     }
 
     /** 腾讯 newfqkline K 线，行结构 [日期, 开盘, 收盘, 最高, 最低, 成交量] */

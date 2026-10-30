@@ -199,7 +199,7 @@ public final class TrendService {
         return trendSina(kind, code);
     }
 
-    /** 美股详情分时：个股/纳指综合走纳斯达克官方 chart，道指/标普500 用 ETF 折算 */
+    /** 美股详情分时：个股/纳指综合走纳斯达克官方 chart，道指/标普500 用 ETF 折算，QQQ 走官方 ETF 分时 */
     public static Map<String, Object> trendUs(String code) {
         String c = code.toLowerCase();
         if (NASDAQ_CHART_INDEX.containsKey(c)) {
@@ -209,6 +209,10 @@ public final class TrendService {
         if (US_ETF_PROXY.containsKey(c)) {
             String[] def = US_ETF_PROXY.get(c);
             return etfProxyMinute(def[0], def[1], def[2]);
+        }
+        if ("qqq".equals(c)) {
+            // 纳指100 无公开指数分钟序列，QQQ 本尊分时即代理口径（与美股页代理卡一致）
+            return nasdaqMinute("QQQ", "etf", "纳斯达克100");
         }
         return nasdaqMinute(code.toUpperCase(), "stocks", code);
     }

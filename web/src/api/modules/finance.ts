@@ -440,6 +440,36 @@ export interface UsPremarketData {
   indices: UsPremarketIndex[]
 }
 
+export interface UsOverviewTrendPoint {
+  time: string
+  price: number
+  avg?: number | null
+  volume?: number | null
+}
+
+export interface UsOverviewIndex {
+  code: string
+  name: string
+  proxySymbol?: string | null
+  proxyName?: string | null
+  price?: number | null
+  change?: number | null
+  changePercent?: number | null
+  open?: number | null
+  high?: number | null
+  low?: number | null
+  preClose?: number | null
+  quoteTime?: string | null
+  trendDate?: string | null
+  trendPrevClose?: number | null
+  points: UsOverviewTrendPoint[]
+}
+
+export interface UsOverviewData {
+  updatedAt: string
+  indices: UsOverviewIndex[]
+}
+
 export type TransactionType = 'expense' | 'income' | 'transfer'
 
 export interface Transaction {
@@ -1663,6 +1693,10 @@ export function getMarketStatus() {
 
 export function getUsPremarket() {
   return requestGet<UsPremarketData>(marketRequest, '/api/market/us/premarket', { timeout: 15000 })
+}
+
+export function getUsOverview() {
+  return requestGet<UsOverviewData>(marketRequest, '/api/market/us/overview', { timeout: 15000 })
 }
 
 export function createTransaction(params: CreateTransactionParams) {

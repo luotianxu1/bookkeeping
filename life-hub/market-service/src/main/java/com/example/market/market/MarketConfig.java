@@ -42,11 +42,12 @@ public final class MarketConfig {
     public static final String NASDAQ_SCREENER_URL =
         "https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=99999&download=true";
 
-    /** 全球指数：新浪代码(dji 等) → 腾讯 K 线代码（伦敦富时/日经腾讯无 K 线数据） */
+    /** 全球指数：新浪代码(dji 等) → 腾讯 K 线代码（伦敦富时/日经腾讯无 K 线数据）；qqq 为纳指100 的 QQQ 代理 */
     public static final Map<String, String> GLOBAL_TENCENT_CODES = Map.of(
         "dji", "usDJI",
         "nasdaq", "usIXIC",
         "sp500", "usINX",
+        "qqq", "usQQQ",
         "hangseng", "hkHSI"
     );
 

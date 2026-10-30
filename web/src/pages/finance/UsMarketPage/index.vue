@@ -1,21 +1,28 @@
 <script setup lang="ts">
-// 美股行情页：通过东财 push2delay 快照 + 分时接口展示美股指数实时行情与当日走势。
+// 美股行情页：走 market-service /api/market/us/overview（腾讯快照 + SPY/QQQ 分时折算）。
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import { useRouter } from 'vue-router'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
-import { getUsPremarket, type UsPremarketData, type UsPremarketIndex } from '@/api/modules/finance'
+import {
+  getUsOverview,
+  getUsPremarket,
+  type UsOverviewIndex,
+  type UsPremarketData,
+} from '@/api/modules/finance'
 import { useTheme } from '@/utils/theme'
 
 type IndexConfig = {
+  code: string
   name: string
-  secid: string
+  // 详情页用（纳指100 以 QQQ 代理呈现）
+  detailCode: string
 }
 
 type IndexCard = {
-  secid: string
+  code: string
   fallbackName: string
   name: string
   price: number | null
@@ -26,36 +33,32 @@ type IndexCard = {
   low: number | null
   preClose: number | null
   vals: number[]
-  seeded: boolean
-  lastMinute: number | null
   error: string
 }
 
-// 可自行增减：name 显示名，secid 东财代码（100. 前缀为全球指数）
-// 注意东财里 100.NDX 是「纳斯达克综合」，100.NDX100 才是「纳斯达克100」
+// 可自行增减：与后端 UsOverviewService.INDEX_DEFS 对应
 const INDEX_CONFIGS: IndexConfig[] = [
-  { name: '纳斯达克100', secid: '100.NDX100' },
-  { name: '标普500', secid: '100.SPX' },
+  { code: 'sp500', name: '标普500', detailCode: 'sp500' },
+  { code: 'ndx100', name: '纳斯达克100', detailCode: 'qqq' },
 ]
 
-const SNAPSHOT_FIELDS = 'f43,f44,f45,f46,f57,f58,f59,f60,f169,f170'
-const REFRESH_INTERVAL_MS = 10_000
-const MAX_INTRADAY_POINTS = 480
 // 美股常规交易时段 9:30–16:00 共 390 分钟，折线横轴按此铺满
 const SESSION_MINUTES = 390
+// 后端 overview 接口 15s 缓存，30s 轮询足够
+const REFRESH_INTERVAL_MS = 30_000
 
 const { isDark } = useTheme()
 const router = useRouter()
 
-// 跳转到全球行情详情页（东财 secid「100.NDX100」-> 品种代码「NDX100」）
-function goDetail(secid: string) {
-  const symbol = secid.includes('.') ? secid.split('.')[1] : secid
-  void router.push(`/finance/global-market/${symbol}`)
+// 跳转到全球行情详情页（/finance/global-market/detail/us/:code）
+function goDetail(code: string) {
+  const config = INDEX_CONFIGS.find((item) => item.code === code)
+  void router.push(`/finance/global-market/detail/us/${config?.detailCode ?? code}`)
 }
 
 const cards = reactive<IndexCard[]>(
   INDEX_CONFIGS.map((config) => ({
-    secid: config.secid,
+    code: config.code,
     fallbackName: config.name,
     name: config.name,
     price: null,
@@ -66,8 +69,6 @@ const cards = reactive<IndexCard[]>(
     low: null,
     preClose: null,
     vals: [],
-    seeded: false,
-    lastMinute: null,
     error: '',
   })),
 )
@@ -182,7 +183,7 @@ function formatChange(card: IndexCard) {
   return `${sign}${formatNumber(card.change)}  ${sign}${card.changePercent.toFixed(2)}%`
 }
 
-function formatPremarketChange(index: UsPremarketIndex) {
+function formatPremarketChange(index: UsPremarketData['indices'][number]) {
   if (index.changePercent == null || !Number.isFinite(index.changePercent)) {
     return '--'
   }
@@ -190,7 +191,7 @@ function formatPremarketChange(index: UsPremarketIndex) {
   return `${sign}${index.changePercent.toFixed(2)}%`
 }
 
-function premarketTone(index: UsPremarketIndex) {
+function premarketTone(index: UsPremarketData['indices'][number]) {
   if (index.changePercent == null || !Number.isFinite(index.changePercent)) {
     return ''
   }
@@ -208,110 +209,42 @@ function formatPremarketTime(value?: string | null) {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-// JSONP 请求，绕过跨域，与项目内其它东财行情调用保持一致
-function jsonpRequest<T>(url: string, callbackParams: string[], timeoutMs = 8000) {
-  return new Promise<T>((resolve, reject) => {
-    const callbackName = `__us_market_${Date.now()}_${Math.floor(Math.random() * 100000)}`
-    const script = document.createElement('script')
-    const globalWindow = window as unknown as Window & Record<string, unknown>
-    const timer = window.setTimeout(() => {
-      cleanup()
-      reject(new Error('行情接口请求超时'))
-    }, timeoutMs)
-
-    function cleanup() {
-      window.clearTimeout(timer)
-      script.remove()
-      delete globalWindow[callbackName]
+// 把后端聚合数据写入卡片：分时整段替换（每分钟一个点，含盘前时段）
+function applyOverview(indices: UsOverviewIndex[]) {
+  for (const index of indices) {
+    const card = cards.find((item) => item.code === index.code)
+    if (!card) {
+      continue
     }
-
-    globalWindow[callbackName] = (data: T) => {
-      cleanup()
-      resolve(data)
-    }
-
-    script.onerror = () => {
-      cleanup()
-      reject(new Error('行情接口加载失败'))
-    }
-
-    const connector = url.includes('?') ? '&' : '?'
-    const callbackQuery = callbackParams
-      .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(callbackName)}`)
-      .join('&')
-    script.src = `${url}${connector}${callbackQuery}`
-    document.body.appendChild(script)
-  })
-}
-
-// 首次用分时接口打底，拿到当日已有的走势
-async function seedTrends(card: IndexCard) {
-  const url = `https://push2delay.eastmoney.com/api/qt/stock/trends2/get?secid=${card.secid}`
-    + '&fields1=f1&fields2=f53&iscr=0&ndays=1'
-    + `&_=${Date.now()}`
-  try {
-    const res = await jsonpRequest<{ data?: { trends?: string[] } }>(url, ['cb'])
-    const trends = res?.data?.trends
-    if (!trends || trends.length === 0) {
-      return
-    }
-    card.vals = trends
-      .map((item) => {
-        const parts = item.split(',')
-        return Number.parseFloat(parts[parts.length - 1])
-      })
-      .filter((value) => Number.isFinite(value))
-  } catch {
-    // 折线打底失败不影响主数据
-  }
-}
-
-// 用最新实时价更新折线：分时粒度为每分钟一个点，同一分钟覆盖，跨分钟追加
-function pushLivePoint(card: IndexCard, price: number) {
-  const minute = Math.floor(Date.now() / 60_000)
-  if (card.lastMinute === minute && card.vals.length > 0) {
-    card.vals[card.vals.length - 1] = price
-  } else {
-    card.vals.push(price)
-    card.lastMinute = minute
-    if (card.vals.length > MAX_INTRADAY_POINTS) {
-      card.vals.shift()
-    }
-  }
-}
-
-async function loadOne(card: IndexCard) {
-  const url = `https://push2delay.eastmoney.com/api/qt/stock/get?secid=${card.secid}&fields=${SNAPSHOT_FIELDS}`
-  try {
-    const res = await jsonpRequest<{ data?: Record<string, number | null> }>(url, ['cb'])
-    const data = res?.data
-    if (!data || data.f43 == null) {
-      throw new Error('暂无行情数据')
-    }
-
-    // f59 = 价格精度（小数位），字段值需 / 10^精度
-    const decimals = data.f59 != null && Number.isFinite(data.f59) ? Number(data.f59) : 2
-    const divisor = 10 ** decimals
-
     card.error = ''
-    card.name = (data.f58 as unknown as string) || card.fallbackName
-    card.price = Number(data.f43) / divisor
-    card.change = Number(data.f169) / divisor
-    card.changePercent = Number(data.f170) / 100
-    card.open = Number(data.f46) / divisor
-    card.high = Number(data.f44) / divisor
-    card.low = Number(data.f45) / divisor
-    card.preClose = Number(data.f60) / divisor
-
-    if (!card.seeded) {
-      // 首屏：先用分时接口打底，再把当前实时价接上
-      card.seeded = true
-      await seedTrends(card)
-    }
-    pushLivePoint(card, card.price)
+    card.name = index.name || card.fallbackName
+    card.price = index.price ?? null
+    card.change = index.change ?? null
+    card.changePercent = index.changePercent ?? null
+    card.open = index.open ?? null
+    card.high = index.high ?? null
+    card.low = index.low ?? null
+    card.preClose = index.preClose ?? null
+    card.vals = (index.points ?? [])
+      .map((point) => point.price)
+      .filter((value) => Number.isFinite(value))
     renderCard(card)
+  }
+  for (const card of cards) {
+    if (!indices.some((index) => index.code === card.code)) {
+      card.error = '暂无行情数据'
+    }
+  }
+}
+
+async function loadOverview() {
+  try {
+    const data = await getUsOverview()
+    applyOverview(data.indices ?? [])
   } catch (error) {
-    card.error = error instanceof Error ? error.message : '加载失败'
+    for (const card of cards) {
+      card.error = card.vals.length > 0 ? '' : error instanceof Error ? error.message : '加载失败'
+    }
   }
 }
 
@@ -343,21 +276,18 @@ async function refresh() {
   nowTime.value = Date.now()
   isRefreshing.value = true
   try {
-    await Promise.all([
-      ...cards.map((card) => loadOne(card)),
-      loadPremarket(),
-    ])
+    await Promise.all([loadOverview(), loadPremarket()])
   } finally {
     isRefreshing.value = false
     isInitialLoading.value = false
   }
 }
 
-function setChartRef(secid: string, el: Element | null) {
+function setChartRef(code: string, el: Element | null) {
   if (el) {
-    chartEls.set(secid, el as HTMLDivElement)
+    chartEls.set(code, el as HTMLDivElement)
   } else {
-    chartEls.delete(secid)
+    chartEls.delete(code)
   }
 }
 
@@ -379,8 +309,8 @@ function buildChartOption(card: IndexCard): EChartsCoreOption {
     max += 1
   }
 
-  // 分时数据每分钟一个点，横轴按美股整段交易时段（390 分钟）铺满，
-  // 折线只画到当前已有的分钟数，随真实时间生长，而非拉伸占满整个宽度。
+  // 分时每分钟一个点，横轴按美股整段交易时段（390 分钟）铺满；
+  // QQQ 代理含盘前点，超出 390 分钟时扩展横轴。
   const points = values.map((value, index) => [index, value])
 
   return {
@@ -390,7 +320,7 @@ function buildChartOption(card: IndexCard): EChartsCoreOption {
       type: 'value',
       show: false,
       min: 0,
-      max: SESSION_MINUTES,
+      max: Math.max(SESSION_MINUTES, values.length),
     },
     yAxis: {
       type: 'value',
@@ -423,14 +353,14 @@ function renderCard(card: IndexCard) {
   if (!echartsLib || card.vals.length < 2) {
     return
   }
-  const el = chartEls.get(card.secid)
+  const el = chartEls.get(card.code)
   if (!el) {
     return
   }
-  let instance = chartInstances.get(card.secid)
+  let instance = chartInstances.get(card.code)
   if (!instance) {
     instance = echartsLib.init(el)
-    chartInstances.set(card.secid, instance)
+    chartInstances.set(card.code, instance)
   }
   instance.setOption(buildChartOption(card), true)
 }
@@ -546,25 +476,25 @@ onBeforeUnmount(() => {
     <div v-else class="us-market-grid">
       <article
         v-for="card in cards"
-        :key="card.secid"
+        :key="card.code"
         class="market-card"
         :class="toneClass(card)"
         role="link"
         tabindex="0"
         :aria-label="`查看${card.name}行情详情`"
-        @click="goDetail(card.secid)"
-        @keydown.enter="goDetail(card.secid)"
+        @click="goDetail(card.code)"
+        @keydown.enter="goDetail(card.code)"
       >
         <header class="market-card-head">
           <span class="market-name">{{ card.name }}</span>
-          <span class="market-code">{{ card.secid }}</span>
+          <span class="market-code">{{ card.code }}</span>
         </header>
 
         <p class="market-price">{{ formatNumber(card.price) }}</p>
         <p class="market-change">{{ formatChange(card) }}</p>
 
         <div
-          :ref="(el) => setChartRef(card.secid, el as Element | null)"
+          :ref="(el) => setChartRef(card.code, el as Element | null)"
           class="market-chart"
         />
 
@@ -579,7 +509,7 @@ onBeforeUnmount(() => {
     </div>
 
     <footer class="us-market-foot">
-      指数来源：东方财富 push2delay 快照 + 分时接口；ETF代理行情来源：Nasdaq公开行情。数据可能延迟，不构成投资建议。
+      指数来源：market-service（腾讯快照 + SPY/QQQ 分时折算，纳指100为QQQ代理）；ETF代理行情来源：Nasdaq公开行情。数据可能延迟，不构成投资建议。
     </footer>
   </section>
 </template>
