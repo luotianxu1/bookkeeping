@@ -608,7 +608,7 @@ async function renderKline(key: string) {
   if (!container || expandedKey.value !== key) {
     return
   }
-  const echarts = await import('echarts')
+  const echarts = await import('@/utils/echarts')
   let chart = klineCharts.get(key)
   if (!chart) {
     chart = echarts.init(container)

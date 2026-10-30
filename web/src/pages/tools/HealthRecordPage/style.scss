@@ -17,7 +17,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text-primary);
 }
 
 .record-form-row {
@@ -64,13 +64,13 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text-primary);
 }
 
 .record-chart-bodyfat {
   font-size: 13px;
   font-weight: 700;
-  color: var(--color-brand-strong, var(--color-text));
+  color: var(--color-brand-strong, var(--color-text-primary));
 }
 
 .record-chart {
@@ -91,7 +91,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text-primary);
 }
 
 .record-item {
@@ -115,7 +115,7 @@
 .record-item-weight {
   font-size: 14px;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text-primary);
 }
 
 .record-item-remark {

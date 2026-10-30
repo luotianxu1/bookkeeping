@@ -104,7 +104,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
-  background: var(--color-bg-muted);
+  background: var(--color-bg-soft-2);
   color: var(--color-text-secondary);
   font-size: var(--font-size-14);
   font-weight: 700;
@@ -143,7 +143,7 @@
 
 .debt-history-settled-badge {
   flex: 0 0 auto;
-  background: var(--color-bg-muted);
+  background: var(--color-bg-soft-2);
   color: var(--color-text-secondary);
 }
 

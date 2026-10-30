@@ -32,7 +32,7 @@ const isRefreshingPrice = ref(false)
 const isLoadingPrice = ref(false)
 const isLoadingTrend = ref(false)
 const goldPriceError = ref('')
-let echartsLib: (typeof import('echarts')) | null = null
+let echartsLib: (typeof import('@/utils/echarts')) | null = null
 let chartIns: ECharts | null = null
 let priceRefreshTimer: number | null = null
 
@@ -365,7 +365,7 @@ function getAxisDayLabel(value: string) {
 
 async function ensureEcharts() {
   if (!echartsLib) {
-    echartsLib = await import('echarts')
+    echartsLib = await import('@/utils/echarts')
   }
   return echartsLib
 }

@@ -151,7 +151,7 @@ function clearProxyMarketState() {
 
 const chartEls = new Map<string, HTMLDivElement>()
 const chartInstances = new Map<string, ECharts>()
-let echartsLib: (typeof import('echarts')) | null = null
+let echartsLib: (typeof import('@/utils/echarts')) | null = null
 let refreshTimer: number | null = null
 
 function isUp(card: IndexCard) {
@@ -392,7 +392,7 @@ function handleVisibilityChange() {
 }
 
 onMounted(async () => {
-  echartsLib = await import('echarts')
+  echartsLib = await import('@/utils/echarts')
   await refresh()
   renderAllCards()
   startRefreshTimer()

@@ -20,7 +20,7 @@ const errorMessage = ref('')
 // 首屏记录加载中，完成后显示趋势图与历史列表
 const isLoading = ref(true)
 
-let echartsLib: (typeof import('echarts')) | null = null
+let echartsLib: (typeof import('@/utils/echarts')) | null = null
 let chart: ECharts | null = null
 const chartRef = ref<HTMLDivElement | null>(null)
 
@@ -76,7 +76,7 @@ async function renderChart() {
     return
   }
   if (!echartsLib) {
-    echartsLib = await import('echarts')
+    echartsLib = await import('@/utils/echarts')
   }
   if (!chart) {
     chart = echartsLib.init(chartRef.value)

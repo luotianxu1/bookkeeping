@@ -152,7 +152,7 @@
   flex: 0 0 auto;
   display: grid;
   justify-items: end;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .liquidation-profit strong {
@@ -173,7 +173,7 @@
 .liquidation-detail-grid div {
   min-width: 0;
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .liquidation-detail-grid strong,

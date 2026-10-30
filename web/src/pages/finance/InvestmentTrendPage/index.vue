@@ -70,7 +70,7 @@ const { isDark } = useTheme()
 const requestSerial = ref(0)
 const isInitialized = ref(false)
 
-let echartsLib: (typeof import('echarts')) | null = null
+let echartsLib: (typeof import('@/utils/echarts')) | null = null
 let chartIns: ECharts | null = null
 
 const {
@@ -397,7 +397,7 @@ watch([trend, isDark], () => {
 
 async function ensureEcharts() {
   if (!echartsLib) {
-    echartsLib = await import('echarts')
+    echartsLib = await import('@/utils/echarts')
   }
   return echartsLib
 }

@@ -282,7 +282,7 @@ const trendSectionTitle = computed(() => {
 
 const pieRef = ref<HTMLDivElement | null>(null)
 const lineRef = ref<HTMLDivElement | null>(null)
-let echartsLib: (typeof import('echarts')) | null = null
+let echartsLib: (typeof import('@/utils/echarts')) | null = null
 let pieChart: ECharts | null = null
 let lineChart: ECharts | null = null
 
@@ -681,7 +681,7 @@ function handleResize() {
 
 async function ensureEcharts() {
   if (!echartsLib) {
-    echartsLib = await import('echarts')
+    echartsLib = await import('@/utils/echarts')
   }
   return echartsLib
 }

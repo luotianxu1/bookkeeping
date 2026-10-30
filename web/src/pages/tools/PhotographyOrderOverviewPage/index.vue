@@ -44,7 +44,7 @@ const pageError = ref('')
 const lineChartRef = ref<HTMLDivElement | null>(null)
 const pieChartRef = ref<HTMLDivElement | null>(null)
 const revenuePieChartRef = ref<HTMLDivElement | null>(null)
-let echartsLib: (typeof import('echarts')) | null = null
+let echartsLib: (typeof import('@/utils/echarts')) | null = null
 let lineChart: ECharts | null = null
 let pieChart: ECharts | null = null
 let revenuePieChart: ECharts | null = null
@@ -486,7 +486,7 @@ function resolveDisplayedTrendPoints() {
 
 async function ensureCharts() {
   if (!echartsLib) {
-    echartsLib = await import('echarts')
+    echartsLib = await import('@/utils/echarts')
   }
   if (lineChart && lineChartRef.value && lineChart.getDom() !== lineChartRef.value) {
     lineChart.dispose()

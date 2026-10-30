@@ -196,7 +196,7 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
       return
     }
 
-    const echarts = await import('echarts')
+    const echarts = await import('@/utils/echarts')
     if (chartRef.value !== chartContainer) {
       return
     }
@@ -436,7 +436,7 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
     const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
     const positiveColor = rootStyle.getPropertyValue('--color-danger').trim()
     const negativeColor = rootStyle.getPropertyValue('--color-success').trim()
-    const echarts = await import('echarts')
+    const echarts = await import('@/utils/echarts')
     const profitSeriesData = buildFundProfitChartSeriesData(points)
 
     if (cumulativeProfitChartRef.value !== chartContainer) {
