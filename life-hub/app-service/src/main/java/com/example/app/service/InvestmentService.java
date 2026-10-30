@@ -2,6 +2,7 @@ package com.example.app.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.example.app.client.MarketQuoteClient;
 import com.example.app.dto.InvestmentDividendResponse;
 import com.example.app.dto.InvestmentDividendIncomeItemResponse;
 import com.example.app.dto.InvestmentDividendIncomePageResponse;
@@ -63,6 +64,7 @@ import com.example.app.mapper.InvestmentProductMapper;
 import com.example.app.mapper.InvestmentTransactionMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -72,17 +74,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.net.URI;
-import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -195,11 +189,6 @@ public class InvestmentService {
     ) {
     }
 
-    private record DividendPrediction(
-        boolean stable,
-        BigDecimal estimatedAmount
-    ) {
-    }
 
     private record DividendProfile(
         boolean stable,
@@ -233,13 +222,6 @@ public class InvestmentService {
     private static final String STOCK_QUOTE_SOURCE = "TENCENT_STOCK_LATEST";
     private static final String FUND_DIVIDEND_PLAN_SOURCE = "EASTMONEY_FUND_FHSP";
     private static final String STOCK_DIVIDEND_HISTORY_SOURCE = "EASTMONEY_STOCK_BONUS";
-    private static final Pattern FUND_DIVIDEND_BATCH_PATTERN = Pattern.compile(
-        "(?:每\\s*)?([0-9]+(?:\\.[0-9]+)?)\\s*份[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*元"
-    );
-    private static final Pattern FUND_DIVIDEND_SINGLE_UNIT_PATTERN = Pattern.compile(
-        "每\\s*份[^0-9]*([0-9]+(?:\\.[0-9]+)?)\\s*元"
-    );
-    private static final Pattern DECIMAL_NUMBER_PATTERN = Pattern.compile("([0-9]+(?:\\.[0-9]+)?)");
     private static final String SUBSCRIPTION_STATUS_CONFIRMED = "confirmed";
     private static final String SUBSCRIPTION_STATUS_PENDING = "pending";
     private static final String SETTLEMENT_STATUS_CONFIRMED = "confirmed";
@@ -298,10 +280,9 @@ public class InvestmentService {
     private final InvestmentPriceQuoteMapper priceQuoteMapper;
     private final GoldPriceService goldPriceService;
     private final ObjectMapper objectMapper;
-    private final RestClient restClient;
-    private final HttpClient httpClient;
     private final TransactionTemplate transactionTemplate;
     private final Set<LocalDate> marketClosedDates;
+    private final MarketQuoteClient marketQuoteClient;
 
     public InvestmentService(
         InvestmentProductMapper productMapper,
@@ -317,7 +298,8 @@ public class InvestmentService {
         GoldPriceService goldPriceService,
         ObjectMapper objectMapper,
         PlatformTransactionManager transactionManager,
-        @Value("${finance.investment.market-closed-dates:}") String marketClosedDatesConfig
+        @Value("${finance.investment.market-closed-dates:}") String marketClosedDatesConfig,
+        MarketQuoteClient marketQuoteClient
     ) {
         this.productMapper = productMapper;
         this.positionMapper = positionMapper;
@@ -332,12 +314,8 @@ public class InvestmentService {
         this.goldPriceService = goldPriceService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-        this.restClient = RestClient.builder().build();
-        this.httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
         this.marketClosedDates = parseMarketClosedDates(marketClosedDatesConfig);
+        this.marketQuoteClient = marketQuoteClient;
     }
 
     public List<InvestmentProductResponse> listProducts(String productType, String keyword) {
@@ -490,7 +468,7 @@ public class InvestmentService {
             response.setLatestPrice(price == null ? null : price.price());
             response.setQuoteDate(price == null ? null : price.quoteDate());
             response.setChangePercent(safeDecimal(baseInfo.path("RZDF").asText(null)));
-            response.setSource("东方财富");
+            response.setSource("新浪财经");
             return response;
         }
 
@@ -5056,124 +5034,34 @@ public class InvestmentService {
         );
     }
 
-    private void fillFundDetail(InvestmentAssetDetailResponse response, InvestmentProductEntity product) {
-        JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
-        JsonNode estimateInfo = fetchFundEstimateInfo(product.getSymbol());
-        BigDecimal officialPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
-        BigDecimal cumulativePrice = safeDecimal(baseInfo.path("LJJZ").asText(null));
-        BigDecimal latestPrice = officialPrice;
-        BigDecimal changePercent = safeDecimal(baseInfo.path("RZDF").asText(null));
-        String updatedAt = baseInfo.path("FSRQ").asText(null);
 
-        response.setProductType("fund");
-        response.setName(blankToDefault(baseInfo.path("SHORTNAME").asText(null), product.getName()));
-        response.setSymbol(blankToDefault(baseInfo.path("FCODE").asText(null), product.getSymbol()));
-        response.setLatestPrice(latestPrice);
-        response.setChangePercent(changePercent);
-        response.setUpdatedAt(updatedAt);
-        response.setChartType("line");
-        response.setFundRedeemFeeOptions(buildFundRedeemFeeOptions(product.getSymbol()));
-        response.setSource("东方财富");
-        response.setDescription("基金详情和累计净值走势来自东方财富公开接口。");
-        response.setMarketStats(List.of(
-            stat("资产类型", "基金", null),
-            stat("基金代码", product.getSymbol(), null),
-            stat("基金类型", blankToDash(baseInfo.path("FTYPE").asText(null)), null),
-            stat("当前净值（单位净值）", latestPrice == null ? "-" : moneyText(latestPrice, 4), tone(changePercent)),
-            stat("累计净值", blankToDash(baseInfo.path("LJJZ").asText(null)), null),
-            stat("当日涨跌幅", percentText(changePercent), tone(changePercent)),
-            stat("净值日期", blankToDash(updatedAt), null),
-            stat("基金公司", blankToDash(baseInfo.path("JJGS").asText(null)), null),
-            stat("申购状态", blankToDash(baseInfo.path("SGZT").asText(null)), null),
-            stat("赎回状态", blankToDash(baseInfo.path("SHZT").asText(null)), null)
-        ));
-        response.setChartPoints(fetchFundTrendPoints(product.getSymbol(), latestPrice, cumulativePrice, updatedAt));
-    }
 
-    private void fillStockDetail(InvestmentAssetDetailResponse response, InvestmentProductEntity product) {
-        String symbol = toTencentSymbol(product.getSymbol(), product.getExchangeCode());
-        JsonNode quote = fetchTencentQuoteFields(symbol);
-        BigDecimal latestPrice = safeDecimal(quote.path("price").asText(null));
-        BigDecimal change = safeDecimal(quote.path("change").asText(null));
-        BigDecimal changePercent = safeDecimal(quote.path("changePercent").asText(null));
-
-        response.setProductType("stock");
-        response.setName(blankToDefault(quote.path("name").asText(null), product.getName()));
-        response.setSymbol(blankToDefault(quote.path("code").asText(null), product.getSymbol()));
-        response.setLatestPrice(latestPrice);
-        response.setChange(change);
-        response.setChangePercent(changePercent);
-        response.setUpdatedAt(formatTencentTime(quote.path("timeRaw").asText(null)));
-        response.setChartType("candlestick");
-        response.setSource("腾讯行情");
-        response.setDescription("股票实时行情和日 K 走势来自腾讯公开行情接口。");
-        response.setMarketStats(List.of(
-            stat("资产类型", "股票", null),
-            stat("股票代码", product.getSymbol(), null),
-            stat("市场", blankToDash(product.getExchangeCode()), null),
-            stat("当前净值（当前价）", latestPrice == null ? "-" : moneyText(latestPrice, 2), tone(change)),
-            stat("涨跌额", moneyText(change, 2), tone(change)),
-            stat("涨跌幅", percentText(changePercent), tone(changePercent)),
-            stat("今开", moneyText(safeDecimal(quote.path("open").asText(null)), 2), null),
-            stat("昨收", moneyText(safeDecimal(quote.path("prevClose").asText(null)), 2), null),
-            stat("最高", moneyText(safeDecimal(quote.path("high").asText(null)), 2), null),
-            stat("最低", moneyText(safeDecimal(quote.path("low").asText(null)), 2), null),
-            stat("成交量（手）", blankToDash(quote.path("volume").asText(null)), null),
-            stat("换手率", percentText(safeDecimal(quote.path("turnoverRate").asText(null))), null),
-            stat("市盈率", blankToDash(quote.path("pe").asText(null)), null),
-            stat("更新时间", blankToDash(response.getUpdatedAt()), null)
-        ));
-        response.setChartPoints(fetchStockKlinePoints(symbol));
-    }
-
+    /**
+     * 基金基础信息：经行情中心 /api/internal/quote/fund/base（新浪基金频道源），
+     * 字段名与原东财 FundBaseTypeInformation 保持一致（SHORTNAME/DWJZ/FSRQ/RZDF/LJJZ/SGZT/SHZT/FTYPE/JJGS）。
+     */
     private JsonNode fetchFundBaseInfo(String code) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                    "https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=" + URLEncoder.encode(code, StandardCharsets.UTF_8)
-                        + "&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0"
-                ))
-                .timeout(Duration.ofSeconds(8))
-                .header("User-Agent", "Mozilla/5.0")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            return objectMapper.readTree(new String(httpResponse.body(), StandardCharsets.UTF_8));
+            return marketQuoteClient.fundBase(code);
         } catch (Exception ex) {
             return objectMapper.createObjectNode();
         }
     }
 
+
+    /**
+     * 基金盘中估值：经行情中心 /api/internal/quote/fund/estimate（新浪 fu_ 源），
+     * 字段名与原东财 funddataforgznew 一致（fundcode/name/jzrq/dwjz/gsz/gztime）。
+     */
     private JsonNode fetchFundEstimateInfo(String code) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                    "https://fund.eastmoney.com/data/funddataforgznew.aspx?fc=" + URLEncoder.encode(code, StandardCharsets.UTF_8) + "&t=basewap"
-                ))
-                .timeout(Duration.ofSeconds(8))
-                .header("User-Agent", "Mozilla/5.0")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            return objectMapper.readTree(extractJsonpObject(new String(httpResponse.body(), StandardCharsets.UTF_8)));
+            return marketQuoteClient.fundEstimate(code);
         } catch (Exception ex) {
             return objectMapper.createObjectNode();
         }
     }
 
-    private String fetchFundFeePage(String code) {
-        try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                    "https://fundf10.eastmoney.com/jjfl_" + URLEncoder.encode(code, StandardCharsets.UTF_8) + ".html"
-                ))
-                .timeout(Duration.ofSeconds(8))
-                .header("User-Agent", "Mozilla/5.0")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            return new String(httpResponse.body(), StandardCharsets.UTF_8);
-        } catch (Exception ex) {
-            return "";
-        }
-    }
+
 
     private BigDecimal calculateFundSellFeeAmount(
         InvestmentPositionEntity position,
@@ -5230,39 +5118,33 @@ public class InvestmentService {
     }
 
     private List<FundRedeemFeeRule> fetchFundRedeemFeeRules(String code) {
-        String body = fetchFundFeePage(code);
-        if (!StringUtils.hasText(body)) {
-            return Collections.emptyList();
-        }
-
-        Matcher tableMatcher = Pattern.compile(
-                "赎回费率.*?<table[^>]*>(.*?)</table>",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-            )
-            .matcher(body);
-        if (!tableMatcher.find()) {
-            return Collections.emptyList();
-        }
-
-        List<FundRedeemFeeRule> rules = new ArrayList<>();
-        Matcher rowMatcher = Pattern.compile(
-                "<tr>\\s*<td[^>]*>(.*?)</td>\\s*<td[^>]*>(.*?)</td>\\s*</tr>",
-                Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-            )
-            .matcher(tableMatcher.group(1));
-        while (rowMatcher.find()) {
-            FundRedeemFeeRule rule = parseFundRedeemFeeRule(
-                normalizeFundFeeText(rowMatcher.group(1)),
-                normalizeFundFeeText(rowMatcher.group(2))
-            );
-            if (rule != null) {
-                rules.add(rule);
+        try {
+            JsonNode payload = marketQuoteClient.fundFees(code);
+            if (payload == null || !payload.path("matched").asBoolean(false)) {
+                return Collections.emptyList();
             }
+            JsonNode rules = payload.path("redeemFeeRules");
+            if (!rules.isArray()) {
+                return Collections.emptyList();
+            }
+            List<FundRedeemFeeRule> parsed = new ArrayList<>();
+            for (JsonNode rule : rules) {
+                FundRedeemFeeRule item = parseFundRedeemFeeRule(
+                    rule.path("label").asText(""),
+                    rule.path("feeRateText").asText("")
+                );
+                if (item != null) {
+                    parsed.add(item);
+                }
+            }
+            return parsed.stream()
+                .sorted(Comparator.comparingInt(FundRedeemFeeRule::minHoldingDaysInclusive))
+                .toList();
+        } catch (Exception ex) {
+            return Collections.emptyList();
         }
-        return rules.stream()
-            .sorted(Comparator.comparingInt(FundRedeemFeeRule::minHoldingDaysInclusive))
-            .toList();
     }
+
 
     private FundRedeemFeeRule parseFundRedeemFeeRule(String holdingPeriodText, String feeRateText) {
         if (!StringUtils.hasText(holdingPeriodText) || !StringUtils.hasText(feeRateText)) {
@@ -5305,17 +5187,6 @@ public class InvestmentService {
         return null;
     }
 
-    private String normalizeFundFeeText(String value) {
-        if (!StringUtils.hasText(value)) {
-            return "";
-        }
-        return value
-            .replaceAll("<[^>]+>", "")
-            .replace("&nbsp;", "")
-            .replace(" ", "")
-            .replace("\u00A0", "")
-            .trim();
-    }
 
     private List<FundHoldingLot> buildAvailableFundHoldingLots(InvestmentPositionEntity position) {
         List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
@@ -5429,130 +5300,56 @@ public class InvestmentService {
         return Math.max((int) ChronoUnit.DAYS.between(acquiredDate, appliedDate), 0);
     }
 
-    private List<InvestmentChartPointResponse> fetchFundTrendPoints(
-        String code,
-        BigDecimal latestPrice,
-        BigDecimal latestCumulativePrice,
-        String latestDate
-    ) {
-        try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                    "https://fund.eastmoney.com/pingzhongdata/" + URLEncoder.encode(code, StandardCharsets.UTF_8) + ".js?v=" + System.currentTimeMillis()
-                ))
-                .timeout(Duration.ofSeconds(10))
-                .header("User-Agent", "Mozilla/5.0")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
-            JsonNode acRows = objectMapper.readTree(extractJsArray(body, "Data_ACWorthTrend"));
-            if (acRows.isArray() && !acRows.isEmpty()) {
-                return mergeLatestFundTrendPoint(buildFundAccumulativeTrendPoints(acRows), latestCumulativePrice, latestDate);
-            }
-            JsonNode netRows = objectMapper.readTree(extractJsArray(body, "Data_netWorthTrend"));
-            if (!netRows.isArray()) {
-                return Collections.emptyList();
-            }
-            return mergeLatestFundTrendPoint(buildFundNetWorthTrendPoints(netRows), latestPrice, latestDate);
-        } catch (Exception ex) {
-            BigDecimal fallbackPrice = latestCumulativePrice != null ? latestCumulativePrice : latestPrice;
-            return mergeLatestFundTrendPoint(new ArrayList<>(), fallbackPrice, latestDate);
-        }
-    }
 
-    private List<InvestmentChartPointResponse> buildFundAccumulativeTrendPoints(JsonNode rows) {
-        List<InvestmentChartPointResponse> points = new ArrayList<>();
-        long cutoff = System.currentTimeMillis() - 3L * 365L * 24L * 60L * 60L * 1000L;
-        for (JsonNode row : rows) {
-            long timestamp = row.path(0).asLong(0);
-            if (timestamp < cutoff) {
-                continue;
-            }
-            BigDecimal value = safeDecimal(row.path(1).asText(null));
-            if (value == null) {
-                continue;
-            }
-            InvestmentChartPointResponse point = new InvestmentChartPointResponse();
-            point.setLabel(java.time.Instant.ofEpochMilli(timestamp).atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDate().toString());
-            point.setValue(value);
-            points.add(point);
-        }
-        return points;
-    }
 
-    private List<InvestmentChartPointResponse> buildFundNetWorthTrendPoints(JsonNode rows) {
-        List<InvestmentChartPointResponse> points = new ArrayList<>();
-        long cutoff = System.currentTimeMillis() - 3L * 365L * 24L * 60L * 60L * 1000L;
-        for (JsonNode row : rows) {
-            long timestamp = row.path("x").asLong(0);
-            if (timestamp < cutoff) {
-                continue;
-            }
-            BigDecimal value = safeDecimal(row.path("y").asText(null));
-            if (value == null) {
-                continue;
-            }
-            InvestmentChartPointResponse point = new InvestmentChartPointResponse();
-            point.setLabel(java.time.Instant.ofEpochMilli(timestamp).atZone(java.time.ZoneId.of("Asia/Shanghai")).toLocalDate().toString());
-            point.setValue(value);
-            points.add(point);
-        }
-        return points;
-    }
 
-    private List<InvestmentChartPointResponse> mergeLatestFundTrendPoint(
-        List<InvestmentChartPointResponse> points,
-        BigDecimal latestPrice,
-        String latestDate
-    ) {
-        LocalDate quoteDate = safeDate(latestDate);
-        if (quoteDate == null || latestPrice == null) {
-            return points;
-        }
 
-        String normalizedDate = quoteDate.toString();
-        List<InvestmentChartPointResponse> merged = points.stream()
-            .filter(point -> !normalizedDate.equals(point.getLabel()))
-            .collect(Collectors.toCollection(ArrayList::new));
 
-        InvestmentChartPointResponse latestPoint = new InvestmentChartPointResponse();
-        latestPoint.setLabel(normalizedDate);
-        latestPoint.setValue(latestPrice);
-        merged.add(latestPoint);
-        merged.sort(Comparator.comparing(point -> safeDate(point.getLabel()), Comparator.nullsLast(Comparator.naturalOrder())));
-        return merged;
-    }
 
-    private List<InvestmentDividendPlanEntity> fetchFundDividendPlans(InvestmentProductEntity product) {
-        return fetchFundDividendPlansResult(product).plans();
-    }
-
+    /**
+     * 基金分红历史：经行情中心 /api/internal/quote/fund/dividends（东财独家数据源，
+     * 页面解析与代码校验逻辑已整体迁出行情中心，此处仅做实体映射）。
+     */
     private DividendHistoryFetchResult fetchFundDividendPlansResult(InvestmentProductEntity product) {
         if (product == null || !StringUtils.hasText(product.getSymbol())) {
             return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                    "https://fundf10.eastmoney.com/fhsp_" + URLEncoder.encode(product.getSymbol(), StandardCharsets.UTF_8) + ".html"
-                ))
-                .timeout(Duration.ofSeconds(10))
-                .header("User-Agent", "Mozilla/5.0")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                log.warn("基金分红历史获取失败，productId={}, symbol={}, status={}",
-                    product.getId(), product.getSymbol(), httpResponse.statusCode());
-                return new DividendHistoryFetchResult(false, Collections.emptyList());
-            }
-
-            String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
-            if (!isFundDividendPageOfProduct(product, body)) {
+            JsonNode payload = marketQuoteClient.fundDividends(product.getSymbol());
+            if (payload == null || !payload.path("matched").asBoolean(false)) {
                 log.warn("基金分红历史获取失败，productId={}, symbol={}, reason=页面基金代码不匹配",
                     product.getId(), product.getSymbol());
                 return new DividendHistoryFetchResult(false, Collections.emptyList());
             }
-            return parseFundDividendPlansFromHtml(product, body);
+            JsonNode items = payload.path("items");
+            if (!items.isArray()) {
+                return new DividendHistoryFetchResult(false, Collections.emptyList());
+            }
+            List<InvestmentDividendPlanEntity> plans = new ArrayList<>();
+            for (JsonNode row : items) {
+                int dividendYear = row.path("dividendYear").asInt(0);
+                LocalDate recordDate = safeDate(row.path("recordDate").asText(null));
+                LocalDate exDividendDate = safeDate(row.path("exDividendDate").asText(null));
+                BigDecimal dividendPerUnit = safeDecimal(row.path("dividendPerUnit").asText(null));
+                LocalDate payDate = safeDate(row.path("payDate").asText(null));
+                if (dividendYear <= 0 || dividendPerUnit == null || payDate == null) {
+                    continue;
+                }
+                InvestmentDividendPlanEntity plan = new InvestmentDividendPlanEntity();
+                plan.setProductId(product.getId());
+                plan.setDividendYear(dividendYear);
+                plan.setRecordDate(recordDate);
+                plan.setExDividendDate(exDividendDate);
+                plan.setPayDate(payDate);
+                plan.setDividendPerUnit(dividendPerUnit.setScale(6, RoundingMode.HALF_UP));
+                plan.setTaxRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+                plan.setCurrencyCode(blankToDefault(product.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
+                plan.setStatus(resolveDividendPlanStatus(payDate));
+                plan.setSource(FUND_DIVIDEND_PLAN_SOURCE);
+                plan.setRemark("基金分红计划由每日净值同步任务自动刷新");
+                plans.add(plan);
+            }
+            return new DividendHistoryFetchResult(true, plans);
         } catch (Exception ex) {
             log.warn("基金分红历史获取失败，productId={}, symbol={}, reason={}",
                 product.getId(), product.getSymbol(), ex.getMessage());
@@ -5560,150 +5357,11 @@ public class InvestmentService {
         }
     }
 
-    /**
-     * 东方财富分红页面偶发返回其他基金的页面内容，先校验标题中的基金代码与请求一致再解析，
-     * 避免把其他基金的分红历史写入当前产品。
-     */
-    private boolean isFundDividendPageOfProduct(InvestmentProductEntity product, String body) {
-        if (product == null || !StringUtils.hasText(product.getSymbol())) {
-            return false;
-        }
-        Matcher titleMatcher = Pattern.compile("<title>(.*?)</title>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(body);
-        return titleMatcher.find() && titleMatcher.group(1).contains("(" + product.getSymbol() + ")");
-    }
 
-    private DividendHistoryFetchResult parseFundDividendPlansFromHtml(InvestmentProductEntity product, String body) {
-        if (!StringUtils.hasText(body)) {
-            return new DividendHistoryFetchResult(false, Collections.emptyList());
-        }
 
-        Pattern tablePattern = Pattern.compile(
-            "<table[^>]*class=['\"][^'\"]*comm\\s+cfxq[^'\"]*['\"][^>]*>(.*?)</table>",
-            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-        );
-        Matcher tableMatcher = tablePattern.matcher(body);
-        if (!tableMatcher.find()) {
-            log.warn("基金分红历史解析失败，productId={}, symbol={}, reason=未找到分红表格",
-                product.getId(), product.getSymbol());
-            return new DividendHistoryFetchResult(false, Collections.emptyList());
-        }
 
-        String tableHtml = tableMatcher.group(1);
-        // 校验表头确为分红送配表（年份/权益登记日/除息日/每10份分红/分红发放日），
-        // 防止页面结构变化时把拆分、公告等同类名表格的行误解析成分红数据。
-        Matcher headMatcher = Pattern.compile("<thead>(.*?)</thead>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(tableHtml);
-        if (!headMatcher.find()
-            || !headMatcher.group(1).contains("权益登记日")
-            || !headMatcher.group(1).contains("分红发放日")) {
-            log.warn("基金分红历史解析失败，productId={}, symbol={}, reason=分红表头不匹配",
-                product.getId(), product.getSymbol());
-            return new DividendHistoryFetchResult(false, Collections.emptyList());
-        }
 
-        Matcher tbodyMatcher = Pattern.compile("<tbody>(.*?)</tbody>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(tableHtml);
-        if (!tbodyMatcher.find()) {
-            log.warn("基金分红历史解析失败，productId={}, symbol={}, reason=未找到分红表体",
-                product.getId(), product.getSymbol());
-            return new DividendHistoryFetchResult(false, Collections.emptyList());
-        }
-        String tableBody = tbodyMatcher.group(1);
-        Matcher rowMatcher = Pattern.compile("<tr>(.*?)</tr>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(tableBody);
-        List<InvestmentDividendPlanEntity> plans = new ArrayList<>();
-        while (rowMatcher.find()) {
-            List<String> cells = extractHtmlTableCells(rowMatcher.group(1));
-            if (cells.size() < 5) {
-                continue;
-            }
 
-            Integer dividendYear = parseDividendYear(cells.get(0));
-            LocalDate recordDate = safeDate(cells.get(1));
-            LocalDate exDividendDate = safeDate(cells.get(2));
-            BigDecimal dividendPerUnit = parseDividendPerUnit(cells.get(3));
-            LocalDate payDate = safeDate(cells.get(4));
-            if (dividendYear == null || dividendPerUnit == null || payDate == null) {
-                continue;
-            }
-
-            InvestmentDividendPlanEntity plan = new InvestmentDividendPlanEntity();
-            plan.setProductId(product.getId());
-            plan.setDividendYear(dividendYear);
-            plan.setRecordDate(recordDate);
-            plan.setExDividendDate(exDividendDate);
-            plan.setPayDate(payDate);
-            plan.setDividendPerUnit(dividendPerUnit.setScale(6, RoundingMode.HALF_UP));
-            plan.setTaxRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
-            plan.setCurrencyCode(blankToDefault(product.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
-            plan.setStatus(resolveDividendPlanStatus(payDate));
-            plan.setSource(FUND_DIVIDEND_PLAN_SOURCE);
-            plan.setRemark("基金分红计划由每日净值同步任务自动刷新");
-            plans.add(plan);
-        }
-        return new DividendHistoryFetchResult(true, plans);
-    }
-
-    private List<String> extractHtmlTableCells(String rowHtml) {
-        Matcher cellMatcher = Pattern.compile("<t[dh][^>]*>(.*?)</t[dh]>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(rowHtml);
-        List<String> cells = new ArrayList<>();
-        while (cellMatcher.find()) {
-            String value = cellMatcher.group(1)
-                .replaceAll("<[^>]+>", "")
-                .replace("&nbsp;", " ")
-                .replace("&amp;", "&")
-                .trim();
-            cells.add(value);
-        }
-        return cells;
-    }
-
-    private Integer parseDividendYear(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        Matcher matcher = Pattern.compile("(\\d{4})").matcher(value);
-        if (!matcher.find()) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(matcher.group(1));
-        } catch (NumberFormatException ex) {
-            return null;
-        }
-    }
-
-    private BigDecimal parseDividendPerUnit(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-
-        String normalizedValue = value.replace(",", "").replace("，", "").trim();
-        Matcher batchMatcher = FUND_DIVIDEND_BATCH_PATTERN.matcher(normalizedValue);
-        if (batchMatcher.find()) {
-            BigDecimal unitCount = safeDecimal(batchMatcher.group(1));
-            BigDecimal batchDividendAmount = safeDecimal(batchMatcher.group(2));
-            if (unitCount == null || unitCount.compareTo(BigDecimal.ZERO) <= 0
-                || batchDividendAmount == null || batchDividendAmount.compareTo(BigDecimal.ZERO) <= 0) {
-                return null;
-            }
-            return batchDividendAmount.divide(unitCount, 12, RoundingMode.HALF_UP);
-        }
-
-        Matcher singleUnitMatcher = FUND_DIVIDEND_SINGLE_UNIT_PATTERN.matcher(normalizedValue);
-        if (singleUnitMatcher.find()) {
-            BigDecimal dividendAmount = safeDecimal(singleUnitMatcher.group(1));
-            return dividendAmount != null && dividendAmount.compareTo(BigDecimal.ZERO) > 0 ? dividendAmount : null;
-        }
-
-        if (normalizedValue.contains("份")) {
-            return null;
-        }
-
-        Matcher numberMatcher = DECIMAL_NUMBER_PATTERN.matcher(normalizedValue);
-        if (!numberMatcher.find()) {
-            return null;
-        }
-        BigDecimal dividendAmount = safeDecimal(numberMatcher.group(1));
-        return dividendAmount != null && dividendAmount.compareTo(BigDecimal.ZERO) > 0 ? dividendAmount : null;
-    }
 
     private String resolveDividendPlanStatus(LocalDate payDate) {
         if (payDate == null) {
@@ -5750,78 +5408,33 @@ public class InvestmentService {
     }
 
     private JsonNode fetchTencentQuoteFields(String symbol) {
+        // 腾讯快照经 market-service /api/internal/quote/stock/snapshot 获取（ symbol 可能带 sh/sz 前缀，需剥离）
+        String bareCode = symbol.replaceFirst("^(?:sh|sz|bj)", "");
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create("https://qt.gtimg.cn/q=" + symbol))
-                .timeout(Duration.ofSeconds(8))
-                .header("User-Agent", "Mozilla/5.0")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            String body = new String(httpResponse.body(), Charset.forName("GBK"));
-            int start = body.indexOf('"');
-            int end = body.lastIndexOf('"');
-            if (start < 0 || end <= start) {
+            JsonNode snapshot = marketQuoteClient.stockSnapshot(bareCode);
+            if (snapshot == null || !snapshot.path("matched").asBoolean(false)) {
                 return objectMapper.createObjectNode();
             }
-            String[] fields = body.substring(start + 1, end).split("~");
-            com.fasterxml.jackson.databind.node.ObjectNode node = objectMapper.createObjectNode();
-            node.put("name", field(fields, 1));
-            node.put("code", field(fields, 2));
-            node.put("price", field(fields, 3));
-            node.put("prevClose", field(fields, 4));
-            node.put("open", field(fields, 5));
-            node.put("volume", field(fields, 6));
-            node.put("timeRaw", field(fields, 30));
-            node.put("change", field(fields, 31));
-            node.put("changePercent", field(fields, 32));
-            node.put("high", field(fields, 33));
-            node.put("low", field(fields, 34));
-            node.put("turnoverRate", field(fields, 38));
-            node.put("pe", field(fields, 39));
+            ObjectNode node = objectMapper.createObjectNode();
+            node.put("name", snapshot.path("name").asText(null));
+            node.put("code", snapshot.path("code").asText(null));
+            node.put("price", snapshot.path("price").asText(null));
+            node.put("prevClose", snapshot.path("prevClose").asText(null));
+            node.put("open", snapshot.path("open").asText(null));
+            node.put("volume", snapshot.path("volume").asText(null));
+            node.put("timeRaw", snapshot.path("timeRaw").asText(null));
+            node.put("change", snapshot.path("change").asText(null));
+            node.put("changePercent", snapshot.path("changePercent").asText(null));
+            node.put("high", snapshot.path("high").asText(null));
+            node.put("low", snapshot.path("low").asText(null));
+            node.put("turnoverRate", snapshot.path("turnoverRate").asText(null));
+            node.put("pe", snapshot.path("pe").asText(null));
             return node;
         } catch (Exception ex) {
             return objectMapper.createObjectNode();
         }
     }
 
-    private List<InvestmentChartPointResponse> fetchStockKlinePoints(String symbol) {
-        try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                    "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=" + URLEncoder.encode(symbol + ",day,,,260,qfq", StandardCharsets.UTF_8)
-                ))
-                .timeout(Duration.ofSeconds(10))
-                .header("User-Agent", "Mozilla/5.0")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            JsonNode root = objectMapper.readTree(new String(httpResponse.body(), StandardCharsets.UTF_8));
-            JsonNode rows = root.path("data").path(symbol).path("qfqday");
-            if (!rows.isArray() || rows.isEmpty()) {
-                rows = root.path("data").path(symbol).path("day");
-            }
-            if (!rows.isArray()) {
-                return Collections.emptyList();
-            }
-            List<InvestmentChartPointResponse> points = new ArrayList<>();
-            for (JsonNode row : rows) {
-                if (!row.isArray() || row.size() < 6) {
-                    continue;
-                }
-                InvestmentChartPointResponse point = new InvestmentChartPointResponse();
-                point.setLabel(row.get(0).asText());
-                point.setOpen(safeDecimal(row.get(1).asText(null)));
-                point.setClose(safeDecimal(row.get(2).asText(null)));
-                point.setHigh(safeDecimal(row.get(3).asText(null)));
-                point.setLow(safeDecimal(row.get(4).asText(null)));
-                point.setVolume(safeDecimal(row.get(5).asText(null)));
-                point.setValue(point.getClose());
-                points.add(point);
-            }
-            return points;
-        } catch (Exception ex) {
-            return Collections.emptyList();
-        }
-    }
 
     private InvestmentDetailStatResponse stat(String label, String value, String tone) {
         return new InvestmentDetailStatResponse(label, value, tone);
@@ -5857,7 +5470,7 @@ public class InvestmentService {
             }
         }
 
-        mergedProducts.addAll(fetchEastMoneyProducts(keyword, productType));
+        mergedProducts.addAll(fetchSearchProducts(keyword, productType));
         return deduplicateProducts(mergedProducts);
     }
 
@@ -5898,12 +5511,6 @@ public class InvestmentService {
         return product;
     }
 
-    private Optional<InvestmentProductResponse> resolveExternalForecastProduct(String productType, String symbol) {
-        if (FUND_PRODUCT_TYPE.equals(productType)) {
-            return fetchFundProduct(symbol);
-        }
-        return fetchStockProduct(symbol).or(() -> fetchTencentStockProduct(symbol));
-    }
 
     private BigDecimal resolveForecastCurrentPrice(
         String productType,
@@ -6050,9 +5657,6 @@ public class InvestmentService {
         return value == null ? "" : value.trim();
     }
 
-    private String safeText(String value) {
-        return value == null ? "" : value;
-    }
 
     private Optional<InvestmentProductResponse> fetchFundProduct(String code) {
         try {
@@ -6079,29 +5683,18 @@ public class InvestmentService {
         }
     }
 
-    private List<InvestmentProductResponse> fetchEastMoneyProducts(String keyword, String productType) {
+    /**
+     * 产品搜索：经行情中心 /api/internal/quote/search（腾讯 smartbox 联想，
+     * LOF/ETF/名称含"基金"的场内份额归为基金，指数剔除，与原东财 suggest type=14 口径一致）。
+     */
+    private List<InvestmentProductResponse> fetchSearchProducts(String keyword, String productType) {
         try {
-            String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                    "https://searchapi.eastmoney.com/api/suggest/get?input=" + encodedKeyword + "&type=14&count=20&cb=searchResult"
-                ))
-                .timeout(Duration.ofSeconds(8))
-                .header("User-Agent", "Mozilla/5.0")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
+            JsonNode items = marketQuoteClient.searchProducts(keyword).path("items");
+            if (!items.isArray()) {
                 return Collections.emptyList();
             }
-
-            String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
-            JsonNode rows = objectMapper.readTree(extractJsonpObject(body)).path("QuotationCodeTable").path("Data");
-            if (!rows.isArray()) {
-                return Collections.emptyList();
-            }
-
-            return java.util.stream.StreamSupport.stream(rows.spliterator(), false)
-                .map(row -> toExternalProductFromSuggestion(row, productType))
+            return java.util.stream.StreamSupport.stream(items.spliterator(), false)
+                .map(row -> toExternalProductFromRow(row, productType))
                 .flatMap(Optional::stream)
                 .toList();
         } catch (Exception ex) {
@@ -6109,97 +5702,76 @@ public class InvestmentService {
         }
     }
 
-    private Optional<InvestmentProductResponse> toExternalProductFromSuggestion(JsonNode row, String productType) {
-        String code = row.path("Code").asText("");
-        String classify = row.path("Classify").asText("");
-        String securityTypeName = row.path("SecurityTypeName").asText("");
-        String resolvedType = resolveProductType(classify, securityTypeName);
+
+    private Optional<InvestmentProductResponse> toExternalProductFromRow(JsonNode row, String productType) {
+        String code = row.path("code").asText("");
+        String resolvedType = row.path("type").asText("");
+        String exchange = row.path("exchange").asText("");
         if (!StringUtils.hasText(code) || !StringUtils.hasText(resolvedType)) {
             return Optional.empty();
         }
         if (StringUtils.hasText(productType) && !productType.equals(resolvedType)) {
             return Optional.empty();
         }
-
+        String name = row.path("name").asText("");
         if ("fund".equals(resolvedType)) {
-            return fetchFundProduct(code).or(() -> Optional.of(toBasicExternalProduct(row, "fund", "FUND", null, "份", 4)));
+            return fetchFundProduct(code).or(() -> Optional.of(toBasicExternalProduct(code, name, "fund", "FUND", null, "份", 4)));
         }
         if ("stock".equals(resolvedType)) {
             return fetchStockProduct(code)
                 .or(() -> fetchTencentStockProduct(code))
-                .or(() -> Optional.of(toBasicExternalProduct(row, "stock", "CN", resolveExchangeCode(row), "股", 2)));
+                .or(() -> Optional.of(toBasicExternalProduct(code, name, "stock", "CN", exchange, "股", 2)));
         }
         if ("bond".equals(resolvedType)) {
-            return Optional.of(toBasicExternalProduct(row, "bond", "CN", resolveExchangeCode(row), "张", 4));
+            return Optional.of(toBasicExternalProduct(code, name, "bond", "CN", exchange, "张", 4));
         }
         return fetchTencentStockProduct(code);
     }
 
+
     private Optional<InvestmentProductResponse> fetchTencentStockProduct(String code) {
-        for (String symbol : tencentStockSymbols(code)) {
-            try {
-                HttpRequest request = HttpRequest.newBuilder(URI.create("https://qt.gtimg.cn/q=" + symbol))
-                    .timeout(Duration.ofSeconds(8))
-                    .header("User-Agent", "Mozilla/5.0")
-                    .GET()
-                    .build();
-                HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-                if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                    continue;
-                }
-
-                String body = new String(httpResponse.body(), Charset.forName("GBK"));
-                int start = body.indexOf('"');
-                int end = body.lastIndexOf('"');
-                if (start < 0 || end <= start) {
-                    continue;
-                }
-                String[] fields = body.substring(start + 1, end).split("~");
-                if (fields.length < 4 || !StringUtils.hasText(fields[1])) {
-                    continue;
-                }
-
-                InvestmentProductResponse response = new InvestmentProductResponse();
-                response.setProductType("stock");
-                response.setMarket("CN");
-                response.setExchangeCode(symbol.startsWith("sh") ? "SSE" : "SZSE");
-                response.setSymbol(fields[2]);
-                response.setName(fields[1]);
-                response.setShortName(fields[1]);
-                response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
-                response.setUnitName("股");
-                response.setPricePrecision(2);
-                response.setLatestPrice(decimalText(fields[3], null));
-                response.setStatus(ACTIVE_STATUS);
-                return Optional.of(response);
-            } catch (Exception ex) {
-                // Try next market prefix.
+        // 腾讯快照经 market-service 获取（client 内部已尝试沪深前缀）
+        try {
+            JsonNode snapshot = marketQuoteClient.stockSnapshot(code);
+            if (snapshot == null || !snapshot.path("matched").asBoolean(false)) {
+                return Optional.empty();
             }
+            String name = snapshot.path("name").asText("");
+            if (!StringUtils.hasText(name)) {
+                return Optional.empty();
+            }
+            String price = snapshot.path("price").asText(null);
+            if (!StringUtils.hasText(price)) {
+                return Optional.empty();
+            }
+
+            InvestmentProductResponse response = new InvestmentProductResponse();
+            response.setProductType("stock");
+            response.setMarket("CN");
+            response.setExchangeCode(snapshot.path("exchangeCode").asText(null));
+            response.setSymbol(code);
+            response.setName(name);
+            response.setShortName(name);
+            response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
+            response.setUnitName("股");
+            response.setPricePrecision(2);
+            response.setLatestPrice(decimalText(price, null));
+            response.setStatus(ACTIVE_STATUS);
+            return Optional.of(response);
+        } catch (Exception ex) {
+            return Optional.empty();
         }
-        return Optional.empty();
     }
 
-    private String resolveProductType(String classify, String securityTypeName) {
-        if ("OTCFUND".equals(classify) || securityTypeName.contains("基金")) {
-            return "fund";
-        }
-        if ("AStock".equals(classify) || securityTypeName.contains("A")) {
-            return "stock";
-        }
-        if ("Bond".equals(classify) || securityTypeName.contains("债券")) {
-            return "bond";
-        }
-        return null;
-    }
 
-    private InvestmentProductResponse toBasicExternalProduct(JsonNode row, String productType, String market, String exchangeCode, String unitName, int pricePrecision) {
+    private InvestmentProductResponse toBasicExternalProduct(String code, String name, String productType, String market, String exchangeCode, String unitName, int pricePrecision) {
         InvestmentProductResponse response = new InvestmentProductResponse();
         response.setProductType(productType);
         response.setMarket(market);
         response.setExchangeCode(exchangeCode);
-        response.setSymbol(row.path("Code").asText(""));
-        response.setName(row.path("Name").asText(""));
-        response.setShortName(row.path("Name").asText(""));
+        response.setSymbol(code);
+        response.setName(name);
+        response.setShortName(name);
         response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
         response.setUnitName(unitName);
         response.setPricePrecision(pricePrecision);
@@ -6207,72 +5779,41 @@ public class InvestmentService {
         return response;
     }
 
-    private String resolveExchangeCode(JsonNode row) {
-        String quoteId = row.path("QuoteID").asText("");
-        if (quoteId.startsWith("1.")) {
-            return "SSE";
-        }
-        if (quoteId.startsWith("0.")) {
-            return "SZSE";
-        }
-        return null;
-    }
 
+
+    /**
+     * 股票产品快照：经行情中心 /api/internal/quote/stock/snapshot（腾讯 qt.gtimg.cn，
+     * 名称/现价，替代原东财 push2 f57/f58/f43）。
+     */
     private Optional<InvestmentProductResponse> fetchStockProduct(String code) {
-        for (String secid : stockSecids(code)) {
-            try {
-                HttpRequest request = HttpRequest.newBuilder(URI.create("http://push2.eastmoney.com/api/qt/stock/get?secid=" + secid + "&fields=f57,f58,f43"))
-                    .timeout(Duration.ofSeconds(8))
-                    .header("User-Agent", "Mozilla/5.0")
-                    .header("Accept-Encoding", "identity")
-                    .GET()
-                    .build();
-                HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-                if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                    continue;
-                }
-
-                String body = new String(httpResponse.body(), StandardCharsets.UTF_8);
-                JsonNode data = objectMapper.readTree(body).path("data");
-                String name = data.path("f58").asText("");
-                if (!StringUtils.hasText(name)) {
-                    continue;
-                }
-
-                InvestmentProductResponse response = new InvestmentProductResponse();
-                response.setProductType("stock");
-                response.setMarket("CN");
-                response.setExchangeCode(secid.startsWith("1.") ? "SSE" : "SZSE");
-                response.setSymbol(data.path("f57").asText(code));
-                response.setName(name);
-                response.setShortName(name);
-                response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
-                response.setUnitName("股");
-                response.setPricePrecision(2);
-                BigDecimal rawPrice = decimalText(data.path("f43").asText(null), null);
-                response.setLatestPrice(rawPrice == null ? null : rawPrice.divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
-                response.setStatus(ACTIVE_STATUS);
-                return Optional.of(response);
-            } catch (Exception ex) {
-                // Try next market prefix.
+        try {
+            JsonNode data = marketQuoteClient.stockSnapshot(code);
+            if (data == null || !data.path("matched").asBoolean(false)) {
+                return Optional.empty();
             }
+            String name = data.path("name").asText("");
+            if (!StringUtils.hasText(name)) {
+                return Optional.empty();
+            }
+            InvestmentProductResponse response = new InvestmentProductResponse();
+            response.setProductType("stock");
+            response.setMarket("CN");
+            response.setExchangeCode(data.path("exchangeCode").asText(null));
+            response.setSymbol(data.path("code").asText(code));
+            response.setName(name);
+            response.setShortName(name);
+            response.setCurrencyCode(DEFAULT_CURRENCY_CODE);
+            response.setUnitName("股");
+            response.setPricePrecision(2);
+            response.setLatestPrice(safeDecimal(data.path("price").asText(null)));
+            response.setStatus(ACTIVE_STATUS);
+            return Optional.of(response);
+        } catch (Exception ex) {
+            return Optional.empty();
         }
-        return Optional.empty();
     }
 
-    private List<String> stockSecids(String code) {
-        if (code.startsWith("6")) {
-            return List.of("1." + code, "0." + code);
-        }
-        return List.of("0." + code, "1." + code);
-    }
 
-    private List<String> tencentStockSymbols(String code) {
-        if (code.startsWith("6")) {
-            return List.of("sh" + code, "sz" + code);
-        }
-        return List.of("sz" + code, "sh" + code);
-    }
 
     private String toTencentSymbol(String code, String exchangeCode) {
         if ("SSE".equals(exchangeCode)) {
@@ -6284,32 +5825,7 @@ public class InvestmentService {
         return code.startsWith("6") ? "sh" + code : "sz" + code;
     }
 
-    private String extractJsonpObject(String body) {
-        int start = body == null ? -1 : body.indexOf('{');
-        int end = body == null ? -1 : body.lastIndexOf('}');
-        if (start < 0 || end <= start) {
-            throw new IllegalArgumentException("外部产品数据格式错误");
-        }
-        return body.substring(start, end + 1);
-    }
 
-    private String extractJsArray(String body, String variableName) {
-        String marker = "var " + variableName + " = ";
-        int start = body == null ? -1 : body.indexOf(marker);
-        if (start < 0) {
-            marker = variableName + " = ";
-            start = body == null ? -1 : body.indexOf(marker);
-        }
-        if (start < 0) {
-            throw new IllegalArgumentException("外部走势数据格式错误");
-        }
-        int arrayStart = body.indexOf('[', start + marker.length());
-        int semicolon = body.indexOf(';', arrayStart);
-        if (arrayStart < 0 || semicolon <= arrayStart) {
-            throw new IllegalArgumentException("外部走势数据格式错误");
-        }
-        return body.substring(arrayStart, semicolon);
-    }
 
     private BigDecimal decimalText(String first, String second) {
         String value = StringUtils.hasText(first) && !"--".equals(first) ? first : second;
@@ -6343,10 +5859,6 @@ public class InvestmentService {
         } catch (Exception ex) {
             return null;
         }
-    }
-
-    private String field(String[] fields, int index) {
-        return fields.length > index ? fields[index] : "";
     }
 
     private String blankToDash(String value) {
@@ -6402,13 +5914,6 @@ public class InvestmentService {
         return "其他";
     }
 
-    private String formatTencentTime(String raw) {
-        if (!StringUtils.hasText(raw) || raw.length() != 14) {
-            return null;
-        }
-        return raw.substring(0, 4) + "-" + raw.substring(4, 6) + "-" + raw.substring(6, 8)
-            + " " + raw.substring(8, 10) + ":" + raw.substring(10, 12) + ":" + raw.substring(12, 14);
-    }
 
     private LocalDate resolveStockQuoteDate(String raw) {
         if (!StringUtils.hasText(raw) || raw.length() < 8) {
@@ -6765,60 +6270,48 @@ public class InvestmentService {
         return fetchStockHistoricalDividendPlansResult(product).plans();
     }
 
+    /**
+     * 股票分红历史：经行情中心 /api/internal/quote/stock/dividends（新浪分红送配页，每10股口径）。
+     * 新浪无"所属年度"列，分红年度取除息日年份（原东财 REPORT_DATE 为空时同为该回退口径）。
+     */
     private DividendHistoryFetchResult fetchStockHistoricalDividendPlansResult(InvestmentProductEntity product) {
         if (product == null || !StringUtils.hasText(product.getSymbol())) {
             return new DividendHistoryFetchResult(false, Collections.emptyList());
         }
         try {
-            String filter = URLEncoder.encode("(SECURITY_CODE=\"" + product.getSymbol() + "\")", StandardCharsets.UTF_8);
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                    "https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_SHAREBONUS_DET"
-                        + "&columns=ALL"
-                        + "&filter=" + filter
-                        + "&pageNumber=1&pageSize=50&sortColumns=REPORT_DATE&sortTypes=-1&source=WEB&client=WEB"
-                ))
-                .timeout(Duration.ofSeconds(10))
-                .header("User-Agent", "Mozilla/5.0")
-                .header("Accept", "application/json,text/plain,*/*")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                log.warn("股票分红历史获取失败，productId={}, symbol={}, status={}",
-                    product.getId(), product.getSymbol(), httpResponse.statusCode());
+            JsonNode payload = marketQuoteClient.stockDividends(product.getSymbol());
+            if (payload == null || !payload.path("matched").asBoolean(false)) {
+                log.warn("股票分红历史获取失败，productId={}, symbol={}, reason=页面不匹配",
+                    product.getId(), product.getSymbol());
                 return new DividendHistoryFetchResult(false, Collections.emptyList());
             }
-
-            JsonNode rows = objectMapper.readTree(new String(httpResponse.body(), StandardCharsets.UTF_8))
-                .path("result")
-                .path("data");
+            JsonNode rows = payload.path("items");
             if (!rows.isArray()) {
                 log.warn("股票分红历史解析失败，productId={}, symbol={}, reason=响应中没有数据数组",
                     product.getId(), product.getSymbol());
                 return new DividendHistoryFetchResult(false, Collections.emptyList());
             }
-
             List<InvestmentDividendPlanEntity> plans = new ArrayList<>();
             for (JsonNode row : rows) {
-                BigDecimal pretaxBonus = safeDecimal(row.path("PRETAX_BONUS_RMB").asText(null));
-                LocalDate exDividendDate = safeDate(row.path("EX_DIVIDEND_DATE").asText(null));
-                LocalDate payDate = safeDate(row.path("PAY_DATE").asText(null));
+                BigDecimal pretaxBonus = safeDecimal(row.path("pretaxPer10").asText(null));
+                LocalDate exDividendDate = safeDate(row.path("exDividendDate").asText(null));
                 if (pretaxBonus == null || pretaxBonus.compareTo(BigDecimal.ZERO) <= 0 || exDividendDate == null) {
                     continue;
                 }
-
+                LocalDate recordDate = safeDate(row.path("recordDate").asText(null));
+                String progress = row.path("progress").asText(null);
                 InvestmentDividendPlanEntity plan = new InvestmentDividendPlanEntity();
                 plan.setProductId(product.getId());
-                plan.setDividendYear(resolveStockDividendYear(row, exDividendDate));
-                plan.setRecordDate(safeDate(row.path("EQUITY_RECORD_DATE").asText(null)));
+                plan.setDividendYear(resolveStockDividendYear(exDividendDate));
+                plan.setRecordDate(recordDate);
                 plan.setExDividendDate(exDividendDate);
-                plan.setPayDate(payDate != null ? payDate : exDividendDate);
+                plan.setPayDate(exDividendDate);
                 plan.setDividendPerUnit(pretaxBonus.divide(BigDecimal.TEN, 6, RoundingMode.HALF_UP));
                 plan.setTaxRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
                 plan.setCurrencyCode(blankToDefault(product.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
-                plan.setStatus(resolveDividendPlanStatus(payDate != null ? payDate : exDividendDate));
+                plan.setStatus(resolveDividendPlanStatus(exDividendDate));
                 plan.setSource(STOCK_DIVIDEND_HISTORY_SOURCE);
-                plan.setRemark(row.path("IMPL_PLAN_PROFILE").asText(null));
+                plan.setRemark(progress);
                 plans.add(plan);
             }
             return new DividendHistoryFetchResult(true, plans);
@@ -6829,110 +6322,15 @@ public class InvestmentService {
         }
     }
 
-    private List<InvestmentDividendPlanEntity> fetchStockForecastDividendPlans(InvestmentProductEntity product, int basisYear) {
-        if (product == null || !StringUtils.hasText(product.getSymbol())) {
-            return Collections.emptyList();
-        }
-        try {
-            String filter = URLEncoder.encode("(SECURITY_CODE=\"" + product.getSymbol() + "\")", StandardCharsets.UTF_8);
-            HttpRequest request = HttpRequest.newBuilder(URI.create(
-                    "https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_SHAREBONUS_DET"
-                        + "&columns=ALL"
-                        + "&filter=" + filter
-                        + "&pageNumber=1&pageSize=50&sortColumns=REPORT_DATE&sortTypes=-1&source=WEB&client=WEB"
-                ))
-                .timeout(Duration.ofSeconds(10))
-                .header("User-Agent", "Mozilla/5.0")
-                .header("Accept", "application/json,text/plain,*/*")
-                .GET()
-                .build();
-            HttpResponse<byte[]> httpResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-            if (httpResponse.statusCode() < 200 || httpResponse.statusCode() >= 300) {
-                return Collections.emptyList();
-            }
 
-            JsonNode rows = objectMapper.readTree(new String(httpResponse.body(), StandardCharsets.UTF_8))
-                .path("result")
-                .path("data");
-            if (!rows.isArray()) {
-                return Collections.emptyList();
-            }
 
-            List<InvestmentDividendPlanEntity> plans = new ArrayList<>();
-            for (JsonNode row : rows) {
-                BigDecimal pretaxBonus = safeDecimal(row.path("PRETAX_BONUS_RMB").asText(null));
-                if (pretaxBonus == null || pretaxBonus.compareTo(BigDecimal.ZERO) <= 0) {
-                    continue;
-                }
 
-                LocalDate reportDate = safeDate(row.path("REPORT_DATE").asText(null));
-                LocalDate exDividendDate = safeDate(row.path("EX_DIVIDEND_DATE").asText(null));
-                LocalDate recordDate = safeDate(row.path("EQUITY_RECORD_DATE").asText(null));
-                LocalDate planNoticeDate = safeDate(row.path("PLAN_NOTICE_DATE").asText(null));
-                LocalDate noticeDate = safeDate(row.path("NOTICE_DATE").asText(null));
-                LocalDate publishDate = safeDate(row.path("PUBLISH_DATE").asText(null));
-                Integer dividendYear = resolveStockDividendYear(row, exDividendDate != null ? exDividendDate : reportDate);
-                if (dividendYear == null || dividendYear != basisYear) {
-                    continue;
-                }
-
-                LocalDate referenceDate = firstNonNullDate(exDividendDate, recordDate, noticeDate, planNoticeDate, publishDate, reportDate);
-                if (referenceDate == null) {
-                    continue;
-                }
-
-                InvestmentDividendPlanEntity plan = new InvestmentDividendPlanEntity();
-                plan.setProductId(product.getId());
-                plan.setDividendYear(dividendYear);
-                plan.setRecordDate(recordDate != null ? recordDate : referenceDate);
-                plan.setExDividendDate(exDividendDate);
-                plan.setPayDate(referenceDate);
-                plan.setDividendPerUnit(pretaxBonus.divide(BigDecimal.TEN, 6, RoundingMode.HALF_UP));
-                plan.setTaxRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
-                plan.setCurrencyCode(blankToDefault(product.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
-                plan.setStatus(exDividendDate != null ? resolveDividendPlanStatus(exDividendDate) : "confirmed");
-                plan.setSource(STOCK_DIVIDEND_HISTORY_SOURCE);
-                plan.setRemark(joinDividendPlanRemark(
-                    row.path("ASSIGN_PROGRESS").asText(null),
-                    row.path("IMPL_PLAN_PROFILE").asText(null)
-                ));
-                plans.add(plan);
-            }
-            return plans;
-        } catch (Exception ex) {
-            return Collections.emptyList();
-        }
+    private Integer resolveStockDividendYear(LocalDate exDividendDate) {
+        return exDividendDate == null ? null : exDividendDate.getYear();
     }
 
-    private Integer resolveStockDividendYear(JsonNode row, LocalDate fallbackDate) {
-        LocalDate reportDate = safeDate(row.path("REPORT_DATE").asText(null));
-        if (reportDate != null) {
-            return reportDate.getYear();
-        }
-        return fallbackDate == null ? null : fallbackDate.getYear();
-    }
 
-    private LocalDate firstNonNullDate(LocalDate... dates) {
-        if (dates == null) {
-            return null;
-        }
-        for (LocalDate date : dates) {
-            if (date != null) {
-                return date;
-            }
-        }
-        return null;
-    }
 
-    private String joinDividendPlanRemark(String progress, String profile) {
-        if (StringUtils.hasText(progress) && StringUtils.hasText(profile)) {
-            return progress.trim() + " · " + profile.trim();
-        }
-        if (StringUtils.hasText(progress)) {
-            return progress.trim();
-        }
-        return StringUtils.hasText(profile) ? profile.trim() : null;
-    }
 
     private DividendProfile buildDividendProfile(
         List<InvestmentDividendPlanEntity> historicalPlans,
@@ -7042,17 +6440,6 @@ public class InvestmentService {
         return today.getYear();
     }
 
-    private boolean isDividendPlanInYear(InvestmentDividendPlanEntity plan, int basisYear) {
-        if (plan == null) {
-            return false;
-        }
-        Integer dividendYear = resolveDividendPlanYear(plan, LocalDate.now());
-        if (dividendYear != null && dividendYear > 0) {
-            return dividendYear == basisYear;
-        }
-        LocalDate recencyDate = dividendPlanRecencyDate(plan);
-        return recencyDate != null && recencyDate.getYear() == basisYear;
-    }
 
     private BigDecimal resolveNetDividendPerUnit(InvestmentDividendPlanEntity plan) {
         BigDecimal dividendPerUnit = defaultZero(plan.getDividendPerUnit());
