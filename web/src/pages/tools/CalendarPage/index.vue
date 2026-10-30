@@ -13,6 +13,7 @@ import {
   type CalendarOverviewView,
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -92,7 +93,7 @@ async function loadOverview() {
     if (currentRequest !== requestSerial) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '日历加载失败'
+    pageError.value = getErrorMessage(error, '日历加载失败')
   } finally {
     if (currentRequest === requestSerial) {
       isLoading.value = false

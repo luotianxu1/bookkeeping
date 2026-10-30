@@ -16,6 +16,7 @@ import {
   type Anniversary,
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type AnniversaryTab = 'month' | 'all'
 
@@ -125,7 +126,7 @@ async function loadAnniversaries() {
   try {
     anniversaries.value = await getAnniversaries({ userId: currentUser.id, scope: 'all' })
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '纪念日加载失败'
+    pageError.value = getErrorMessage(error, '纪念日加载失败')
   } finally {
     isLoading.value = false
   }
@@ -228,7 +229,7 @@ async function saveAnniversary() {
     showFeedback(isEditing ? '纪念日已更新' : '纪念日已新增', 'success')
     await loadAnniversaries()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '纪念日保存失败'
+    const message = getErrorMessage(error, '纪念日保存失败')
     formError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -252,7 +253,7 @@ async function confirmDeleteAnniversary() {
     showFeedback('纪念日已删除', 'success')
     await loadAnniversaries()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     showFeedback(message, 'error')
   } finally {
     isDeleting.value = false

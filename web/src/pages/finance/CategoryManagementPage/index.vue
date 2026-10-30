@@ -21,6 +21,7 @@ import {
   type SaveCategoryParams,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type CategoryGroup = {
   parent: Category
@@ -218,7 +219,7 @@ async function loadCategories() {
     })
     categories.value = nextCategories.filter((category) => !isHiddenFixedExpenseCategory(category))
   } catch (error) {
-    categoryListError.value = error instanceof Error ? error.message : '分类列表加载失败'
+    categoryListError.value = getErrorMessage(error, '分类列表加载失败')
   } finally {
     isLoadingCategories.value = false
   }
@@ -272,7 +273,7 @@ async function saveCategory() {
     closeCategoryModal()
     await loadCategories()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '分类保存失败'
+    const message = getErrorMessage(error, '分类保存失败')
     categoryFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -315,7 +316,7 @@ async function confirmDeleteCategory() {
     showFeedback('删除成功', 'success')
     await loadCategories()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '分类删除失败'
+    const message = getErrorMessage(error, '分类删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

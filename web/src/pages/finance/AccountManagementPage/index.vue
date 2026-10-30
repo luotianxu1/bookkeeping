@@ -31,6 +31,7 @@ import {
 import type { AccountGroup, AccountOverview } from '@/types/account'
 import AccountGroupCard from '../components/AccountGroupCard/index.vue'
 import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
+import { getErrorMessage } from '@/api/request'
 
 const DEBT_ACCOUNT_CODES = new Set(['debt'])
 const LIABILITY_ACCOUNT_CODES = new Set(['liability'])
@@ -472,7 +473,7 @@ async function saveAccount() {
     showFeedback('新增成功', 'success')
     await loadAccounts()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '账户保存失败'
+    const message = getErrorMessage(error, '账户保存失败')
     accountFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -506,7 +507,7 @@ async function loadAccounts() {
   } catch (error) {
     accounts.value = []
     overviewTotalAssets.value = null
-    accountListError.value = error instanceof Error ? error.message : '账户列表加载失败'
+    accountListError.value = getErrorMessage(error, '账户列表加载失败')
   } finally {
     isLoadingAccounts.value = false
   }
@@ -529,7 +530,7 @@ async function loadAccountTypes() {
       accountType.value = types[0]?.code ?? ''
     }
   } catch (error) {
-    accountTypeError.value = error instanceof Error ? error.message : '账户类型加载失败'
+    accountTypeError.value = getErrorMessage(error, '账户类型加载失败')
   } finally {
     isLoadingAccountTypes.value = false
   }
@@ -549,7 +550,7 @@ async function loadContactsForForm() {
       status: 'active',
     })
   } catch (error) {
-    accountFormError.value = error instanceof Error ? error.message : '联系人加载失败'
+    accountFormError.value = getErrorMessage(error, '联系人加载失败')
   } finally {
     isLoadingContacts.value = false
   }

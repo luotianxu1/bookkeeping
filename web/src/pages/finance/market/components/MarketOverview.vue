@@ -8,7 +8,7 @@ import {
   type MarketActivity,
   type MarketTurnover,
 } from '@/api/modules/market'
-import { ApiError } from '@/api/request'
+import { getErrorMessage } from '@/api/request'
 
 const props = defineProps<{ market?: ActivityMarket }>()
 
@@ -27,8 +27,7 @@ const note = computed(() => {
 })
 
 function errText(e: unknown, fallback: string): string {
-  if (e instanceof ApiError) return e.message || fallback
-  return e instanceof Error ? e.message : fallback
+  return getErrorMessage(e, fallback)
 }
 
 async function load(): Promise<void> {

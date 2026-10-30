@@ -25,6 +25,7 @@ import StatsEntry from '../components/StatsEntry/index.vue'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import type { FinanceOverview } from '@/types/finance'
+import { getErrorMessage } from '@/api/request'
 
 const router = useRouter()
 const emptyOverview: FinanceOverview = {
@@ -139,7 +140,7 @@ async function loadCashTransactions() {
     }
   } catch (error) {
     transactions.value = []
-    transactionListError.value = error instanceof Error ? error.message : '收支记录加载失败'
+    transactionListError.value = getErrorMessage(error, '收支记录加载失败')
   } finally {
     isLoadingTransactions.value = false
   }
@@ -253,7 +254,7 @@ async function confirmDeleteTransaction() {
     showFeedback('删除成功', 'success')
     await loadCashTransactions()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

@@ -52,6 +52,7 @@ import {
   statTone,
   toneByNumber,
 } from './utils'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -294,7 +295,7 @@ async function loadTransactionPage(page: number) {
     })
     applyTransactionPage(pageData)
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '交易记录加载失败', 'error')
+    showFeedback(getErrorMessage(error, '交易记录加载失败'), 'error')
   } finally {
     isLoadingTransactionPage.value = false
   }
@@ -364,7 +365,7 @@ async function loadDetail() {
     fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
     loadExternalMarketData(detailData)
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '投资详情加载失败'
+    pageError.value = getErrorMessage(error, '投资详情加载失败')
   } finally {
     isLoading.value = false
   }
@@ -398,7 +399,7 @@ async function updateAutoInvestPlanStatus(plan: InvestmentAutoInvestPlan, status
     showFeedback(status === 'active' ? '定投计划已恢复' : status === 'paused' ? '定投计划已暂停' : '定投计划已停用', 'success')
     await loadDetail()
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '定投计划更新失败', 'error')
+    showFeedback(getErrorMessage(error, '定投计划更新失败'), 'error')
   } finally {
     isSavingAutoInvest.value = false
   }
@@ -418,7 +419,7 @@ async function removeAutoInvestPlan(plan: InvestmentAutoInvestPlan) {
     showFeedback('定投计划已删除', 'success')
     await loadDetail()
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '删除定投计划失败', 'error')
+    showFeedback(getErrorMessage(error, '删除定投计划失败'), 'error')
   } finally {
     isSavingAutoInvest.value = false
   }
@@ -462,7 +463,7 @@ async function confirmDeletePosition() {
     showFeedback('删除成功', 'success')
     await router.push(backTo.value)
   } catch (error) {
-    const message = error instanceof Error ? error.message : '投资资产删除失败'
+    const message = getErrorMessage(error, '投资资产删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

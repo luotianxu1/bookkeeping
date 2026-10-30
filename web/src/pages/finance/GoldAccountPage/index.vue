@@ -32,6 +32,7 @@ import {
 } from '@/api/modules/finance'
 import { refreshGoldPriceCache, useGoldPriceCache } from '@/utils/gold-price-cache'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const router = useRouter()
 
@@ -242,7 +243,7 @@ async function loadGoldAccount() {
     if (currentRequestVersion !== requestVersion) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '黄金账户加载失败'
+    pageError.value = getErrorMessage(error, '黄金账户加载失败')
   } finally {
     if (currentRequestVersion === requestVersion) {
       isLoading.value = false
@@ -261,7 +262,7 @@ async function refreshGoldData() {
     await refreshGoldPriceCache({ forceRemote: true })
     showFeedback('黄金信息已刷新', 'success')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '黄金信息刷新失败'
+    const message = getErrorMessage(error, '黄金信息刷新失败')
     showFeedback(message, 'error')
   } finally {
     isRefreshingGold.value = false
@@ -323,7 +324,7 @@ async function saveGoldAccount() {
     closeCreateModal(true)
     await loadGoldAccount()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '账户保存失败'
+    const message = getErrorMessage(error, '账户保存失败')
     accountFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -345,7 +346,7 @@ async function removeAccount(id: number) {
     showFeedback('删除成功', 'success')
     await loadGoldAccount()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '账户删除失败'
+    const message = getErrorMessage(error, '账户删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

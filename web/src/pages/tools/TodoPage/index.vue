@@ -18,6 +18,7 @@ import {
   type TodoStatus,
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type TodoTab = 'all' | 'today' | 'completed'
 
@@ -121,7 +122,7 @@ async function loadTodoItems() {
   try {
     todoItems.value = await getTodoItems({ userId: currentUser.id, status: 'all' })
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '待办事项加载失败'
+    pageError.value = getErrorMessage(error, '待办事项加载失败')
   } finally {
     isLoading.value = false
   }
@@ -221,7 +222,7 @@ async function saveTodoItem() {
     showFeedback(isEditing ? '待办事项已更新' : '待办事项已新增', 'success')
     await loadTodoItems()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '待办事项保存失败'
+    const message = getErrorMessage(error, '待办事项保存失败')
     formError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -247,7 +248,7 @@ async function toggleTodoStatus(item: TodoItem) {
     todoItems.value = todoItems.value.map((todoItem) => (todoItem.id === updatedItem.id ? updatedItem : todoItem))
     showFeedback(nextStatus === 'completed' ? '已标记为完成' : '已恢复为待办', 'success')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '状态更新失败'
+    const message = getErrorMessage(error, '状态更新失败')
     showFeedback(message, 'error')
   } finally {
     updatingTodoId.value = null
@@ -273,7 +274,7 @@ async function confirmDeleteTodo() {
     showFeedback('待办事项已删除', 'success')
     await loadTodoItems()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     showFeedback(message, 'error')
   } finally {
     isDeleting.value = false

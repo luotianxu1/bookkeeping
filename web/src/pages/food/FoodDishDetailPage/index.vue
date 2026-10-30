@@ -5,6 +5,7 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getFoodDish, type FoodDish } from '@/api/modules/food'
 import { getFoodDishListPath, isDarkFoodPath, mapCoverToneToClass } from '../shared'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 
@@ -31,7 +32,7 @@ async function loadDetail() {
   try {
     dish.value = await getFoodDish(dishId)
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '菜品详情加载失败'
+    pageError.value = getErrorMessage(error, '菜品详情加载失败')
   } finally {
     isLoading.value = false
   }

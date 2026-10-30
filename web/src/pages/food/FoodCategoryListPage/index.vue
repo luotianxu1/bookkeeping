@@ -23,6 +23,7 @@ import {
   getFoodDishListPath,
   isDarkFoodPath,
 } from '../shared'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -87,7 +88,7 @@ async function loadCategories() {
       categoryType: 'dish',
     })
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '分类加载失败'
+    pageError.value = getErrorMessage(error, '分类加载失败')
   } finally {
     isLoading.value = false
   }
@@ -182,7 +183,7 @@ async function saveCategory() {
     await loadCategories()
     closeCategoryModal()
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '保存失败', 'error')
+    showFeedback(getErrorMessage(error, '保存失败'), 'error')
   } finally {
     isSaving.value = false
   }
@@ -218,7 +219,7 @@ async function confirmDeleteCategory() {
     showFeedback('分类已删除', 'success')
     await loadCategories()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

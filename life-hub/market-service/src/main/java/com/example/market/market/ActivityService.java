@@ -37,6 +37,11 @@ public final class ActivityService {
     private static final int MAX_WORKERS = 12;
     private static final int HK_CHUNK = 300;
 
+    /** HttpClient 不可变且线程安全，全局复用连接池（每次新建无法复用连接） */
+    private static final HttpClient NASDAQ_HTTP_CLIENT = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .build();
+
     /** 各市场缓存 TTL：A股 60s；港美统计开销大，300s */
     private static final Map<String, Long> TTL = Map.of("a", 60_000L, "hk", 300_000L, "us", 300_000L);
     private static final Map<String, MarketUtils.TtlCache<Map<String, Object>>> CACHES = Map.of(
@@ -364,8 +369,7 @@ public final class ActivityService {
                 .header("Accept", "application/json")
                 .GET()
                 .build();
-            HttpResponse<String> resp = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10))
-                .build().send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> resp = NASDAQ_HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() != 200) {
                 throw new IllegalStateException("纳斯达克 screener 返回 " + resp.statusCode());
             }

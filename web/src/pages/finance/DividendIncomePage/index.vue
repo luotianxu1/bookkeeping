@@ -24,6 +24,7 @@ import {
   updateInvestmentFixedExpense,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type FixedExpenseSource = 'investment' | 'renewal'
 
@@ -130,7 +131,7 @@ async function loadPageData() {
     investmentExpenseItems.value = normalizeInvestmentExpenseItems(dividendIncomeData.fixedExpenses)
     renewalExpenseItems.value = normalizeRenewalExpenseItems(renewalSubscriptions, currentUser.id)
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '攒股收息加载失败'
+    pageError.value = getErrorMessage(error, '攒股收息加载失败')
   } finally {
     isLoading.value = false
   }
@@ -159,7 +160,7 @@ async function refreshDividendIncomeData() {
     investmentExpenseItems.value = normalizeInvestmentExpenseItems(dividendIncomeData.fixedExpenses)
     renewalExpenseItems.value = normalizeRenewalExpenseItems(renewalSubscriptions, currentUser.id)
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '攒股收息刷新失败'
+    pageError.value = getErrorMessage(error, '攒股收息刷新失败')
   } finally {
     isRefreshing.value = false
   }
@@ -378,7 +379,7 @@ async function submitExpenseItem() {
     await refreshExpenseItems()
     closeExpenseModal()
   } catch (error) {
-    expenseError.value = error instanceof Error ? error.message : '保存固定支出失败'
+    expenseError.value = getErrorMessage(error, '保存固定支出失败')
   } finally {
     expenseSaving.value = false
   }
@@ -413,7 +414,7 @@ async function removeExpenseItem(id: number) {
     await deleteInvestmentFixedExpense(id, currentUserId.value)
     await refreshExpenseItems()
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '删除固定支出失败'
+    pageError.value = getErrorMessage(error, '删除固定支出失败')
   }
 }
 </script>

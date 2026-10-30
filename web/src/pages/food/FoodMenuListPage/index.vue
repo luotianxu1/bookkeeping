@@ -9,6 +9,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import { deleteFoodOrder, getFoodOrders, type FoodOrder } from '@/api/modules/food'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getFoodHomePath, getFoodMenuDetailPath } from '../shared'
+import { getErrorMessage } from '@/api/request'
 
 const router = useRouter()
 
@@ -59,7 +60,7 @@ async function loadOrders() {
       userId: currentUser.id,
     })
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '菜单列表加载失败'
+    pageError.value = getErrorMessage(error, '菜单列表加载失败')
   } finally {
     isLoading.value = false
   }
@@ -106,7 +107,7 @@ async function confirmDeleteOrder() {
     showFeedback('菜单已删除', 'success')
     await loadOrders()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '菜单删除失败'
+    const message = getErrorMessage(error, '菜单删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

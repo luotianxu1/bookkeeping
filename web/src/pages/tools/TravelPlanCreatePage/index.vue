@@ -13,6 +13,7 @@ import {
   updateTravelPlan,
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type CompanionOption = {
   value: string
@@ -87,7 +88,7 @@ async function loadContacts() {
     }))
   } catch (error) {
     companionOptions.value = []
-    loadError.value = error instanceof Error ? error.message : '联系人加载失败'
+    loadError.value = getErrorMessage(error, '联系人加载失败')
   }
 }
 
@@ -109,7 +110,7 @@ async function loadPlanDetail() {
       contactId: item.contactId,
     }))
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : '旅行详情加载失败'
+    loadError.value = getErrorMessage(error, '旅行详情加载失败')
   }
 }
 
@@ -183,7 +184,7 @@ async function submitCreate() {
 
     void router.push(`/tools/travel-plans/${saved.id}`)
   } catch (error) {
-    saveError.value = error instanceof Error ? error.message : `${isEditMode.value ? '修改' : '创建'}旅行失败`
+    saveError.value = getErrorMessage(error, `${isEditMode.value ? '修改' : '创建'}旅行失败`)
   } finally {
     isSaving.value = false
   }

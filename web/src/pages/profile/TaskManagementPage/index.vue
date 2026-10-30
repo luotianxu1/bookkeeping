@@ -11,6 +11,7 @@ import {
   getTodayScheduledTasks,
   type ScheduledTask,
 } from '@/api/modules/finance'
+import { getErrorMessage } from '@/api/request'
 
 const tasks = ref<ScheduledTask[]>([])
 const isLoading = ref(true)
@@ -42,7 +43,7 @@ async function loadTasks(forceRefresh = false) {
   try {
     tasks.value = await getTodayScheduledTasks()
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '任务状态加载失败'
+    pageError.value = getErrorMessage(error, '任务状态加载失败')
   } finally {
     isLoading.value = false
     isRefreshing.value = false
@@ -94,7 +95,7 @@ async function executeTask(task: ScheduledTask) {
     showFeedback.value = true
     await loadTasks(true)
   } catch (error) {
-    feedbackMessage.value = error instanceof Error ? error.message : '任务执行失败'
+    feedbackMessage.value = getErrorMessage(error, '任务执行失败')
     feedbackType.value = 'error'
     showFeedback.value = true
   } finally {

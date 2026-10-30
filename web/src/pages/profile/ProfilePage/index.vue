@@ -14,6 +14,7 @@ import {
   setStoredCurrentUser,
 } from '@/utils/current-user'
 import { useTheme } from '@/utils/theme'
+import { getErrorMessage } from '@/api/request'
 
 type ProfileMenuItem = {
   label: string
@@ -137,7 +138,7 @@ async function confirmDeleteAccount() {
     showFeedback('账号已注销', 'success')
     await router.push('/login')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '注销失败'
+    const message = getErrorMessage(error, '注销失败')
     deleteAccountError.value = message
     showFeedback(message, 'error')
   } finally {

@@ -5,6 +5,8 @@
 - **grid 溢出陷阱**：页面级 grid 的轨道默认 min-width:auto，nowrap 表格/文本的 min-content 会沿 grid 链条把整页撑出横向滚动。容纳宽内容的 grid 必须加 `> * { min-width: 0 }`，宽表格交给卡片内 `overflow-x: auto` 的包裹层滚动。
 - design token 全部在 `src/styles/base.css`：涨=红 `--color-danger`、跌=绿 `--color-success`、金色点缀 `--color-chart-gold`；**字号 token 只有 11/12/13/14/16/18/20/24/26/28/30/36/38（15/17 等不存在，var 引用空值会回退继承 43px！）**；间距 `--space-2~96`（18/30 等不存在，28 存在）、圆角 `--radius-8~36`；注意 `--space-18` 不存在。
 - API：`financeRequest` 实例无路径前缀，路径须写全（如 `/api/finance/market/...`）；行情行数据用中文键 Map 保持与后端契约一致。
+- **错误消息归一化（2026-10-30 起）**：页面 catch 一律用 `getErrorMessage(error, '兜底文案')`（request.ts 导出，处理 ApiError/AxiosError/普通 Error），禁止手写 `error instanceof Error ? error.message : '...'`；主动取消用 `isCancelRequest(error)` 静默忽略，取消请求传 `{ signal }`（`useRequestAbort` composable：signalFor() 自带「先 abort 上一个」+ 卸载自动 abort）。
+- **批量脚本改文件铁律**：必须整文件读入→全文写回→行数/INSERT 计数断言；向 import 区插入时用 depth-aware 定位（多行 import 语句内不能插），且动手前确认 git 工作区干净可回滚（曾因只写回部分内容截断 16 个文件，靠 git checkout 恢复）。
 - **echarts 一律按需引入（2026-10-30 起）**：页面动态加载统一走 `src/utils/echarts.ts`（`import('@/utils/echarts')`，命名导出 `init` 返回主包 `ECharts` 类型），新图表类型/组件在该文件 `echarts.use()` 注册；禁止直接 `import('echarts')`（全量包 1.1MB）。类型仍 `import type { ECharts } from 'echarts'`。坑：core 的 EChartsType 与主包 ECharts 私有字段 _ssr 不重叠，断言需 `as unknown as ECharts`。
 
 ## 后端（spring-cloud-bookkeeping）

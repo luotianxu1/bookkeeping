@@ -24,6 +24,7 @@ import {
   type PhotographyOrderType,
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type TabKey = 'pending' | 'shot' | 'all'
 
@@ -215,7 +216,7 @@ async function loadPage() {
     cashAccounts.value = accountList.filter(isCashAccount)
     hydrateDefaultAccounts()
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '摄影订单加载失败'
+    pageError.value = getErrorMessage(error, '摄影订单加载失败')
   } finally {
     isLoading.value = false
   }
@@ -347,9 +348,10 @@ async function saveOrder() {
     showFeedback(isEditing ? '摄影订单修改成功' : '新增摄影订单成功', 'success')
     await loadPage()
   } catch (error) {
-    orderFormError.value = error instanceof Error
-      ? error.message
-      : `${isEditing ? '修改' : '新增'}订单失败`
+    orderFormError.value = getErrorMessage(
+      error,
+      `${isEditing ? '修改' : '新增'}订单失败`,
+    )
     showFeedback(orderFormError.value, 'error')
   } finally {
     isSaving.value = false
@@ -425,7 +427,7 @@ async function confirmCollectFinal() {
     showFeedback('尾款已入账', 'success')
     await loadPage()
   } catch (error) {
-    collectFormError.value = error instanceof Error ? error.message : '尾款入账失败'
+    collectFormError.value = getErrorMessage(error, '尾款入账失败')
     showFeedback(collectFormError.value, 'error')
   } finally {
     isCollecting.value = false
@@ -479,7 +481,7 @@ async function confirmCancelOrder() {
     showFeedback('拍摄已取消，订金已保留', 'success')
     await loadPage()
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '取消拍摄失败', 'error')
+    showFeedback(getErrorMessage(error, '取消拍摄失败'), 'error')
   } finally {
     isCancelling.value = false
   }
@@ -506,7 +508,7 @@ async function confirmDeleteOrder() {
     showFeedback('订单删除成功', 'success')
     await loadPage()
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '删除订单失败', 'error')
+    showFeedback(getErrorMessage(error, '删除订单失败'), 'error')
   } finally {
     isDeleting.value = false
   }

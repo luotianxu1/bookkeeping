@@ -22,6 +22,7 @@ import {
 } from '@/api/modules/tool'
 import { getApiBaseUrl } from '@/api/api-base-url'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type DetailTab = 'overview' | 'route' | 'expense'
 type ModalType = 'transport' | 'scenic' | 'dining' | 'accommodation'
@@ -758,7 +759,7 @@ async function loadDetail(silent = false) {
   } catch (error) {
     if (!silent) {
       detail.value = null
-      loadError.value = error instanceof Error ? error.message : '旅行详情加载失败'
+      loadError.value = getErrorMessage(error, '旅行详情加载失败')
     }
   } finally {
     if (!silent) {
@@ -958,7 +959,7 @@ async function saveModal() {
     closeModal()
     resetModalForm()
   } catch (error) {
-    modalError.value = error instanceof Error ? error.message : '保存行程失败'
+    modalError.value = getErrorMessage(error, '保存行程失败')
   } finally {
     isSavingItinerary.value = false
   }
@@ -1001,7 +1002,7 @@ async function saveEditModal() {
       showFeedback('行程已更新', 'success')
       await loadDetail(true)
     } catch (error) {
-      editModalError.value = error instanceof Error ? error.message : '行程保存失败'
+      editModalError.value = getErrorMessage(error, '行程保存失败')
     } finally {
       isSavingItinerary.value = false
     }
@@ -1040,7 +1041,7 @@ async function saveEditModal() {
     showFeedback(target.isNew ? '费用已新增' : '费用已更新', 'success')
     await loadDetail(true)
   } catch (error) {
-    editModalError.value = error instanceof Error ? error.message : '费用保存失败'
+    editModalError.value = getErrorMessage(error, '费用保存失败')
   } finally {
     isSavingExpense.value = false
   }
@@ -1065,7 +1066,7 @@ async function confirmDeleteItem() {
     closeDeleteItemModal(true)
     await loadDetail()
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '删除失败', 'error')
+    showFeedback(getErrorMessage(error, '删除失败'), 'error')
   } finally {
     isDeletingItem.value = false
   }
@@ -1535,7 +1536,7 @@ async function renderTravelMap(kind: 'overview' | 'route') {
       routeMapContainer = mapContainer
     }
   } catch (error) {
-    messageRef.value = error instanceof Error ? error.message : '高德地图加载失败'
+    messageRef.value = getErrorMessage(error, '高德地图加载失败')
   }
 }
 

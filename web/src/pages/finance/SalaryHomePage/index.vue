@@ -9,6 +9,7 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { formatSalaryCurrency, formatSalaryPercent } from '../salary-shared'
+import { getErrorMessage } from '@/api/request'
 
 const pageData = ref<SalaryOverview | null>(null)
 const isLoading = ref(true)
@@ -35,7 +36,7 @@ async function loadPage() {
   try {
     pageData.value = await getSalaryOverview(currentUser.id)
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '工资管理加载失败'
+    pageError.value = getErrorMessage(error, '工资管理加载失败')
     openFeedback(pageError.value, 'error')
   } finally {
     isLoading.value = false

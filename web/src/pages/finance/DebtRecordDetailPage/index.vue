@@ -11,6 +11,7 @@ import {
   type DebtRecord,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 const account = ref<Account | null>(null)
@@ -82,7 +83,7 @@ async function loadDetail() {
       .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime())
   } catch (error) {
     if (currentRequestVersion === requestVersion) {
-      pageError.value = error instanceof Error ? error.message : '债务项详情加载失败'
+      pageError.value = getErrorMessage(error, '债务项详情加载失败')
     }
   } finally {
     if (currentRequestVersion === requestVersion) {

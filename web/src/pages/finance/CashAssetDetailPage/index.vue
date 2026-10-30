@@ -27,6 +27,7 @@ import { allAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON, resolveCashAccountIco
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
 import type { DayGroup, Transaction } from '@/types/finance'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
+import { getErrorMessage } from '@/api/request'
 
 const CASH_TRANSACTION_PAGE_SIZE = 50
 
@@ -168,7 +169,7 @@ async function saveCashAccount() {
     showFeedback('修改成功', 'success')
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '账户保存失败'
+    const message = getErrorMessage(error, '账户保存失败')
     accountFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -220,7 +221,7 @@ async function loadDetail() {
     if (currentRequestVersion !== requestVersion) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '资产详情加载失败'
+    pageError.value = getErrorMessage(error, '资产详情加载失败')
   } finally {
     if (currentRequestVersion === requestVersion) {
       isLoading.value = false
@@ -261,7 +262,7 @@ async function loadTransactionPage() {
       return
     }
     transactions.value = []
-    historyError.value = error instanceof Error ? error.message : '收支记录加载失败'
+    historyError.value = getErrorMessage(error, '收支记录加载失败')
   } finally {
     if (currentRequestVersion === requestVersion) {
       isLoadingTransactions.value = false
@@ -334,7 +335,7 @@ async function confirmDeleteTransaction() {
     }
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

@@ -18,6 +18,7 @@ import {
   getFoodDishListPath,
   isDarkFoodPath,
 } from '../shared'
+import { getErrorMessage } from '@/api/request'
 
 type EditableIngredient = {
   uid: number
@@ -102,7 +103,7 @@ async function loadCategories() {
     })
     categoryId.value = categories.value[0]?.id ?? null
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '分类加载失败'
+    pageError.value = getErrorMessage(error, '分类加载失败')
   } finally {
     isLoading.value = false
   }
@@ -176,7 +177,7 @@ async function saveDish() {
     showFeedback('菜品已保存', 'success')
     await router.replace(getFoodDishDetailPath(isDark.value, created.id))
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '菜品保存失败', 'error')
+    showFeedback(getErrorMessage(error, '菜品保存失败'), 'error')
   } finally {
     isSaving.value = false
   }

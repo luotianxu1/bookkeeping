@@ -25,6 +25,7 @@ import {
   type LiabilityRecord,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type InstallmentPreview = {
   amount: number
@@ -226,7 +227,7 @@ async function loadDetail() {
     if (currentRequestVersion !== requestVersion) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '负债详情加载失败'
+    pageError.value = getErrorMessage(error, '负债详情加载失败')
   } finally {
     if (currentRequestVersion === requestVersion) {
       isLoading.value = false
@@ -465,7 +466,7 @@ async function saveRecord() {
     showFeedback(isEditing ? '月账单已更新' : '月账单已新增', 'success')
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '月账单保存失败'
+    const message = getErrorMessage(error, '月账单保存失败')
     recordFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -488,7 +489,7 @@ async function confirmDelete() {
     showFeedback('月账单已删除', 'success')
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -516,7 +517,7 @@ async function confirmRepay() {
     showFeedback('该期月账单已还款', 'success')
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '还款失败'
+    const message = getErrorMessage(error, '还款失败')
     repayError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -544,7 +545,7 @@ async function confirmPrepay() {
     showFeedback('该负债账户已提前结清', 'success')
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '提前还款失败'
+    const message = getErrorMessage(error, '提前还款失败')
     prepayError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -569,7 +570,7 @@ async function confirmDeleteAccount() {
     showFeedback('负债账户已删除', 'success')
     await router.push('/finance/accounts/liability')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     accountDeleteError.value = message
     showFeedback(message, 'error')
   } finally {

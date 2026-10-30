@@ -16,6 +16,7 @@ import {
   dividendTypeOptions,
   formatEditableFundQuantity,
 } from './utils'
+import { getErrorMessage } from '@/api/request'
 
 const props = defineProps<{
   detail: InvestmentAssetDetail
@@ -143,7 +144,7 @@ async function submitEdit() {
     emit('feedback', '修改成功', 'success')
     emit('saved')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '修改失败'
+    const message = getErrorMessage(error, '修改失败')
     editError.value = message
     emit('feedback', message, 'error')
   } finally {

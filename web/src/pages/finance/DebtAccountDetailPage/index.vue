@@ -26,6 +26,7 @@ import {
 } from '@/api/modules/finance'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type DebtRecordKind = 'payable-borrow' | 'receivable-borrow' | 'payable-repayment' | 'receivable-repayment'
 
@@ -206,7 +207,7 @@ async function loadDetail() {
     if (currentRequestVersion !== requestVersion) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '债务详情加载失败'
+    pageError.value = getErrorMessage(error, '债务详情加载失败')
   } finally {
     if (currentRequestVersion === requestVersion) {
       isLoading.value = false
@@ -344,7 +345,7 @@ async function saveRecord() {
     showFeedback(isEditing ? '债务记录已更新' : '债务记录已新增', 'success')
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '债务记录保存失败'
+    const message = getErrorMessage(error, '债务记录保存失败')
     recordFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -367,7 +368,7 @@ async function confirmDelete() {
     showFeedback('债务记录已删除', 'success')
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

@@ -21,6 +21,7 @@ import {
 } from '@/api/modules/food'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getFoodHomePath } from '../shared'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -128,7 +129,7 @@ async function loadPage() {
     }
     selectedCategoryId.value = categoryList[0]?.id ?? null
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '食材列表加载失败'
+    pageError.value = getErrorMessage(error, '食材列表加载失败')
   } finally {
     isLoading.value = false
   }
@@ -224,7 +225,7 @@ async function saveIngredient() {
     closeEditModal()
     showFeedback(isEditing ? '食材已修改' : '食材已新增', 'success')
   } catch (error) {
-    const message = error instanceof Error ? error.message : (editingIngredient.value ? '食材修改失败' : '食材新增失败')
+    const message = getErrorMessage(error, editingIngredient.value ? '食材修改失败' : '食材新增失败')
     formError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -250,7 +251,7 @@ async function confirmDeleteIngredient() {
     await loadPage()
     showFeedback('食材已删除', 'success')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '食材删除失败'
+    const message = getErrorMessage(error, '食材删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

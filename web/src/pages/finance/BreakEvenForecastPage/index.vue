@@ -7,6 +7,7 @@ import {
   getInvestmentProducts,
   type InvestmentProduct,
 } from '@/api/modules/finance'
+import { getErrorMessage } from '@/api/request'
 
 const searchKeyword = ref('')
 const searchResults = ref<InvestmentProduct[]>([])
@@ -207,7 +208,7 @@ async function searchProducts() {
   } catch (error) {
     searchResults.value = []
     searchMessage.value = ''
-    pageError.value = error instanceof Error ? error.message : '资产搜索失败'
+    pageError.value = getErrorMessage(error, '资产搜索失败')
   } finally {
     isSearching.value = false
   }

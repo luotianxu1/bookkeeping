@@ -25,6 +25,7 @@ import {
 } from '@/api/modules/finance'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const DIRECTION_OPTIONS = [
   { label: '送出', value: 'outgoing' },
@@ -148,7 +149,7 @@ async function loadDetail() {
     if (currentRequestVersion !== requestVersion) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '人情详情加载失败'
+    pageError.value = getErrorMessage(error, '人情详情加载失败')
   } finally {
     if (currentRequestVersion === requestVersion) {
       isLoading.value = false
@@ -259,7 +260,7 @@ async function saveRecord() {
     showFeedback(isEditing ? '人情记录已更新' : '人情记录已新增', 'success')
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '人情记录保存失败'
+    const message = getErrorMessage(error, '人情记录保存失败')
     recordFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -282,7 +283,7 @@ async function confirmDelete() {
     showFeedback('人情记录已删除', 'success')
     await loadDetail()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

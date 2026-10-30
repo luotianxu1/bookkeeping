@@ -33,6 +33,7 @@ import {
   allAccountIconOptions,
   resolveInvestmentAccountIcon,
 } from '@/data/account-icons'
+import { getErrorMessage } from '@/api/request'
 
 type InvestmentAccountCard = {
   account: Account
@@ -185,7 +186,7 @@ async function loadInvestmentAccounts() {
     positions.value = positionList
     summary.value = summaryData
   } catch (error) {
-    const message = error instanceof Error ? error.message : '投资账户加载失败'
+    const message = getErrorMessage(error, '投资账户加载失败')
     pageError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -321,7 +322,7 @@ async function saveAccount() {
     closeAccountModal(true)
     await loadInvestmentAccounts()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '投资账户保存失败'
+    const message = getErrorMessage(error, '投资账户保存失败')
     accountFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -344,7 +345,7 @@ async function confirmDelete() {
     showFeedback('投资账户已删除', 'success')
     await loadInvestmentAccounts()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

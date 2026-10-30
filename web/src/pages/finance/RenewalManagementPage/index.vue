@@ -28,6 +28,7 @@ import {
   type SaveRenewalSubscriptionParams,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type FilterKey = 'all' | 'due' | 'paused'
 
@@ -237,7 +238,7 @@ async function loadPage() {
       formFundingAccountId.value = String(fundingAccounts.value[0].id)
     }
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '固定支出加载失败'
+    pageError.value = getErrorMessage(error, '固定支出加载失败')
   } finally {
     isLoading.value = false
   }
@@ -377,7 +378,7 @@ async function saveSubscription() {
     closeSubscriptionModal(true)
     await loadPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '固定支出保存失败'
+    const message = getErrorMessage(error, '固定支出保存失败')
     formError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -402,7 +403,7 @@ async function toggleSubscriptionStatus(subscription: RenewalSubscription) {
     }
     await loadPage()
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '固定支出状态更新失败', 'error')
+    showFeedback(getErrorMessage(error, '固定支出状态更新失败'), 'error')
   } finally {
     isUpdatingStatus.value = false
   }
@@ -424,7 +425,7 @@ async function confirmDeleteSubscription() {
     showFeedback('固定支出已删除', 'success')
     await loadPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '固定支出删除失败'
+    const message = getErrorMessage(error, '固定支出删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

@@ -23,6 +23,7 @@ import {
   mapCoverToneToClass,
   useFoodSelection,
 } from '../shared'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -145,7 +146,7 @@ async function loadPage() {
       currentCategoryId.value = categoryList[0].id
     }
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '菜品列表加载失败'
+    pageError.value = getErrorMessage(error, '菜品列表加载失败')
   } finally {
     isLoading.value = false
   }
@@ -175,7 +176,7 @@ async function confirmOrder() {
     selectedPanelOpen.value = false
     void router.push(getFoodMenuDetailPath(order.id))
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '新增菜单失败', 'error')
+    showFeedback(getErrorMessage(error, '新增菜单失败'), 'error')
   } finally {
     isSubmitting.value = false
   }

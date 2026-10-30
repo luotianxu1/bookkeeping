@@ -22,6 +22,7 @@ import {
   type TransactionAnalysisPeriodSummary,
   type TransactionAnalysisTrendPoint,
 } from '@/api/modules/finance'
+import { getErrorMessage } from '@/api/request'
 
 type PeriodLabel = '月' | '年'
 type SummaryTab = '收入' | '支出' | '结余'
@@ -402,7 +403,7 @@ async function loadAnalysis() {
       return
     }
     analysis.value = null
-    pageError.value = error instanceof Error ? error.message : '收支分析加载失败'
+    pageError.value = getErrorMessage(error, '收支分析加载失败')
   } finally {
     if (currentRequest === requestSerial.value) {
       isLoading.value = false

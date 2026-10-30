@@ -7,6 +7,7 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import { getFundProfitForecast, type FundProfitForecast, type FundProfitForecastAccount, type FundProfitForecastHolding } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type ForecastMetrics = Pick<
   FundProfitForecast,
@@ -109,7 +110,7 @@ async function loadForecast() {
       selectedAccountId.value = 'all'
     }
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '收益预测加载失败'
+    pageError.value = getErrorMessage(error, '收益预测加载失败')
   } finally {
     isLoading.value = false
   }

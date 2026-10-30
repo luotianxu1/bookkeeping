@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { getErrorMessage } from '@/api/request'
 import type { ECharts } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
@@ -782,7 +783,7 @@ function formatKlineNumber(value: unknown, fractionDigits = 2) {
 }
 
 function toErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback
+  return getErrorMessage(error, fallback)
 }
 </script>
 

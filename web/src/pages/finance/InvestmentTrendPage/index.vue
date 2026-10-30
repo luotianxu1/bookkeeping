@@ -21,6 +21,7 @@ import {
   type AssetTrendPoint,
   type AssetTrendRange,
 } from '@/api/modules/finance'
+import { getErrorMessage } from '@/api/request'
 
 type TrendRangeLabel = '近7日' | '近30日' | '年内' | '全部'
 
@@ -481,7 +482,7 @@ async function loadTrend() {
       return
     }
     trend.value = null
-    pageError.value = error instanceof Error ? error.message : '资产趋势加载失败'
+    pageError.value = getErrorMessage(error, '资产趋势加载失败')
     resetYesterdaySnapshots()
   } finally {
     if (currentRequest === requestSerial.value) {

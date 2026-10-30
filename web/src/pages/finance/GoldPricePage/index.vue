@@ -7,6 +7,7 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import { getGoldPrices, type GoldPrice, type GoldPriceRange } from '@/api/modules/finance'
 import { useTheme } from '@/utils/theme'
+import { getErrorMessage } from '@/api/request'
 
 type TrendKey = '1日' | '7日' | '30日' | '3个月' | '1年' | '3年'
 type DeltaTone = 'positive' | 'negative' | 'neutral'
@@ -410,7 +411,7 @@ async function loadGoldPriceWithOptions(options: {
         chartPoints: includeChart ? nextPrice.chartPoints : (goldPrice.value?.chartPoints ?? []),
       }
   } catch (error) {
-    goldPriceError.value = error instanceof Error ? error.message : '金价加载失败'
+    goldPriceError.value = getErrorMessage(error, '金价加载失败')
   } finally {
     isLoadingPrice.value = false
   }
@@ -422,7 +423,7 @@ async function loadTrendData() {
   try {
     await loadGoldPriceWithOptions({ includeChart: true })
   } catch (error) {
-    goldPriceError.value = error instanceof Error ? error.message : '走势加载失败'
+    goldPriceError.value = getErrorMessage(error, '走势加载失败')
   } finally {
     isLoadingTrend.value = false
   }
@@ -441,7 +442,7 @@ async function refreshCurrentGoldPrice() {
       includeChart: true,
     })
   } catch (error) {
-    goldPriceError.value = error instanceof Error ? error.message : '金价刷新失败'
+    goldPriceError.value = getErrorMessage(error, '金价刷新失败')
   } finally {
     isRefreshingPrice.value = false
   }

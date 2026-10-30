@@ -25,6 +25,14 @@ import { bias as biasCalc, kdj as kdjCalc, macd as macdCalc, rsi as rsiCalc } fr
 import { amt, dirClass, f2, pct, signedYi } from '@/utils/marketFormat'
 import { detailRoute } from '../routes'
 import PageHeader from '@/components/common/PageHeader/index.vue'
+import { getErrorMessage, isCancelRequest } from '@/api/request'
+import { useRequestAbort } from '@/composables/useRequestAbort'
+
+// 请求取消：切换标的/周期时中止上一组请求，防止慢响应覆盖新数据。
+// 三路通道互不干扰：图表（K线/分时，随周期切换）、头部快照、元信息（extra/F10/报表/回看）。
+const { signalFor: chartSignal } = useRequestAbort()
+const { signalFor: headerSignal } = useRequestAbort()
+const { signalFor: metaSignal } = useRequestAbort()
 
 const route = useRoute()
 const router = useRouter()
@@ -213,13 +221,14 @@ async function load(silent = false): Promise<void> {
 /** 头部行情快照：独立于图表周期加载，永远是今日实时数据（含五档/估值） */
 async function loadHeader(): Promise<void> {
   try {
-    const data = await getDetail(kind.value, code.value, '240', 5)
+    const data = await getDetail(kind.value, code.value, '240', 5, { signal: headerSignal() })
     quote.value = data.quote
     depth.value = data.depth
     valuation.value = data.valuation
     symbol.value = data.symbol
-  } catch {
+  } catch (e) {
     // 头部快照失败不阻塞图表；分时合成行情会兜底
+    if (isCancelRequest(e)) return
   }
 }
 
@@ -227,7 +236,7 @@ async function loadHeader(): Promise<void> {
 async function loadKline(silent = false): Promise<void> {
   if (!silent) loading.value = true
   try {
-    const data = await getKline(kind.value, code.value, scale.value, 250)
+    const data = await getKline(kind.value, code.value, scale.value, 250, { signal: chartSignal() })
     kline.value = data.kline
     klineScale.value = scale.value
     // 分钟K默认展示范围：60/30分为最近一周（5 个交易日），15/5分为今天；
@@ -254,12 +263,13 @@ async function loadKline(silent = false): Promise<void> {
     selDate.value = null
     error.value = ''
   } catch (e) {
+    // 被新请求/卸载中止：不清 loading（新请求已接管），也不展示错误
+    if (isCancelRequest(e)) return
     // 静默模式下保留旧图表，仅在没有旧数据时才展示错误
     if (!kline.value.length)
-      error.value = e instanceof Error ? e.message || '详情加载失败' : '详情加载失败'
-  } finally {
-    loading.value = false
+      error.value = getErrorMessage(e, '详情加载失败')
   }
+  loading.value = false
 }
 
 async function loadTrend(silent = false): Promise<void> {
@@ -268,16 +278,17 @@ async function loadTrend(silent = false): Promise<void> {
   selIdx.value = null
   trendDayIdx.value = -1
   try {
-    trendData.value = await getTrend(kind.value, code.value)
+    trendData.value = await getTrend(kind.value, code.value, { signal: chartSignal() })
     if (trendData.value) symbol.value = trendData.value.symbol
     error.value = ''
   } catch (e) {
+    // 被新请求/卸载中止：新请求已接管 loading，保持状态即可
+    if (isCancelRequest(e)) return
     // 静默模式下保留旧分时图，仅在没有旧数据时才展示错误
     if (!trendData.value)
-      error.value = e instanceof Error ? e.message || '分时加载失败' : '分时加载失败'
-  } finally {
-    loading.value = false
+      error.value = getErrorMessage(e, '分时加载失败')
   }
+  loading.value = false
 }
 
 watch(() => [kind.value, code.value], () => load())
@@ -291,7 +302,7 @@ onMounted(loadHeader)
 /** 扩展信息（资金流向/公告/分红）只在切换标时加载一次，与周期切换无关 */
 async function loadExtra(): Promise<void> {
   try {
-    extra.value = await getExtra(kind.value, code.value)
+    extra.value = await getExtra(kind.value, code.value, { signal: metaSignal() })
   } catch {
     extra.value = { moneyflow: [], announcements: [], dividends: [] }
   }
@@ -302,7 +313,7 @@ onMounted(loadExtra)
 /** F10 信息（财务指标/十大股东/融资融券/公司概况）与扩展信息一样只在切换标的时加载一次 */
 async function loadF10(): Promise<void> {
   try {
-    f10.value = await getF10(kind.value, code.value)
+    f10.value = await getF10(kind.value, code.value, { signal: metaSignal() })
   } catch {
     f10.value = { financials: null, holders: null, margin: null, profile: null, sectors: null }
   }
@@ -334,7 +345,7 @@ const curStatements = computed(() => statements.value?.[stmtTab.value] ?? null)
 
 async function loadStatements(): Promise<void> {
   try {
-    statements.value = await getStatements(kind.value, code.value)
+    statements.value = await getStatements(kind.value, code.value, 5, { signal: metaSignal() })
     // 当前选中的报表若没有数据，自动切到第一张有数据的报表
     if (statements.value && !statements.value[stmtTab.value]) {
       const first = STMT_TABS.find((t) => statements.value?.[t.key])
@@ -367,7 +378,7 @@ async function loadTrendHistory(): Promise<void> {
     return
   }
   try {
-    const data = await getTrendHistory(kind.value, code.value, 5)
+    const data = await getTrendHistory(kind.value, code.value, 5, { signal: metaSignal() })
     trendHistory.value = data?.days ?? null
   } catch {
     trendHistory.value = null

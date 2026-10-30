@@ -14,6 +14,7 @@ import {
 } from '@/api/modules/food'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getFoodDishListPath, getFoodDishMenuPath, getFoodMenuDetailPath, getFoodMenuPath } from '../shared'
+import { getErrorMessage } from '@/api/request'
 
 const router = useRouter()
 
@@ -57,7 +58,7 @@ async function loadPage() {
   try {
     homeData.value = await getFoodHome(currentUser.id)
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '餐饮首页加载失败'
+    pageError.value = getErrorMessage(error, '餐饮首页加载失败')
   } finally {
     isLoading.value = false
   }
@@ -91,7 +92,7 @@ async function createTodayMenu() {
     showFeedback('今日菜单已生成', 'success')
     await loadPage()
   } catch (error) {
-    showFeedback(error instanceof Error ? error.message : '生成菜单失败', 'error')
+    showFeedback(getErrorMessage(error, '生成菜单失败'), 'error')
   }
 }
 

@@ -2,6 +2,7 @@
 // A 股 tab：核心指数条 + 市场概况 + 涨跌停 + 概念板块 + 快照表（移植自 investment Home 页）。
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { getErrorMessage } from '@/api/request'
 import {
   getIndexSpot,
   getSectorSpot,
@@ -31,7 +32,7 @@ const sectorLoading = ref(true)
 const sectorError = ref('')
 
 function errText(e: unknown, fallback: string): string {
-  return e instanceof Error ? e.message || fallback : fallback
+  return getErrorMessage(e, fallback)
 }
 
 /* ---------- 数据加载（一次并发拉全，各自独立容错） ---------- */

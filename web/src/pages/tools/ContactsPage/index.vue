@@ -10,6 +10,7 @@ import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { createContact, deleteContact, getContacts, updateContact, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type ContactCardPreset = {
   variant: string
@@ -189,7 +190,7 @@ async function loadContacts() {
   try {
     contacts.value = await getContacts({ userId: currentUser.id })
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '联系人加载失败'
+    pageError.value = getErrorMessage(error, '联系人加载失败')
   } finally {
     isLoading.value = false
   }
@@ -239,7 +240,7 @@ async function saveContact() {
     showFeedback(isEditing ? '修改成功' : '新增成功', 'success')
     await loadContacts()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '联系人保存失败'
+    const message = getErrorMessage(error, '联系人保存失败')
     formError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -261,7 +262,7 @@ async function confirmDeleteContact() {
     showFeedback('删除成功', 'success')
     await loadContacts()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     showFeedback(message, 'error')
   } finally {
     isDeleting.value = false

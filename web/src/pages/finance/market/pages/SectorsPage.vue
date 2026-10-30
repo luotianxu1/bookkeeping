@@ -3,6 +3,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { getSectorSpot, type SectorKind, type SectorRow } from '@/api/modules/market'
 import { amt, dirClass, pct } from '@/utils/marketFormat'
+import { getErrorMessage } from '@/api/request'
 
 /* ---------- 状态 ---------- */
 const kind = ref<SectorKind>('industry')
@@ -39,7 +40,7 @@ async function load(): Promise<void> {
     const data = await getSectorSpot(kind.value)
     sectors.value = data.data
   } catch (e) {
-    error.value = e instanceof Error ? e.message || '板块数据加载失败' : '板块数据加载失败'
+    error.value = getErrorMessage(e, '板块数据加载失败')
   } finally {
     loading.value = false
   }

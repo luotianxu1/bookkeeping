@@ -15,6 +15,7 @@ import {
   type InvestmentTransaction,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type LiquidationRow = {
   position: InvestmentPosition
@@ -153,7 +154,7 @@ async function loadLiquidations() {
     if (currentRequestVersion !== requestVersion) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '清仓明细加载失败'
+    pageError.value = getErrorMessage(error, '清仓明细加载失败')
   } finally {
     if (currentRequestVersion === requestVersion) {
       isLoading.value = false

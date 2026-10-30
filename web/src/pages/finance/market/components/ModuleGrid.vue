@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { getGlobalModules, type GlobalModule } from '@/api/modules/market'
 import { dirClass, f2 } from '@/utils/marketFormat'
 import { detailRoute } from '../routes'
+import { getErrorMessage } from '@/api/request'
 
 const router = useRouter()
 
@@ -20,7 +21,7 @@ async function load(): Promise<void> {
     const data = await getGlobalModules()
     modules.value = data.modules
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '行情加载失败'
+    error.value = getErrorMessage(e, '行情加载失败')
   } finally {
     loading.value = false
   }

@@ -2,10 +2,14 @@
 // 行情搜索：新浪 suggest 联想（代码/名称/拼音），选中跳详情。
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { isCancelRequest } from '@/api/request'
+import { useRequestAbort } from '@/composables/useRequestAbort'
 import { searchStocks, type SearchRow } from '@/api/modules/market'
 import { detailRoute } from '../routes'
 
 const router = useRouter()
+// 输入型联想搜索：新关键词触发即中止上一请求，防止慢响应覆盖新结果
+const { signalFor } = useRequestAbort()
 
 const wrapEl = ref<HTMLElement | null>(null)
 const keyword = ref('')
@@ -25,17 +29,18 @@ async function runSearch(): Promise<void> {
   }
   searching.value = true
   try {
-    const data = await searchStocks(kw)
+    const data = await searchStocks(kw, { signal: signalFor() })
     results.value = data.data
     searched.value = true
     open.value = true
-  } catch {
+  } catch (e) {
+    // 被新请求中止：新请求已在跑，保持 searching 状态
+    if (isCancelRequest(e)) return
     results.value = []
     searched.value = true
     open.value = true
-  } finally {
-    searching.value = false
   }
+  searching.value = false
 }
 
 function onInput(): void {

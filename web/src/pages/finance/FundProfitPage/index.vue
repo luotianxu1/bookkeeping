@@ -18,6 +18,7 @@ import {
   type FundProfitView,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type DetailFilter = 'all' | 'profit' | 'loss'
 
@@ -355,7 +356,7 @@ async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean
     }
   } catch (error) {
     pageData.value = null
-    pageError.value = error instanceof Error ? error.message : '基金收益加载失败'
+    pageError.value = getErrorMessage(error, '基金收益加载失败')
   } finally {
     if (detailOnly) {
       isDetailLoading.value = false
@@ -388,7 +389,7 @@ async function refreshPositionData() {
     await wait(2000)
     await loadPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '基金持仓刷新失败'
+    const message = getErrorMessage(error, '基金持仓刷新失败')
     showFeedback(message, 'error')
   } finally {
     isRefreshingPositions.value = false

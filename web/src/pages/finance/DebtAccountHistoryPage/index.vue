@@ -11,6 +11,7 @@ import {
 } from '@/api/modules/finance'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type DebtHistoryGroup = {
   accountId: number
@@ -101,7 +102,7 @@ async function loadHistory() {
     contacts.value = contactList
     debtRecords.value = recordList
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '债务明细加载失败'
+    pageError.value = getErrorMessage(error, '债务明细加载失败')
   } finally {
     isLoading.value = false
   }

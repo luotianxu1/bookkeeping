@@ -23,6 +23,7 @@ import {
   type LiabilityAccountSummary,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type LiabilityCardView = {
   account: Account
@@ -273,7 +274,7 @@ async function loadLiabilityPage() {
     summary.value = summaryData
     liabilityRecords.value = recordList
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '负债账户加载失败'
+    pageError.value = getErrorMessage(error, '负债账户加载失败')
   } finally {
     isLoading.value = false
   }
@@ -362,7 +363,7 @@ async function saveAccount() {
     closeAccountModal(true)
     await loadLiabilityPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '负债账户保存失败'
+    const message = getErrorMessage(error, '负债账户保存失败')
     accountFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -385,7 +386,7 @@ async function confirmDelete() {
     showFeedback('负债账户已删除', 'success')
     await loadLiabilityPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

@@ -29,6 +29,7 @@ import {
   tradeTimeSlotOptions,
   type TradeFundFeeMode,
 } from './utils'
+import { getErrorMessage } from '@/api/request'
 
 const props = defineProps<{
   detail: InvestmentAssetDetail
@@ -318,7 +319,7 @@ async function removePendingTransaction() {
     emit('feedback', '待确认交易已删除', 'success')
     emit('saved')
   } catch (error) {
-    emit('feedback', error instanceof Error ? error.message : '删除交易失败', 'error')
+    emit('feedback', getErrorMessage(error, '删除交易失败'), 'error')
   } finally {
     isSubmitting.value = false
   }
@@ -410,7 +411,7 @@ async function submitTrade() {
       emit('feedback', editingTransaction.value ? '待确认交易已更新' : getFundTransactionSubmitMessage(transaction), 'success')
       emit('saved')
     } catch (error) {
-      const message = error instanceof Error ? error.message : `${tradeModalTitle.value}失败`
+      const message = getErrorMessage(error, `${tradeModalTitle.value}失败`)
       tradeError.value = message
       emit('feedback', message, 'error')
     } finally {
@@ -461,7 +462,7 @@ async function submitTrade() {
     emit('feedback', currentTradeAction.value === 'buy' ? '加仓成功' : '减仓成功', 'success')
     emit('saved')
   } catch (error) {
-    const message = error instanceof Error ? error.message : `${tradeModalTitle.value}失败`
+    const message = getErrorMessage(error, `${tradeModalTitle.value}失败`)
     tradeError.value = message
     emit('feedback', message, 'error')
   } finally {

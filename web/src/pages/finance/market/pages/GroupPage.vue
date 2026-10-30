@@ -2,6 +2,7 @@
 // 港股/美股/ETF/黄金 tab：核心行情方块阵 + 市场概况/榜单/行业板块（移植自 investment MarketPage）。
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { getErrorMessage } from '@/api/request'
 import {
   getQuotes,
   getUsSectors,
@@ -29,7 +30,7 @@ const usSectorLoading = ref(false)
 const usSectorError = ref('')
 
 function errText(e: unknown, fallback: string): string {
-  return e instanceof Error ? e.message || fallback : fallback
+  return getErrorMessage(e, fallback)
 }
 
 async function load(): Promise<void> {

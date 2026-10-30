@@ -13,6 +13,7 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const settings = ref<SalarySettings | null>(null)
 const isLoading = ref(true)
@@ -96,7 +97,7 @@ async function loadPage() {
     settings.value = await getSalarySettings(currentUser.id)
     fillForm(settings.value)
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '工资设置加载失败'
+    pageError.value = getErrorMessage(error, '工资设置加载失败')
     openFeedback(pageError.value, 'error')
   } finally {
     isLoading.value = false
@@ -192,7 +193,7 @@ async function submitQuickAdjust() {
     fillForm(settings.value)
     openFeedback('工资设置已保存', 'success')
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : '工资设置保存失败'
+    formError.value = getErrorMessage(error, '工资设置保存失败')
   } finally {
     isSaving.value = false
   }

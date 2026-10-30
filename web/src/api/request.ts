@@ -50,6 +50,11 @@ export function createRequest(options: RequestOptions = {}) {
     instance.interceptors.response.use(
         (response) => response,
         (error: AxiosError) => {
+            // 主动取消的请求（AbortController）原样抛出，页面用 isCancelRequest 静默忽略
+            if (axios.isCancel(error)) {
+                return Promise.reject(error)
+            }
+
             const status = error.response?.status
             if (status === 401) {
                 clearStoredCurrentUser()
@@ -75,17 +80,38 @@ export function createRequest(options: RequestOptions = {}) {
     return instance
 }
 
-function getErrorMessage(error: AxiosError) {
-    const data = error.response?.data
-    if (isRecord(data) && typeof data.message === 'string') {
-        return data.message
+/**
+ * 错误消息归一化：页面 catch 里统一用它替代手写的
+ * `error instanceof Error ? error.message : 'xxx'`。
+ */
+export function getErrorMessage(error: unknown, fallback = '网络异常，请稍后再试'): string {
+    if (error instanceof ApiError) {
+        return error.message
     }
 
-    if (error.response?.status) {
-        return `请求失败：${error.response.status}`
+    if (error instanceof AxiosError) {
+        const data = error.response?.data
+        if (isRecord(data) && typeof data.message === 'string') {
+            return data.message
+        }
+
+        if (error.response?.status) {
+            return `请求失败：${error.response.status}`
+        }
+
+        return error.message || fallback
     }
 
-    return error.message || '网络异常，请稍后再试'
+    if (error instanceof Error && error.message) {
+        return error.message
+    }
+
+    return fallback
+}
+
+/** 请求是否为主动取消（AbortController 中止），页面 catch 中应静默忽略 */
+export function isCancelRequest(error: unknown): boolean {
+    return axios.isCancel(error)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -120,43 +146,16 @@ function unwrapApiResponse<T>(payload: unknown, status?: number): T {
     return payload.data
 }
 
-const request = createRequest()
-
-export async function get<T>(url: string, config?: AxiosRequestConfig) {
-    const response = await request.get<ApiResponse<T> | T>(url, config)
-    return unwrapApiResponse<T>(response.data, response.status)
-}
-
-export async function post<T, D = unknown>(
-    url: string,
-    data?: D,
-    config?: AxiosRequestConfig,
-) {
-    const response = await request.post<ApiResponse<T> | T>(url, data, config)
-    return unwrapApiResponse<T>(response.data, response.status)
-}
-
-export async function put<T, D = unknown>(
-    url: string,
-    data?: D,
-    config?: AxiosRequestConfig,
-) {
-    const response = await request.put<ApiResponse<T> | T>(url, data, config)
-    return unwrapApiResponse<T>(response.data, response.status)
-}
-
-export async function del<T>(url: string, config?: AxiosRequestConfig) {
-    const response = await request.delete<ApiResponse<T> | T>(url, config)
-    return unwrapApiResponse<T>(response.data, response.status)
-}
-
-export default request
-
 export const authRequest = createRequest({ service: 'auth' })
 export const financeRequest = createRequest({ service: 'finance' })
 export const toolRequest = createRequest({ service: 'tool' })
 export const foodRequest = createRequest({ service: 'food' })
 export const marketRequest = createRequest({ service: 'market' })
+
+// requestXxx 的 config 透传 AxiosRequestConfig，取消请求传 { signal } 即可：
+//   const controller = new AbortController()
+//   requestGet(client, url, { signal: controller.signal })
+//   controller.abort()  // 参数变更或页面卸载时中止旧请求
 
 export async function requestGet<T>(
     client: ReturnType<typeof createRequest>,

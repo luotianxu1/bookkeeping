@@ -5,6 +5,7 @@ import { getExchangeRate } from '@/api/modules/finance'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
+import { getErrorMessage } from '@/api/request'
 
 const currencyOptions = [
   { code: 'USD', label: 'USD 美元' },
@@ -91,7 +92,7 @@ async function loadExchangeRate() {
     if (currentRequestId !== requestId) {
       return
     }
-    exchangeRateError.value = error instanceof Error ? error.message : '汇率加载失败'
+    exchangeRateError.value = getErrorMessage(error, '汇率加载失败')
     rate.value = 0
     updatedAt.value = ''
   } finally {

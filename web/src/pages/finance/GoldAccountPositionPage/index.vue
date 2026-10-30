@@ -36,6 +36,7 @@ import {
 import { refreshGoldPriceCache, useGoldPriceCache } from '@/utils/gold-price-cache'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { allAccountIconOptions } from '@/data/account-icons'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -235,7 +236,7 @@ async function loadGoldPosition() {
     if (currentRequestVersion !== requestVersion) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '黄金持仓加载失败'
+    pageError.value = getErrorMessage(error, '黄金持仓加载失败')
   } finally {
     if (currentRequestVersion === requestVersion) {
       isLoading.value = false
@@ -254,7 +255,7 @@ async function refreshGoldData() {
     await refreshGoldPriceCache({ forceRemote: true })
     showFeedback('黄金信息已刷新', 'success')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '黄金信息刷新失败'
+    const message = getErrorMessage(error, '黄金信息刷新失败')
     showFeedback(message, 'error')
   } finally {
     isRefreshingGold.value = false
@@ -342,7 +343,7 @@ async function saveAccountSettings() {
     showFeedback('黄金账户已更新', 'success')
     await loadGoldPosition()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '黄金账户保存失败'
+    const message = getErrorMessage(error, '黄金账户保存失败')
     accountSettingsError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -423,7 +424,7 @@ async function openEditModalFromAction() {
     formRemark.value = position.remark ?? ''
     showPositionModal.value = true
   } catch (error) {
-    const message = error instanceof Error ? error.message : '持仓详情加载失败'
+    const message = getErrorMessage(error, '持仓详情加载失败')
     actionError.value = message
     showFeedback(message, 'error')
   }
@@ -557,7 +558,7 @@ async function savePosition() {
     closePositionModal(true)
     await loadGoldPosition()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '黄金持仓保存失败'
+    const message = getErrorMessage(error, '黄金持仓保存失败')
     positionFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -600,7 +601,7 @@ async function openSellModalFromAction() {
     resetSellForm()
     showSellModal.value = true
   } catch (error) {
-    const message = error instanceof Error ? error.message : '持仓详情加载失败'
+    const message = getErrorMessage(error, '持仓详情加载失败')
     actionError.value = message
     showFeedback(message, 'error')
   }
@@ -646,7 +647,7 @@ async function confirmDeletePosition() {
     showFeedback('删除成功', 'success')
     await loadGoldPosition()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '黄金持仓删除失败'
+    const message = getErrorMessage(error, '黄金持仓删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -724,7 +725,7 @@ async function submitSellPosition() {
     showFeedback('卖出成功', 'success')
     await loadGoldPosition()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '卖出失败'
+    const message = getErrorMessage(error, '卖出失败')
     sellError.value = message
     showFeedback(message, 'error')
   } finally {

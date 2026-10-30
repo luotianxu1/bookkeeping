@@ -17,6 +17,7 @@ import {
   type SaveMonthlyBudgetParams,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const currentBudget = ref<MonthlyBudget | null>(null)
 const budgets = ref<MonthlyBudget[]>([])
@@ -129,7 +130,7 @@ async function loadBudgets() {
     currentBudget.value = current
     budgets.value = list
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '预算加载失败'
+    pageError.value = getErrorMessage(error, '预算加载失败')
   } finally {
     isLoading.value = false
   }
@@ -175,7 +176,7 @@ async function saveBudget() {
     closeBudgetModal()
     await loadBudgets()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '预算保存失败'
+    const message = getErrorMessage(error, '预算保存失败')
     formError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -198,7 +199,7 @@ async function confirmDeleteBudget() {
     showFeedback('删除成功', 'success')
     await loadBudgets()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '预算删除失败'
+    const message = getErrorMessage(error, '预算删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

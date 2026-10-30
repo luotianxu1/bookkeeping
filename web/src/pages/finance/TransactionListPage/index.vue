@@ -26,6 +26,7 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 import { buildTransactionDayGroups } from '@/utils/transaction-day-groups'
 import type { Transaction as DayTransaction } from '@/types/finance'
 import TransactionDayCard from '../components/TransactionDayCard/index.vue'
+import { getErrorMessage } from '@/api/request'
 
 const filterOptions = ['全部', '收入', '支出']
 const TRANSACTION_PAGE_SIZE = 50
@@ -297,7 +298,7 @@ async function loadCashTransactions() {
     summaryIncomeTotal.value = 0
     summaryExpenseTotal.value = 0
     summaryBalanceTotal.value = 0
-    transactionListError.value = error instanceof Error ? error.message : '收支记录加载失败'
+    transactionListError.value = getErrorMessage(error, '收支记录加载失败')
   } finally {
     if (requestSerial === transactionRequestSerial.value) {
       isLoadingTransactions.value = false
@@ -378,7 +379,7 @@ async function confirmDeleteTransaction() {
     showFeedback('删除成功', 'success')
     await loadCashTransactions()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

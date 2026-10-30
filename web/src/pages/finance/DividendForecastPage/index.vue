@@ -13,6 +13,7 @@ import {
   type InvestmentProductQuote,
   type InvestmentProduct,
 } from '@/api/modules/finance'
+import { getErrorMessage } from '@/api/request'
 
 const inputModeOptions = [
   { label: '持仓数量', value: 'quantity' },
@@ -175,7 +176,7 @@ async function searchProducts() {
   } catch (error) {
     searchResults.value = []
     searchMessage.value = ''
-    pageError.value = error instanceof Error ? error.message : '资产搜索失败'
+    pageError.value = getErrorMessage(error, '资产搜索失败')
   } finally {
     isSearching.value = false
   }
@@ -208,7 +209,7 @@ async function selectProduct(product: InvestmentProduct) {
       name: selectedProductQuote.value.name || product.name,
     }
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '行情查询失败'
+    pageError.value = getErrorMessage(error, '行情查询失败')
   } finally {
     isLoadingQuote.value = false
   }
@@ -259,7 +260,7 @@ async function calculateForecast() {
     })
   } catch (error) {
     forecastResult.value = null
-    pageError.value = error instanceof Error ? error.message : '收息预测失败'
+    pageError.value = getErrorMessage(error, '收息预测失败')
   } finally {
     isCalculating.value = false
   }

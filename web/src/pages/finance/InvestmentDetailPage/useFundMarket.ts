@@ -39,6 +39,7 @@ import {
   type FundTrendValueEntry,
   type FundTrendValueMode,
 } from './utils'
+import { getErrorMessage } from '@/api/request'
 
 type FundMarketSnapshot = {
   expiresAt: number
@@ -499,7 +500,7 @@ export function useFundMarket(options: UseFundMarketOptions) {
       }
       externalStatus.value = ''
     } catch (error) {
-      externalStatus.value = error instanceof Error ? error.message : '行情加载失败'
+      externalStatus.value = getErrorMessage(error, '行情加载失败')
     }
   }
 

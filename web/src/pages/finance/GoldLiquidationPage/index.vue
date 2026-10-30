@@ -11,6 +11,7 @@ import {
   type GoldLiquidationRecord,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 const isLoading = ref(true)
@@ -78,7 +79,7 @@ async function loadLiquidations() {
     if (currentRequestVersion !== requestVersion) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '清仓记录加载失败'
+    pageError.value = getErrorMessage(error, '清仓记录加载失败')
   } finally {
     if (currentRequestVersion === requestVersion) {
       isLoading.value = false

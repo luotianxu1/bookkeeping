@@ -27,6 +27,7 @@ import {
 } from '@/api/modules/finance'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type DebtCardView = {
   account: Account
@@ -228,7 +229,7 @@ async function loadDebtPage() {
     summary.value = summaryData
     debtRecords.value = recordList
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '债务账户加载失败'
+    pageError.value = getErrorMessage(error, '债务账户加载失败')
   } finally {
     isLoading.value = false
   }
@@ -283,7 +284,7 @@ async function saveAccount() {
     closeAccountModal(true)
     await loadDebtPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '债务账户保存失败'
+    const message = getErrorMessage(error, '债务账户保存失败')
     accountFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -306,7 +307,7 @@ async function confirmDelete() {
     showFeedback('债务账户已删除', 'success')
     await loadDebtPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

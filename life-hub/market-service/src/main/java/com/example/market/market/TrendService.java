@@ -539,6 +539,11 @@ public final class TrendService {
 
     /** 轻量 HTTP/JSON 助手（带自定义请求头） */
     static final class HttpRequestHelper {
+        /** HttpClient 不可变且线程安全，helper 生命周期内复用 */
+        private static final java.net.http.HttpClient CLIENT = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofSeconds(10))
+            .build();
+
         JsonNode getJson(String url, Map<String, String> headers, int timeoutSeconds) {
             try {
                 java.net.http.HttpRequest.Builder builder = java.net.http.HttpRequest.newBuilder(
@@ -546,9 +551,7 @@ public final class TrendService {
                     .timeout(java.time.Duration.ofSeconds(timeoutSeconds))
                     .GET();
                 headers.forEach(builder::header);
-                java.net.http.HttpResponse<String> resp = java.net.http.HttpClient.newBuilder()
-                    .connectTimeout(java.time.Duration.ofSeconds(10))
-                    .build()
+                java.net.http.HttpResponse<String> resp = CLIENT
                     .send(builder.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
                 return MarketUtils.MAPPER.readTree(resp.body());
             } catch (Exception e) {

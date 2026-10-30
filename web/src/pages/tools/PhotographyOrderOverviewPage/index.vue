@@ -16,6 +16,7 @@ import {
   type PhotographyOrderOverviewView,
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -183,7 +184,7 @@ async function loadOverview() {
     if (currentRequest !== requestSerial) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '订单总览加载失败'
+    pageError.value = getErrorMessage(error, '订单总览加载失败')
   } finally {
     if (currentRequest === requestSerial) {
       isLoading.value = false
@@ -218,7 +219,7 @@ async function loadCalendarOrders() {
     if (currentRequest !== requestSerial) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '订单列表加载失败'
+    pageError.value = getErrorMessage(error, '订单列表加载失败')
   }
 }
 

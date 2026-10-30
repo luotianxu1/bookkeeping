@@ -7,6 +7,7 @@ import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { createRecentYearOptions, formatSalaryCurrency } from '../salary-shared'
+import { getErrorMessage } from '@/api/request'
 
 const pageData = ref<SalaryCashPage | null>(null)
 const isLoading = ref(true)
@@ -35,7 +36,7 @@ async function loadPage() {
   try {
     pageData.value = await getSalaryCashPage(currentUser.id, Number(selectedYear.value))
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '现金账户加载失败'
+    pageError.value = getErrorMessage(error, '现金账户加载失败')
     feedbackMessage.value = pageError.value
     feedbackType.value = 'error'
     feedbackVisible.value = true

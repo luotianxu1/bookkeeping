@@ -18,6 +18,7 @@ import {
   autoInvestFrequencyOptions,
   buildFundingAccountOptions,
 } from './utils'
+import { getErrorMessage } from '@/api/request'
 
 const props = defineProps<{
   position: InvestmentPosition
@@ -140,7 +141,7 @@ async function saveAutoInvestPlan() {
     emit('feedback', editingAutoInvestPlanId.value ? '定投计划已更新' : '定投计划已创建', 'success')
     emit('saved')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '定投计划保存失败'
+    const message = getErrorMessage(error, '定投计划保存失败')
     autoInvestError.value = message
     emit('feedback', message, 'error')
   } finally {

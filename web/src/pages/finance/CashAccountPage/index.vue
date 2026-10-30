@@ -18,6 +18,7 @@ import AccountIcon from '@/components/common/AccountIcon/index.vue'
 import { createAccount, deleteAccount, getAccounts, getAccountTypes, updateAccount, type Account, type AccountType } from '@/api/modules/finance'
 import { allAccountIconOptions, DEFAULT_CASH_ACCOUNT_ICON, resolveCashAccountIcon } from '@/data/account-icons'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const isManageMode = ref(false)
 const showCreateAccountModal = ref(false)
@@ -147,7 +148,7 @@ async function saveCashAccount() {
     closeCreateModal()
     await loadCashAccounts()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '账户保存失败'
+    const message = getErrorMessage(error, '账户保存失败')
     accountFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -168,7 +169,7 @@ async function removeAccount(id: number) {
     showFeedback('删除成功', 'success')
     await loadCashAccounts()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '账户删除失败'
+    const message = getErrorMessage(error, '账户删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -229,7 +230,7 @@ async function loadCashAccounts() {
       status: 'active',
     })
   } catch (error) {
-    accountListError.value = error instanceof Error ? error.message : '现金账户加载失败'
+    accountListError.value = getErrorMessage(error, '现金账户加载失败')
   } finally {
     isLoadingAccounts.value = false
   }

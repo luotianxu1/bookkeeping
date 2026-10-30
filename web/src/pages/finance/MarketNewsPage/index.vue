@@ -5,6 +5,7 @@ import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshBu
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getMarketNews, type MarketNews, type MarketNewsCategory } from '@/api/modules/finance'
+import { getErrorMessage } from '@/api/request'
 
 type CategoryOption = {
   label: string
@@ -81,7 +82,7 @@ async function loadMarketNews(forceRefresh = false) {
     if (currentRequestId !== requestId) {
       return
     }
-    pageError.value = error instanceof Error ? error.message : '市场快讯加载失败'
+    pageError.value = getErrorMessage(error, '市场快讯加载失败')
   } finally {
     if (currentRequestId === requestId) {
       isLoading.value = false

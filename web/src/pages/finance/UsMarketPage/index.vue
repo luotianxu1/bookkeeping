@@ -13,6 +13,7 @@ import {
   type UsPremarketData,
 } from '@/api/modules/finance'
 import { useTheme } from '@/utils/theme'
+import { getErrorMessage } from '@/api/request'
 
 type IndexConfig = {
   code: string
@@ -243,7 +244,7 @@ async function loadOverview() {
     applyOverview(data.indices ?? [])
   } catch (error) {
     for (const card of cards) {
-      card.error = card.vals.length > 0 ? '' : error instanceof Error ? error.message : '加载失败'
+      card.error = card.vals.length > 0 ? '' : getErrorMessage(error, '加载失败')
     }
   }
 }
@@ -262,7 +263,7 @@ async function loadPremarket() {
     premarketData.value = await getUsPremarket()
   } catch (error) {
     if (!premarketData.value) {
-      premarketError.value = error instanceof Error ? error.message : '盘前行情加载失败'
+      premarketError.value = getErrorMessage(error, '盘前行情加载失败')
     }
   } finally {
     premarketLoading.value = false

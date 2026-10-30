@@ -26,6 +26,7 @@ import {
 } from '@/api/modules/finance'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type HumanRelationCardView = {
   account: Account
@@ -226,7 +227,7 @@ async function loadHumanRelationPage() {
     summary.value = summaryData
     records.value = recordList
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '人情账户加载失败'
+    pageError.value = getErrorMessage(error, '人情账户加载失败')
   } finally {
     isLoading.value = false
   }
@@ -281,7 +282,7 @@ async function saveAccount() {
     closeAccountModal(true)
     await loadHumanRelationPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '人情账户保存失败'
+    const message = getErrorMessage(error, '人情账户保存失败')
     accountFormError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -304,7 +305,7 @@ async function confirmDelete() {
     showFeedback('人情账户已删除', 'success')
     await loadHumanRelationPage()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除失败'
+    const message = getErrorMessage(error, '删除失败')
     deleteError.value = message
     showFeedback(message, 'error')
   } finally {

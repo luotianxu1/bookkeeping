@@ -7,6 +7,7 @@ import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getFreeEstimate, type FreeEstimate } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const estimate = ref<FreeEstimate | null>(null)
 const currentAssetsInput = ref('')
@@ -162,7 +163,7 @@ async function loadEstimate() {
     monthlyExpenseInput.value = formatInputNumber(result.monthlyExpense)
   } catch (error) {
     estimate.value = null
-    pageError.value = error instanceof Error ? error.message : 'Free 测算数据加载失败'
+    pageError.value = getErrorMessage(error, 'Free 测算数据加载失败')
   } finally {
     isLoading.value = false
   }

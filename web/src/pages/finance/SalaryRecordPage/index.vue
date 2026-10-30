@@ -17,6 +17,7 @@ import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { createRecentYearOptions, dateToMonthInput, formatSalaryCurrency, monthInputToDate } from '../salary-shared'
+import { getErrorMessage } from '@/api/request'
 
 const pageData = ref<SalaryMonthPage | null>(null)
 const isLoading = ref(true)
@@ -60,7 +61,7 @@ async function loadPage() {
   try {
     pageData.value = await getSalaryMonthPage(currentUser.id, Number(selectedYear.value))
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '工资明细加载失败'
+    pageError.value = getErrorMessage(error, '工资明细加载失败')
     openFeedback(pageError.value, 'error')
   } finally {
     isLoading.value = false
@@ -122,7 +123,7 @@ async function submitRecord() {
     showRecordModal.value = false
     openFeedback(editingRecord.value ? '工资记录已更新' : '工资记录已新增', 'success')
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : '工资记录保存失败'
+    formError.value = getErrorMessage(error, '工资记录保存失败')
   } finally {
     isSaving.value = false
   }
@@ -141,7 +142,7 @@ async function removeRecord() {
     showRecordModal.value = false
     openFeedback('工资记录已删除', 'success')
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : '工资记录删除失败'
+    formError.value = getErrorMessage(error, '工资记录删除失败')
   } finally {
     isSaving.value = false
   }

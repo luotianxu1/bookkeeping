@@ -1,5 +1,6 @@
 // 行情中心 API（/api/market，Java 端 MarketController）：A股/港股/美股/ETF/黄金/全球模块。
 // 行情行使用中文键（与后端 LinkedHashMap 字段一一对应），保持与数据源语义一致。
+import type { AxiosRequestConfig } from 'axios'
 import { marketRequest, requestGet } from '../request'
 
 /** 实时行情快照行结构（部分常用字段） */
@@ -385,42 +386,43 @@ export const getStockSpot = (limit = 50) =>
   requestGet<{ count: number; data: SpotRow[] }>(marketRequest, '/api/market/stock/spot', { params: { limit } })
 
 /** 标的详情：实时行情 + K 线（scale 单位秒，240 = 日K；海外市场仅日K） */
-export const getDetail = (kind: DetailKind, code: string, scale = '240', datalen = 120) =>
-  requestGet<DetailData>(marketRequest, '/api/market/detail', { params: { kind, code, scale, datalen } })
+export const getDetail = (kind: DetailKind, code: string, scale = '240', datalen = 120, config?: AxiosRequestConfig) =>
+  requestGet<DetailData>(marketRequest, '/api/market/detail', { params: { kind, code, scale, datalen }, ...config })
 
 /** 仅K线序列（详情页滚到最早后向前翻页加载） */
-export const getKline = (kind: DetailKind, code: string, scale = '240', datalen = 250) =>
+export const getKline = (kind: DetailKind, code: string, scale = '240', datalen = 250, config?: AxiosRequestConfig) =>
   requestGet<{ count: number; kline: KlinePoint[] }>(marketRequest, '/api/market/kline', {
     params: { kind, code, scale, datalen },
+    ...config,
   })
 
 /** 分时（当日 1 分钟线）：A股新浪 / 海外腾讯，美股可能无数据 */
-export const getTrend = (kind: DetailKind, code: string) =>
-  requestGet<TrendData>(marketRequest, '/api/market/trend', { params: { kind, code } })
+export const getTrend = (kind: DetailKind, code: string, config?: AxiosRequestConfig) =>
+  requestGet<TrendData>(marketRequest, '/api/market/trend', { params: { kind, code }, ...config })
 
 /** 近 N 个交易日分时回看（仅 A 股） */
-export const getTrendHistory = (kind: DetailKind, code: string, days = 5) =>
+export const getTrendHistory = (kind: DetailKind, code: string, days = 5, config?: AxiosRequestConfig) =>
   requestGet<{ symbol: string; scale: string; days: TrendHistoryDay[] } | null>(
     marketRequest,
     '/api/market/trend/history',
-    { params: { kind, code, days } },
+    { params: { kind, code, days }, ...config },
   )
 
 /** 详情页扩展信息：资金流向/公司公告/分红送配（仅 A 股个股有数据） */
-export const getExtra = (kind: DetailKind, code: string) =>
-  requestGet<ExtraInfo>(marketRequest, '/api/market/extra', { params: { kind, code } })
+export const getExtra = (kind: DetailKind, code: string, config?: AxiosRequestConfig) =>
+  requestGet<ExtraInfo>(marketRequest, '/api/market/extra', { params: { kind, code }, ...config })
 
 /** 详情页 F10 信息（仅 A 股个股有数据） */
-export const getF10 = (kind: DetailKind, code: string) =>
-  requestGet<F10Data>(marketRequest, '/api/market/f10', { params: { kind, code } })
+export const getF10 = (kind: DetailKind, code: string, config?: AxiosRequestConfig) =>
+  requestGet<F10Data>(marketRequest, '/api/market/f10', { params: { kind, code }, ...config })
 
 /** 三大财务报表（利润表/资产负债表/现金流量表，仅 A 股） */
-export const getStatements = (kind: DetailKind, code: string, periods = 5) =>
-  requestGet<StatementsData>(marketRequest, '/api/market/statements', { params: { kind, code, periods } })
+export const getStatements = (kind: DetailKind, code: string, periods = 5, config?: AxiosRequestConfig) =>
+  requestGet<StatementsData>(marketRequest, '/api/market/statements', { params: { kind, code, periods }, ...config })
 
 /** 股票/指数/港股/美股联想搜索 */
-export const searchStocks = (keyword: string) =>
-  requestGet<{ count: number; data: SearchRow[] }>(marketRequest, '/api/market/search', { params: { keyword } })
+export const searchStocks = (keyword: string, config?: AxiosRequestConfig) =>
+  requestGet<{ count: number; data: SearchRow[] }>(marketRequest, '/api/market/search', { params: { keyword }, ...config })
 
 /* ---------- A股前复权日K（腾讯 fqkline，qfq 防除权跳空，与图表既有口径一致） ---------- */
 

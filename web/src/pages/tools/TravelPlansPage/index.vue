@@ -9,6 +9,7 @@ import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { deleteTravelPlan, getTravelPlans, type TravelPlan } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 type FilterTab = 'traveling' | 'completed'
 
@@ -80,7 +81,7 @@ async function loadPlans() {
     plans.value = await getTravelPlans({ userId: currentUser.id, status: 'all' })
   } catch (error) {
     plans.value = []
-    loadError.value = error instanceof Error ? error.message : '旅行列表加载失败'
+    loadError.value = getErrorMessage(error, '旅行列表加载失败')
   } finally {
     isLoading.value = false
   }
@@ -151,7 +152,7 @@ async function confirmDeletePlan() {
       isEditing.value = false
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : '删除旅行失败'
+    const message = getErrorMessage(error, '删除旅行失败')
     showFeedback(message, 'error')
   } finally {
     isDeleting.value = false

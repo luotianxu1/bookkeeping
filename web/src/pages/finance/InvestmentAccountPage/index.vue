@@ -41,6 +41,7 @@ import {
   resolveInvestmentAccountIcon,
 } from '@/data/account-icons'
 import { getStoredCurrentUser } from '@/utils/current-user'
+import { getErrorMessage } from '@/api/request'
 
 const router = useRouter()
 const route = useRoute()
@@ -318,7 +319,7 @@ async function saveAccountSettings() {
     showFeedback('投资账户已更新', 'success')
     await loadInvestmentData()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '投资账户保存失败'
+    const message = getErrorMessage(error, '投资账户保存失败')
     accountSettingsError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -397,7 +398,7 @@ async function loadInvestmentData() {
       addAssetFundingAccount.value = ''
     }
   } catch (error) {
-    pageError.value = error instanceof Error ? error.message : '投资账户加载失败'
+    pageError.value = getErrorMessage(error, '投资账户加载失败')
   } finally {
     isLoading.value = false
   }
@@ -421,7 +422,7 @@ async function refreshQuoteData() {
     })
     showFeedback('已提交刷新任务，请稍后刷新页面', 'success')
   } catch (error) {
-    const message = error instanceof Error ? error.message : '投资持仓刷新失败'
+    const message = getErrorMessage(error, '投资持仓刷新失败')
     showFeedback(message, 'error')
   } finally {
     isRefreshingQuotes.value = false
@@ -549,7 +550,7 @@ async function saveAsset() {
     )
     await loadInvestmentData()
   } catch (error) {
-    const message = error instanceof Error ? error.message : '新增投资失败'
+    const message = getErrorMessage(error, '新增投资失败')
     formError.value = message
     showFeedback(message, 'error')
   } finally {
@@ -604,7 +605,7 @@ async function lookupProductByKeyword(keyword = addAssetKeyword.value) {
   } catch (error) {
     addAssetSearchResults.value = []
     selectedAddAssetResultId.value = ''
-    productLookupMessage.value = error instanceof Error ? error.message : '代码识别失败'
+    productLookupMessage.value = getErrorMessage(error, '代码识别失败')
   } finally {
     isLookingUpProduct.value = false
   }
