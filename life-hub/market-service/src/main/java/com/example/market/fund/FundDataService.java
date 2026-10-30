@@ -50,13 +50,18 @@ public class FundDataService {
         });
     }
 
-    /** 基金净值历史（新浪官方开放接口，倒序；近4年窗口） */
+    /** 基金净值历史（新浪官方开放接口，倒序；近4年窗口，日频） */
     public Map<String, Object> fundNavHistory(String code) {
         List<Map<String, Object>> items = navItems(code);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("matched", items != null && !items.isEmpty());
         out.put("items", items == null ? List.of() : items);
         return out;
+    }
+
+    /** 基金阶段涨幅（东财 FundMNPeriodIncrease 兼容口径）：rows:[{title,syl}]，title=Y/3Y/6Y/1N/2N/3N/5N */
+    public Map<String, Object> fundPeriodReturns(String code) {
+        return cached("pret:" + code, 30 * 60_000L, () -> assemblePeriodReturns(code));
     }
 
     /** 产品搜索（腾讯 smartbox） */
@@ -175,10 +180,102 @@ public class FundDataService {
     private List<Map<String, Object>> navItems(String code) {
         try {
             return cached("nav:" + code, 30 * 60_000L,
-                () -> SinaNavHistoryClient.fetch(code, LocalDate.now().minusYears(4)));
+                () -> SinaNavHistoryClient.fetch(code, LocalDate.now().minusYears(4), 3));
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** 深度净值历史（近6年，供阶段涨幅近5年档计算） */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> navItemsDeep(String code) {
+        try {
+            return cached("navdeep:" + code, 6 * 60 * 60_000L,
+                () -> SinaNavHistoryClient.fetch(code, LocalDate.now().minusYears(6), 6));
+        } catch (Exception e) {
+            return navItems(code);
+        }
+    }
+
+    /**
+     * 阶段涨幅组装（分红再投资复权口径）：以最新净值日为基准回溯各周期，
+     * 区间内逐日累乘收益率（除息日把每份分红加回当日收益），title 与东财 FundMNPeriodIncrease 一致。
+     */
+    private Map<String, Object> assemblePeriodReturns(String code) {
+        List<Map<String, Object>> items = navItemsDeep(code);
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (items == null || items.size() < 2) {
+            out.put("matched", false);
+            out.put("rows", List.of());
+            return out;
+        }
+
+        // items 为倒序，先整理成升序并解析数值
+        record NavPoint(LocalDate date, double nav, double acc) {
+        }
+        List<NavPoint> asc = new ArrayList<>();
+        try {
+            for (int i = items.size() - 1; i >= 0; i--) {
+                Map<String, Object> item = items.get(i);
+                asc.add(new NavPoint(
+                    LocalDate.parse(str(item, "date").substring(0, 10)),
+                    Double.parseDouble(str(item, "nav")),
+                    Double.parseDouble(str(item, "accNav"))
+                ));
+            }
+        } catch (Exception e) {
+            out.put("matched", false);
+            out.put("rows", List.of());
+            return out;
+        }
+        NavPoint latest = asc.get(asc.size() - 1);
+
+        // title → 周期（东财代码：Y=近1月、3Y=近3月、6Y=近6月、1N/2N/3N/5N=近N年）
+        Map<String, Integer> periodMonths = new LinkedHashMap<>();
+        periodMonths.put("Y", 1);
+        periodMonths.put("3Y", 3);
+        periodMonths.put("6Y", 6);
+        periodMonths.put("1N", 12);
+        periodMonths.put("2N", 24);
+        periodMonths.put("3N", 36);
+        periodMonths.put("5N", 60);
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : periodMonths.entrySet()) {
+            LocalDate targetDate = latest.date().minusMonths(entry.getValue());
+            // 起点行：日期 ≤ targetDate 的最近一行
+            int startIdx = -1;
+            for (int i = asc.size() - 1; i >= 0; i--) {
+                if (!asc.get(i).date().isAfter(targetDate)) {
+                    startIdx = i;
+                    break;
+                }
+            }
+            Double pct = null;
+            if (startIdx >= 0 && startIdx < asc.size() - 1) {
+                double total = 1.0;
+                double prevNav = asc.get(startIdx).nav();
+                double prevAccDiff = asc.get(startIdx).acc() - asc.get(startIdx).nav();
+                for (int i = startIdx + 1; i < asc.size(); i++) {
+                    NavPoint point = asc.get(i);
+                    double accDiff = point.acc() - point.nav();
+                    double dividendPerUnit = accDiff - prevAccDiff; // 本次分红（每份），0 表示无分红
+                    double dayReturn = (point.nav() + dividendPerUnit - prevNav) / prevNav;
+                    total *= (1 + dayReturn);
+                    prevNav = point.nav();
+                    prevAccDiff = accDiff;
+                }
+                pct = (total - 1) * 100;
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("title", entry.getKey());
+            row.put("syl", pct == null ? null : String.format("%.2f", pct));
+            rows.add(row);
+        }
+
+        out.put("matched", true);
+        out.put("rows", rows);
+        return out;
     }
 
     private static String firstNav(List<Map<String, Object>> nav, String key) {

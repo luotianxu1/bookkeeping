@@ -7,7 +7,7 @@ import type {
   InvestmentPosition,
   InvestmentTransaction,
 } from '@/api/modules/finance'
-import { getQfqDailyKline } from '@/api/modules/market'
+import { getInvestmentFundTrend, getInvestmentStockSnapshot, getQfqDailyKline } from '@/api/modules/market'
 
 export type FundTrendRange = '1m' | '3m' | '6m' | '1y' | '3y'
 export type FundChartView = 'netValue' | 'profit'
@@ -20,9 +20,6 @@ export type FundTrendValueEntry = {
 export type FundPeriodIncreaseItem = {
   title?: string | null
   syl?: string | number | null
-}
-export type FundPeriodIncreaseResponse = {
-  Datas?: FundPeriodIncreaseItem[] | null
 }
 export type FundProfitState = {
   holdingQuantity: number
@@ -393,104 +390,45 @@ export function formatAutoInvestStatus(value: string) {
   return '执行中'
 }
 
-// ---------- 外部行情接口（东方财富 / 腾讯） ----------
+// ---------- 外部行情接口（经行情中心 /api/market/quote/**，不再浏览器直连东财/腾讯） ----------
 
-export function jsonpRequest<T>(url: string, callbackParams: string[], timeoutMs = 8000) {
-  return new Promise<T>((resolve, reject) => {
-    const callbackName = `__jsonp_${Date.now()}_${Math.floor(Math.random() * 100000)}`
-    const script = document.createElement('script')
-    const globalWindow = window as unknown as Window & Record<string, unknown>
-    const timer = window.setTimeout(() => {
-      cleanup()
-      reject(new Error('行情接口请求超时'))
-    }, timeoutMs)
-
-    function cleanup() {
-      window.clearTimeout(timer)
-      script.remove()
-      delete globalWindow[callbackName]
-    }
-
-    globalWindow[callbackName] = (data: T) => {
-      cleanup()
-      resolve(data)
-    }
-
-    script.onerror = () => {
-      cleanup()
-      reject(new Error('行情接口加载失败'))
-    }
-
-    const connector = url.includes('?') ? '&' : '?'
-    const callbackQuery = callbackParams
-      .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(callbackName)}`)
-      .join('&')
-    script.src = `${url}${connector}${callbackQuery}`
-    document.body.appendChild(script)
-  })
-}
-
-export function fetchFundTrend(fundCode: string) {
-  return new Promise<{ netWorthTrend: any[]; acWorthTrend: any[] }>((resolve, reject) => {
-    const script = document.createElement('script')
-    const globalWindow = window as Window & Record<string, any>
-    const timer = window.setTimeout(() => {
-      cleanup()
-      reject(new Error('基金走势请求超时'))
-    }, 10000)
-
-    function cleanup() {
-      window.clearTimeout(timer)
-      script.remove()
-    }
-
-    globalWindow.Data_netWorthTrend = undefined
-    globalWindow.Data_ACWorthTrend = undefined
-
-    script.onload = () => {
-      const netWorthTrend = Array.isArray(globalWindow.Data_netWorthTrend) ? globalWindow.Data_netWorthTrend.slice() : []
-      const acWorthTrend = Array.isArray(globalWindow.Data_ACWorthTrend) ? globalWindow.Data_ACWorthTrend.slice() : []
-      cleanup()
-      resolve({ netWorthTrend, acWorthTrend })
-    }
-
-    script.onerror = () => {
-      cleanup()
-      reject(new Error('基金走势加载失败'))
-    }
-
-    script.src = `https://fund.eastmoney.com/pingzhongdata/${encodeURIComponent(fundCode)}.js?v=${Date.now()}`
-    document.body.appendChild(script)
-  })
+/** 基金净值走势：行情中心近4年日频净值 → 原东财 pingzhongdata 兼容形状（图表/收益计算零改动） */
+export async function fetchFundTrend(fundCode: string): Promise<{ netWorthTrend: any[]; acWorthTrend: any[] }> {
+  const data = await getInvestmentFundTrend(fundCode)
+  const items = data?.items ?? []
+  const toTs = (date: string) => {
+    const parsed = new Date(`${date}T00:00:00`).getTime()
+    return Number.isFinite(parsed) ? parsed : NaN
+  }
+  return {
+    netWorthTrend: items
+      .map((item) => ({ x: toTs(item.date), y: Number(item.nav) }))
+      .filter((item) => Number.isFinite(item.x) && Number.isFinite(item.y)),
+    acWorthTrend: items
+      .map((item) => [toTs(item.date), Number(item.accNav)] as [number, number])
+      .filter(([ts, value]) => Number.isFinite(ts) && Number.isFinite(value)),
+  }
 }
 
 export async function fetchStockQuote(symbol: string) {
-  const response = await fetch(`https://qt.gtimg.cn/q=${encodeURIComponent(symbol)}`)
-  const buffer = await response.arrayBuffer()
-  let text = ''
-  try {
-    text = new TextDecoder('gbk').decode(buffer)
-  } catch {
-    text = new TextDecoder().decode(buffer)
-  }
-  const start = text.indexOf('"')
-  const end = text.lastIndexOf('"')
-  if (start < 0 || end <= start) {
+  // 腾讯快照经行情中心获取（symbol 可能带 sh/sz 前缀，接口需裸代码）
+  const bareCode = symbol.replace(/^(?:sh|sz|bj)/, '')
+  const snapshot = await getInvestmentStockSnapshot(bareCode)
+  if (!snapshot?.matched) {
     throw new Error('股票行情格式异常')
   }
-  const arr = text.slice(start + 1, end).split('~')
   return {
-    name: arr[1],
-    code: arr[2],
-    price: arr[3],
-    prevClose: arr[4],
-    open: arr[5],
-    volume: arr[6],
-    timeRaw: arr[30],
-    change: arr[31],
-    changePct: arr[32],
-    high: arr[33],
-    low: arr[34],
+    name: snapshot.name ?? '',
+    code: snapshot.code ?? bareCode,
+    price: snapshot.price ?? '',
+    prevClose: snapshot.prevClose ?? '',
+    open: snapshot.open ?? '',
+    volume: snapshot.volume ?? '',
+    timeRaw: snapshot.timeRaw ?? '',
+    change: snapshot.change ?? '',
+    changePct: snapshot.changePercent ?? '',
+    high: snapshot.high ?? '',
+    low: snapshot.low ?? '',
   }
 }
 

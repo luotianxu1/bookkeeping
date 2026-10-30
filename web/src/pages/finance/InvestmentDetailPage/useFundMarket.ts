@@ -6,6 +6,7 @@ import type {
   InvestmentPosition,
   InvestmentTransaction,
 } from '@/api/modules/finance'
+import { getInvestmentFundBase, getInvestmentFundPeriodReturns } from '@/api/modules/market'
 import {
   buildFundPeriodReturnMap,
   buildFundPeriodReturnStats,
@@ -25,7 +26,6 @@ import {
   fundTrendRangeOptions,
   formatNumber,
   hasReliableFundTradeHistory,
-  jsonpRequest,
   normalizeDateLabel,
   parsePointLabelDate,
   resolveFundCostTransactionTime,
@@ -35,7 +35,6 @@ import {
   formatTencentTime,
   toTencentSymbol,
   toneByNumber,
-  type FundPeriodIncreaseResponse,
   type FundTrendRange,
   type FundTrendValueEntry,
   type FundTrendValueMode,
@@ -384,19 +383,13 @@ export function useFundMarket(options: UseFundMarketOptions) {
       periodReturns = cached.periodReturns
     } else {
       const [baseResult, trendResult, periodIncreaseResult] = await Promise.allSettled([
-        jsonpRequest<Record<string, any>>(
-          `https://fundmobapi.eastmoney.com/FundMApi/FundBaseTypeInformation.ashx?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
-          ['callback'],
-        ),
+        getInvestmentFundBase(fundCode),
         fetchFundTrend(fundCode),
-        jsonpRequest<FundPeriodIncreaseResponse>(
-          `https://fundmobapi.eastmoney.com/FundMNewApi/FundMNPeriodIncrease?FCODE=${encodeURIComponent(fundCode)}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0`,
-          ['callback'],
-        ),
+        getInvestmentFundPeriodReturns(fundCode),
       ])
       baseInfo = baseResult.status === 'fulfilled' ? baseResult.value?.Datas ?? {} : {}
       const periodIncreaseRows = periodIncreaseResult.status === 'fulfilled'
-        ? periodIncreaseResult.value?.Datas ?? []
+        ? periodIncreaseResult.value?.rows ?? []
         : []
       periodReturns = buildFundPeriodReturnMap(periodIncreaseRows)
       trend = trendResult.status === 'fulfilled'
@@ -435,7 +428,7 @@ export function useFundMarket(options: UseFundMarketOptions) {
       latestPrice: Number.isFinite(latestPrice) ? latestPrice : baseDetail.latestPrice,
       changePercent: Number.isFinite(changePercent) ? changePercent : baseDetail.changePercent,
       updatedAt: updatedAt || baseDetail.updatedAt,
-      source: '东方财富（累计净值）',
+      source: '新浪财经（累计净值）',
       chartType: 'line',
       chartPoints: filterFundTrendPoints(chartPoints, selectedFundTrendRange.value),
       marketStats: [

@@ -434,3 +434,49 @@ export interface QfqDailyKline {
 /** A股前复权日K（symbol 形如 sh600000/sz000001/bj832000），datalen 10~640 */
 export const getQfqDailyKline = (symbol: string, datalen = 120) =>
   requestGet<QfqDailyKline>(marketRequest, '/api/market/kline/qfq', { params: { symbol, datalen } })
+
+/* ---------- 投资详情页基金/股票行情（替代浏览器直连东财/腾讯） ---------- */
+
+/** 基金基础信息（EM 兼容字段：SHORTNAME/DWJZ/FSRQ/RZDF/LJJZ/SGZT/SHZT/FTYPE/JJGS） */
+export interface InvestmentFundBase {
+  matched: boolean
+  Datas: Record<string, string | null>
+}
+
+/** 基金净值历史行 */
+export interface FundNavItem {
+  date: string
+  nav: string
+  accNav: string
+}
+
+/** 基金净值走势（近4年日频，倒序） */
+export interface InvestmentFundTrend {
+  matched: boolean
+  items: FundNavItem[]
+}
+
+/** 阶段涨幅行（title=Y/3Y/6Y/1N/2N/3N/5N，syl 为百分数字符串） */
+export interface FundPeriodReturnRow {
+  title: string
+  syl: string | null
+}
+
+export const getInvestmentFundBase = (code: string) =>
+  requestGet<InvestmentFundBase>(marketRequest, '/api/market/quote/fund/base', { params: { code } })
+
+export const getInvestmentFundTrend = (code: string) =>
+  requestGet<InvestmentFundTrend>(marketRequest, '/api/market/quote/fund/trend', { params: { code } })
+
+export const getInvestmentFundPeriodReturns = (code: string) =>
+  requestGet<{ matched: boolean; rows: FundPeriodReturnRow[] }>(
+    marketRequest,
+    '/api/market/quote/fund/period-returns',
+    { params: { code } },
+  )
+
+/** A股快照（code 为裸代码如 600519） */
+export const getInvestmentStockSnapshot = (code: string) =>
+  requestGet<Record<string, string | null>>(marketRequest, '/api/market/quote/stock/snapshot', {
+    params: { code },
+  })

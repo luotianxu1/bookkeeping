@@ -20,10 +20,10 @@ final class SinaNavHistoryClient {
 
     private static final Pattern DATE = Pattern.compile("(\\d{4}-\\d{2}-\\d{2})");
 
-    /** 拉取 datefrom 以来的净值历史（倒序）；items: date/nav/accNav */
-    static List<Map<String, Object>> fetch(String code, LocalDate dateFrom) throws Exception {
+    /** 拉取 datefrom 以来的净值历史（倒序），最多 maxPages 页；items: date/nav/accNav */
+    static List<Map<String, Object>> fetch(String code, LocalDate dateFrom, int maxPages) throws Exception {
         List<Map<String, Object>> items = new ArrayList<>();
-        for (int page = 1; page <= 3; page++) {
+        for (int page = 1; page <= maxPages; page++) {
             String url = "https://stock.finance.sina.com.cn/fundInfo/api/openapi.php/CaihuiFundInfoService.getNav"
                 + "?symbol=" + code
                 + "&datefrom=" + dateFrom + "&dateto=" + LocalDate.now()
