@@ -1,26 +1,27 @@
 package com.example.app.service;
 
+import com.example.app.client.MarketForexClient;
 import com.example.app.dto.ExchangeRateResponse;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 汇率服务适配层（2026-10-30 汇率取数整体收编 market-service 后）：
+ * 经 {@link MarketForexClient} → market-service /api/internal/forex/rate（open.er-api 主源，
+ * market-service 内部 5 分钟缓存 + 兜底）。market-service 不可用时降级为本地内置汇率表，
+ * 对外响应字段口径不变。
+ */
 @Service
 public class ExchangeRateService {
 
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Shanghai");
-    private static final long CACHE_MILLIS = 5 * 60_000L;
     private static final Map<String, BigDecimal> DEFAULT_USD_RATES = Map.of(
         "USD", BigDecimal.ONE,
         "CNY", new BigDecimal("7.20"),
@@ -33,98 +34,48 @@ public class ExchangeRateService {
         "SGD", new BigDecimal("1.35")
     );
 
-    private final ObjectMapper objectMapper;
-    private final RestClient restClient;
-    private final String latestApiUrl;
-    private final Map<String, CachedRates> cachedRates = new ConcurrentHashMap<>();
+    private final MarketForexClient marketForexClient;
 
-    public ExchangeRateService(
-        ObjectMapper objectMapper,
-        @Value("${finance.exchange-rate.latest-api-url:https://open.er-api.com/v6/latest}") String latestApiUrl
-    ) {
-        this.objectMapper = objectMapper;
-        this.restClient = RestClient.builder().build();
-        this.latestApiUrl = latestApiUrl;
+    public ExchangeRateService(MarketForexClient marketForexClient) {
+        this.marketForexClient = marketForexClient;
     }
 
     public ExchangeRateResponse getRate(String fromCurrency, String toCurrency) {
         String from = normalizeCurrency(fromCurrency, "USD");
         String to = normalizeCurrency(toCurrency, "CNY");
 
-        CachedRates rates = fetchRates(from);
-        BigDecimal rate = from.equals(to) ? BigDecimal.ONE : rates.rates().get(to);
-        if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0) {
-            rate = fallbackRate(from, to);
+        try {
+            return toResponse(marketForexClient.rate(from, to));
+        } catch (Exception ex) {
+            // 行情中心不可用：本地内置汇率兜底（与原降级行为一致）
+            BigDecimal rate = from.equals(to) ? BigDecimal.ONE : fallbackRate(from, to);
+            ExchangeRateResponse response = new ExchangeRateResponse();
+            response.setFromCurrency(from);
+            response.setToCurrency(to);
+            response.setRate(rate.setScale(6, RoundingMode.HALF_UP));
+            response.setUpdatedAt(LocalDateTime.now(DEFAULT_ZONE));
+            response.setSource("内置兜底汇率");
+            return response;
         }
+    }
 
+    private ExchangeRateResponse toResponse(JsonNode data) {
         ExchangeRateResponse response = new ExchangeRateResponse();
-        response.setFromCurrency(from);
-        response.setToCurrency(to);
-        response.setRate(rate.setScale(6, RoundingMode.HALF_UP));
-        response.setUpdatedAt(rates.updatedAt());
-        response.setSource(rates.source());
+        response.setFromCurrency(textOr(data, "fromCurrency", "USD"));
+        response.setToCurrency(textOr(data, "toCurrency", "CNY"));
+        JsonNode rateNode = data.path("rate");
+        response.setRate(rateNode.isNumber()
+            ? rateNode.decimalValue().setScale(6, RoundingMode.HALF_UP)
+            : new BigDecimal(rateNode.asText("1")).setScale(6, RoundingMode.HALF_UP));
+        String updatedAtText = data.path("updatedAt").asText("");
+        response.setUpdatedAt(updatedAtText.isEmpty() ? LocalDateTime.now(DEFAULT_ZONE) : LocalDateTime.parse(updatedAtText));
+        response.setSource(data.path("source").asText("open.er-api"));
         return response;
     }
 
-    private CachedRates fetchRates(String baseCurrency) {
-        long now = System.currentTimeMillis();
-        CachedRates cached = cachedRates.get(baseCurrency);
-        if (cached != null && now - cached.cachedAt() < CACHE_MILLIS) {
-            return cached;
-        }
-
-        try {
-            JsonNode root = fetchJson(latestApiUrl + "/" + baseCurrency);
-            JsonNode ratesNode = root.path("rates");
-            if (!ratesNode.isObject()) {
-                throw new IllegalStateException("汇率数据格式错误");
-            }
-
-            Map<String, BigDecimal> rates = new ConcurrentHashMap<>();
-            ratesNode.fields().forEachRemaining((entry) -> {
-                JsonNode value = entry.getValue();
-                if (value != null && value.isNumber()) {
-                    rates.put(entry.getKey().toUpperCase(Locale.ROOT), value.decimalValue());
-                }
-            });
-
-            CachedRates nextCache = new CachedRates(
-                rates,
-                extractUpdatedAt(root),
-                now,
-                "open.er-api"
-            );
-            cachedRates.put(baseCurrency, nextCache);
-            return nextCache;
-        } catch (Exception ex) {
-            if (cached != null) {
-                return cached;
-            }
-            CachedRates fallback = new CachedRates(
-                fallbackRates(baseCurrency),
-                LocalDateTime.now(DEFAULT_ZONE),
-                now,
-                "内置兜底汇率"
-            );
-            cachedRates.put(baseCurrency, fallback);
-            return fallback;
-        }
-    }
-
-    private JsonNode fetchJson(String url) throws Exception {
-        String body = restClient.get()
-            .uri(url)
-            .retrieve()
-            .body(String.class);
-        return objectMapper.readTree(body);
-    }
-
-    private LocalDateTime extractUpdatedAt(JsonNode root) {
-        JsonNode timestampNode = root.path("time_last_update_unix");
-        if (!timestampNode.isNumber()) {
-            return LocalDateTime.now(DEFAULT_ZONE);
-        }
-        return LocalDateTime.ofInstant(Instant.ofEpochSecond(timestampNode.asLong()), DEFAULT_ZONE);
+    private String textOr(JsonNode node, String field, String defaultValue) {
+        String value = node.path(field).asText("");
+        return value.isEmpty() ? defaultValue : value;
     }
 
     private String normalizeCurrency(String value, String defaultValue) {
@@ -134,20 +85,6 @@ public class ExchangeRateService {
         return value.trim().toUpperCase(Locale.ROOT);
     }
 
-    private Map<String, BigDecimal> fallbackRates(String baseCurrency) {
-        BigDecimal baseToUsd = DEFAULT_USD_RATES.get(baseCurrency);
-        if (baseToUsd == null || baseToUsd.compareTo(BigDecimal.ZERO) <= 0) {
-            return Map.of(baseCurrency, BigDecimal.ONE);
-        }
-
-        Map<String, BigDecimal> rates = new ConcurrentHashMap<>();
-        DEFAULT_USD_RATES.forEach((currency, usdRate) -> {
-            BigDecimal rate = usdRate.divide(baseToUsd, 8, RoundingMode.HALF_UP);
-            rates.put(currency, rate);
-        });
-        return rates;
-    }
-
     private BigDecimal fallbackRate(String from, String to) {
         BigDecimal fromUsdRate = DEFAULT_USD_RATES.get(from);
         BigDecimal toUsdRate = DEFAULT_USD_RATES.get(to);
@@ -155,8 +92,5 @@ public class ExchangeRateService {
             return BigDecimal.ONE;
         }
         return toUsdRate.divide(fromUsdRate, 8, RoundingMode.HALF_UP);
-    }
-
-    private record CachedRates(Map<String, BigDecimal> rates, LocalDateTime updatedAt, long cachedAt, String source) {
     }
 }
