@@ -127,19 +127,25 @@ public final class KlineService {
     /** 腾讯无K线历史、需走纳斯达克官方 historical 的美股代码（详情短代码） */
     private static final Set<String> NASDAQ_HISTORY_CODES = Set.of("qqq");
 
-    /** 纳斯达克官方日K缓存：symbol → (到期时间戳, 数据)，10 分钟 TTL，避免详情页反复拉 10 年历史 */
-    private static final Map<String, Object[]> NASDAQ_DAILY_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    /**
+     * 纳斯达克官方日K缓存：成功 10 分钟 TTL；上游失败/空数据负缓存 60s，
+     * 避免故障期间每个详情页请求都直打 api.nasdaq.com 等 15s。
+     */
+    private static final MarketUtils.KeyedTtlCache<String, List<Map<String, Object>>> NASDAQ_DAILY_CACHE =
+        new MarketUtils.KeyedTtlCache<>(600_000L, 60_000L, 16);
 
     /**
      * 纳斯达克官方日K（api.nasdaq.com historical）：data.tradesTable.rows[]，
      * 行结构 {date:"MM/DD/YYYY", open/high/low/close, volume:"38,251,580"}，周K/月K由调用方聚合。
      */
     public static List<Map<String, Object>> nasdaqDailyKline(String symbol, String assetClass, int datalen) {
-        String cacheKey = symbol + ":" + assetClass;
-        Object[] cached = NASDAQ_DAILY_CACHE.get(cacheKey);
-        if (cached != null && System.currentTimeMillis() < (long) cached[0]) {
-            return (List<Map<String, Object>>) cached[1];
-        }
+        String cacheKey = symbol + ":" + assetClass + ":" + datalen;
+        List<Map<String, Object>> cached = NASDAQ_DAILY_CACHE.get(cacheKey,
+            k -> fetchNasdaqDaily(symbol, assetClass, datalen));
+        return cached == null ? List.of() : cached;
+    }
+
+    private static List<Map<String, Object>> fetchNasdaqDaily(String symbol, String assetClass, int datalen) {
         // 覆盖 datalen 根交易日所需日历日（约 ×2.2 含节假日/休市），限 10 年
         long days = Math.min((long) Math.ceil(datalen * 2.2) + 30, 3660);
         String from = LocalDate.now().minusDays(days).format(DateTimeFormatter.ISO_LOCAL_DATE);
@@ -152,10 +158,11 @@ public final class KlineService {
             rows = helper.getJson(url, MarketConfig.NASDAQ_HEADERS, 15)
                 .path("data").path("tradesTable").path("rows");
         } catch (Exception e) {
-            return List.of();
+            // 上游故障按失败处理：负缓存 60s，期间直接返回空不再请求
+            throw new IllegalStateException("纳斯达克日K上游请求失败: " + e.getMessage(), e);
         }
         if (!rows.isArray() || rows.isEmpty()) {
-            return List.of();
+            throw new IllegalStateException("纳斯达克日K数据为空");
         }
         DateTimeFormatter mdY = DateTimeFormatter.ofPattern("MM/dd/yyyy");
         List<Map<String, Object>> out = new ArrayList<>();
@@ -177,8 +184,6 @@ public final class KlineService {
         }
         // 官方返回按日期倒序，统一为升序（与其他 K 线源一致）
         java.util.Collections.reverse(out);
-        NASDAQ_DAILY_CACHE.put(cacheKey, new Object[]{
-            System.currentTimeMillis() + 600_000L, java.util.Collections.unmodifiableList(out)});
         return out;
     }
 

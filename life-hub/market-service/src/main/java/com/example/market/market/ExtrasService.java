@@ -12,23 +12,28 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * 详情页扩展信息：资金流向 / 公司公告 / 分红送配（对应 investment 项目 services/extras.py）。
  *
- * <p>数据源均为新浪（仅 A 股标的有此类数据），带 64 条 LRU 式进程缓存。</p>
+ * <p>数据源均为新浪（仅 A 股标的有此类数据）。缓存统一走
+ * {@link MarketUtils.KeyedTtlCache}：公告/分红 30 分钟 TTL（内容按日更新）、
+ * 资金流向 60 秒 TTL；上游失败降级旧值/负缓存 60s，不再出现旧实现
+ * 「缓存永不过期 + 到上限整表 clear()」的问题。</p>
  */
 public final class ExtrasService {
 
     private ExtrasService() {
     }
 
-    private static final int CACHE_MAX = 64;
-    private static final Map<String, List<Map<String, Object>>> ANNOUNCEMENT_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, List<Map<String, Object>>> DIVIDEND_CACHE = new ConcurrentHashMap<>();
+    private static final MarketUtils.KeyedTtlCache<String, List<Map<String, Object>>> ANNOUNCEMENT_CACHE =
+        new MarketUtils.KeyedTtlCache<>(30 * 60_000L, 60_000L, 128);
+    private static final MarketUtils.KeyedTtlCache<String, List<Map<String, Object>>> DIVIDEND_CACHE =
+        new MarketUtils.KeyedTtlCache<>(30 * 60_000L, 60_000L, 128);
+    private static final MarketUtils.KeyedTtlCache<String, List<Map<String, Object>>> MONEYFLOW_CACHE =
+        new MarketUtils.KeyedTtlCache<>(60_000L, 30_000L, 128);
 
     private static final Pattern BULLETIN_RE = Pattern.compile(
         "<a target='_blank' href='(/corp/view/vCB_AllBulletinDetail\\.php\\?stockid=\\d+&(?:amp;)?id=\\d+)'>"
@@ -43,13 +48,18 @@ public final class ExtrasService {
             return List.of();
         }
         String sym = KlineService.sinaSymbol(kind, code);
+        List<Map<String, Object>> cached = MONEYFLOW_CACHE.get(sym, k -> fetchMoneyflow(sym));
+        return cached == null ? List.of() : cached;
+    }
+
+    private static List<Map<String, Object>> fetchMoneyflow(String sym) {
         String url = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php"
             + "/MoneyFlow.ssl_qsfx_lscjfb?page=1&num=20&sort=opendate&asc=0&daima=" + sym;
         JsonNode raw;
         try {
             raw = MarketUtils.MAPPER.readTree(SinaClient.getText(url, StandardCharsets.UTF_8, 10));
         } catch (Exception e) {
-            return List.of();
+            throw new IllegalStateException("资金流向上游请求失败: " + e.getMessage(), e);
         }
         if (!raw.isArray()) {
             return List.of();
@@ -81,11 +91,11 @@ public final class ExtrasService {
         if (!kind.equals("stock")) {
             return List.of();
         }
-        String cacheKey = code;
-        List<Map<String, Object>> cached = ANNOUNCEMENT_CACHE.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
+        List<Map<String, Object>> cached = ANNOUNCEMENT_CACHE.get(code, k -> fetchAnnouncements(kind, code));
+        return cached == null ? List.of() : cached;
+    }
+
+    private static List<Map<String, Object>> fetchAnnouncements(String kind, String code) {
         String sym = KlineService.sinaSymbol(kind, code);
         String page = SinaClient.getText(
             "https://vip.stock.finance.sina.com.cn/corp/go.php/vCB_AllBulletin/stockid/"
@@ -124,10 +134,6 @@ public final class ExtrasService {
                 }
             }
         }
-        if (ANNOUNCEMENT_CACHE.size() >= CACHE_MAX) {
-            ANNOUNCEMENT_CACHE.clear();
-        }
-        ANNOUNCEMENT_CACHE.put(cacheKey, out);
         return out;
     }
 
@@ -136,11 +142,11 @@ public final class ExtrasService {
         if (!kind.equals("stock")) {
             return List.of();
         }
-        String cacheKey = code;
-        List<Map<String, Object>> cached = DIVIDEND_CACHE.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
+        List<Map<String, Object>> cached = DIVIDEND_CACHE.get(code, k -> fetchDividends(kind, code));
+        return cached == null ? List.of() : cached;
+    }
+
+    private static List<Map<String, Object>> fetchDividends(String kind, String code) {
         String sym = KlineService.sinaSymbol(kind, code);
         String page = SinaClient.getText(
             "https://vip.stock.finance.sina.com.cn/corp/go.php/vISSUE_ShareBonus/stockid/"
@@ -168,10 +174,6 @@ public final class ExtrasService {
                 ? cells.get(6) : null);
             out.add(row);
         }
-        if (DIVIDEND_CACHE.size() >= CACHE_MAX) {
-            DIVIDEND_CACHE.clear();
-        }
-        DIVIDEND_CACHE.put(cacheKey, out);
         return out;
     }
 

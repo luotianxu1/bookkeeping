@@ -1,5 +1,6 @@
 package com.example.market.forex;
 
+import com.example.market.market.MarketUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -22,12 +23,17 @@ import java.util.concurrent.ConcurrentHashMap;
  * 汇率服务（2026-10-30 从 app-service ExchangeRateService 整体迁入）：
  * 主源 open.er-api.com（每币种基准 5 分钟缓存），失败降级为内置兜底汇率表。
  * 字段口径与原 app-service 一致：fromCurrency/toCurrency/rate(6位小数)/updatedAt/source。
+ *
+ * <p>缓存语义（2026-10-30 修复）：兜底汇率不再写入正式缓存——上游失败时
+ * 有历史真实值则返回旧值（30s 降级窗口后重试上游），完全没有时返回
+ * 不落缓存的兜底值，恢复后下一次请求即重试主源，不会把兜底价当真实值用 5 分钟。</p>
  */
 @Service
 public class ForexRateService {
 
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Shanghai");
     private static final long CACHE_MILLIS = 5 * 60_000L;
+    private static final long FAILURE_TTL_MILLIS = 30_000L;
     private static final Map<String, BigDecimal> DEFAULT_USD_RATES = Map.of(
         "USD", BigDecimal.ONE,
         "CNY", new BigDecimal("7.20"),
@@ -43,7 +49,8 @@ public class ForexRateService {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final String latestApiUrl;
-    private final Map<String, CachedRates> cachedRates = new ConcurrentHashMap<>();
+    private final MarketUtils.KeyedTtlCache<String, CachedRates> ratesCache =
+        new MarketUtils.KeyedTtlCache<>(CACHE_MILLIS, FAILURE_TTL_MILLIS, 32);
 
     public ForexRateService(
         ObjectMapper objectMapper,
@@ -76,61 +83,60 @@ public class ForexRateService {
     }
 
     private CachedRates fetchRates(String baseCurrency) {
-        long now = System.currentTimeMillis();
-        CachedRates cached = cachedRates.get(baseCurrency);
-        if (cached != null && now - cached.cachedAt() < CACHE_MILLIS) {
+        CachedRates cached = ratesCache.get(baseCurrency, this::fetchUpstreamRates);
+        if (cached != null) {
             return cached;
         }
-
-        try {
-            JsonNode root = fetchJson(latestApiUrl + "/" + baseCurrency);
-            JsonNode ratesNode = root.path("rates");
-            if (!ratesNode.isObject()) {
-                throw new IllegalStateException("汇率数据格式错误");
-            }
-
-            Map<String, BigDecimal> rates = new ConcurrentHashMap<>();
-            ratesNode.fields().forEachRemaining((entry) -> {
-                JsonNode value = entry.getValue();
-                if (value != null && value.isNumber()) {
-                    rates.put(entry.getKey().toUpperCase(Locale.ROOT), value.decimalValue());
-                }
-            });
-
-            CachedRates nextCache = new CachedRates(
-                rates,
-                extractUpdatedAt(root),
-                now,
-                "open.er-api"
-            );
-            cachedRates.put(baseCurrency, nextCache);
-            return nextCache;
-        } catch (Exception ex) {
-            if (cached != null) {
-                return cached;
-            }
-            CachedRates fallback = new CachedRates(
-                fallbackRates(baseCurrency),
-                LocalDateTime.now(DEFAULT_ZONE),
-                now,
-                "内置兜底汇率"
-            );
-            cachedRates.put(baseCurrency, fallback);
-            return fallback;
-        }
+        // 上游失败且无历史真实值：返回不落缓存的兜底汇率，恢复后下一次请求即重试上游
+        return new CachedRates(
+            fallbackRates(baseCurrency),
+            LocalDateTime.now(DEFAULT_ZONE),
+            System.currentTimeMillis(),
+            "内置兜底汇率"
+        );
     }
 
-    private JsonNode fetchJson(String url) throws Exception {
+    private CachedRates fetchUpstreamRates(String baseCurrency) {
+        JsonNode root = fetchJson(latestApiUrl + "/" + baseCurrency);
+        JsonNode ratesNode = root.path("rates");
+        if (!ratesNode.isObject()) {
+            throw new IllegalStateException("汇率数据格式错误");
+        }
+
+        Map<String, BigDecimal> rates = new ConcurrentHashMap<>();
+        ratesNode.fields().forEachRemaining((entry) -> {
+            JsonNode value = entry.getValue();
+            if (value != null && value.isNumber()) {
+                rates.put(entry.getKey().toUpperCase(Locale.ROOT), value.decimalValue());
+            }
+        });
+
+        return new CachedRates(
+            rates,
+            extractUpdatedAt(root),
+            System.currentTimeMillis(),
+            "open.er-api"
+        );
+    }
+
+    private JsonNode fetchJson(String url) {
         HttpRequest request = HttpRequest.newBuilder(URI.create(url))
             .timeout(Duration.ofSeconds(10))
             .header("User-Agent", "Mozilla/5.0")
             .GET()
             .build();
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IllegalStateException("汇率接口 HTTP " + response.statusCode());
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException("汇率接口 HTTP " + response.statusCode());
+            }
+            return objectMapper.readTree(response.body());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("汇率接口请求失败: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("汇率接口请求被中断", e);
         }
-        return objectMapper.readTree(response.body());
     }
 
     private LocalDateTime extractUpdatedAt(JsonNode root) {
