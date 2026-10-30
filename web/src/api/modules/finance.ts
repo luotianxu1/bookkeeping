@@ -1586,7 +1586,8 @@ export function getGoldPrices(
   forceRefreshCurrent = false,
   includeChart = true,
 ) {
-  return requestGet<GoldPrice>(financeRequest, '/api/finance/gold-prices', {
+  // 金价已迁至行情中心 market-service（响应结构不变）
+  return requestGet<GoldPrice>(marketRequest, '/api/market/gold-prices', {
     params: {
       range,
       forceRefreshCurrent,
@@ -1597,7 +1598,8 @@ export function getGoldPrices(
 }
 
 export function getRealtimeGoldPrice(forceRefreshCurrent = false) {
-  return requestGet<GoldRealtimePrice>(financeRequest, '/api/finance/gold-prices/realtime', {
+  // 金价已迁至行情中心 market-service（响应结构不变）
+  return requestGet<GoldRealtimePrice>(marketRequest, '/api/market/gold-prices/realtime', {
     params: {
       forceRefreshCurrent,
       ...(forceRefreshCurrent ? { _: Date.now() } : {}),

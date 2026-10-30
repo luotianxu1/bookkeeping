@@ -16,6 +16,13 @@ market:
   us-premarket:
     quote-info-api-url: https://api.nasdaq.com/api/quote
 
+# 金价（2026-10-30 自 app-service 迁入；实时主源新浪 gds_AU9999+hf_XAU、走势主源新浪 AU0 K线，
+# 首饰金价为金投独家并作实时/走势降级源，口径与迁移前一致）
+finance:
+  gold-price:
+    exchange-rate-api-url: https://open.er-api.com/v6/latest/USD
+    cngold-api-url: https://api.jijinhao.com
+
 internal:
   # 与 app-service / auth-service 的 internal 接口同一约定
   api-key: ${INTERNAL_API_KEY:dev-internal-key}

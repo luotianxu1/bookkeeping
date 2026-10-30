@@ -35,10 +35,11 @@ mvn clean install -pl common,auth-service   # single module
 | --- | --- | --- |
 | auth-service | 8081 | JWT auth, user/family management |
 | app-service | 8082 | 全部业务：finance（账户/交易/投资/选股）+ tools（contacts/todos/photography/calendar，`/api/tools/*`）+ food（`/api/tools/food/*`） |
-| market-service | 8083 | 行情中心：`/api/market/*` 全球行情/K线/涨跌停/市场状态/要闻/美股盘前；JWT 认证与 app-service 同套（同 JWT_SECRET、同一 MySQL 用户状态校验），无业务表 |
+| market-service | 8083 | 行情中心：`/api/market/*` 全球行情/K线/涨跌停/市场状态/要闻/美股盘前/金价（金投网源，含品牌首饰金价与走势）；JWT 认证与 app-service 同套（同 JWT_SECRET、同一 MySQL 用户状态校验），无业务表 |
 
 - 2026-10: 项目更名 life-hub（原 spring-cloud-bookkeeping），前端目录更名 web/（原 vue3-ts-app）。tool-service / food-service 已合并进业务服务并整体更名 app-service（原 finance-service；包名 `com.example.app`/主类 `AppServiceApplication`）。历史备份在 `life-hub/data/backup-20261029/`。跨服务 Client（`FinanceClient` / `ToolServiceClient`）已改为同 JVM 本地调用；internal 接口与 X-Internal-Key 鉴权保留为兼容入口。数据库与 tunnel 名保留 `bookkeeping` 不变。
 - 2026-10 下旬: 行情代码（原 `com.example.app.market` 包 + 行情 controllers/services/DTOs）整体迁出为 `market-service`（包 `com.example.market`，路由 `/api/finance/market*` → `/api/market/*`）。app-service 选股引擎经 `/api/internal/market/kline`（`MarketClient`，X-Internal-Key）调行情中心取日K；前端 market 接口走 `/market-api` 代理 + `marketRequest`。market-service 认证与 app-service 一致：scanBasePackages "com.example" 复用 common 全套 security（JWT Cookie + DefaultSecurityConfig + UserStatusChecker 查库），需 JWT_SECRET/DB_PASSWORD；曾做过的匿名开放+可选 MARKET_API_KEY 方案已废弃（ApiKeyFilter 已删）。
+- 2026-10-30: 金价（金投网 jijinhao 源：黄金9999/伦敦金/品牌首饰金价/走势，数据口径不变）自 app-service 整体迁入 market-service（包 `com.example.market.gold`，对外 `/api/market/gold-prices`，内部 `/api/internal/gold/**`）。app-service `GoldPriceService` 变为薄适配层（`MarketGoldClient`，X-Internal-Key），方法签名不变，金账户/资产趋势/投资估值等内部消费方与 `GoldPriceCacheTask` 零改动；app-service 旧 `GoldPriceController` 已删除。前端 `getGoldPrices`/`getRealtimeGoldPrice` 改走 `marketRequest` + `/api/market/gold-prices`，响应结构不变。
 - All services share one MySQL database: `bookkeeping_app`
 - Database: MySQL 8.0+, charset utf8mb4
 - Schema migrations: run `database/` files in numeric order (001, 002, ...)
