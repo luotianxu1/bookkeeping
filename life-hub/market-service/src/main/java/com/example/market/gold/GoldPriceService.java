@@ -5,8 +5,11 @@ import com.example.market.gold.dto.GoldRealtimePriceResponse;
 import com.example.market.market.SinaClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -19,6 +22,8 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 金价服务（2026-10-30 自 app-service GoldPriceService 迁入并切换数据源）。
@@ -34,7 +39,11 @@ import java.util.Map;
 @Service
 public class GoldPriceService {
 
+    private static final Logger log = LoggerFactory.getLogger(GoldPriceService.class);
+
     private static final BigDecimal TROY_OUNCE_GRAMS = new BigDecimal("31.1034768");
+    /** 缓存最大有效期：超过后读路径触发懒刷新（单飞），定时兜底任务也按此判定 */
+    private static final long CACHE_TTL_MILLIS = 60_000L;
     private static final String DOMESTIC_GOLD_CODE = "JO_71";
     private static final String LONDON_GOLD_CODE = "JO_92233";
     private static final ZoneId DEFAULT_ZONE = ZoneId.of("Asia/Shanghai");
@@ -55,7 +64,15 @@ public class GoldPriceService {
     private final String exchangeRateApiUrl;
     private final String jijinhaoApiBaseUrl;
 
-    private CachedGoldPrice cachedCurrentPrice;
+    /**
+     * 缓存快照：volatile 保证读侧原子读取且拿到完整发布对象
+     * （响应构建完成后不再变更，可安全跨线程共享，无需读锁）。
+     */
+    private volatile CachedGoldPrice cachedCurrentPrice;
+    /** 强刷串行锁：仅覆盖 /refresh 与 forceRefreshCurrent 的主动回源，不覆盖读路径 */
+    private final ReentrantLock refreshLock = new ReentrantLock();
+    /** 懒刷新单飞标记：缓存过期瞬间并发请求只放一个进上游，其余直接用当前快照 */
+    private final AtomicBoolean lazyRefreshing = new AtomicBoolean(false);
 
     public GoldPriceService(
         ObjectMapper objectMapper,
@@ -74,71 +91,110 @@ public class GoldPriceService {
         this.jijinhaoApiBaseUrl = cngoldApiUrl;
     }
 
-    public synchronized GoldPriceResponse getGoldPrice(String range) {
+    public GoldPriceResponse getGoldPrice(String range) {
         return getGoldPrice(range, false, true);
     }
 
-    public synchronized GoldPriceResponse getGoldPrice(String range, boolean forceRefreshCurrent) {
+    public GoldPriceResponse getGoldPrice(String range, boolean forceRefreshCurrent) {
         return getGoldPrice(range, forceRefreshCurrent, true);
     }
 
-    public synchronized GoldPriceResponse getGoldPrice(String range, boolean forceRefreshCurrent, boolean includeChart) {
-        String normalizedRange = normalizeRange(range);
-        GoldPriceResponse response;
+    public GoldPriceResponse getGoldPrice(String range, boolean forceRefreshCurrent, boolean includeChart) {
         if (forceRefreshCurrent) {
             try {
                 refreshCache();
-                response = copyResponseWithoutChart(cachedCurrentPrice.response());
             } catch (Exception ex) {
-                response = cachedCurrentPrice == null
-                    ? emptyGoldPriceResponse()
-                    : copyResponseWithoutChart(cachedCurrentPrice.response());
+                log.warn("金价强制刷新失败，降级使用缓存: {}", ex.getMessage());
             }
         } else {
-            response = cachedCurrentPrice == null
-                ? emptyGoldPriceResponse()
-                : copyResponseWithoutChart(cachedCurrentPrice.response());
+            ensureFresh();
         }
-        response.setChartPoints(includeChart ? fetchChartPoints(normalizedRange) : List.of());
+        CachedGoldPrice cached = cachedCurrentPrice;
+        GoldPriceResponse response = cached == null
+            ? emptyGoldPriceResponse()
+            : copyResponseWithoutChart(cached.response());
+        // 走势图与缓存无共享状态：放在锁外取数，慢请求（最长 8s+）不会阻塞其他金价调用
+        response.setChartPoints(includeChart ? fetchChartPoints(normalizeRange(range)) : List.of());
         return response;
     }
 
-    public synchronized GoldRealtimePriceResponse getRealtimePrice() {
-        return cachedCurrentPrice == null
+    public GoldRealtimePriceResponse getRealtimePrice() {
+        ensureFresh();
+        CachedGoldPrice cached = cachedCurrentPrice;
+        return cached == null
             ? emptyRealtimePriceResponse()
-            : toRealtimePrice(copyResponseWithoutChart(cachedCurrentPrice.response()));
+            : toRealtimePrice(copyResponseWithoutChart(cached.response()));
     }
 
-    public synchronized GoldRealtimePriceResponse getRealtimePrice(boolean forceRefreshCurrent) throws Exception {
+    public GoldRealtimePriceResponse getRealtimePrice(boolean forceRefreshCurrent) throws Exception {
         if (forceRefreshCurrent) {
             refreshCache();
         }
         return getRealtimePrice();
     }
 
-    public synchronized BigDecimal getCachedSpotPrice() {
-        if (cachedCurrentPrice == null) {
+    public BigDecimal getCachedSpotPrice() {
+        CachedGoldPrice cached = cachedCurrentPrice;
+        if (cached == null) {
             return null;
         }
-        GoldPriceResponse.GoldMarketQuote spotGold = cachedCurrentPrice.response().getSpotGold();
+        GoldPriceResponse.GoldMarketQuote spotGold = cached.response().getSpotGold();
         if (spotGold == null || spotGold.getPrice() == null || spotGold.getPrice().compareTo(BigDecimal.ZERO) <= 0) {
             return null;
         }
         return spotGold.getPrice().setScale(2, RoundingMode.HALF_UP);
     }
 
-    public synchronized BigDecimal getStrictRealtimeSpotPrice() {
+    public BigDecimal getStrictRealtimeSpotPrice() {
         return getCachedSpotPrice();
     }
 
-    public synchronized boolean hasWarmCache() {
+    public boolean hasWarmCache() {
         return cachedCurrentPrice != null;
     }
 
-    public synchronized void refreshCache() throws Exception {
-        long now = System.currentTimeMillis();
-        GoldPriceResponse currentPrice = fetchCurrentPrice();
-        cachedCurrentPrice = new CachedGoldPrice(currentPrice, now);
+    /**
+     * 懒刷新：缓存缺失或超过 TTL 时回源。单飞保证过期瞬间的并发请求
+     * 只放一个进上游，失败时保留旧缓存（陈旧但可用的降级语义）。
+     */
+    private void ensureFresh() {
+        CachedGoldPrice cached = cachedCurrentPrice;
+        if (cached != null && System.currentTimeMillis() - cached.cachedAt() < CACHE_TTL_MILLIS) {
+            return;
+        }
+        if (!lazyRefreshing.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            refreshCache();
+        } catch (Exception ex) {
+            log.warn("金价懒刷新失败，继续使用缓存: {}", ex.getMessage());
+        } finally {
+            lazyRefreshing.set(false);
+        }
+    }
+
+    /**
+     * 强制回源刷新（新浪+金投），供 /refresh 内部口与 forceRefreshCurrent 使用；
+     * 并发强刷在此串行执行。读路径不经此方法，不会长期持锁。
+     */
+    public void refreshCache() throws Exception {
+        refreshLock.lock();
+        try {
+            GoldPriceResponse currentPrice = fetchCurrentPrice();
+            cachedCurrentPrice = new CachedGoldPrice(currentPrice, System.currentTimeMillis());
+        } finally {
+            refreshLock.unlock();
+        }
+    }
+
+    /**
+     * market-service 自身兜底刷新：app-service 停机或预热任务连续失败时，
+     * 缓存也不会无限期陈旧。fresh 时为 no-op（ensureFresh 内部判定），不增加上游压力。
+     */
+    @Scheduled(initialDelay = 15_000L, fixedDelay = 30_000L)
+    public void scheduledCacheRefresh() {
+        ensureFresh();
     }
 
     private GoldPriceResponse fetchCurrentPrice() throws Exception {
