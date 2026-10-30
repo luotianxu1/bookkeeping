@@ -1,4 +1,4 @@
-import { financeRequest, requestDelete, requestGet, requestPost, requestPut } from '@/api/request'
+import { financeRequest, marketRequest, requestDelete, requestGet, requestPost, requestPut } from '@/api/request'
 
 export interface AccountType {
   id: number
@@ -1612,7 +1612,7 @@ export function getExchangeRate(from: string, to: string) {
 }
 
 export function getMarketNews(params: { category?: MarketNewsCategory; limit?: number } = {}) {
-  return requestGet<MarketNews>(financeRequest, '/api/finance/market-news', { params })
+  return requestGet<MarketNews>(marketRequest, '/api/market/news', { params })
 }
 
 export function getStockScreenStatus() {
@@ -1652,15 +1652,15 @@ export function stopStockScreenRun() {
 }
 
 export function getLimitUpDownStatistics() {
-  return requestGet<LimitUpDownStatistics>(financeRequest, '/api/finance/limit-up-down')
+  return requestGet<LimitUpDownStatistics>(marketRequest, '/api/market/limit-up-down')
 }
 
 export function getMarketStatus() {
-  return requestGet<MarketStatus>(financeRequest, '/api/finance/market-status')
+  return requestGet<MarketStatus>(marketRequest, '/api/market/status')
 }
 
 export function getUsPremarket() {
-  return requestGet<UsPremarketData>(financeRequest, '/api/finance/us-market/premarket', { timeout: 15000 })
+  return requestGet<UsPremarketData>(marketRequest, '/api/market/us/premarket', { timeout: 15000 })
 }
 
 export function createTransaction(params: CreateTransactionParams) {

@@ -124,7 +124,7 @@
 .scan-progress-metrics strong {
   overflow: hidden;
   color: var(--color-text-primary);
-  font-size: var(--font-size-15);
+  font-size: var(--font-size-14);
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
 }
@@ -162,8 +162,8 @@
 
 .market-status-card {
   display: grid;
-  gap: var(--space-12);
-  padding: var(--space-16);
+  gap: var(--space-10);
+  padding: var(--space-12);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-16);
   background: var(--color-bg-card);
@@ -204,19 +204,27 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 单行 4 列紧凑指数条：一块浅底容器 + 发丝竖分隔线，替代原来的 2×2 瓷砖块 */
 .market-index-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-8);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: var(--space-8) var(--space-4);
+  border-radius: var(--radius-10);
+  background: var(--color-bg-card-soft);
 }
 
 .market-index-grid article {
   min-width: 0;
   display: grid;
-  gap: 2px;
-  padding: var(--space-10);
-  border-radius: var(--radius-12);
-  background: var(--color-bg-card-soft);
+  justify-items: center;
+  gap: 1px;
+  padding: 0 var(--space-6);
+  border-left: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.market-index-grid article:first-child {
+  border-left: 0;
 }
 
 .market-index-grid span {
@@ -228,7 +236,7 @@
 .market-index-grid strong {
   overflow: hidden;
   color: var(--color-text-primary);
-  font-size: var(--font-size-14);
+  font-size: var(--font-size-13);
   text-overflow: ellipsis;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -236,7 +244,7 @@
 
 .market-index-grid b,
 .market-breadth-counts b {
-  font-size: var(--font-size-12);
+  font-size: var(--font-size-11);
   font-variant-numeric: tabular-nums;
 }
 
@@ -293,8 +301,8 @@
 
 .limit-statistics-card {
   display: grid;
-  gap: var(--space-12);
-  padding: var(--space-16);
+  gap: var(--space-10);
+  padding: var(--space-12);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-16);
   background: var(--color-bg-card);
@@ -338,16 +346,17 @@
 .limit-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-8);
+  gap: var(--space-6);
 }
 
 .limit-summary-grid article {
   min-width: 0;
   display: grid;
-  gap: 2px;
-  padding: var(--space-10);
-  border-radius: var(--radius-12);
+  gap: 1px;
+  padding: var(--space-6) var(--space-4);
+  border-radius: var(--radius-10);
   background: var(--color-bg-card-soft);
+  text-align: center;
 }
 
 .limit-summary-grid span {
@@ -359,12 +368,13 @@
 .limit-summary-grid div {
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 2px;
 }
 
 .limit-summary-grid strong {
   color: var(--color-text-primary);
-  font-size: var(--font-size-20);
+  font-size: var(--font-size-14);
   line-height: 1.3;
   font-variant-numeric: tabular-nums;
 }
@@ -385,20 +395,20 @@
 .limit-stock-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-8);
+  gap: var(--space-4);
   padding: var(--space-4);
-  border-radius: var(--radius-12);
+  border-radius: var(--radius-10);
   background: var(--color-bg-soft);
 }
 
 .limit-stock-tabs button {
-  min-height: var(--space-44);
+  min-height: var(--space-28);
   border: 0;
-  border-radius: var(--radius-10);
+  border-radius: var(--radius-8);
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
-  font-size: var(--font-size-13);
+  font-size: var(--font-size-12);
   font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
@@ -438,12 +448,12 @@
 
 .limit-stock-list > div {
   min-width: 0;
-  min-height: var(--space-44);
+  min-height: var(--space-40);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-12);
-  padding: var(--space-6) 0;
+  padding: var(--space-4) 0;
 }
 
 .limit-stock-list > div + div {
@@ -484,6 +494,37 @@
 
 .limit-stock-list strong.negative {
   color: var(--color-success-strong);
+}
+
+.limit-list-toggle {
+  display: block;
+  min-height: var(--space-28);
+  margin: var(--space-2) auto 0;
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-brand);
+  font: inherit;
+  font-size: var(--font-size-12);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 0.18s ease;
+}
+
+.limit-list-toggle::after {
+  content: '▾';
+  margin-left: 4px;
+  font-size: var(--font-size-11);
+}
+
+.limit-list-toggle.expanded::after {
+  content: '▴';
+}
+
+.limit-list-toggle:hover {
+  background: var(--color-bg-brand-soft);
 }
 
 .limit-stock-panel > p {

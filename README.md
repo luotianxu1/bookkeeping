@@ -22,7 +22,8 @@
 │   ├── common/                  # 公共 DTO、JWT、安全组件与通用逻辑
 │   │   └── src/main/resources/config/common-base.yml   # 各服务共享的基础配置
 │   ├── auth-service/            # 认证、用户、家庭管理，端口 8081
-│   ├── app-service/             # 全部业务：财务（含投资/行情）、工具、餐饮，端口 8082
+│   ├── app-service/             # 全部业务：财务（含投资/选股）、工具、餐饮，端口 8082
+│   ├── market-service/          # 行情中心（可独立部署）：A股/港股/美股/ETF/黄金/全球指数/要闻，端口 8083
 │   └── pom.xml
 └── database/                    # MySQL 建表与变更脚本，按数字顺序执行
 ```
@@ -64,7 +65,8 @@
 | 服务 | 模块 | 端口 | 说明 |
 | --- | --- | --- | --- |
 | 认证服务 | `auth-service` | `8081` | 登录、注册、JWT、用户/家庭管理 |
-| 业务服务 | `app-service` | `8082` | 财务（账户/记账/预算/投资/行情/工资）+ 工具（联系人/待办/摄影/旅行/健康）+ 餐饮（`/api/tools/food/*`） |
+| 业务服务 | `app-service` | `8082` | 财务（账户/记账/预算/投资/选股/工资）+ 工具（联系人/待办/摄影/旅行/健康）+ 餐饮（`/api/tools/food/*`） |
+| 行情中心 | `market-service` | `8083` | A股/港股/美股/ETF/黄金/全球指数实时行情与 K 线、涨跌停、市场状态、要闻、美股盘前；JWT 与 app-service 同套认证 |
 | 前端 | `web` | `5173` | Vite 开发服务 |
 
 每个后端服务启动后，Knife4j 文档地址为：
@@ -72,6 +74,7 @@
 ```text
 http://localhost:8081/doc.html
 http://localhost:8082/doc.html
+http://localhost:8083/doc.html
 ```
 
 ## 环境要求
@@ -124,7 +127,7 @@ done
 | --- | --- | --- |
 | `JWT_SECRET` | **是（必填）** | JWT 签名密钥，至少 32 字节；**所有服务必须一致**。未设置时服务启动直接失败（配置中无默认值） |
 | `DB_PASSWORD` | 是 | MySQL `root` 用户密码 |
-| `INTERNAL_API_KEY` | 生产必填 | 服务间内部接口（`/api/internal/**`）鉴权密钥，**两服务必须同值**；本地开发有默认值 `dev-internal-key` |
+| `INTERNAL_API_KEY` | 生产必填 | 服务间内部接口（`/api/internal/**`）鉴权密钥，**各服务必须同值**；本地开发有默认值 `dev-internal-key` |
 | `AMAP_WEB_SERVICE_KEY` | 按需 | 高德 Web 服务 key，app-service 用于路线/地点代理；前端不再直调高德 |
 | `AUTH_COOKIE_SECURE` | https 部署时设 `true` | 登录 Cookie 加 `Secure` 标记 |
 | `KNIFE4J_PRODUCTION` | 生产建议 `true` | 设为 `true` 关闭 Knife4j 在线文档 |
@@ -145,7 +148,7 @@ life-hub/common/src/main/resources/config/common-base.yml
 export DB_PASSWORD='你的MySQL密码'
 export JWT_SECRET='change-this-to-a-long-secret-key-at-least-32-bytes'
 # 生产环境追加：
-export INTERNAL_API_KEY='随机长随机串-四服务同值'
+export INTERNAL_API_KEY='随机长随机串-各服务同值'
 export AUTH_COOKIE_SECURE=true
 export KNIFE4J_PRODUCTION=true
 ```
@@ -157,11 +160,12 @@ cd "/Users/luotianxu/Documents/New project/life-hub"
 mvn clean install -DskipTests
 ```
 
-分别启动 2 个服务：
+分别启动 3 个服务：
 
 ```bash
 mvn -pl auth-service spring-boot:run
 mvn -pl app-service spring-boot:run
+mvn -pl market-service spring-boot:run
 ```
 
 也可以指定公共模块一起构建：
@@ -183,9 +187,10 @@ mvn clean install -pl common,auth-service -DskipTests
 ```text
 AuthServiceApplication
 AppServiceApplication
+MarketServiceApplication
 ```
 
-每个启动配置都需要带环境变量。`.idea/runConfigurations/` 中已提交预置好环境变量的运行配置（`JWT_SECRET`、`DB_PASSWORD`，app-service 另有 `AMAP_WEB_SERVICE_KEY`），直接使用即可；若自行新建配置，至少要设置：
+每个启动配置都需要带环境变量。`.idea/runConfigurations/` 中已提交预置好环境变量的运行配置（`JWT_SECRET`、`DB_PASSWORD`，app-service 另有 `AMAP_WEB_SERVICE_KEY`；market-service 无需 DB/JWT），直接使用即可；若自行新建配置，至少要设置：
 
 ```text
 DB_PASSWORD=你的MySQL密码
@@ -239,6 +244,7 @@ Vite 已配置本地代理：
 | `/finance-api` | `http://localhost:8082` |
 | `/tool-api` | `http://localhost:8082` |
 | `/food-api` | `http://localhost:8082` |
+| `/market-api` | `http://localhost:8083` |
 | `/api-proxy` | `http://localhost:8081` |
 
 前端请求封装位于：
@@ -257,6 +263,7 @@ VITE_AUTH_API_BASE_URL=/auth-api
 VITE_FINANCE_API_BASE_URL=/finance-api
 VITE_TOOL_API_BASE_URL=/tool-api
 VITE_FOOD_API_BASE_URL=/food-api
+VITE_MARKET_API_BASE_URL=/market-api
 ```
 
 如果使用 Vite 代理，建议使用 `/auth-api`、`/finance-api` 这类相对路径。
@@ -284,9 +291,17 @@ JWT 通过 `access_token` httpOnly Cookie（`SameSite=Lax`）随请求携带，*
 
 ### 服务间内部接口
 
-跨服务调用（如摄影订单入账）走 `/api/internal/**`，由 `InternalApiKeyFilter` 校验 `X-Internal-Key` 请求头，不使用 JWT。生产环境务必设置 `INTERNAL_API_KEY` 并保证两服务同值，否则使用默认弱密钥 `dev-internal-key`。
+跨服务调用（如摄影订单入账、选股引擎日K）走 `/api/internal/**`，由 `InternalApiKeyFilter` 校验 `X-Internal-Key` 请求头，不使用 JWT。生产环境务必设置 `INTERNAL_API_KEY` 并保证各服务同值，否则使用默认弱密钥 `dev-internal-key`。
 
-> 说明：2026-10 服务合并后，原 tool/food 与 finance 同属 app-service，`FinanceClient`/`ToolServiceClient` 已是同 JVM 本地调用；internal 接口作为兼容入口保留。
+> 说明：2026-10 服务合并后，原 tool/food 与 finance 同属 app-service，`FinanceClient`/`ToolServiceClient` 已是同 JVM 本地调用；internal 接口作为兼容入口保留。同月行情代码整体迁出为独立 `market-service`（行情中心），app-service 的选股引擎经 `/api/internal/market/kline`（日K）与 `/api/internal/market/stock-list`（全市场清单，新浪 hs_a）调用行情中心，选股链路已零东财依赖。
+
+### 行情中心（market-service）
+
+行情中心为纯行情聚合（新浪/腾讯/东财/纳斯达克公开源），认证体系与 app-service 完全一致：
+
+- `/api/market/**` 需登录（同一 `JWT_SECRET` 签发的 httpOnly Cookie，前端 `withCredentials` 自动携带）；`/api/internal/**` 走 `X-Internal-Key`；
+- 用户状态校验（`UserStatusChecker`）连同一 MySQL（`bookkeeping_app`），但无业务表，仅 jdbc 只读；
+- 前端经 `/market-api` 代理访问；`JWT_SECRET`/`DB_PASSWORD` 与 app-service 同值，无其他环境变量。
 
 ### 第三方 API 代理
 
@@ -373,7 +388,7 @@ Access denied for user 'root'@'localhost'
 
 ### 后端启动提示 Could not resolve placeholder 'JWT_SECRET'
 
-`JWT_SECRET` 现为必填项（配置中无默认值），为四个服务的运行配置都设置该环境变量。
+`JWT_SECRET` 现为必填项（配置中无默认值），为后端各服务的运行配置都设置该环境变量（market-service 除外）。
 
 ### 登录后接口 401
 
@@ -390,12 +405,12 @@ IDEA 增量编译可能把损坏的 class 写进 `target/classes`（字节码内
 
 ### 服务与包结构（2026-10 合并更名后）
 
-后端只有 `auth-service`（认证）与 `app-service`（全部业务，原 finance-service/tool-service/food-service 合并更名而来）。业务包结构：财务 `com.example.app`、工具 `com.example.tool`（路由 `/api/tools/*`）、餐饮 `com.example.food`（路由 `/api/tools/food/*`）。前端目录为 `web/`（原 `vue3-ts-app`）。
+后端有三个服务：`auth-service`（认证）、`app-service`（全部业务，原 finance-service/tool-service/food-service 合并更名而来）、`market-service`（行情中心，2026-10 自 app-service 迁出）。业务包结构：财务 `com.example.app`、工具 `com.example.tool`（路由 `/api/tools/*`）、餐饮 `com.example.food`（路由 `/api/tools/food/*`）。前端目录为 `web/`（原 `vue3-ts-app`）。
 
 ### 生产部署检查清单
 
-- [ ] 两服务均设置 `JWT_SECRET`（同值，≥32 字节）与 `DB_PASSWORD`
-- [ ] 两服务设置 `INTERNAL_API_KEY`（同值，替换默认弱密钥）
+- [ ] auth-service/app-service 设置 `JWT_SECRET`（同值，≥32 字节）与 `DB_PASSWORD`
+- [ ] 各服务设置 `INTERNAL_API_KEY`（同值，替换默认弱密钥）
 - [ ] https 环境设置 `AUTH_COOKIE_SECURE=true`
 - [ ] 设置 `KNIFE4J_PRODUCTION=true` 关闭接口文档
 - [ ] app-service 设置 `AMAP_WEB_SERVICE_KEY`（用到地图功能时）

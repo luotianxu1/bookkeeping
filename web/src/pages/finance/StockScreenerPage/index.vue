@@ -23,6 +23,7 @@ import {
   type StockScreenPage,
   type StockScreenRun,
 } from '@/api/modules/finance'
+import { getQfqDailyKline } from '@/api/modules/market'
 
 type ScreeningRule = {
   key: string
@@ -168,6 +169,20 @@ const activeLimitStocks = computed(() => (
     ? limitStatistics.value?.limitUps || []
     : limitStatistics.value?.limitDowns || []
 ))
+// 涨跌停列表默认只展示前 5 只，避免卡片把整页撑得过长
+const LIMIT_LIST_PREVIEW_COUNT = 5
+const limitListExpanded = ref(false)
+const visibleLimitStocks = computed(() => (
+  limitListExpanded.value
+    ? activeLimitStocks.value
+    : activeLimitStocks.value.slice(0, LIMIT_LIST_PREVIEW_COUNT)
+))
+const limitListHiddenCount = computed(() => (
+  Math.max(0, activeLimitStocks.value.length - LIMIT_LIST_PREVIEW_COUNT)
+))
+watch(activeLimitTab, () => {
+  limitListExpanded.value = false
+})
 const primaryMarketIndices = computed<MarketStatusIndex[]>(() => {
   const primaryCodes = new Set(['000001', '399001', '399006', '899050'])
   return (marketStatus.value?.indices || []).filter((item) => primaryCodes.has(item.code))
@@ -741,22 +756,17 @@ function disposeAllKlineCharts() {
   klineCharts.clear()
 }
 
-// 日K数据前端直连腾讯行情，复用投资详情页的接口口径。
+// 日K经行情中心 /api/market/kline/qfq（腾讯前复权，与投资详情页同口径），不再浏览器直连。
 async function fetchStockKline(symbol: string): Promise<KlinePoint[]> {
-  const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${encodeURIComponent(`${symbol},day,,,120,qfq`)}`)
-  const data = await response.json()
-  const rows = data?.data?.[symbol]?.qfqday || data?.data?.[symbol]?.day || []
-  if (!Array.isArray(rows)) {
-    return []
-  }
-  return rows
-    .map((row: any) => ({
-      label: row?.[0] as string,
-      open: Number(row?.[1]),
-      close: Number(row?.[2]),
-      high: Number(row?.[3]),
-      low: Number(row?.[4]),
-      volume: Number(row?.[5]),
+  const data = await getQfqDailyKline(symbol, 120)
+  return (data?.kline ?? [])
+    .map(row => ({
+      label: row['日期'],
+      open: row['开盘'],
+      close: row['收盘'],
+      high: row['最高'],
+      low: row['最低'],
+      volume: row['成交量'],
     }))
     .filter((item: KlinePoint) => item.label && Number.isFinite(item.close))
 }
@@ -977,13 +987,21 @@ function toErrorMessage(error: unknown, fallback: string) {
         :aria-label="activeLimitTab === 'up' ? '涨停股票' : '跌停股票'"
       >
         <div v-if="activeLimitStocks.length" class="limit-stock-list">
-          <div v-for="stock in activeLimitStocks" :key="`${activeLimitTab}-${stock.code}`">
+          <div v-for="stock in visibleLimitStocks" :key="`${activeLimitTab}-${stock.code}`">
             <span><b>{{ stock.name }}</b><small>{{ stock.code }} · {{ stock.industry || '其他' }}</small></span>
             <strong :class="activeLimitTab === 'up' ? 'positive' : 'negative'">
               {{ formatSignedPercent(stock.changePercent) }}
             </strong>
           </div>
         </div>
+        <button
+          v-if="limitListHiddenCount > 0 || limitListExpanded"
+          :class="['limit-list-toggle', { expanded: limitListExpanded }]"
+          type="button"
+          @click="limitListExpanded = !limitListExpanded"
+        >
+          {{ limitListExpanded ? '收起列表' : `展开全部 ${activeLimitStocks.length} 只` }}
+        </button>
         <p v-else>{{ activeLimitTab === 'up' ? '暂无涨停股票' : '暂无跌停股票' }}</p>
       </section>
 

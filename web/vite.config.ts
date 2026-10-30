@@ -22,6 +22,11 @@ const apiProxy = {
         changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/food-api/, ''),
     },
+    '/market-api': {
+        target: 'http://localhost:8083',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/market-api/, ''),
+    },
     '/api-proxy': {
         target: 'http://localhost:8081',
         changeOrigin: true,

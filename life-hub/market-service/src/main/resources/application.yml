@@ -1,0 +1,25 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: market-service
+  config:
+    import: classpath:config/common-base.yml
+
+# 行情数据源（可按需覆盖外部地址）
+market:
+  news:
+    eastmoney-fast-news-api-url: https://np-weblist.eastmoney.com/comm/web/getFastNewsList
+  status:
+    index-api-url: https://push2delay.eastmoney.com/api/qt/ulist.np/get
+  us-premarket:
+    quote-info-api-url: https://api.nasdaq.com/api/quote
+
+internal:
+  # 与 app-service / auth-service 的 internal 接口同一约定
+  api-key: ${INTERNAL_API_KEY:dev-internal-key}
+
+springdoc:
+  api-docs:
+    enabled: true

@@ -6,22 +6,18 @@ import com.example.app.dto.StockScreenPageResponse;
 import com.example.app.dto.StockScreenRunResponse;
 import com.example.app.entity.StockScreenRunEntity;
 import com.example.app.entity.StockScreenSnapshotEntity;
-import com.example.app.market.KlineService;
+import com.example.app.client.MarketClient;
 import com.example.app.mapper.StockScreenRunMapper;
 import com.example.app.mapper.StockScreenSnapshotMapper;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -53,10 +49,9 @@ public class StockScreenerService {
     private static final String RULE_SUNRISE_RISE = "sunrise-rise";
     private static final String RULE_YIN_YANG_DOUBLE_BEAR = "yin-yang-double-bear";
     private static final String RULE_FIRST_BOARD_HIGH_BEAR = "first-board-high-bear";
-    private static final String DATA_SOURCE = "东方财富股票列表 / 新浪日K";
+    private static final String DATA_SOURCE = "新浪股票列表 / 新浪日K（行情中心）";
     private static final String CURRENT_RULE_VERSION = "downtrend-engulf-v4";
     private static final LocalTime MARKET_DATA_READY_TIME = LocalTime.of(16, 0);
-    private static final int UNIVERSE_PAGE_SIZE = 100;
     private static final int K_LINE_COUNT = 32;
     private static final BigDecimal DEFAULT_THREE_DAY_DECLINE = new BigDecimal("9");
     private static final BigDecimal DEFAULT_LAST_DAY_DECLINE = new BigDecimal("3");
@@ -73,39 +68,28 @@ public class StockScreenerService {
 
     private final StockScreenRunMapper runMapper;
     private final StockScreenSnapshotMapper snapshotMapper;
-    private final ObjectMapper objectMapper;
-    private final RestClient restClient;
+    private final MarketClient marketClient;
     private final ExecutorService quoteFetchExecutor;
     private final ExecutorService manualScanExecutor;
     private final AtomicBoolean scanRunning = new AtomicBoolean(false);
     private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
-    private final String stockListApiUrl;
     private final Set<LocalDate> marketClosedDates;
 
     public StockScreenerService(
         StockScreenRunMapper runMapper,
         StockScreenSnapshotMapper snapshotMapper,
-        ObjectMapper objectMapper,
-        @Value("${finance.stock-screener.stock-list-api-url:https://push2delay.eastmoney.com/api/qt/clist/get}") String stockListApiUrl,
+        MarketClient marketClient,
         @Value("${finance.stock-screener.fetch-concurrency:12}") Integer fetchConcurrency,
-        @Value("${finance.stock-screener.connect-timeout-millis:3000}") Integer connectTimeoutMillis,
-        @Value("${finance.stock-screener.read-timeout-millis:5000}") Integer readTimeoutMillis,
         @Value("${finance.investment.market-closed-dates:}") String marketClosedDates
     ) {
         this.runMapper = runMapper;
         this.snapshotMapper = snapshotMapper;
-        this.objectMapper = objectMapper;
-        this.stockListApiUrl = stockListApiUrl;
+        this.marketClient = marketClient;
         this.marketClosedDates = Arrays.stream(marketClosedDates.split(","))
             .map(String::trim)
             .filter(value -> !value.isEmpty())
             .map(LocalDate::parse)
             .collect(Collectors.toSet());
-
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Math.max(500, connectTimeoutMillis));
-        requestFactory.setReadTimeout(Math.max(1000, readTimeoutMillis));
-        this.restClient = RestClient.builder().requestFactory(requestFactory).build();
 
         int concurrency = Math.max(2, Math.min(24, fetchConcurrency));
         this.quoteFetchExecutor = Executors.newFixedThreadPool(concurrency, daemonThreadFactory("stock-quote-"));
@@ -369,41 +353,23 @@ public class StockScreenerService {
         return run;
     }
 
-    private List<StockInstrument> fetchStockUniverse() throws Exception {
+    private List<StockInstrument> fetchStockUniverse() {
+        // 全市场清单经行情中心 /api/internal/market/stock-list（新浪 hs_a：沪深主板/创业板/科创板/北交所，
+        // 停牌无效标的已在行情中心过滤），服务端缓存 30 分钟
+        List<Map<String, Object>> rows = marketClient.stockUniverse();
+        if (rows.isEmpty()) {
+            throw new IllegalStateException("A股清单接口返回为空");
+        }
         Map<String, StockInstrument> stocks = new LinkedHashMap<>();
-        int total = Integer.MAX_VALUE;
-        for (int page = 1; page <= 80 && stocks.size() < total; page++) {
-            if (cancelRequested.get()) {
-                break;
+        for (Map<String, Object> row : rows) {
+            String code = String.valueOf(row.get("code")).trim();
+            String name = String.valueOf(row.get("name")).trim();
+            String market = String.valueOf(row.get("market")).trim();
+            String symbol = String.valueOf(row.get("symbol")).trim();
+            if (code.isBlank() || name.isBlank() || market.isBlank() || symbol.isBlank()) {
+                continue;
             }
-            String url = stockListApiUrl
-                + "?pn=" + page
-                + "&pz=" + UNIVERSE_PAGE_SIZE
-                + "&po=0&np=1&fltt=2&invt=2&fid=f12"
-                + "&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048"
-                + "&fields=f12,f14,f2";
-            JsonNode root = fetchJson(url, "https://quote.eastmoney.com/");
-            JsonNode data = root.path("data");
-            if (data.isMissingNode() || data.isNull()) {
-                throw new IllegalStateException("股票列表接口返回异常");
-            }
-            total = data.path("total").asInt(0);
-            JsonNode rows = data.path("diff");
-            if (!rows.isArray() || rows.isEmpty()) {
-                break;
-            }
-            for (JsonNode row : rows) {
-                String code = row.path("f12").asText("").trim();
-                String name = row.path("f14").asText("").trim();
-                String market = resolveMarket(code);
-                if (market == null || name.isBlank() || !isPositiveNumber(row.path("f2"))) {
-                    continue;
-                }
-                stocks.putIfAbsent(code, new StockInstrument(code, name, marketPrefix(market) + code, market));
-            }
-            if (rows.size() < UNIVERSE_PAGE_SIZE) {
-                break;
-            }
+            stocks.putIfAbsent(code, new StockInstrument(code, name, symbol, market));
         }
         return new ArrayList<>(stocks.values());
     }
@@ -428,9 +394,9 @@ public class StockScreenerService {
         Exception lastError = null;
         for (int attempt = 1; attempt <= 2; attempt++) {
             try {
-                // 复用行情中心（global 页）的日K通道：新浪 CN_MarketDataService（KlineService.sinaKline），
-                // 与详情页 K 线同源同封装，仅保留重试与排序
-                List<Map<String, Object>> rows = KlineService.sinaKline(symbol, K_LINE_COUNT, "240");
+                // 复用行情中心的日K通道：新浪 CN_MarketDataService（market-service KlineService.sinaKline），
+                // 经 internal 接口调用，与详情页 K 线同源同封装，仅保留重试与排序
+                List<Map<String, Object>> rows = marketClient.sinaKline(symbol, K_LINE_COUNT, "240");
                 List<DailyBar> bars = new ArrayList<>();
                 for (Map<String, Object> row : rows) {
                     DailyBar bar = toDailyBar(row);
@@ -982,18 +948,6 @@ public class StockScreenerService {
             .eq(StockScreenSnapshotEntity::getRunId, runId));
     }
 
-    private JsonNode fetchJson(String url, String referer) throws Exception {
-        return objectMapper.readTree(fetchText(url, referer));
-    }
-
-    private String fetchText(String url, String referer) {
-        return restClient.get()
-            .uri(URI.create(url))
-            .header("User-Agent", "Mozilla/5.0")
-            .header("Referer", referer)
-            .retrieve()
-            .body(String.class);
-    }
 
     /** 行情中心 KlineService 行（中文键，值为 Double/Long）→ 选股器日K条 */
     private DailyBar toDailyBar(Map<String, Object> row) {
@@ -1066,27 +1020,7 @@ public class StockScreenerService {
         return Math.min(maximum, value.subtract(threshold).multiply(multiplier).intValue());
     }
 
-    private boolean isPositiveNumber(JsonNode value) {
-        if (value == null || value.isMissingNode() || value.isNull()) {
-            return false;
-        }
-        try {
-            return new BigDecimal(value.asText()).signum() > 0;
-        } catch (NumberFormatException ex) {
-            return false;
-        }
-    }
 
-    private String resolveMarket(String code) {
-        if (code.matches("6\\d{5}")) return "SH";
-        if (code.matches("[03]\\d{5}")) return "SZ";
-        if (code.matches("92\\d{4}")) return "BJ";
-        return null;
-    }
-
-    private String marketPrefix(String market) {
-        return market.toLowerCase(Locale.ROOT);
-    }
 
     private StockScreenRunResponse toRunResponse(StockScreenRunEntity entity) {
         if (entity == null) {

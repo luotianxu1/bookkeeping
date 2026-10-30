@@ -1,12 +1,13 @@
 // 投资详情页共享工具：类型、常量与纯函数（无 Vue 响应式依赖）。
 import type {
-  Account,
+    Account,
   InvestmentChartPoint,
   InvestmentDetailStat,
   InvestmentDividendRecord,
   InvestmentPosition,
   InvestmentTransaction,
 } from '@/api/modules/finance'
+import { getQfqDailyKline } from '@/api/modules/market'
 
 export type FundTrendRange = '1m' | '3m' | '6m' | '1y' | '3y'
 export type FundChartView = 'netValue' | 'profit'
@@ -494,21 +495,18 @@ export async function fetchStockQuote(symbol: string) {
 }
 
 export async function fetchStockKline(symbol: string) {
-  const response = await fetch(`https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${encodeURIComponent(`${symbol},day,,,260,qfq`)}`)
-  const data = await response.json()
-  const rows = data?.data?.[symbol]?.qfqday || data?.data?.[symbol]?.day || []
-  if (!Array.isArray(rows)) {
-    return []
-  }
+  // 经行情中心 /api/market/kline/qfq（腾讯 fqkline 前复权，与原直连同口径），不再浏览器直连
+  const data = await getQfqDailyKline(symbol, 260)
+  const rows = data?.kline ?? []
   return rows
     .map((row) => ({
-      label: row?.[0],
-      open: Number(row?.[1]),
-      close: Number(row?.[2]),
-      high: Number(row?.[3]),
-      low: Number(row?.[4]),
-      volume: Number(row?.[5]),
-      value: Number(row?.[2]),
+      label: row['日期'],
+      open: row['开盘'],
+      close: row['收盘'],
+      high: row['最高'],
+      low: row['最低'],
+      volume: row['成交量'],
+      value: row['收盘'],
     }))
     .filter((item) => item.label && Number.isFinite(item.close))
 }

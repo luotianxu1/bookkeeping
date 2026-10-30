@@ -1,6 +1,6 @@
-// 行情中心 API（/api/finance/market，Java 端 MarketController）：A股/港股/美股/ETF/黄金/全球模块。
+// 行情中心 API（/api/market，Java 端 MarketController）：A股/港股/美股/ETF/黄金/全球模块。
 // 行情行使用中文键（与后端 LinkedHashMap 字段一一对应），保持与数据源语义一致。
-import { financeRequest, requestGet } from '../request'
+import { marketRequest, requestGet } from '../request'
 
 /** 实时行情快照行结构（部分常用字段） */
 export interface SpotRow {
@@ -338,86 +338,99 @@ export interface SearchRow {
 /* ---------- 接口函数（requestGet 解包 Result<T>） ---------- */
 
 /** 健康检查 */
-export const getHealth = () => requestGet<{ status: string }>(financeRequest, '/api/finance/market/health')
+export const getHealth = () => requestGet<{ status: string }>(marketRequest, '/api/market/health')
 
 /** 全球页六大模块行情 */
 export const getGlobalModules = () =>
-  requestGet<{ count: number; modules: GlobalModule[] }>(financeRequest, '/api/finance/market/global/modules')
+  requestGet<{ count: number; modules: GlobalModule[] }>(marketRequest, '/api/market/global/modules')
 
 /** 市场概况：涨跌家数 + 分布 */
 export const getActivity = (market: ActivityMarket = 'a') =>
-  requestGet<MarketActivity>(financeRequest, '/api/finance/market/activity', { params: { market } })
+  requestGet<MarketActivity>(marketRequest, '/api/market/activity', { params: { market } })
 
 /** 涨跌停个股明细（仅 A 股） */
-export const getLimits = () => requestGet<MarketLimits>(financeRequest, '/api/finance/market/limits')
+export const getLimits = () => requestGet<MarketLimits>(marketRequest, '/api/market/limits')
 
 /** 港股/美股涨跌幅榜 */
 export const getMovers = (market: 'hk' | 'us') =>
-  requestGet<MarketMovers>(financeRequest, '/api/finance/market/movers', { params: { market } })
+  requestGet<MarketMovers>(marketRequest, '/api/market/movers', { params: { market } })
 
 /** 美股行业板块聚合（键结构与 SectorRow 一致，可复用板块组件） */
 export const getUsSectors = () =>
-  requestGet<{ count: number; data: SectorRow[] }>(financeRequest, '/api/finance/market/sector/us')
+  requestGet<{ count: number; data: SectorRow[] }>(marketRequest, '/api/market/sector/us')
 
 /** 今日实时成交额 + 较上一日此时 */
 export const getTurnover = (market: ActivityMarket = 'a') =>
-  requestGet<MarketTurnover>(financeRequest, '/api/finance/market/turnover', { params: { market } })
+  requestGet<MarketTurnover>(marketRequest, '/api/market/turnover', { params: { market } })
 
 /** 大盘核心指数实时行情 */
 export const getIndexSpot = () =>
   requestGet<{ count: number; data: IndexSpotRow[]; summary?: MarketSummary }>(
-    financeRequest,
-    '/api/finance/market/index/spot',
+    marketRequest,
+    '/api/market/index/spot',
   )
 
 /** 板块实时行情（按涨跌幅降序） */
 export const getSectorSpot = (kind: SectorKind = 'industry') =>
-  requestGet<{ kind: SectorKind; count: number; data: SectorRow[] }>(financeRequest, '/api/finance/market/sector/spot', {
+  requestGet<{ kind: SectorKind; count: number; data: SectorRow[] }>(marketRequest, '/api/market/sector/spot', {
     params: { kind },
   })
 
 /** 各市场行情（全球/港股/美股/ETF/黄金） */
 export const getQuotes = (group: MarketGroup) =>
-  requestGet<{ group: string; count: number; data: QuoteRow[] }>(financeRequest, `/api/finance/market/quotes/${group}`)
+  requestGet<{ group: string; count: number; data: QuoteRow[] }>(marketRequest, `/api/market/quotes/${group}`)
 
 /** A 股实时行情快照 */
 export const getStockSpot = (limit = 50) =>
-  requestGet<{ count: number; data: SpotRow[] }>(financeRequest, '/api/finance/market/stock/spot', { params: { limit } })
+  requestGet<{ count: number; data: SpotRow[] }>(marketRequest, '/api/market/stock/spot', { params: { limit } })
 
 /** 标的详情：实时行情 + K 线（scale 单位秒，240 = 日K；海外市场仅日K） */
 export const getDetail = (kind: DetailKind, code: string, scale = '240', datalen = 120) =>
-  requestGet<DetailData>(financeRequest, '/api/finance/market/detail', { params: { kind, code, scale, datalen } })
+  requestGet<DetailData>(marketRequest, '/api/market/detail', { params: { kind, code, scale, datalen } })
 
 /** 仅K线序列（详情页滚到最早后向前翻页加载） */
 export const getKline = (kind: DetailKind, code: string, scale = '240', datalen = 250) =>
-  requestGet<{ count: number; kline: KlinePoint[] }>(financeRequest, '/api/finance/market/kline', {
+  requestGet<{ count: number; kline: KlinePoint[] }>(marketRequest, '/api/market/kline', {
     params: { kind, code, scale, datalen },
   })
 
 /** 分时（当日 1 分钟线）：A股新浪 / 海外腾讯，美股可能无数据 */
 export const getTrend = (kind: DetailKind, code: string) =>
-  requestGet<TrendData>(financeRequest, '/api/finance/market/trend', { params: { kind, code } })
+  requestGet<TrendData>(marketRequest, '/api/market/trend', { params: { kind, code } })
 
 /** 近 N 个交易日分时回看（仅 A 股） */
 export const getTrendHistory = (kind: DetailKind, code: string, days = 5) =>
   requestGet<{ symbol: string; scale: string; days: TrendHistoryDay[] } | null>(
-    financeRequest,
-    '/api/finance/market/trend/history',
+    marketRequest,
+    '/api/market/trend/history',
     { params: { kind, code, days } },
   )
 
 /** 详情页扩展信息：资金流向/公司公告/分红送配（仅 A 股个股有数据） */
 export const getExtra = (kind: DetailKind, code: string) =>
-  requestGet<ExtraInfo>(financeRequest, '/api/finance/market/extra', { params: { kind, code } })
+  requestGet<ExtraInfo>(marketRequest, '/api/market/extra', { params: { kind, code } })
 
 /** 详情页 F10 信息（仅 A 股个股有数据） */
 export const getF10 = (kind: DetailKind, code: string) =>
-  requestGet<F10Data>(financeRequest, '/api/finance/market/f10', { params: { kind, code } })
+  requestGet<F10Data>(marketRequest, '/api/market/f10', { params: { kind, code } })
 
 /** 三大财务报表（利润表/资产负债表/现金流量表，仅 A 股） */
 export const getStatements = (kind: DetailKind, code: string, periods = 5) =>
-  requestGet<StatementsData>(financeRequest, '/api/finance/market/statements', { params: { kind, code, periods } })
+  requestGet<StatementsData>(marketRequest, '/api/market/statements', { params: { kind, code, periods } })
 
 /** 股票/指数/港股/美股联想搜索 */
 export const searchStocks = (keyword: string) =>
-  requestGet<{ count: number; data: SearchRow[] }>(financeRequest, '/api/finance/market/search', { params: { keyword } })
+  requestGet<{ count: number; data: SearchRow[] }>(marketRequest, '/api/market/search', { params: { keyword } })
+
+/* ---------- A股前复权日K（腾讯 fqkline，qfq 防除权跳空，与图表既有口径一致） ---------- */
+
+/** A股前复权日K响应 */
+export interface QfqDailyKline {
+  symbol: string
+  count: number
+  kline: KlinePoint[]
+}
+
+/** A股前复权日K（symbol 形如 sh600000/sz000001/bj832000），datalen 10~640 */
+export const getQfqDailyKline = (symbol: string, datalen = 120) =>
+  requestGet<QfqDailyKline>(marketRequest, '/api/market/kline/qfq', { params: { symbol, datalen } })

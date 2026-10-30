@@ -156,6 +156,7 @@ export const authRequest = createRequest({ service: 'auth' })
 export const financeRequest = createRequest({ service: 'finance' })
 export const toolRequest = createRequest({ service: 'tool' })
 export const foodRequest = createRequest({ service: 'food' })
+export const marketRequest = createRequest({ service: 'market' })
 
 export async function requestGet<T>(
     client: ReturnType<typeof createRequest>,
