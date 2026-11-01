@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { getErrorMessage } from '@/api/request'
-import type { ECharts } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
-import { readChartToken } from '@/utils/chart-theme'
-import { useTheme } from '@/utils/theme'
 import {
   getLimitUpDownStatistics,
   getMarketStatus,
@@ -24,54 +21,23 @@ import {
   type StockScreenPage,
   type StockScreenRun,
 } from '@/api/modules/finance'
-import { getQfqDailyKline } from '@/api/modules/market'
-
-type ScreeningRule = {
-  key: string
-  label: string
-  title: string
-  description: string
-  points: string[]
-}
-
-// 选股规则目录：后续新增规则时，在此追加一项即可自动出现在下拉框中。
-const screeningRules: ScreeningRule[] = [
-  {
-    key: 'sunrise-rise',
-    label: '旭日东升',
-    title: '旭日东升',
-    description: '连续下跌末端出现缩量阳线实体反包，捕捉超跌反转的启动信号。',
-    points: [
-      '近6日至少 4 根阴线，处于连续下跌通道',
-      '最后3日累计跌幅不低于 9%，第3根阴线单日跌幅不低于 3%',
-      '最后3日连续收阴，次日阳线实体反包且缩量',
-    ],
-  },
-  {
-    key: 'yin-yang-double-bear',
-    label: '阴阳双熊',
-    title: '阴阳双熊',
-    description: '上涨趋势中先出现放量阴线，次日低开后以缩量阳线收回阴线实体但不完全反包。',
-    points: [
-      '5日均线连续向上，且排除短期连续4个涨停后的形态',
-      '阴线与阳线实体至少一根达到 5%，实体最大不超过 15%',
-      '阳线相对阴线收盘低开至少 1.5%，收盘进入阴线实体但不完全反包',
-      '阴线实体不超过阳线实体 2 倍，阳线上影线不长于自身实体',
-      '阴线相对前5日均量放量 1.5～4 倍，阳线较阴线缩量',
-    ],
-  },
-  {
-    key: 'first-board-high-bear',
-    label: '首版高阴',
-    title: '首版高阴',
-    description: '低位首个实体涨停后出现高开低走放量阴线，再等待反包、突破或缩量回踩的确认买点。',
-    points: [
-      '近一个月窗口内优先寻找低位震荡后的首个实体涨停，涨停穿越3日均线且不过度爆量',
-      '涨停次日高开低走收阴，阴线实体和回落幅度受控，成交量高于首板',
-      '后续满足反包高阴、放量突破高阴最高位、或地量回踩首板低点附近任一买点',
-    ],
-  },
-]
+import {
+  clampNumber,
+  createOptimisticRunningState,
+  formatDate,
+  formatIndexValue,
+  formatKlineNumber,
+  formatMarketTime,
+  formatPercent,
+  formatPrice,
+  formatSignedPercent,
+  formatTurnover,
+  itemChangePercent,
+  marketChangeClass,
+  marketLabel,
+} from './screenerFormat'
+import { screeningRules } from './screenerRules'
+import { useExpandedKline } from './useExpandedKline'
 
 const activeRuleKey = ref<string>(screeningRules[0].key)
 const criteria = reactive({
@@ -106,27 +72,25 @@ let waitingForSubmittedScan = false
 let submittedAfterRunId = 0
 let statusRequestInFlight = false
 
-type KlinePoint = {
-  label: string
-  open: number
-  close: number
-  high: number
-  low: number
-  volume: number
-}
-
-// 展开的股票 K 线：一次只展开一只，数据前端直连腾讯行情，按 key 缓存已拉取的点位。
-const expandedKey = ref('')
-const klineLoadingKey = ref('')
-const klineErrorKey = ref('')
-const klineChartError = ref('')
-const klineCache = new Map<string, KlinePoint[]>()
-const klineCharts = new Map<string, ECharts>()
-const klineContainers = new Map<string, HTMLElement>()
-
 const STATUS_POLL_INTERVAL = 2000
 
 const cardKey = (item: StockScreenItem) => `${item.signalDate}-${item.stockCode}`
+
+const {
+  expandedKey,
+  klineLoadingKey,
+  klineErrorKey,
+  klineChartError,
+  toggleCard,
+  loadKline,
+  setKlineContainer,
+  disposeAllKlineCharts,
+} = useExpandedKline({
+  cardKey,
+  onError: (message) => {
+    pageError.value = message
+  },
+})
 
 const scanIsRunning = computed(() => latestRun.value?.status === 'running')
 const scanProcessedStocks = computed(() => Math.max(0, latestRun.value?.processedStocks || 0))
@@ -235,7 +199,7 @@ async function loadInitialData() {
       scheduleStatusPolling(0)
     }
   } catch (error) {
-    pageError.value = toErrorMessage(error, '选股数据加载失败')
+    pageError.value = getErrorMessage(error, '选股数据加载失败')
   } finally {
     isLoading.value = false
   }
@@ -251,7 +215,7 @@ async function loadLimitStatistics() {
     limitStatistics.value = await getLimitUpDownStatistics()
   } catch (error) {
     if (!limitStatistics.value) {
-      limitStatisticsError.value = toErrorMessage(error, '涨跌停数据加载失败')
+      limitStatisticsError.value = getErrorMessage(error, '涨跌停数据加载失败')
     }
   } finally {
     isLimitStatisticsLoading.value = false
@@ -268,7 +232,7 @@ async function loadMarketStatus() {
     marketStatus.value = await getMarketStatus()
   } catch (error) {
     if (!marketStatus.value) {
-      marketStatusError.value = toErrorMessage(error, '大盘状态加载失败')
+      marketStatusError.value = getErrorMessage(error, '大盘状态加载失败')
     }
   } finally {
     isMarketStatusLoading.value = false
@@ -286,7 +250,7 @@ async function applyRules(options: { preserveMessage?: boolean } = {}) {
     screenPage.value = page
     results.value = page.items || []
   } catch (error) {
-    pageError.value = toErrorMessage(error, '规则筛选失败')
+    pageError.value = getErrorMessage(error, '规则筛选失败')
   } finally {
     isLoading.value = false
   }
@@ -304,7 +268,7 @@ async function loadMore() {
     screenPage.value = page
     results.value = [...results.value, ...(page.items || [])]
   } catch (error) {
-    pageError.value = toErrorMessage(error, '加载更多结果失败')
+    pageError.value = getErrorMessage(error, '加载更多结果失败')
   } finally {
     isLoadingMore.value = false
   }
@@ -332,10 +296,10 @@ async function startFullMarketScan() {
       return
     }
     waitingForSubmittedScan = true
-    latestRun.value = createOptimisticRunningState(latestRun.value)
+    latestRun.value = createOptimisticRunningState(latestRun.value, submittedAfterRunId)
     scheduleStatusPolling(0)
   } catch (error) {
-    const message = toErrorMessage(error, '全市场扫描提交失败')
+    const message = getErrorMessage(error, '全市场扫描提交失败')
     pageError.value = message
     scanProgressError.value = message
   } finally {
@@ -362,7 +326,7 @@ async function stopFullMarketScan() {
     latestRun.value = await getStockScreenStatus()
   } catch (error) {
     isStoppingScan.value = false
-    const message = toErrorMessage(error, '停止扫描失败，请稍后重试')
+    const message = getErrorMessage(error, '停止扫描失败，请稍后重试')
     pageError.value = message
     scanProgressError.value = message
   }
@@ -455,24 +419,6 @@ function handleVisibilityChange() {
   }
 }
 
-function createOptimisticRunningState(current: StockScreenRun | null): StockScreenRun {
-  return {
-    id: current?.id || submittedAfterRunId,
-    tradeDate: current?.tradeDate || null,
-    triggerName: 'manual-api',
-    status: 'running',
-    totalStocks: 0,
-    processedStocks: 0,
-    matchedStocks: 0,
-    failedStocks: 0,
-    dataSource: current?.dataSource || '公开行情',
-    resultMessage: null,
-    errorMessage: null,
-    startedAt: new Date().toISOString(),
-    finishedAt: null,
-  }
-}
-
 function buildQuery(page: number) {
   return {
     ruleKey: activeRuleKey.value,
@@ -488,303 +434,6 @@ function buildQuery(page: number) {
   }
 }
 
-function clampNumber(value: number, min: number, max: number, fallback: number) {
-  const normalized = Number(value)
-  return Number.isFinite(normalized) ? Math.min(max, Math.max(min, normalized)) : fallback
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return '--'
-  const parts = value.split('-')
-  return parts.length === 3 ? `${parts[0]}.${parts[1]}.${parts[2]}` : value
-}
-
-function formatPrice(value?: number | null) {
-  const normalized = Number(value)
-  return Number.isFinite(normalized) ? normalized.toFixed(2) : '--'
-}
-
-function formatSignedPercent(value?: number | null) {
-  const normalized = Number(value)
-  if (!Number.isFinite(normalized)) return '--'
-  return `${normalized > 0 ? '+' : ''}${normalized.toFixed(2)}%`
-}
-
-function formatPercent(value?: number | null) {
-  const normalized = Number(value)
-  return Number.isFinite(normalized) ? `${normalized.toFixed(0)}%` : '--'
-}
-
-function formatIndexValue(value?: number | null) {
-  const normalized = Number(value)
-  return Number.isFinite(normalized) ? normalized.toFixed(2) : '--'
-}
-
-function formatTurnover(value?: number | null) {
-  const normalized = Number(value)
-  if (!Number.isFinite(normalized) || normalized <= 0) return '--'
-  if (normalized >= 1_000_000_000_000) return `${(normalized / 1_000_000_000_000).toFixed(2)}万亿`
-  return `${(normalized / 100_000_000).toFixed(0)}亿`
-}
-
-function formatMarketTime(value?: string | null) {
-  if (!value) return '--:--'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '--:--'
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
-function marketChangeClass(value?: number | null) {
-  const normalized = Number(value)
-  return normalized > 0 ? 'positive' : normalized < 0 ? 'negative' : 'neutral'
-}
-
-function marketLabel(market: string) {
-  return market === 'SH' ? '沪市' : market === 'SZ' ? '深市' : market === 'BJ' ? '北交所' : market
-}
-
-// 今日涨幅：信号日收盘相对前一日收盘的百分比。
-function itemChangePercent(item: StockScreenItem) {
-  const prev = Number(item.previousClose)
-  const close = Number(item.signalClose)
-  if (!Number.isFinite(prev) || !Number.isFinite(close) || prev <= 0) {
-    return null
-  }
-  return ((close - prev) / prev) * 100
-}
-
-async function toggleCard(item: StockScreenItem) {
-  const key = cardKey(item)
-  if (expandedKey.value === key) {
-    disposeKlineChart(key)
-    expandedKey.value = ''
-    return
-  }
-  // 一次只展开一只：先销毁上一只的图表实例。
-  if (expandedKey.value) {
-    disposeKlineChart(expandedKey.value)
-  }
-  expandedKey.value = key
-  await loadKline(item)
-}
-
-async function loadKline(item: StockScreenItem) {
-  const key = cardKey(item)
-  klineErrorKey.value = ''
-  if (klineCache.has(key)) {
-    await renderKline(key)
-    return
-  }
-  klineLoadingKey.value = key
-  try {
-    const points = await fetchStockKline(toScreenerSymbol(item.stockCode, item.market))
-    if (points.length === 0) {
-      throw new Error('未获取到日K数据')
-    }
-    klineCache.set(key, points)
-    // 拉取期间用户可能已收起或切换到别的卡片。
-    if (expandedKey.value === key) {
-      await renderKline(key)
-    }
-  } catch (error) {
-    if (expandedKey.value === key) {
-      klineErrorKey.value = key
-      pageError.value = ''
-      klineChartError.value = toErrorMessage(error, '日K加载失败')
-    }
-  } finally {
-    if (klineLoadingKey.value === key) {
-      klineLoadingKey.value = ''
-    }
-  }
-}
-
-async function renderKline(key: string) {
-  const points = klineCache.get(key)
-  if (!points || points.length === 0) {
-    return
-  }
-  await nextTick()
-  const container = klineContainers.get(key)
-  if (!container || expandedKey.value !== key) {
-    return
-  }
-  const echarts = await import('@/utils/echarts')
-  let chart = klineCharts.get(key)
-  if (!chart) {
-    chart = echarts.init(container)
-    klineCharts.set(key, chart)
-  }
-
-  const rootStyle = getComputedStyle(document.documentElement)
-  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
-  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
-  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
-  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
-  // 红涨绿跌：颜色走全局令牌，随明暗主题切换。
-  const upColor = readChartToken('--color-danger', '#dc2626')
-  const downColor = readChartToken('--color-success', '#16a34a')
-  const dates = points.map((point) => point.label)
-  const candleData = points.map((point) => [point.open, point.close, point.low, point.high])
-  // 成交量柱子跟随当日 K 线红涨绿跌：收盘 ≥ 开盘为红，否则为绿。
-  const volumeData = points.map((point) => ({
-    value: point.volume ?? 0,
-    itemStyle: { color: point.close >= point.open ? upColor : downColor },
-  }))
-  // 默认展示最近半个月（约 10 个交易日）的行情，K线与成交量共用同一 dataZoom 保持横轴对应。
-  const defaultSpan = 10
-  const zoomStartIndex = Math.max(0, points.length - defaultSpan)
-  const zoomEndIndex = Math.max(0, points.length - 1)
-
-  chart.setOption({
-    animation: false,
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross' },
-      confine: true,
-      // tooltip 固定停在图表顶部，避免压在光标/手指下方遮挡数据。
-      position: (point: number[], _params: unknown, _dom: unknown, _rect: unknown, size: { contentSize: number[] }) => {
-        const [pointerX] = point
-        const [tooltipWidth] = size.contentSize
-        const chartWidth = chart?.getWidth() ?? 0
-        const x = Math.min(Math.max(pointerX - tooltipWidth / 2, 0), Math.max(0, chartWidth - tooltipWidth))
-        return [x, 0]
-      },
-      backgroundColor: tooltipBg,
-      borderColor: tooltipBorder,
-      textStyle: { color: tooltipText },
-      formatter: (params: any) => {
-        const items = Array.isArray(params) ? params : [params]
-        if (items.length === 0) {
-          return '--'
-        }
-        const title = items[0]?.axisValueLabel || items[0]?.axisValue || '--'
-        const lines = [title]
-        for (const entry of items) {
-          if (entry.seriesType === 'candlestick' && Array.isArray(entry.data)) {
-            const [, open, close, low, high] = entry.data
-            lines.push(`${entry.marker}${entry.seriesName} 开 ${formatKlineNumber(open)} 收 ${formatKlineNumber(close)} 高 ${formatKlineNumber(high)} 低 ${formatKlineNumber(low)}`)
-            continue
-          }
-          if (entry.seriesType === 'bar') {
-            lines.push(`${entry.marker}${entry.seriesName} ${formatKlineNumber(entry.value, 0)}`)
-          }
-        }
-        return lines.join('<br/>')
-      },
-    },
-    legend: {
-      top: 0,
-      left: 0,
-      icon: 'roundRect',
-      itemWidth: 10,
-      itemHeight: 10,
-      textStyle: { color: axisText, fontSize: 11 },
-      data: ['日K', '成交量'],
-    },
-    grid: [
-      { left: 42, right: 14, top: 42, height: '54%' },
-      { left: 42, right: 14, top: '76%', height: '14%' },
-    ],
-    xAxis: [
-      { type: 'category', data: dates, boundaryGap: true, axisTick: { alignWithLabel: true }, axisLabel: { color: axisText, fontSize: 10 } },
-      { type: 'category', gridIndex: 1, data: dates, boundaryGap: true, axisTick: { alignWithLabel: true, show: false }, axisLabel: { show: false } },
-    ],
-    yAxis: [
-      { scale: true, axisLabel: { color: axisText, fontSize: 10 }, splitLine: { lineStyle: { color: splitLine } } },
-      { scale: true, gridIndex: 1, axisLabel: { show: false }, axisTick: { show: false }, axisLine: { show: false }, splitLine: { show: false } },
-    ],
-    dataZoom: [{ type: 'inside', xAxisIndex: [0, 1], startValue: zoomStartIndex, endValue: zoomEndIndex }],
-    series: [
-      {
-        name: '日K',
-        type: 'candlestick',
-        data: candleData,
-        barWidth: '60%',
-        itemStyle: {
-          color: upColor,
-          color0: downColor,
-          borderColor: upColor,
-          borderColor0: downColor,
-        },
-      },
-      {
-        name: '成交量',
-        type: 'bar',
-        xAxisIndex: 1,
-        yAxisIndex: 1,
-        data: volumeData,
-        barWidth: '60%',
-      },
-    ],
-  }, true)
-  requestAnimationFrame(() => chart?.resize())
-}
-
-// 主题切换时重建当前展开的 K 线图，让蜡烛红绿跟随令牌换色。
-const { isDark } = useTheme()
-watch(isDark, () => {
-  const key = expandedKey.value
-  if (key && klineCache.has(key)) {
-    void renderKline(key)
-  }
-})
-
-function setKlineContainer(key: string, el: Element | null) {
-  if (el instanceof HTMLElement) {
-    klineContainers.set(key, el)
-  } else {
-    klineContainers.delete(key)
-  }
-}
-
-function disposeKlineChart(key: string) {
-  const chart = klineCharts.get(key)
-  if (chart) {
-    chart.dispose()
-    klineCharts.delete(key)
-  }
-  if (klineErrorKey.value === key) {
-    klineErrorKey.value = ''
-  }
-}
-
-function disposeAllKlineCharts() {
-  for (const chart of klineCharts.values()) {
-    chart.dispose()
-  }
-  klineCharts.clear()
-}
-
-// 日K经行情中心 /api/market/kline/qfq（腾讯前复权，与投资详情页同口径），不再浏览器直连。
-async function fetchStockKline(symbol: string): Promise<KlinePoint[]> {
-  const data = await getQfqDailyKline(symbol, 120)
-  return (data?.kline ?? [])
-    .map(row => ({
-      label: row['日期'],
-      open: row['开盘'],
-      close: row['收盘'],
-      high: row['最高'],
-      low: row['最低'],
-      volume: row['成交量'],
-    }))
-    .filter((item: KlinePoint) => item.label && Number.isFinite(item.close))
-}
-
-function toScreenerSymbol(code: string, market: string) {
-  const prefix = market === 'SH' ? 'sh' : market === 'SZ' ? 'sz' : market === 'BJ' ? 'bj' : (code.startsWith('6') ? 'sh' : 'sz')
-  return `${prefix}${code}`
-}
-
-function formatKlineNumber(value: unknown, fractionDigits = 2) {
-  const normalized = Number(value)
-  return Number.isFinite(normalized) ? normalized.toFixed(fractionDigits) : '--'
-}
-
-function toErrorMessage(error: unknown, fallback: string) {
-  return getErrorMessage(error, fallback)
-}
 </script>
 
 <template>

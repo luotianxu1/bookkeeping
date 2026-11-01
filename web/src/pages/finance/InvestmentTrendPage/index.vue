@@ -8,38 +8,36 @@ import CommonSelect, { type CommonSelectOption } from '@/components/common/Commo
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
-import { readChartToken } from '@/utils/chart-theme'
 import { useTheme } from '@/utils/theme'
 import {
   getLatestAssetAccountSnapshots,
   getAssetTrend,
   type AssetAccountSnapshot,
-  type AssetAccountSnapshotItem,
   type AssetTrend,
-  type AssetTrendAllocation,
-  type AssetTrendContributor,
   type AssetTrendPoint,
   type AssetTrendRange,
 } from '@/api/modules/finance'
 import { getErrorMessage } from '@/api/request'
+import {
+  buildRangeDetailPoint,
+  getRangeDetailChangeAmount,
+  getTodayCompareAmount,
+  getTrendYAxisBounds,
+  mergeAssetTrendResults,
+  mergeLatestAssetSnapshots,
+  type RangeDetailPoint,
+  type SnapshotAccountItemView,
+} from './trendMerge'
+import {
+  formatAxisMoney,
+  formatCurrency,
+  formatDateTime,
+  formatSignedCurrency,
+  getAllocationDotStyle,
+  getAllocationTrackStyle,
+} from './trendFormat'
 
 type TrendRangeLabel = '近7日' | '近30日' | '年内' | '全部'
-
-interface RangeDetailPoint {
-  key: string
-  label: string
-  value: number | null
-  changeAmount: number | null
-}
-
-interface TrendYAxisBounds {
-  min?: number
-  max?: number
-}
-
-interface SnapshotAccountItemView extends AssetAccountSnapshotItem {
-  ownerLabel?: string
-}
 
 const route = useRoute()
 
@@ -287,7 +285,7 @@ const chartOption = computed<EChartsCoreOption>(() => {
           points[dataIndex - 1],
           dataIndex === 0 ? trend.value?.previousPeriodValue : null,
         )
-        const todayCompareAmount = getTodayCompareAmount(point)
+        const todayCompareAmount = getTodayCompareAmount(point, trend.value?.totalAssets)
         const dateLabel = item?.axisValueLabel || item?.axisValue || point.label
         const changeColor = changeAmount === null || changeAmount === 0
           ? tooltipText
@@ -470,7 +468,7 @@ async function loadTrend() {
       return
     }
 
-    const merged = mergeAssetTrendResults(results)
+    const merged = mergeAssetTrendResults(results, rangeMap[activeRange.value])
     trend.value = merged
     const normalizedRange = reverseRangeMap[(merged.range as AssetTrendRange) ?? 'ytd']
     if (normalizedRange) {
@@ -510,171 +508,12 @@ function applyYesterdaySnapshots(results: PromiseSettledResult<AssetAccountSnaps
     return
   }
 
-  const merged = mergeLatestAssetSnapshots(fulfilled)
+  const merged = mergeLatestAssetSnapshots(fulfilled, viewerNameByUserId.value)
   yesterdaySnapshots.value = merged.accounts
   yesterdaySnapshotDate.value = merged.snapshotDate
   yesterdaySnapshotCurrentTotal.value = merged.currentTotalAssets
   yesterdaySnapshotChangeAmount.value = merged.changeAmount
   snapshotError.value = merged.accounts.length > 0 ? '所有账户与今日一致' : '暂无昨日账户快照'
-}
-
-function mergeAssetTrendResults(results: AssetTrend[]) {
-  if (results.length === 1) {
-    return results[0]
-  }
-
-  const first = results[0]
-  const pointOrder: string[] = []
-  const trendPointMap = new Map<string, AssetTrendPoint>()
-  const allocationOrder: string[] = []
-  const allocationMap = new Map<string, AssetTrendAllocation>()
-  const contributorMap = new Map<string, AssetTrendContributor>()
-
-  let totalAssets = 0
-  let cumulativeProfit = 0
-  let periodChangeAmount = 0
-  let startDate = first?.startDate ?? ''
-  let endDate = first?.endDate ?? ''
-  let lastSyncedAt = first?.lastSyncedAt ?? null
-
-  results.forEach((result) => {
-    totalAssets += Number(result.totalAssets ?? 0)
-    cumulativeProfit += Number(result.cumulativeProfit ?? 0)
-    periodChangeAmount += Number(result.periodChangeAmount ?? 0)
-    startDate = pickEarlierDate(startDate, result.startDate)
-    endDate = pickLaterDate(endDate, result.endDate)
-    lastSyncedAt = pickLaterDateTime(lastSyncedAt, result.lastSyncedAt)
-
-    result.trendPoints.forEach((item) => {
-      if (!trendPointMap.has(item.key)) {
-        pointOrder.push(item.key)
-        trendPointMap.set(item.key, {
-          key: item.key,
-          label: item.label,
-          value: 0,
-        })
-      }
-      const current = trendPointMap.get(item.key)!
-      current.value += Number(item.value ?? 0)
-    })
-
-    result.allocations.forEach((item) => {
-      const key = `${item.accountTypeCode ?? 'unknown'}:${item.label}`
-      if (!allocationMap.has(key)) {
-        allocationOrder.push(key)
-        allocationMap.set(key, {
-          accountTypeCode: item.accountTypeCode,
-          label: item.label,
-          balance: 0,
-          percent: 0,
-        })
-      }
-      const current = allocationMap.get(key)!
-      current.balance += Number(item.balance ?? 0)
-    })
-
-    result.contributors.forEach((item) => {
-      const key = `${item.accountTypeCode ?? 'unknown'}:${item.accountName}`
-      const current = contributorMap.get(key) ?? {
-        accountId: item.accountId,
-        accountName: item.accountName,
-        accountTypeCode: item.accountTypeCode,
-        accountTypeLabel: item.accountTypeLabel,
-        contributionAmount: 0,
-        contributionRate: 0,
-      }
-      current.contributionAmount += Number(item.contributionAmount ?? 0)
-      contributorMap.set(key, current)
-    })
-  })
-
-  const mergedTrendPoints = pointOrder
-    .map((key) => trendPointMap.get(key))
-    .filter((item): item is AssetTrendPoint => Boolean(item))
-
-  const mergedAllocations = allocationOrder
-    .map((key) => allocationMap.get(key))
-    .filter((item): item is AssetTrendAllocation => Boolean(item))
-    .map((item) => ({
-      ...item,
-      percent: totalAssets > 0 ? (Number(item.balance ?? 0) / totalAssets) * 100 : 0,
-    }))
-
-  const mergedContributors = Array.from(contributorMap.values())
-    .map((item) => ({
-      ...item,
-      contributionRate: totalAssets > 0 ? (Number(item.contributionAmount ?? 0) / totalAssets) * 100 : 0,
-    }))
-    .sort((left, right) => Number(right.contributionAmount ?? 0) - Number(left.contributionAmount ?? 0))
-
-  const hasCompletePreviousPeriodValue = results.every(
-    (result) => result.previousPeriodValue !== null && result.previousPeriodValue !== undefined,
-  )
-  const previousPeriodValue = hasCompletePreviousPeriodValue
-    ? results.reduce((total, result) => total + Number(result.previousPeriodValue), 0)
-    : null
-
-  const previousTotal = mergedTrendPoints.length > 1
-    ? Number(mergedTrendPoints[mergedTrendPoints.length - 2]?.value ?? 0)
-    : 0
-  const periodChangeRate = previousTotal > 0
-    ? (periodChangeAmount / previousTotal) * 100
-    : 0
-  const cumulativeProfitRate = totalAssets > 0
-    ? (cumulativeProfit / totalAssets) * 100
-    : 0
-
-  return {
-    userId: first?.userId ?? 0,
-    accountId: first?.accountId ?? null,
-    range: first?.range ?? rangeMap[activeRange.value],
-    rangeLabel: first?.rangeLabel ?? '',
-    startDate,
-    endDate,
-    totalAssets,
-    cumulativeProfit,
-    cumulativeProfitRate,
-    periodChangeAmount,
-    periodChangeRate,
-    previousPeriodValue,
-    lastSyncedAt,
-    trendPoints: mergedTrendPoints,
-    allocations: mergedAllocations,
-    contributors: mergedContributors,
-  } satisfies AssetTrend
-}
-
-function mergeLatestAssetSnapshots(results: AssetAccountSnapshot[]) {
-  const accounts: SnapshotAccountItemView[] = []
-  let snapshotDate = ''
-  let currentTotalAssets = 0
-  let changeAmount = 0
-
-  results.forEach((result) => {
-    if (!snapshotDate && result.snapshotDate) {
-      snapshotDate = result.snapshotDate
-    }
-    currentTotalAssets += Number(result.currentTotalAssets ?? 0)
-    changeAmount += Number(result.changeAmount ?? 0)
-
-    const ownerLabel = results.length > 1
-      ? (viewerNameByUserId.value.get(result.userId) ?? '')
-      : ''
-
-    result.accounts.forEach((item) => {
-      accounts.push({
-        ...item,
-        ownerLabel,
-      })
-    })
-  })
-
-  return {
-    snapshotDate,
-    currentTotalAssets,
-    changeAmount,
-    accounts,
-  }
 }
 
 function resetYesterdaySnapshots() {
@@ -683,224 +522,6 @@ function resetYesterdaySnapshots() {
   yesterdaySnapshotCurrentTotal.value = null
   yesterdaySnapshotChangeAmount.value = null
   snapshotError.value = ''
-}
-
-function buildRangeDetailPoint(
-  item: AssetTrendPoint,
-  previous?: AssetTrendPoint,
-  previousPeriodValue?: number | null,
-) {
-  return {
-    key: item.key,
-    label: item.label,
-    value: Number(item.value ?? 0),
-    changeAmount: getRangeDetailChangeAmount(item, previous, previousPeriodValue),
-  } satisfies RangeDetailPoint
-}
-
-function getRangeDetailChangeAmount(
-  item: AssetTrendPoint,
-  previous?: AssetTrendPoint,
-  previousPeriodValue?: number | null,
-) {
-  const comparisonValue = previous
-    ? Number(previous.value ?? 0)
-    : previousPeriodValue === null || previousPeriodValue === undefined
-      ? null
-      : Number(previousPeriodValue)
-  if (comparisonValue === null || !Number.isFinite(comparisonValue)) {
-    return null
-  }
-  const currentValue = Number(item.value ?? 0)
-  return currentValue - comparisonValue
-}
-
-function getTodayCompareAmount(item: AssetTrendPoint) {
-  const todayValue = Number(trend.value?.totalAssets)
-  if (!Number.isFinite(todayValue)) {
-    return null
-  }
-  return todayValue - Number(item.value ?? 0)
-}
-
-function pickEarlierDate(current: string, candidate?: string | null) {
-  if (!candidate) {
-    return current
-  }
-  if (!current) {
-    return candidate
-  }
-  return new Date(candidate).getTime() < new Date(current).getTime() ? candidate : current
-}
-
-function pickLaterDate(current: string, candidate?: string | null) {
-  if (!candidate) {
-    return current
-  }
-  if (!current) {
-    return candidate
-  }
-  return new Date(candidate).getTime() > new Date(current).getTime() ? candidate : current
-}
-
-function pickLaterDateTime(current?: string | null, candidate?: string | null) {
-  if (!candidate) {
-    return current ?? null
-  }
-  if (!current) {
-    return candidate
-  }
-  return new Date(candidate).getTime() > new Date(current).getTime() ? candidate : current
-}
-
-function getAllocationTrackStyle(item: AssetTrendAllocation) {
-  const colors = getAccountTypeColors(item.accountTypeCode)
-  return {
-    '--allocation-fill': colors.fill,
-    '--allocation-track': colors.track,
-    '--allocation-width': `${Math.max(0, Math.min(Number(item.percent ?? 0), 100))}%`,
-  }
-}
-
-function getAllocationDotStyle(item: AssetTrendAllocation) {
-  return {
-    backgroundColor: getAccountTypeColors(item.accountTypeCode).fill,
-  }
-}
-
-function getAccountTypeColors(value?: string | null) {
-  // 依赖 isDark 让取色在主题切换时重算
-  void isDark.value
-  if (value === 'cash') {
-    return {
-      fill: readChartToken('--color-success', '#16a34a'),
-      track: readChartToken('--color-bg-success-soft', '#ecfdf5'),
-    }
-  }
-  if (value === 'investment') {
-    return {
-      fill: readChartToken('--color-danger', '#dc2626'),
-      track: readChartToken('--color-danger-soft', '#fef2f2'),
-    }
-  }
-  if (value === 'gold') {
-    return {
-      fill: readChartToken('--color-warning-strong', '#d97706'),
-      track: readChartToken('--color-warning-soft', '#fff7ed'),
-    }
-  }
-  if (value === 'other_asset') {
-    return {
-      fill: readChartToken('--color-brand-strong', '#2563eb'),
-      track: readChartToken('--color-bg-brand-soft', '#eff6ff'),
-    }
-  }
-  if (value === 'debt' || value === 'liability' || value === 'other_liability' || value === 'credit_card') {
-    return {
-      fill: readChartToken('--color-purple', '#7c3aed'),
-      track: readChartToken('--color-bg-purple-soft', '#f3e8ff'),
-    }
-  }
-  if (value === 'human_relation') {
-    return {
-      fill: readChartToken('--color-orange', '#c2410c'),
-      track: readChartToken('--color-warning-soft', '#fff7ed'),
-    }
-  }
-  return {
-    fill: readChartToken('--color-text-muted', '#64748b'),
-    track: readChartToken('--color-bg-neutral-soft', '#eef2f8'),
-  }
-}
-
-function formatCurrency(value?: number | null) {
-  return Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
-function formatSignedCurrency(value?: number | null) {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return '--'
-  }
-  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
-  return `${sign}¥ ${formatCurrency(Math.abs(value))}`
-}
-
-function formatCompactMoney(value: number) {
-  const normalized = Number(value ?? 0)
-  if (Math.abs(normalized) >= 100000000) {
-    return `${(normalized / 100000000).toFixed(2)}亿`
-  }
-  if (Math.abs(normalized) >= 10000) {
-    return `${(normalized / 10000).toFixed(2)}万`
-  }
-  return normalized.toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
-
-function formatAxisMoney(value: number, axisRange?: number) {
-  const normalized = Number(value ?? 0)
-  const span = Number(axisRange ?? 0)
-
-  if (span >= 100000) {
-    return formatCompactMoney(normalized)
-  }
-
-  return normalized.toLocaleString('zh-CN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: span > 0 && span < 1 ? 2 : 0,
-  })
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) {
-    return '--'
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return date.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function getTrendYAxisBounds(values: number[]) {
-  const normalized = values.filter((value) => Number.isFinite(value))
-  if (normalized.length === 0) {
-    return {} satisfies TrendYAxisBounds
-  }
-
-  const minValue = Math.min(...normalized)
-  const maxValue = Math.max(...normalized)
-  const baseRange = maxValue - minValue
-
-  if (baseRange === 0) {
-    const padding = Math.max(Math.abs(minValue) * 0.02, 1)
-    return {
-      min: minValue,
-      max: maxValue + padding,
-    } satisfies TrendYAxisBounds
-  }
-
-  const center = (minValue + maxValue) / 2
-  const basePadding = Math.max(baseRange * 0.12, 1)
-  const valuePadding = Math.abs(center) * 0.002
-  const padding = Math.max(basePadding, valuePadding)
-
-  return {
-    min: minValue,
-    max: maxValue + padding,
-  } satisfies TrendYAxisBounds
 }
 </script>
 
@@ -978,7 +599,7 @@ function getTrendYAxisBounds(values: number[]) {
           >
             <div class="allocation-row">
               <div class="allocation-title">
-                <span class="allocation-dot" :style="getAllocationDotStyle(item)"></span>
+                <span class="allocation-dot" :style="getAllocationDotStyle(item, isDark)"></span>
                 <strong>{{ item.label }}</strong>
               </div>
               <div class="allocation-side">
@@ -986,7 +607,7 @@ function getTrendYAxisBounds(values: number[]) {
                 <span>{{ `${Number(item.percent ?? 0).toFixed(2)}%` }}</span>
               </div>
             </div>
-            <div class="allocation-track" :style="getAllocationTrackStyle(item)">
+            <div class="allocation-track" :style="getAllocationTrackStyle(item, isDark)">
               <span class="allocation-fill"></span>
             </div>
           </article>

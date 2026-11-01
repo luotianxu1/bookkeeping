@@ -2,7 +2,7 @@
 // 标的详情：实时报价 + K线蜡烛图 + 分时 + 技术指标副图 + 五档盘口/估值 + 资金流向/公告/分红/F10。
 // 移植自 investment 项目 Detail 页，浅色移动端主题（涨红 --color-danger / 跌绿 --color-success / 琥珀点缀）。
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import {
   getDetail,
   getExtra,
@@ -21,12 +21,35 @@ import {
   type TrendData,
   type TrendHistoryDay,
 } from '@/api/modules/market'
-import { bias as biasCalc, kdj as kdjCalc, macd as macdCalc, rsi as rsiCalc } from '@/utils/marketIndicators'
-import { amt, dirClass, f2, pct, signedYi } from '@/utils/marketFormat'
-import { detailRoute } from '../routes'
+import { amt, dirClass, f2, pct } from '@/utils/marketFormat'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { getErrorMessage, isCancelRequest } from '@/api/request'
 import { useRequestAbort } from '@/composables/useRequestAbort'
+import DepthPanel from './detail/DepthPanel.vue'
+import HoldersPanel from './detail/HoldersPanel.vue'
+import MarginFinancialsPanel from './detail/MarginFinancialsPanel.vue'
+import MoneyflowPanel from './detail/MoneyflowPanel.vue'
+import NoticesPanel from './detail/NoticesPanel.vue'
+import ProfilePanel from './detail/ProfilePanel.vue'
+import StatementsPanel from './detail/StatementsPanel.vue'
+import {
+  buildCandleChart,
+  buildSub,
+  indicatorDefs,
+  H,
+  maSeries,
+  MA_DEFS,
+  PAD,
+  SUB_H,
+  SUB_PAD,
+  SUB_TABS,
+  W,
+  type SubKey,
+} from './detail/chartGeometry'
+import { buildTrendChart, buildTrendSub, TREND_PAD } from './detail/trendGeometry'
+import { signed, vol } from './detail/format'
+import { useKlineInteraction } from './detail/useKlineInteraction'
+import { useTrendInteraction } from './detail/useTrendInteraction'
 
 // 请求取消：切换标的/周期时中止上一组请求，防止慢响应覆盖新数据。
 // 三路通道互不干扰：图表（K线/分时，随周期切换）、头部快照、元信息（extra/F10/报表/回看）。
@@ -35,7 +58,6 @@ const { signalFor: headerSignal } = useRequestAbort()
 const { signalFor: metaSignal } = useRequestAbort()
 
 const route = useRoute()
-const router = useRouter()
 
 const kind = computed(() => route.params.kind as DetailKind)
 const code = computed(() => decodeURIComponent(String(route.params.code ?? '')))
@@ -65,96 +87,33 @@ const scale = ref('trend') // 周期模式：默认分时，其余为新浪 K �
 const klineScale = ref('240') // 当前 kline 实际加载的周期（分时模式不改动 K 线数据）
 const trendData = ref<TrendData | null>(null)
 
-/* ---------- 视窗状态：滚轮/拖拽浏览历史区间 ---------- */
-const chartEl = ref<SVGSVGElement | null>(null)
-const viewCount = ref(0) // 可见根数；0 = 未初始化（显示全部）
-const endOffset = ref(0) // 右端距最新一根的偏移根数；0 = 对齐最新
-const dragging = ref(false)
-
-/** 当前视窗内的K线切片 */
-const view = computed(() => {
-  const pts = kline.value
-  if (!pts.length) return []
-  const count = viewCount.value > 0 ? Math.min(viewCount.value, pts.length) : pts.length
-  const end = pts.length - endOffset.value
-  return pts.slice(Math.max(0, end - count), end)
+/** 全序列均线（含视窗外），图表与单日详情共用 */
+const masAll = computed(() => {
+  const closes = kline.value.map((p) => p['收盘'])
+  return MA_DEFS.map((d) => ({ ...d, vals: maSeries(closes, d.n) }))
 })
 
-/* ---------- 向前翻页：视窗滚到最早时自动加载更早历史 ---------- */
-const loadingMore = ref(false)
-const exhausted = ref(false) // 数据源已无更早数据
-const PAGE = 250 // 每次向前加载的根数
+/** K线分页请求：绑定当前标的/周期，供向前翻页加载更早历史 */
+const fetchKline = (count: number) => getKline(kind.value, code.value, scale.value, count)
 
-async function loadMore(): Promise<void> {
-  if (loadingMore.value || exhausted.value || !kline.value.length) return
-  loadingMore.value = true
-  try {
-    const data = await getKline(kind.value, code.value, scale.value, kline.value.length + PAGE)
-    const firstDate = kline.value[0]['日期']
-    const older = data.kline.filter((p) => p['日期'] < firstDate)
-    if (!older.length) {
-      exhausted.value = true
-      return
-    }
-    kline.value = [...older, ...kline.value]
-  } catch {
-    // 加载失败不打断浏览，滚回最前端会再次尝试
-  } finally {
-    loadingMore.value = false
-  }
-}
-
-/** 视窗左端接近最早数据时触发翻页 */
-function maybeLoadMore(): void {
-  const len = kline.value.length
-  if (exhausted.value || loadingMore.value || !len) return
-  const count = Math.min(viewCount.value || len, len)
-  if (endOffset.value + count >= len - 5) void loadMore()
-}
-
-/* ---------- 点击选中单根K线，显示当日详情 ---------- */
-const selDate = ref<string | null>(null)
-
-const selIndex = computed(() => {
-  if (!selDate.value) return -1
-  return view.value.findIndex((p) => p['日期'] === selDate.value)
-})
-
-const selInfo = computed(() => {
-  const p = selIndex.value >= 0 ? view.value[selIndex.value] : null
-  if (!p) return null
-  const gi = kline.value.findIndex((q) => q['日期'] === p['日期'])
-  return {
-    p,
-    up: p['收盘'] >= p['开盘'],
-    mas: masAll.value.map((m) => ({
-      label: m.label,
-      color: m.color,
-      v: gi >= 0 ? m.vals[gi] : null,
-    })),
-  }
-})
-
-function onSelect(e: MouseEvent): void {
-  // 拖拽结束的 click 不算选中
-  if (dragMoved) {
-    dragMoved = false
-    return
-  }
-  const el = chartEl.value
-  const pts = view.value
-  if (!el || !pts.length) return
-  const rect = el.getBoundingClientRect()
-  const xSvg = ((e.clientX - rect.left) * W) / rect.width
-  const step = INNER_W / pts.length
-  const i = Math.floor((xSvg - PAD.left) / step)
-  if (i < 0 || i >= pts.length) {
-    selDate.value = null
-    return
-  }
-  // 再点同根K线取消选中
-  selDate.value = selDate.value === pts[i]['日期'] ? null : pts[i]['日期']
-}
+/* ---------- K线图交互：视窗/翻页/选中（composable，模板绑定同名解构） ---------- */
+const {
+  chartEl,
+  view,
+  viewCount,
+  endOffset,
+  dragging,
+  loadingMore,
+  exhausted,
+  selDate,
+  selIndex,
+  selInfo,
+  onSelect,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  resetSelection: resetKlineSelection,
+} = useKlineInteraction({ kline, fetchKline, masAll })
 
 const PERIODS = computed(() => {
   const base = [
@@ -272,11 +231,15 @@ async function loadKline(silent = false): Promise<void> {
   loading.value = false
 }
 
+/** 重置图表选中状态：K线单日详情与分时详情/回看日期一并清空 */
+function resetSelection(): void {
+  resetKlineSelection()
+  resetTrendSelection()
+}
+
 async function loadTrend(silent = false): Promise<void> {
   if (!silent) loading.value = true
-  selDate.value = null
-  selIdx.value = null
-  trendDayIdx.value = -1
+  resetSelection()
   try {
     trendData.value = await getTrend(kind.value, code.value, { signal: chartSignal() })
     if (trendData.value) symbol.value = trendData.value.symbol
@@ -321,36 +284,14 @@ async function loadF10(): Promise<void> {
 watch(() => [kind.value, code.value], loadF10)
 onMounted(loadF10)
 
-/** 股东人数趋势（附较上期变化%，从新到旧） */
-const holderTrendRows = computed(() => {
-  const trend = f10.value?.holders?.trend ?? []
-  return trend.slice(0, 8).map((t, i) => {
-    const prev = trend[i + 1]?.total
-    const delta = prev && prev > 0 ? ((t.total - prev) / prev) * 100 : null
-    return { date: t.date, total: t.total, delta }
-  })
-})
+/** 股东人数趋势视图已移至 HoldersPanel（ holders.trend → 行内计算） */
 
 /* ---------- 三大财务报表（利润表/资产负债表/现金流量表，仅 A 股） ---------- */
 const statements = ref<StatementsData | null>(null)
-type StmtKey = 'income' | 'balance' | 'cashflow'
-const STMT_TABS: { key: StmtKey; label: string }[] = [
-  { key: 'income', label: '利润表' },
-  { key: 'balance', label: '资产负债表' },
-  { key: 'cashflow', label: '现金流量表' },
-]
-const stmtTab = ref<StmtKey>('income')
-/** 当前选中报表的非空视图，模板里 v-if 收窄用 */
-const curStatements = computed(() => statements.value?.[stmtTab.value] ?? null)
 
 async function loadStatements(): Promise<void> {
   try {
     statements.value = await getStatements(kind.value, code.value, 5, { signal: metaSignal() })
-    // 当前选中的报表若没有数据，自动切到第一张有数据的报表
-    if (statements.value && !statements.value[stmtTab.value]) {
-      const first = STMT_TABS.find((t) => statements.value?.[t.key])
-      if (first) stmtTab.value = first.key
-    }
   } catch {
     statements.value = null
   }
@@ -358,15 +299,10 @@ async function loadStatements(): Promise<void> {
 
 /** 三张报表是否至少有一张有数据；没有则整个区块不渲染 */
 const hasStatements = computed(
-  () => !!statements.value && STMT_TABS.some((t) => !!statements.value?.[t.key]),
+  () => !!statements.value && ['income', 'balance', 'cashflow'].some((k) => !!statements.value?.[k as keyof StatementsData]),
 )
 watch(() => [kind.value, code.value], loadStatements)
 onMounted(loadStatements)
-
-/** 重点科目行强调（利润/资产/负债/权益/经营现金流合计行） */
-function isKeyRow(label: string): boolean {
-  return /营业总收入|净利润|资产总计|负债合计|所有者权益|经营活动产生的现金流量净额/.test(label) && !/增长率|比重|综合收益/.test(label)
-}
 
 /* ---------- 分时回看（近 5 个交易日，5 分钟粒度，仅 A 股） ---------- */
 const trendHistory = ref<TrendHistoryDay[] | null>(null)
@@ -408,71 +344,6 @@ const activeTrend = computed(() => {
   return { points: t.points, prev: t.prev_close, hint: '当日 1 分钟走势' }
 })
 
-/* ---------- F10 辅助 ---------- */
-/** 金额固定两位小数「亿」（融资余额/财务金额） */
-function yi(v: number | null): string {
-  if (v === null || v === undefined) return '—'
-  return `${(v / 1e8).toFixed(2)}亿`
-}
-/** 股数转「万股」 */
-function wan(v: number): string {
-  return `${(v / 1e4).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}万股`
-}
-/** 财务金额按量级取整显示 */
-function finVal(v: number | null): string {
-  if (v === null || v === undefined) return '—'
-  const abs = Math.abs(v)
-  if (abs >= 1e8) return yi(v)
-  if (abs >= 1) return v.toFixed(2)
-  return v.toFixed(4)
-}
-
-/* ---------- 资金流向：双向条形图 ---------- */
-const latestFlow = computed(() => extra.value?.moneyflow?.[0] ?? null)
-const maxAbsNet = computed(() => {
-  const rows = extra.value?.moneyflow ?? []
-  return Math.max(...rows.map((r) => Math.abs(r.net)), 1)
-})
-/** 双向条形图定位：轨道中线为 0，流入向右（红）、流出向左（绿） */
-function netBarStyle(net: number): Record<string, string> {
-  const half = (Math.abs(net) / maxAbsNet.value) * 50
-  return net >= 0
-    ? { left: '50%', width: `${half}%` }
-    : { right: '50%', width: `${half}%` }
-}
-/** 连续同向天数：从最新日起净流入（或流出）连续的天数 */
-const flowStreak = computed(() => {
-  const rows = extra.value?.moneyflow ?? []
-  if (!rows.length) return 0
-  const inflow = rows[0].net >= 0
-  let n = 0
-  for (const r of rows) {
-    if ((r.net >= 0) === inflow) n++
-    else break
-  }
-  return n
-})
-/** 区间累计（返回顺序与表格列一致：主力/超大/大/中/小） */
-const flowSum = computed(() => {
-  const rows = extra.value?.moneyflow ?? []
-  const s = { net: 0, xl: 0, l: 0, m: 0, s: 0 }
-  for (const r of rows) {
-    s.net += r.net
-    s.xl += r.xl_net
-    s.l += r.l_net
-    s.m += r.m_net
-    s.s += r.s_net
-  }
-  return s
-})
-/** 区间日均净流入率（tfoot 用） */
-const flowSumAvg = computed(() => {
-  const rows = extra.value?.moneyflow ?? []
-  if (!rows.length) return '—'
-  const avg = rows.reduce((acc, r) => acc + r.ratio, 0) / rows.length
-  return `日均 ${avg >= 0 ? '+' : ''}${avg.toFixed(2)}%`
-})
-
 /* ---------- 头部行情：实时数据优先，其次分时合成，缺失回退最后一根K线 ---------- */
 
 /** 分时数据合成的行情兜底：默认周期是分时时 detail 接口不返回 quote */
@@ -509,19 +380,7 @@ const suffix = computed(() => {
   return ''
 })
 
-/** 带符号涨跌额 */
-function signed(v: number | null | undefined): string {
-  if (v === null || v === undefined) return '—'
-  return `${v > 0 ? '+' : ''}${f2(v)}`
-}
-
-/** 成交量自适应：亿 / 万 / 原值 */
-function vol(v: number | null | undefined): string {
-  if (!v) return '—'
-  if (v >= 1e8) return `${(v / 1e8).toFixed(2)}亿`
-  if (v >= 1e4) return `${(v / 1e4).toFixed(1)}万`
-  return String(v)
-}
+/** 带符号涨跌额 / 成交量自适应已移至 detail/format（面板与主页面共用） */
 
 /* ---------- 关键统计 ---------- */
 /** 周期 → 明细表备注 */
@@ -540,168 +399,13 @@ const stats = computed(() => {
 })
 
 /* ---------- K线图（SVG 蜡烛 + 均线，作用于当前视窗切片） ---------- */
-/* 坐标系宽度取 360 ≈ 移动端容器实际像素宽，SVG 文字与线条按 1:1 呈现，不再被 viewBox 缩小 */
-const W = 360
-const H = 230
-const PAD = { top: 12, right: 48, bottom: 22, left: 8 }
-const INNER_W = W - PAD.left - PAD.right
-const INNER_H = H - PAD.top - PAD.bottom
+/* 几何常量与蜡烛/均线计算在 detail/chartGeometry（纯函数模块） */
 
-/** 常用均线定义（浅色主题配色：石板灰/琥珀/紫/天蓝） */
-const MA_DEFS = [
-  { n: 5, key: 'ma5', label: 'MA5', color: '#94a3b8' },
-  { n: 10, key: 'ma10', label: 'MA10', color: '#eab308' },
-  { n: 20, key: 'ma20', label: 'MA20', color: '#7c3aed' },
-  { n: 60, key: 'ma60', label: 'MA60', color: '#0ea5e9' },
-]
-
-/** 全序列均线（含视窗外），图表与单日详情共用 */
-const masAll = computed(() => {
-  const closes = kline.value.map((p) => p['收盘'])
-  return MA_DEFS.map((d) => ({ ...d, vals: maSeriesLocal(closes, d.n) }))
-})
-
-/** 收盘价简单移动平均；前 n-1 根为 null */
-function maSeriesLocal(closes: number[], n: number): (number | null)[] {
-  const out: (number | null)[] = []
-  let sum = 0
-  for (let i = 0; i < closes.length; i++) {
-    sum += closes[i]
-    if (i >= n) sum -= closes[i - n]
-    out.push(i >= n - 1 ? sum / n : null)
-  }
-  return out
-}
-
-/** 单根K线的几何信息 */
-interface Candle {
-  key: string
-  cx: number
-  bodyX: number
-  bodyW: number
-  bodyY: number
-  bodyH: number
-  wickY1: number
-  wickY2: number
-  up: boolean
-}
-
-const chart = computed(() => {
-  const pts = view.value
-  if (pts.length < 2) return null
-  const n = pts.length
-  const full = kline.value
-  // 视窗在完整序列中的起点，保证均线在窗口首端也有值
-  const startIdx = Math.max(0, full.length - endOffset.value - n)
-  const mas = masAll.value
-
-  let min = Math.min(...pts.map((p) => p['最低']))
-  let max = Math.max(...pts.map((p) => p['最高']))
-  // 均线值纳入纵轴范围，避免均线越界
-  for (const m of mas) {
-    for (let i = 0; i < n; i++) {
-      const v = m.vals[startIdx + i]
-      if (v !== null) {
-        if (v < min) min = v
-        if (v > max) max = v
-      }
-    }
-  }
-  if (min === max) {
-    min *= 0.995
-    max *= 1.005
-  }
-  const pad = (max - min) * 0.04
-  min -= pad
-  max += pad
-  const y = (v: number) => PAD.top + (1 - (v - min) / (max - min)) * INNER_H
-  const step = INNER_W / n
-  const bodyW = Math.max(1.5, Math.min(14, step * 0.65))
-  const candles: Candle[] = pts.map((p, i) => {
-    const cx = PAD.left + step * (i + 0.5)
-    const yo = y(p['开盘'])
-    const yc = y(p['收盘'])
-    return {
-      key: p['日期'],
-      cx,
-      bodyX: cx - bodyW / 2,
-      bodyW,
-      bodyY: Math.min(yo, yc),
-      bodyH: Math.max(1, Math.abs(yc - yo)),
-      wickY1: y(p['最高']),
-      wickY2: y(p['最低']),
-      up: p['收盘'] >= p['开盘'],
-    }
-  })
-  // 均线折线：null 处断开分段
-  const maLines = mas.map((m) => {
-    let d = ''
-    let open = false
-    for (let i = 0; i < n; i++) {
-      const v = m.vals[startIdx + i]
-      if (v === null) {
-        open = false
-        continue
-      }
-      d += `${open ? 'L' : 'M'}${(PAD.left + step * (i + 0.5)).toFixed(1)},${y(v).toFixed(1)}`
-      open = true
-    }
-    const lastVal = m.vals[startIdx + n - 1]
-    return { key: m.key, label: m.label, color: m.color, d, legend: lastVal === null ? '—' : f2(lastVal) }
-  })
-  const grid = [0, 1, 2, 3].map((t) => {
-    const v = min + ((max - min) * t) / 3
-    return { y: y(v), label: f2(v) }
-  })
-  const last = pts[n - 1]
-  // 横轴刻度按标签实测宽度配置（10px 字号下数字≈7px/字符，标签 + 间距必须 < 刻度间距）：
-  // 分钟K "10-29 14:00"≈71px → 3 个刻度（间距 152px）；周K "24-01-31"≈46px → 4 个（101px）；
-  // 月K "22-09"≈30px → 5 个（76px）；日K "10-18"/"26-05"≈30px → 6 个（61px），跨年处缩为 YY-MM
-  const sc = scale.value
-  const isMinute = sc === '60' || sc === '30' || sc === '15' || sc === '5'
-  const tickN = isMinute ? 3 : sc === 'week' ? 4 : sc === 'month' ? 5 : 6
-  let prevYear = ''
-  const xTicks = Array.from({ length: tickN }, (_, t) => {
-    const i = Math.round((t / (tickN - 1)) * (n - 1))
-    const day = pts[i]['日期']
-    let label: string
-    if (isMinute) {
-      label = day.slice(5, 16) // "2026-10-29 15:00" → "10-29 15:00"
-    } else if (sc === 'week') {
-      label = day.slice(2, 10) // "2024-01-31" → "24-01-31"（自带年份）
-    } else if (sc === 'month') {
-      label = day.slice(2, 7) // "2022-09-06" → "22-09"
-    } else {
-      const year = day.slice(0, 4)
-      const showYear = t === 0 || year !== prevYear
-      prevYear = year
-      label = showYear ? day.slice(2, 7) : day.slice(5, 10) // "26-05" / "10-18"
-    }
-    return {
-      x: PAD.left + step * (i + 0.5),
-      label,
-      anchor: t === 0 ? 'start' : t === tickN - 1 ? 'end' : 'middle',
-    }
-  })
-  return {
-    candles,
-    maLines,
-    grid,
-    lastY: y(last['收盘']),
-    lastLabel: f2(last['收盘']),
-    lastUp: last['收盘'] >= last['开盘'],
-    xTicks,
-  }
-})
+const chart = computed(() =>
+  buildCandleChart(view.value, kline.value, endOffset.value, scale.value),
+)
 
 /* ---------- 技术指标副图（MACD/KDJ/RSI/BIAS 多选叠加，随主图视窗联动） ---------- */
-type SubKey = 'macd' | 'kdj' | 'rsi' | 'bias'
-const SUB_TABS: { key: SubKey; label: string }[] = [
-  { key: 'macd', label: 'MACD' },
-  { key: 'kdj', label: 'KDJ' },
-  { key: 'rsi', label: 'RSI' },
-  { key: 'bias', label: 'BIAS' },
-]
 /** 多选：点亮的指标各自渲染一个副图，纵向堆叠 */
 const subIndicators = ref<SubKey[]>(['macd'])
 function toggleSub(key: SubKey) {
@@ -709,63 +413,6 @@ function toggleSub(key: SubKey) {
   const i = arr.indexOf(key)
   if (i >= 0) arr.splice(i, 1)
   else arr.push(key)
-}
-const SUB_H = 110
-const SUB_PAD = { top: 8, right: 48, bottom: 6, left: 8 }
-const SUB_INNER_H = SUB_H - SUB_PAD.top - SUB_PAD.bottom
-
-interface SubLine {
-  key: string
-  label: string
-  color: string
-  vals: (number | null)[]
-}
-
-/** 由 OHLC 序列构造四个指标的线/柱定义（K线与分时副图共用） */
-function indicatorDefs(
-  closes: number[],
-  highs: number[],
-  lows: number[],
-): Record<SubKey, { lines: SubLine[]; bars: (number | null)[] | null; fixed: boolean }> {
-  const m = macdCalc(closes)
-  const k3 = kdjCalc(highs, lows, closes)
-  return {
-    macd: {
-      lines: [
-        { key: 'dif', label: 'DIF', color: '#94a3b8', vals: m.dif },
-        { key: 'dea', label: 'DEA', color: '#eab308', vals: m.dea },
-      ],
-      bars: m.hist,
-      fixed: false,
-    },
-    kdj: {
-      lines: [
-        { key: 'k', label: 'K', color: '#94a3b8', vals: k3.k },
-        { key: 'd', label: 'D', color: '#eab308', vals: k3.d },
-        { key: 'j', label: 'J', color: '#7c3aed', vals: k3.j },
-      ],
-      bars: null,
-      fixed: true,
-    },
-    rsi: {
-      lines: [
-        { key: 'r6', label: 'RSI6', color: '#94a3b8', vals: rsiCalc(closes, 6) },
-        { key: 'r12', label: 'RSI12', color: '#eab308', vals: rsiCalc(closes, 12) },
-        { key: 'r24', label: 'RSI24', color: '#0ea5e9', vals: rsiCalc(closes, 24) },
-      ],
-      bars: null,
-      fixed: true,
-    },
-    bias: {
-      lines: [
-        { key: 'b6', label: 'BIAS6', color: '#94a3b8', vals: biasCalc(closes, 6) },
-        { key: 'b12', label: 'BIAS12', color: '#eab308', vals: biasCalc(closes, 12) },
-        { key: 'b24', label: 'BIAS24', color: '#0ea5e9', vals: biasCalc(closes, 24) },
-      ],
-      bars: null,
-      fixed: false,
-    },
-  }
 }
 
 /** 全量技术指标序列（基于完整K线计算，切片显示保证窗口首端有值） */
@@ -776,317 +423,30 @@ const subSeries = computed(() => {
   return indicatorDefs(closes, highs, lows)
 })
 
-/** 单个副图几何计算（提取自原 subChart，供多副图复用） */
-function buildSub(def: { lines: SubLine[]; bars: (number | null)[] | null; fixed: boolean }) {
-  const pts = view.value
-  const n = pts.length
-  const full = kline.value
-  const startIdx = Math.max(0, full.length - endOffset.value - n)
-
-  // 纵轴范围：固定域(KDJ/RSI 0-100，J 超界自适应) 或 窗口自适应(MACD/BIAS 含零轴)
-  let min = 0
-  let max = def.fixed ? 100 : 0
-  for (const l of def.lines) {
-    for (let i = 0; i < n; i++) {
-      const v = l.vals[startIdx + i]
-      if (v === null) continue
-      if (v < min) min = v
-      if (v > max) max = v
-    }
-  }
-  if (def.bars) {
-    for (let i = 0; i < n; i++) {
-      const v = def.bars[startIdx + i]
-      if (v === null) continue
-      if (v < min) min = v
-      if (v > max) max = v
-    }
-  }
-  if (min === max) {
-    min -= 1
-    max += 1
-  }
-  const pad = (max - min) * 0.08
-  min -= pad
-  max += pad
-  const y = (v: number) => SUB_PAD.top + (1 - (v - min) / (max - min)) * SUB_INNER_H
-  const step = INNER_W / n
-  const zeroY = y(0)
-
-  // 指标折线（null 断段），与主图 x 完全对齐
-  const lineDs = def.lines.map((l) => {
-    let d = ''
-    let open = false
-    for (let i = 0; i < n; i++) {
-      const v = l.vals[startIdx + i]
-      if (v === null) {
-        open = false
-        continue
-      }
-      d += `${open ? 'L' : 'M'}${(PAD.left + step * (i + 0.5)).toFixed(1)},${y(v).toFixed(1)}`
-      open = true
-    }
-    return { key: l.key, color: l.color, d }
-  })
-
-  // MACD 柱
-  const barW = Math.max(1.5, Math.min(14, step * 0.65))
-  const bars: { key: string; x: number; y: number; h: number; up: boolean }[] = []
-  if (def.bars) {
-    for (let i = 0; i < n; i++) {
-      const v = def.bars[startIdx + i]
-      if (v === null) continue
-      const cy = PAD.left + step * (i + 0.5)
-      const vy = y(v)
-      bars.push({
-        key: pts[i]['日期'],
-        x: cy - barW / 2,
-        y: Math.min(vy, zeroY),
-        h: Math.max(1, Math.abs(vy - zeroY)),
-        up: v >= 0,
-      })
-    }
-  }
-
-  // 网格：固定域 20/50/80，自适应域 0/中值/最大值三档
-  const grid = def.fixed
-    ? [20, 50, 80].map((v) => ({ y: y(v), label: String(v) }))
-    : [0, (min + max) / 2, max].map((v) => ({ y: y(v), label: Math.abs(v) >= 1 ? v.toFixed(1) : v.toFixed(2) }))
-
-  // 图例取选中K线（未选中取最新），与主图十字线联动
-  const idx = selIndex.value >= 0 && selIndex.value < n ? selIndex.value : n - 1
-  const legend = def.lines.map((l) => ({
-    label: l.label,
-    color: l.color,
-    value: l.vals[startIdx + idx] === null || l.vals[startIdx + idx] === undefined ? '—' : f2(l.vals[startIdx + idx] as number),
-  }))
-  if (def.bars) {
-    const hv = def.bars[startIdx + idx]
-    legend.unshift({ label: 'MACD', color: hv === null || hv < 0 ? 'var(--color-success)' : 'var(--color-danger)', value: hv === null || hv === undefined ? '—' : f2(hv) })
-  }
-  return { lineDs, bars, grid, zeroY, legend, hasBars: !!def.bars, barW }
-}
-
 /** 多副图：按 SUB_TABS 顺序渲染所有点亮的指标 */
 const subCharts = computed(() => {
   if (!chart.value) return []
   return SUB_TABS.filter((t) => subIndicators.value.includes(t.key)).map((t) => ({
     key: t.key,
     label: t.label,
-    ...buildSub(subSeries.value[t.key]),
+    ...buildSub(subSeries.value[t.key], view.value, kline.value, endOffset.value, selIndex.value),
   }))
 })
 
 /* ---------- 分时折线图（价格线 + 均价线 + 昨收基准，涨跌空间以昨收对称） ---------- */
-const TREND_PAD = { top: 12, right: 48, bottom: 22, left: 40 }
+/* 几何计算在 detail/trendGeometry（纯函数模块） */
 
-const trendChart = computed(() => {
-  const av = activeTrend.value
-  if (!av || av.points.length < 2) return null
-  const pts = av.points
-  const prev = av.prev
-  let min = Infinity
-  let max = -Infinity
-  for (const p of pts) {
-    if (p.price < min) min = p.price
-    if (p.price > max) max = p.price
-    if (p.avg !== null) {
-      if (p.avg < min) min = p.avg
-      if (p.avg > max) max = p.avg
-    }
-  }
-  if (prev !== null) {
-    if (prev < min) min = prev
-    if (prev > max) max = prev
-  }
-  if (!isFinite(min) || min > max) return null
-  if (min === max) {
-    min *= 0.995
-    max *= 1.005
-  }
-  if (prev !== null) {
-    // 以昨收为中心对称展开，保留涨跌空间的观感惯例
-    const dev = Math.max(max - prev, prev - min)
-    if (dev > 0) {
-      max = prev + dev
-      min = prev - dev
-    }
-  }
-  const pad = (max - min) * 0.06
-  min -= pad
-  max += pad
+const trendChart = computed(() => buildTrendChart(activeTrend.value ?? { points: [], prev: null }))
 
-  const top = TREND_PAD.top
-  const innerW = W - TREND_PAD.left - PAD.right
-  const innerH = H - top - PAD.bottom
-  const y = (v: number) => top + (1 - (v - min) / (max - min)) * innerH
-  const n = pts.length
-  const step = innerW / n
-  const x = (i: number) => TREND_PAD.left + step * (i + 0.5)
-
-  let priceD = ''
-  let avgD = ''
-  let avgOpen = false
-  let lastAvg: number | null = null
-  pts.forEach((p, i) => {
-    priceD += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.price).toFixed(1)}`
-    if (p.avg !== null) {
-      avgD += `${avgOpen ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.avg).toFixed(1)}`
-      avgOpen = true
-      lastAvg = p.avg
-    } else {
-      avgOpen = false
-    }
-  })
-  const last = pts[n - 1]
-  const up = prev !== null ? last.price >= prev : true
-  const baseY = (top + innerH).toFixed(1)
-  const areaD = `${priceD}L${x(n - 1).toFixed(1)},${baseY}L${x(0).toFixed(1)},${baseY}Z`
-
-  const grid = [0, 1, 2, 3].map((k) => {
-    const v = min + ((max - min) * k) / 3
-    const pctV = prev ? (v / prev - 1) * 100 : null
-    return {
-      y: y(v),
-      label: f2(v),
-      pct: pctV === null ? '' : `${pctV > 0 ? '+' : ''}${pctV.toFixed(1)}%`,
-      side: pctV === null || pctV === 0 ? '' : pctV > 0 ? 'up' : 'down',
-    }
-  })
-  // 5 个刻度（首尾 start/end 对齐，中间居中），避免 9 个在 360 宽坐标系里挤成一团
-  const xTicks = Array.from({ length: 5 }, (_, k) => {
-    const i = Math.round((k / 4) * (n - 1))
-    return {
-      x: x(i),
-      label: pts[i].time,
-      anchor: k === 0 ? 'start' : k === 4 ? 'end' : 'middle',
-    }
-  })
-  return {
-    priceD,
-    avgD,
-    areaD,
-    grid,
-    xTicks,
-    prevY: prev !== null ? y(prev) : null,
-    prevLabel: prev === null ? '—' : f2(prev),
-    lastLabel: f2(last.price),
-    avgLabel: lastAvg === null ? '—' : f2(lastAvg),
-    lineColor: up ? 'var(--color-danger)' : 'var(--color-success)',
-    prev, // 供单点涨跌幅计算
-    xOf: x,
-    yOf: y,
-    step,
-  }
-})
-
-/* ---------- 分时点击选中：显示该分钟详情 + 十字定位 ---------- */
-/** 选中按「点的索引」而非 time 字符串：期货夜盘跨日后同一分钟可能重复出现 */
-const selIdx = ref<number | null>(null)
-
-const trendSel = computed(() => {
-  const t = activeTrend.value
-  const tc = trendChart.value
-  if (!t || !tc || selIdx.value === null || selIdx.value >= t.points.length) return null
-  const p = t.points[selIdx.value]
-  const chg = tc.prev ? (p.price / tc.prev - 1) * 100 : null
-  return {
-    p,
-    chg,
-    cx: tc.xOf(selIdx.value),
-    cy: tc.yOf(p.price),
-  }
-})
+/* ---------- 分时图交互：点击选中（composable，模板绑定同名解构） ---------- */
+const {
+  selIdx,
+  trendSel,
+  onTrendSelect,
+  resetSelection: resetTrendSelection,
+} = useTrendInteraction({ activeTrend, trendChart, trendDayIdx })
 
 /* ---------- 分时副图：MACD/KDJ/RSI/BIAS（与K线副图共用开关，基于当日分钟价格序列计算） ---------- */
-/** 分时副图几何：x 与分时主图完全对齐（左 44 右 64），全量点渲染，无视窗切片 */
-function buildTrendSub(def: { lines: SubLine[]; bars: (number | null)[] | null; fixed: boolean }) {
-  const pts = activeTrend.value!.points
-  const n = pts.length
-
-  // 纵轴范围：固定域(KDJ/RSI 0-100) 或 窗口自适应(MACD/BIAS 含零轴)
-  let min = 0
-  let max = def.fixed ? 100 : 0
-  for (const l of def.lines) {
-    for (const v of l.vals) {
-      if (v === null) continue
-      if (v < min) min = v
-      if (v > max) max = v
-    }
-  }
-  if (def.bars) {
-    for (const v of def.bars) {
-      if (v === null) continue
-      if (v < min) min = v
-      if (v > max) max = v
-    }
-  }
-  if (min === max) {
-    min -= 1
-    max += 1
-  }
-  const pad = (max - min) * 0.08
-  min -= pad
-  max += pad
-  const y = (v: number) => SUB_PAD.top + (1 - (v - min) / (max - min)) * SUB_INNER_H
-  const step = (W - TREND_PAD.left - PAD.right) / n
-  const x = (i: number) => TREND_PAD.left + step * (i + 0.5)
-  const zeroY = y(0)
-
-  // 指标折线（null 断段），与分时主图 x 完全对齐
-  const lineDs = def.lines.map((l) => {
-    let d = ''
-    let open = false
-    for (let i = 0; i < n; i++) {
-      const v = l.vals[i]
-      if (v === null) {
-        open = false
-        continue
-      }
-      d += `${open ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`
-      open = true
-    }
-    return { key: l.key, color: l.color, d }
-  })
-
-  // MACD 柱
-  const barW = Math.max(1, Math.min(14, step * 0.65))
-  const bars: { key: string; x: number; y: number; h: number; up: boolean }[] = []
-  if (def.bars) {
-    for (let i = 0; i < n; i++) {
-      const v = def.bars[i]
-      if (v === null) continue
-      const vy = y(v)
-      bars.push({
-        key: pts[i].time,
-        x: x(i) - barW / 2,
-        y: Math.min(vy, zeroY),
-        h: Math.max(1, Math.abs(vy - zeroY)),
-        up: v >= 0,
-      })
-    }
-  }
-
-  // 网格：固定域 20/50/80，自适应域 0/中值/最大值三档
-  const grid = def.fixed
-    ? [20, 50, 80].map((v) => ({ y: y(v), label: String(v) }))
-    : [0, (min + max) / 2, max].map((v) => ({ y: y(v), label: Math.abs(v) >= 1 ? v.toFixed(1) : v.toFixed(2) }))
-
-  // 图例取选中分钟（未选中取最新），与分时十字线联动
-  const sel = selIdx.value !== null && selIdx.value < n ? selIdx.value : -1
-  const idx = sel >= 0 ? sel : n - 1
-  const legend = def.lines.map((l) => ({
-    label: l.label,
-    color: l.color,
-    value: l.vals[idx] === null || l.vals[idx] === undefined ? '—' : f2(l.vals[idx] as number),
-  }))
-  if (def.bars) {
-    const hv = def.bars[idx]
-    legend.unshift({ label: 'MACD', color: hv === null || hv < 0 ? 'var(--color-success)' : 'var(--color-danger)', value: hv === null || hv === undefined ? '—' : f2(hv) })
-  }
-  return { lineDs, bars, grid, zeroY, legend, hasBars: !!def.bars, barW }
-}
-
 /** 分时副图：按 SUB_TABS 顺序渲染所有点亮的指标 */
 const trendSubCharts = computed(() => {
   const av = activeTrend.value
@@ -1096,137 +456,14 @@ const trendSubCharts = computed(() => {
   return SUB_TABS.filter((t) => subIndicators.value.includes(t.key)).map((t) => ({
     key: t.key,
     label: t.label,
-    ...buildTrendSub(defs[t.key]),
+    ...buildTrendSub(defs[t.key], pts, selIdx.value ?? -1),
   }))
 })
 
-function onTrendSelect(e: MouseEvent): void {
-  const t = activeTrend.value
-  if (!t || t.points.length < 2) return
-  const svg = e.currentTarget as SVGSVGElement
-  const rect = svg.getBoundingClientRect()
-  const xSvg = ((e.clientX - rect.left) * W) / rect.width
-  const step = (W - TREND_PAD.left - PAD.right) / t.points.length
-  const i = Math.floor((xSvg - TREND_PAD.left) / step)
-  if (i < 0 || i >= t.points.length) {
-    selIdx.value = null
-    return
-  }
-  // 再点同一点取消选中
-  selIdx.value = selIdx.value === i ? null : i
-}
-
-/* ---------- 交互：滚轮滚动历史、拖拽平移、Ctrl+滚轮缩放、双击复位 ---------- */
-function clampOffset(v: number): number {
-  const len = kline.value.length
-  const count = Math.min(viewCount.value || len, len)
-  return Math.min(Math.max(0, v), Math.max(0, len - count))
-}
-
-function onWheel(e: WheelEvent): void {
-  const len = kline.value.length
-  if (!len) return
-  // 悬停在K线图上时滚轮只作用于图表，不滚动页面
-  e.preventDefault()
-  if (e.ctrlKey || e.metaKey) {
-    // 缩放：放大/缩小可见根数，右端对齐不变
-    const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15
-    const count = Math.round((viewCount.value || len) * factor)
-    viewCount.value = Math.min(len, Math.max(20, count))
-    endOffset.value = clampOffset(endOffset.value)
-    return
-  }
-  // 滚动：向下滚看更早，向上滚回到最新
-  const step = e.deltaY > 0 ? 4 : -4
-  endOffset.value = clampOffset(endOffset.value + step)
-  maybeLoadMore()
-}
-
-// wheel 需要非 passive 监听才能按需 preventDefault；元素随 v-if 出现，用 watch 挂载
-watch(chartEl, (el, _prev, onCleanup) => {
-  if (!el) return
-  el.addEventListener('wheel', onWheel, { passive: false })
-  onCleanup(() => el.removeEventListener('wheel', onWheel))
-})
-
-let dragX = 0
-let dragOffset = 0
-let dragMoved = false
-
-/* 双指捏合缩放（触屏）：双指按下进入缩放，距离拉大=放大（看更少根数） */
-const activePointers = new Map<number, number>()
-let pinching = false
-let pinchBaseDist = 0
-let pinchBaseCount = 0
-
-function pinchDistance(): number {
-  const xs = [...activePointers.values()]
-  return Math.abs(xs[0] - xs[1])
-}
-
-function onPointerDown(e: PointerEvent): void {
-  activePointers.set(e.pointerId, e.clientX)
-  if (activePointers.size === 2 && kline.value.length >= 2) {
-    // 第二根手指落下：终止拖拽，以当前距离/根数为基准进入捏合缩放
-    pinching = true
-    dragging.value = false
-    pinchBaseDist = pinchDistance()
-    pinchBaseCount = viewCount.value || kline.value.length
-    return
-  }
-  if (activePointers.size > 1 || kline.value.length < 2) return
-  dragX = e.clientX
-  dragOffset = endOffset.value
-  dragMoved = false
-  dragging.value = true
-  ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-}
-
-function onPointerMove(e: PointerEvent): void {
-  if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, e.clientX)
-  if (pinching && activePointers.size >= 2) {
-    const dist = pinchDistance()
-    if (dist > 10 && pinchBaseDist > 0) {
-      const len = kline.value.length
-      const count = Math.round(pinchBaseCount * (pinchBaseDist / dist))
-      viewCount.value = Math.min(len, Math.max(20, count))
-      endOffset.value = clampOffset(endOffset.value)
-    }
-    return
-  }
-  if (!dragging.value || !chartEl.value) return
-  if (Math.abs(e.clientX - dragX) > 4) dragMoved = true
-  const rect = chartEl.value.getBoundingClientRect()
-  const perCandle = (rect.width * INNER_W) / W / viewCount.value
-  const shift = Math.round((e.clientX - dragX) / perCandle)
-  endOffset.value = clampOffset(dragOffset + shift)
-  maybeLoadMore()
-}
-
-function onPointerUp(e: PointerEvent): void {
-  activePointers.delete(e.pointerId)
-  if (activePointers.size < 2) pinching = false
-  dragging.value = false
-  ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
-}
-
-/* ---------- 五档盘口 / 估值资料 ---------- */
-/** 卖档自上而下：卖5 → 卖1 */
-const asksDesc = computed(() => (depth.value ? [...depth.value.asks].reverse() : []))
-
-function formatVal(k: string, v: number): string {
-  if (k === '总市值' || k === '流通市值') return `${f2(v)}亿`
-  if (k === '换手率' || k === '振幅') return `${f2(v)}%`
-  return f2(v)
-}
+/* ---------- 五档盘口 / 估值 / 同行业跳转：已移至 detail/DepthPanel、ProfilePanel ---------- */
 
 /* 明细表：最近 12 根，最新在前 */
 const tableRows = computed(() => kline.value.slice(-12).reverse())
-
-/** 同行业个股跳详情 */
-function openSibling(code2: string): void {
-  void router.push(detailRoute('stock', code2))
-}
 </script>
 
 <template>
@@ -1606,389 +843,14 @@ function openSibling(code2: string): void {
         </template>
       </section>
 
-      <!-- 五档盘口 + 估值资料（A股盘口 / A股港股估值） -->
-      <section v-if="depth || valuation" class="extra-row">
-        <div v-if="depth" class="panel">
-          <div class="spot-head">
-            <h2>五档盘口</h2>
-            <span class="spot-note num">{{ depth.date }} {{ depth.time }}</span>
-          </div>
-          <table class="depth-table">
-            <tbody>
-              <tr v-for="(a, i) in asksDesc" :key="'a' + i">
-                <td class="side muted">卖{{ asksDesc.length - i }}</td>
-                <td class="num ask-price">{{ f2(a[0]) }}</td>
-                <td class="num muted">{{ vol(a[1]) }}</td>
-              </tr>
-              <tr class="now-row">
-                <td class="side muted">最新</td>
-                <td class="num" :class="dirClass(changePct)">{{ f2(price) }}</td>
-                <td class="num muted" :class="dirClass(changePct)">{{ pct(changePct) }}</td>
-              </tr>
-              <tr v-for="(b, i) in depth.bids" :key="'b' + i">
-                <td class="side muted">买{{ i + 1 }}</td>
-                <td class="num bid-price">{{ f2(b[0]) }}</td>
-                <td class="num muted">{{ vol(b[1]) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div v-if="valuation" class="panel">
-          <div class="spot-head">
-            <h2>估值资料</h2>
-            <span class="spot-note">腾讯行情</span>
-          </div>
-          <dl class="val-grid">
-            <div v-for="(v, k) in valuation" :key="k" class="val-item">
-              <dt>{{ k }}</dt>
-              <dd class="num">{{ formatVal(k, v) }}</dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
-      <!-- 资金流向（A股）：最新日英雄数字 + 双向条形图 -->
-      <section v-if="extra?.moneyflow?.length" class="kline-section">
-        <div class="spot-head">
-          <h2>资金流向</h2>
-          <span class="spot-note">近 {{ extra.moneyflow.length }} 日 · 主力 = 超大单 + 大单 · 新浪</span>
-        </div>
-        <div v-if="latestFlow" class="flow-hero">
-          <div class="flow-hero-main">
-            <span class="flow-hero-label num">{{ latestFlow.date }} 主力净流入</span>
-            <span class="num flow-hero-value" :class="dirClass(latestFlow.net)">{{ signedYi(latestFlow.net) }}</span>
-            <span v-if="flowStreak > 1" class="flow-streak num" :class="dirClass(latestFlow.net)">
-              {{ latestFlow.net >= 0 ? '连续流入' : '连续流出' }} {{ flowStreak }} 日
-            </span>
-          </div>
-          <div class="flow-hero-sub num">
-            <span>净流入率 <b :class="dirClass(latestFlow.net)">{{ latestFlow.ratio.toFixed(2) }}%</b></span>
-            <span>超大单 <b :class="dirClass(latestFlow.xl_net)">{{ signedYi(latestFlow.xl_net) }}</b></span>
-            <span>大单 <b :class="dirClass(latestFlow.l_net)">{{ signedYi(latestFlow.l_net) }}</b></span>
-            <span>中单 <b :class="dirClass(latestFlow.m_net)">{{ signedYi(latestFlow.m_net) }}</b></span>
-            <span>小单 <b :class="dirClass(latestFlow.s_net)">{{ signedYi(latestFlow.s_net) }}</b></span>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>日期</th>
-                <th class="num">收盘价</th>
-                <th class="num">涨跌幅</th>
-                <th class="num">换手率</th>
-                <th class="num">净流入率</th>
-                <th class="num">主力净流入</th>
-                <th class="flow-bar-head">净流入分布</th>
-                <th class="num">超大单</th>
-                <th class="num">大单</th>
-                <th class="num">中单</th>
-                <th class="num">小单</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="r in extra.moneyflow" :key="r.date">
-                <td class="num">{{ r.date }}</td>
-                <td class="num">{{ f2(r.close) }}</td>
-                <td class="num" :class="dirClass(r.pct)">{{ pct(r.pct) }}</td>
-                <td class="num muted">{{ r.turnover.toFixed(2) }}%</td>
-                <td class="num muted">{{ r.ratio.toFixed(2) }}%</td>
-                <td class="num flow-strong" :class="dirClass(r.net)">{{ signedYi(r.net) }}</td>
-                <td class="flow-bar-cell">
-                  <div class="flow-bar-track" aria-hidden="true">
-                    <div class="flow-bar" :class="r.net >= 0 ? 'in' : 'out'" :style="netBarStyle(r.net)"></div>
-                  </div>
-                </td>
-                <td class="num" :class="dirClass(r.xl_net)">{{ signedYi(r.xl_net) }}</td>
-                <td class="num" :class="dirClass(r.l_net)">{{ signedYi(r.l_net) }}</td>
-                <td class="num" :class="dirClass(r.m_net)">{{ signedYi(r.m_net) }}</td>
-                <td class="num" :class="dirClass(r.s_net)">{{ signedYi(r.s_net) }}</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td class="flow-foot-label">累计</td>
-                <td colspan="3" class="muted">{{ extra.moneyflow.length }} 个交易日</td>
-                <td class="num muted">{{ flowSumAvg }}</td>
-                <td class="num flow-strong" :class="dirClass(flowSum.net)">{{ signedYi(flowSum.net) }}</td>
-                <td></td>
-                <td class="num" :class="dirClass(flowSum.xl)">{{ signedYi(flowSum.xl) }}</td>
-                <td class="num" :class="dirClass(flowSum.l)">{{ signedYi(flowSum.l) }}</td>
-                <td class="num" :class="dirClass(flowSum.m)">{{ signedYi(flowSum.m) }}</td>
-                <td class="num" :class="dirClass(flowSum.s)">{{ signedYi(flowSum.s) }}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </section>
-
-      <!-- 公司公告 + 分红送配（A股）：时间轴 + 票根式方案 -->
-      <section
-        v-if="extra && (extra.announcements.length || extra.dividends.length)"
-        class="extra-row"
-      >
-        <div v-if="extra.announcements.length" class="panel">
-          <div class="spot-head">
-            <h2>公司公告</h2>
-            <span class="spot-note">最新 {{ extra.announcements.length }} 条 · 新浪</span>
-          </div>
-          <ol class="news-list">
-            <li v-for="(a, i) in extra.announcements" :key="a.url" :class="{ lead: i === 0 }">
-              <span class="news-date num">{{ a.date }}</span>
-              <a :href="a.url" target="_blank" rel="noopener">
-                <span class="news-title">{{ a.title }}</span>
-                <span class="news-arrow" aria-hidden="true">↗</span>
-              </a>
-            </li>
-          </ol>
-        </div>
-        <div v-if="extra.dividends.length" class="panel">
-          <div class="spot-head">
-            <h2>分红送配</h2>
-            <span class="spot-note">每10股口径 · 新浪</span>
-          </div>
-          <table class="div-table">
-            <thead>
-              <tr>
-                <th>除权除息日</th>
-                <th>分红方案</th>
-                <th>进度</th>
-                <th class="num">公告日</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="d in extra.dividends" :key="d.announce + (d.ex_date ?? '')">
-                <td class="num">{{ d.ex_date ?? '—' }}</td>
-                <td>
-                  <span v-if="d.dividend" class="div-amt num">派 {{ parseFloat(d.dividend.toFixed(2)) }}</span>
-                  <span v-if="d.bonus" class="div-tag">送 {{ d.bonus }}</span>
-                  <span v-if="d.convert" class="div-tag">转 {{ d.convert }}</span>
-                  <span v-if="!d.dividend && !d.bonus && !d.convert" class="muted">—</span>
-                </td>
-                <td class="muted">{{ d.progress }}</td>
-                <td class="num muted">{{ d.announce }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- 公司概况（A股）：资料字段 + 简介/主营业务 -->
-      <section v-if="f10?.profile" class="kline-section">
-        <div class="spot-head">
-          <h2>公司概况</h2>
-          <span class="spot-note">新浪公司资料</span>
-        </div>
-        <div class="profile-grid">
-          <div v-for="(v, k) in f10.profile.fields" :key="k" class="profile-item">
-            <span class="profile-label">{{ k }}</span>
-            <span class="profile-value" :class="{ num: /\d/.test(v) }">{{ v }}</span>
-          </div>
-        </div>
-        <div v-if="f10.profile.intro" class="profile-block">
-          <h3>公司简介</h3>
-          <p>{{ f10.profile.intro }}</p>
-        </div>
-        <div v-if="f10.profile.mainbiz" class="profile-block">
-          <h3>主营业务</h3>
-          <p>{{ f10.profile.mainbiz }}</p>
-        </div>
-        <!-- 所属板块：申万行业 + 概念 -->
-        <div v-if="f10.sectors" class="profile-block">
-          <h3>所属板块</h3>
-          <div class="sector-chips">
-            <span v-if="f10.sectors.industry" class="sector-chip industry">{{ f10.sectors.industry }}</span>
-            <span v-for="c in f10.sectors.concepts" :key="c" class="sector-chip">{{ c }}</span>
-          </div>
-          <div v-if="f10.sectors.siblings.length" class="sibling-row">
-            <span class="sibling-label">同行业个股</span>
-            <div class="sibling-links">
-              <button
-                v-for="s in f10.sectors.siblings"
-                :key="s.code"
-                class="sibling-link"
-                type="button"
-                @click="openSibling(s.code)"
-              >{{ s.name }}</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- F10：融资融券 + 财务指标（A股） -->
-      <section
-        v-if="f10 && (f10.margin || f10.financials)"
-        class="extra-row"
-      >
-        <div v-if="f10.margin" class="panel">
-          <div class="spot-head">
-            <h2>融资融券</h2>
-            <span class="spot-note">{{ f10.margin.date }} · 交易所官方</span>
-          </div>
-          <div class="margin-hero">
-            <div class="margin-hero-main">
-              <span class="margin-hero-label">融资余额</span>
-              <span class="num flow-hero-value">{{ yi(f10.margin.balance) }}</span>
-            </div>
-            <div v-if="f10.margin.delta !== null" class="margin-hero-sub num">
-              较上日 <b :class="dirClass(f10.margin.delta)">{{ signedYi(f10.margin.delta) }}</b>
-            </div>
-          </div>
-          <dl class="val-grid">
-            <div class="val-item">
-              <dt>融资买入额</dt>
-              <dd class="num">{{ yi(f10.margin.buy) }}</dd>
-            </div>
-            <div class="val-item">
-              <dt>融资偿还额</dt>
-              <dd class="num">{{ f10.margin.repay === null ? '—' : yi(f10.margin.repay) }}</dd>
-            </div>
-            <div class="val-item">
-              <dt>融券余量</dt>
-              <dd class="num">{{ wan(f10.margin.short_vol) }}</dd>
-            </div>
-            <div class="val-item">
-              <dt>融券卖出量</dt>
-              <dd class="num">{{ f10.margin.short_sell === null ? '—' : wan(f10.margin.short_sell) }}</dd>
-            </div>
-          </dl>
-        </div>
-
-        <div v-if="f10.financials" class="panel">
-          <div class="spot-head">
-            <h2>财务指标</h2>
-            <span class="spot-note num">{{ f10.financials.latest_date }} vs {{ f10.financials.prev_date }}</span>
-          </div>
-          <div class="table-wrap">
-            <table class="fin-table">
-              <thead>
-                <tr>
-                  <th>指标</th>
-                  <th class="num">最新报告期</th>
-                  <th class="num">上年同期</th>
-                  <th class="num">同比</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="r in f10.financials.rows" :key="r.name">
-                  <td>{{ r.name }}</td>
-                  <td class="num">{{ finVal(r.latest) }}</td>
-                  <td class="num muted">{{ finVal(r.prev) }}</td>
-                  <td class="num" :class="dirClass(r.yoy ?? 0)">{{ r.yoy === null ? '—' : pct(r.yoy) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- 十大流通股东（A股） -->
-      <section v-if="f10?.holders?.rows.length" class="kline-section">
-        <div class="spot-head">
-          <h2>十大流通股东</h2>
-          <span class="spot-note num">
-            {{ f10.holders.date }} 报告期<template v-if="f10.holders.announce"> · 公告 {{ f10.holders.announce }}</template>
-            <template v-if="f10.holders.total_holders"> · 股东总数 {{ f10.holders.total_holders.toLocaleString() }} 户</template>
-          </span>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>股东名称</th>
-                <th class="num">持股数量</th>
-                <th class="num">占总股本</th>
-                <th class="num">较上期</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="h in f10.holders.rows" :key="h.rank">
-                <td class="num muted">{{ h.rank }}</td>
-                <td>{{ h.name }}</td>
-                <td class="num">{{ wan(h.shares) }}</td>
-                <td class="num muted">{{ h.ratio === null ? '—' : `${h.ratio}%` }}</td>
-                <td class="num">
-                  <span v-if="h.note === '增持'" class="holder-up">↑ 增持</span>
-                  <span v-else-if="h.note === '减持'" class="holder-down">↓ 减持</span>
-                  <span v-else-if="h.note === '新进'" class="holder-new">新进</span>
-                  <span v-else class="muted">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <!-- 股东人数变化：户数减少 = 筹码集中 -->
-        <div v-if="holderTrendRows.length" class="holder-trend">
-          <h3>股东人数变化</h3>
-          <div class="table-wrap">
-            <table class="ht-table">
-              <thead>
-                <tr>
-                  <th class="num">报告期</th>
-                  <th class="num">股东户数</th>
-                  <th class="num">较上期</th>
-                  <th>筹码</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="t in holderTrendRows" :key="t.date">
-                  <td class="num">{{ t.date }}</td>
-                  <td class="num">{{ t.total.toLocaleString() }}</td>
-                  <td class="num" :class="t.delta === null ? 'muted' : t.delta <= 0 ? 'holder-up' : 'holder-down'">
-                    <template v-if="t.delta === null">—</template>
-                    <template v-else>{{ t.delta > 0 ? '+' : '' }}{{ t.delta.toFixed(1) }}%</template>
-                  </td>
-                  <td>
-                    <span v-if="t.delta === null" class="muted">—</span>
-                    <span v-else-if="t.delta <= -3" class="holder-up">筹码集中</span>
-                    <span v-else-if="t.delta >= 3" class="holder-down">筹码分散</span>
-                    <span v-else class="muted">基本持平</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- 三大财务报表（A股）：利润表/资产负债表/现金流量表；无数据整块不显示 -->
-      <section v-if="hasStatements" class="kline-section">
-        <div class="spot-head">
-          <h2>财务报表</h2>
-          <span class="spot-note num">单位：万元 · 最近 5 个报告期 · 新浪</span>
-        </div>
-        <div class="stmt-tabs" role="group" aria-label="报表选择">
-          <button
-            v-for="t in STMT_TABS"
-            :key="t.key"
-            class="sub-tab"
-            :class="{ active: stmtTab === t.key }"
-            type="button"
-            @click="stmtTab = t.key"
-          >
-            {{ t.label }}
-          </button>
-        </div>
-        <div v-if="curStatements" class="table-wrap">
-          <table class="stmt-table">
-            <thead>
-              <tr>
-                <th class="stmt-label-col">科目</th>
-                <th v-for="p in curStatements.periods" :key="p" class="num">{{ p }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="r in curStatements.rows" :key="r.label" :class="{ 'stmt-key': isKeyRow(r.label) }">
-                <td>{{ r.label }}</td>
-                <td v-for="(v, i) in r.vals" :key="i" class="num">
-                  {{ v === null ? '—' : v.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <!-- 五档盘口 / 估值 / 资金流向 / 公告分红 / 公司概况 / F10 / 股东 / 报表：面板子组件 -->
+      <DepthPanel v-if="depth || valuation" :depth="depth" :valuation="valuation" :price="price" :change-pct="changePct" />
+      <MoneyflowPanel v-if="extra?.moneyflow?.length" :rows="extra.moneyflow" />
+      <NoticesPanel v-if="extra" :extra="extra" />
+      <ProfilePanel v-if="f10?.profile" :profile="f10.profile" :sectors="f10.sectors" />
+      <MarginFinancialsPanel v-if="f10" :f10="f10" />
+      <HoldersPanel v-if="f10?.holders" :holders="f10.holders" />
+      <StatementsPanel v-if="hasStatements" :statements="statements" />
 
       <!-- 行情明细表 -->
       <section class="kline-section" aria-labelledby="kline-title">
@@ -2249,166 +1111,13 @@ function openSibling(code2: string): void {
 }
 
 /* 分时回看日期切换行 / 三大报表 tab */
-.trend-days,
-.stmt-tabs {
+.trend-days {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
   padding: var(--space-2) 0 var(--space-8);
 }
 
-.stmt-table th,
-.stmt-table td {
-  white-space: nowrap;
-}
-
-.stmt-table .stmt-label-col {
-  min-width: 180px;
-  text-align: left;
-}
-
-.stmt-table tr.stmt-key td {
-  color: var(--color-brand);
-  font-weight: 600;
-}
-
-.stmt-table tr.stmt-key td:first-child {
-  border-left: 2px solid rgba(29, 78, 216, 0.35);
-}
-
-/* 公司概况 */
-.profile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-8) var(--space-16);
-}
-
-.profile-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-6) 0;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.profile-label {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-11);
-}
-
-.profile-value {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-12);
-  word-break: break-all;
-}
-
-.profile-block {
-  margin-top: var(--space-12);
-  padding-top: var(--space-10);
-  border-top: 1px dashed var(--color-border);
-
-  h3 {
-    margin: 0 0 var(--space-6);
-    color: var(--color-brand);
-    font-size: var(--font-size-11);
-    letter-spacing: 0.08em;
-  }
-
-  p {
-    margin: 0;
-    color: var(--color-text-primary);
-    font-size: var(--font-size-12);
-    line-height: 1.7;
-  }
-}
-
-/* 板块 chips：行业琥珀实底，概念描边 */
-.sector-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-6);
-}
-
-.sector-chip {
-  padding: var(--space-2) var(--space-10);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-11);
-
-  &.industry {
-    border-color: rgba(234, 179, 8, 0.5);
-    background: rgba(234, 179, 8, 0.1);
-    color: #b45309;
-  }
-}
-
-.sibling-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-10);
-  margin-top: var(--space-10);
-}
-
-.sibling-label {
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-11);
-}
-
-.sibling-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4) var(--space-12);
-}
-
-.sibling-link {
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-bottom: 1px dashed transparent;
-  color: var(--color-text-primary);
-  font: inherit;
-  font-size: var(--font-size-12);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-
-  &:hover {
-    color: var(--color-brand);
-    border-bottom-color: var(--color-brand);
-  }
-
-  &:focus-visible {
-    outline: 3px solid var(--color-ring-focus);
-    outline-offset: 1px;
-  }
-}
-
-/* 股东人数变化表 */
-.holder-trend {
-  margin-top: var(--space-14);
-  padding-top: var(--space-10);
-  border-top: 1px dashed var(--color-border);
-
-  h3 {
-    margin: 0 0 var(--space-8);
-    color: var(--color-brand);
-    font-size: var(--font-size-11);
-    letter-spacing: 0.08em;
-  }
-}
-
-.holder-up {
-  color: var(--color-danger);
-}
-
-.holder-down {
-  color: var(--color-success);
-}
-
-.holder-new {
-  color: var(--color-chart-gold);
-}
 
 .sub-legend {
   display: flex;
@@ -2702,383 +1411,6 @@ function openSibling(code2: string): void {
   &.down {
     fill: var(--color-success);
   }
-}
-
-/* ---------- 五档盘口 / 估值资料 ---------- */
-.extra-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: var(--space-12);
-  margin-top: var(--space-16);
-}
-
-.panel {
-  padding: var(--space-12);
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-10);
-  box-shadow: 0 4px 14px rgba(183, 200, 244, 0.18);
-}
-
-.spot-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-10);
-  margin-bottom: var(--space-10);
-
-  h2 {
-    margin: 0;
-    color: var(--color-text-primary);
-    font-size: var(--font-size-14);
-    font-weight: 700;
-  }
-}
-
-.spot-note {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-11);
-}
-
-.depth-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-12);
-
-  td {
-    padding: var(--space-4) var(--space-10);
-    border-bottom: 1px solid var(--color-border);
-    white-space: nowrap;
-  }
-
-  tr:last-child td {
-    border-bottom: none;
-  }
-
-  .side {
-    width: 3em;
-  }
-
-  .now-row td {
-    border-top: 1px solid var(--color-border-soft-2);
-    border-bottom: 1px solid var(--color-border-soft-2);
-    font-weight: 700;
-  }
-}
-
-/* A股盘口惯例：卖档绿、买档红 */
-.ask-price {
-  color: var(--color-success);
-}
-
-.bid-price {
-  color: var(--color-danger);
-}
-
-.val-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: var(--space-8);
-  margin: 0;
-
-  dt {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-11);
-    letter-spacing: 0.08em;
-  }
-
-  dd {
-    margin: var(--space-4) 0 0;
-    font-size: var(--font-size-14);
-    font-weight: 600;
-  }
-}
-
-/* ---------- F10：融资融券 / 财务指标 / 十大股东 ---------- */
-.margin-hero {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--space-8) var(--space-16);
-  padding: var(--space-2) 0 var(--space-16);
-}
-
-.margin-hero-main {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-10);
-}
-
-.margin-hero-label {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-12);
-}
-
-.margin-hero-sub {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-12);
-
-  b {
-    font-weight: 600;
-  }
-}
-
-.fin-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-12);
-
-  th,
-  td {
-    padding: var(--space-8) var(--space-10);
-    border-bottom: 1px solid var(--color-border);
-    text-align: left;
-    white-space: nowrap;
-  }
-
-  th:first-child,
-  td:first-child {
-    padding-left: 0;
-  }
-
-  tr:last-child td {
-    border-bottom: none;
-  }
-}
-
-/* ---------- 资金流向：英雄数字 + 双向条形图 ---------- */
-.flow-hero {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--space-8) var(--space-20);
-  margin-bottom: var(--space-12);
-  padding: var(--space-12) var(--space-16);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-10);
-  /* 琥珀金自上而下渗光，区分于普通表格面板 */
-  background:
-    linear-gradient(180deg, rgba(234, 179, 8, 0.08), transparent 72%),
-    var(--color-bg-card);
-}
-
-.flow-hero-main {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-12);
-}
-
-.flow-hero-label {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-12);
-  letter-spacing: 0.06em;
-}
-
-.flow-hero-value {
-  font-size: var(--font-size-26);
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.flow-hero-sub {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-6) var(--space-14);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-12);
-
-  b {
-    font-weight: 600;
-    white-space: nowrap;
-  }
-}
-
-/* 连续同向天数徽标 */
-.flow-streak {
-  padding: var(--space-2) var(--space-8);
-  border: 1px solid currentColor;
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-11);
-  font-weight: 600;
-  opacity: 0.9;
-}
-
-.flow-strong {
-  font-weight: 700;
-}
-
-.flow-bar-head {
-  min-width: 150px;
-}
-
-/* 累计行：双线压顶 + 淡琥珀底，与数据行区分 */
-.flow-foot-label {
-  font-weight: 700;
-  letter-spacing: 0.1em;
-}
-
-tfoot td {
-  border-top: 2px solid var(--color-border);
-  border-bottom: none;
-  background: rgba(234, 179, 8, 0.05);
-  font-weight: 600;
-}
-
-.flow-bar-cell {
-  min-width: 150px;
-  padding-top: var(--space-12);
-  padding-bottom: var(--space-12);
-}
-
-/* 发丝中线为 0 轴，条形自中线向两侧生长 */
-.flow-bar-track {
-  position: relative;
-  height: 12px;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: -5px;
-    bottom: -5px;
-    width: 1px;
-    background: var(--color-border);
-  }
-}
-
-.flow-bar {
-  position: absolute;
-  top: 50%;
-  height: 8px;
-  border-radius: 2px;
-  transform: translateY(-50%);
-
-  &.in {
-    background: linear-gradient(90deg, rgba(220, 38, 38, 0.2), var(--color-danger));
-  }
-
-  &.out {
-    background: linear-gradient(270deg, rgba(22, 163, 74, 0.2), var(--color-success));
-  }
-}
-
-/* ---------- 公司公告：时间轴 ---------- */
-.news-list {
-  position: relative;
-  margin: 0;
-  padding: 0 0 0 var(--space-16);
-  list-style: none;
-
-  /* 左侧规则线，串起所有节点 */
-  &::before {
-    content: '';
-    position: absolute;
-    left: 3px;
-    top: var(--space-10);
-    bottom: var(--space-10);
-    width: 1px;
-    background: var(--color-border);
-  }
-
-  li {
-    position: relative;
-    border-bottom: 1px solid var(--color-border);
-
-    &:last-child {
-      border-bottom: none;
-    }
-
-    /* 节点圆点：首条用强调色实心 */
-    &::before {
-      content: '';
-      position: absolute;
-      left: calc(-1 * var(--space-16));
-      top: 15px;
-      width: 7px;
-      height: 7px;
-      border: 1px solid var(--color-border);
-      border-radius: 50%;
-      background: var(--color-bg-card);
-    }
-
-    &.lead::before {
-      border-color: var(--color-brand);
-      background: var(--color-brand);
-    }
-  }
-
-  a {
-    display: flex;
-    gap: var(--space-12);
-    align-items: baseline;
-    padding: var(--space-8) var(--space-2);
-    color: inherit;
-    text-decoration: none;
-  }
-}
-
-.news-date {
-  flex-shrink: 0;
-  width: 76px;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-11);
-}
-
-.news-title {
-  flex: 1;
-  overflow: hidden;
-  font-size: var(--font-size-13);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  transition: color 0.15s ease-out;
-}
-
-/* 首条公告破格：换行全文 + 加重 */
-.news-list li.lead .news-title {
-  font-weight: 600;
-  line-height: 1.55;
-  white-space: normal;
-}
-
-.news-arrow {
-  flex-shrink: 0;
-  color: var(--color-brand);
-  opacity: 0;
-  transform: translate(-4px, 2px);
-  transition:
-    opacity 0.15s ease-out,
-    transform 0.15s ease-out;
-}
-
-.news-list a:hover .news-title,
-.news-list a:focus-visible .news-title {
-  color: var(--color-brand);
-}
-
-.news-list a:hover .news-arrow,
-.news-list a:focus-visible .news-arrow {
-  opacity: 1;
-  transform: none;
-}
-
-/* ---------- 分红送配：派息金额强调 ---------- */
-.div-table th,
-.div-table td {
-  padding: var(--space-8) var(--space-10);
-}
-
-.div-amt {
-  color: var(--color-chart-gold);
-  font-weight: 700;
-}
-
-.div-tag {
-  display: inline-block;
-  margin-left: var(--space-6);
-  padding: 1px var(--space-8);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-8);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-11);
 }
 
 /* ---------- 明细表 ---------- */

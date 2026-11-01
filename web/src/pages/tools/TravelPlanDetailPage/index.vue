@@ -23,17 +23,30 @@ import {
 import { getApiBaseUrl } from '@/api/api-base-url'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
+import { parseAmapLocation, useTravelMaps, type TravelMapPoint } from './useTravelMaps'
+import type { TravelTone } from './travelFormat'
+import {
+  addDays,
+  calculateDayCount,
+  expenseAmountText,
+  expenseNote,
+  expenseTypeLabel,
+  formatDayTabLabel,
+  formatDate,
+  formatDistance,
+  formatDuration,
+  formatMetric,
+  formatStartTime,
+  itineraryDescription,
+  normalizeTimeValue,
+  overviewExpenseRowAmount,
+  routeCountText,
+  routeTransferSummary,
+  typeTone,
+} from './travelFormat'
 
 type DetailTab = 'overview' | 'route' | 'expense'
 type ModalType = 'transport' | 'scenic' | 'dining' | 'accommodation'
-type TravelTone = 'blue' | 'green' | 'orange' | 'violet'
-type TravelMapPoint = {
-  index: number
-  title: string
-  longitude: number
-  latitude: number
-}
-
 type FocusMapTarget = TravelMapPoint & {
   key: string
 }
@@ -67,21 +80,6 @@ type NavigationPoint = {
   poiName?: string | null
 }
 
-type AMapInstance = {
-  clearMap: () => void
-  add: (overlays: unknown[]) => void
-  setFitView: (overlays?: unknown[], immediately?: boolean, avoid?: number[]) => void
-  setZoomAndCenter: (zoom: number, center: [number, number]) => void
-  destroy: () => void
-}
-
-type AMapConstructor = {
-  Map: new (container: HTMLElement, options: Record<string, unknown>) => AMapInstance
-  Marker: new (options: Record<string, unknown>) => unknown
-  Polyline: new (options: Record<string, unknown>) => unknown
-  Pixel: new (x: number, y: number) => unknown
-}
-
 type EditTarget =
   | {
       type: 'itinerary'
@@ -97,17 +95,8 @@ type EditTarget =
       isNew?: boolean
     }
 
-declare global {
-  interface Window {
-    AMap?: AMapConstructor
-  }
-}
-
-let amapScriptPromise: Promise<AMapConstructor> | null = null
 let searchDebounceTimer: number | null = null
 let searchRequestSequence = 0
-let routeMapContainer: HTMLDivElement | null = null
-let overviewMapContainer: HTMLDivElement | null = null
 
 const route = useRoute()
 const router = useRouter()
@@ -137,10 +126,20 @@ const editingTarget = ref<EditTarget | null>(null)
 const deletingTarget = ref<EditTarget | null>(null)
 const searchStackRef = ref<HTMLDivElement | null>(null)
 const expenseTitleSearchStackRef = ref<HTMLDivElement | null>(null)
-const overviewMapRef = ref<HTMLDivElement | null>(null)
-const routeMapRef = ref<HTMLDivElement | null>(null)
-const overviewMapMessage = ref('')
-const routeMapMessage = ref('')
+const {
+  overviewMapRef,
+  routeMapRef,
+  overviewMapMessage,
+  routeMapMessage,
+  renderOverviewMap,
+  renderRouteMap,
+  destroyMaps,
+  focusPoint,
+} = useTravelMaps({
+  overviewPoints: () => overviewMapPoints.value,
+  routePoints: () => currentRouteMapPoints.value,
+  hasPlanStartDate: () => !!detail.value?.startDate,
+})
 const detail = ref<TravelPlanDetail | null>(null)
 const isLoading = ref(true)
 const isSearchingLocation = ref(false)
@@ -155,11 +154,8 @@ const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 
-const amapWebJsKey = String(import.meta.env.VITE_AMAP_WEB_JS_KEY ?? '').trim()
 // 路线规划 / 地点搜索的 Key 保存在 tool-service，前端经 /tool-api 代理调用
 const amapProxyBaseUrl = `${getApiBaseUrl('tool').replace(/\/$/, '')}/api/tool/amap`
-let overviewMapInstance: AMapInstance | null = null
-let routeMapInstance: AMapInstance | null = null
 
 const itineraryTypeOptions: CommonSelectOption[] = [
   { label: '交通', value: 'transport' },
@@ -197,12 +193,7 @@ onBeforeUnmount(() => {
     window.clearTimeout(searchDebounceTimer)
     searchDebounceTimer = null
   }
-  overviewMapInstance?.destroy()
-  overviewMapInstance = null
-  overviewMapContainer = null
-  routeMapInstance?.destroy()
-  routeMapInstance = null
-  routeMapContainer = null
+  destroyMaps()
 })
 
 const currentDay = computed(() => {
@@ -573,12 +564,7 @@ function focusMapPoint(target: FocusMapTarget | null) {
     return
   }
 
-  const mapInstance = activeTab.value === 'overview' ? overviewMapInstance : routeMapInstance
-  if (!mapInstance) {
-    return
-  }
-
-  mapInstance.setZoomAndCenter(14, [target.longitude, target.latitude])
+  focusPoint(activeTab.value === 'overview' ? 'overview' : 'route', target)
 }
 
 function focusOverviewEntry(title: string) {
@@ -836,26 +822,6 @@ function goToEditPage() {
     return
   }
   void router.push(`/tools/travel-plans/${currentPlanId.value}/edit`)
-}
-
-function typeTone(type: TravelTone | ModalType | string) {
-  switch (type) {
-    case 'blue':
-    case 'transport':
-      return 'blue'
-    case 'green':
-    case 'scenic':
-      return 'green'
-    case 'orange':
-    case 'dining':
-      return 'orange'
-    default:
-      return 'violet'
-  }
-}
-
-function expenseAmountText(amount: number) {
-  return `¥ ${amount}`
 }
 
 function itineraryEditTarget(dayId: number, dayIndex: number, item: TravelPlanDetail['days'][number]['itineraries'][number]): EditTarget {
@@ -1129,91 +1095,6 @@ function handleDocumentPointerDown(event: PointerEvent) {
   }
 }
 
-function overviewExpenseRowAmount(item: { amount: number }) {
-  return `¥ ${item.amount}`
-}
-
-function formatMetric(value: number | undefined) {
-  return `¥ ${(value ?? 0).toLocaleString('zh-CN')}`
-}
-
-function formatDayTabLabel(day: TravelPlanDetail['days'][number]) {
-  if (day.travelDate) {
-    return formatDate(day.travelDate)
-  }
-  return `Day ${day.dayIndex}`
-}
-
-function formatDate(dateText?: string | null) {
-  return dateText ? dateText.split('-').join('.') : ''
-}
-
-function calculateDayCount(startDate?: string | null, endDate?: string | null) {
-  if (!startDate || !endDate) {
-    return 0
-  }
-
-  const start = new Date(`${startDate}T00:00:00`)
-  const end = new Date(`${endDate}T00:00:00`)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-    return 0
-  }
-
-  const millisecondsPerDay = 24 * 60 * 60 * 1000
-  return Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1
-}
-
-function addDays(startDate?: string | null, offset = 0) {
-  if (!startDate) {
-    return ''
-  }
-
-  const nextDate = new Date(`${startDate}T00:00:00`)
-  if (Number.isNaN(nextDate.getTime())) {
-    return ''
-  }
-
-  nextDate.setDate(nextDate.getDate() + offset)
-  const year = nextDate.getFullYear()
-  const month = `${nextDate.getMonth() + 1}`.padStart(2, '0')
-  const day = `${nextDate.getDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function normalizeTimeValue(value: string) {
-  return value ? `${value}:00` : undefined
-}
-
-function formatStartTime(time?: string | null) {
-  if (!time) {
-    return '待定'
-  }
-  return time.slice(0, 5)
-}
-
-function formatDistance(distanceMeters?: number | null) {
-  if (!distanceMeters || distanceMeters <= 0) {
-    return ''
-  }
-  if (distanceMeters >= 1000) {
-    return `${(distanceMeters / 1000).toFixed(1)} km`
-  }
-  return `${distanceMeters} m`
-}
-
-function formatDuration(durationSeconds?: number | null) {
-  if (!durationSeconds || durationSeconds <= 0) {
-    return ''
-  }
-  const totalMinutes = Math.round(durationSeconds / 60)
-  if (totalMinutes < 60) {
-    return `${totalMinutes} 分钟`
-  }
-  const hours = Math.floor(totalMinutes / 60)
-  const minutes = totalMinutes % 60
-  return minutes > 0 ? `${hours} 小时 ${minutes} 分钟` : `${hours} 小时`
-}
-
 function getPreviousRoutePoint() {
   const items = currentDay.value?.itineraries ?? []
   if (editingTarget.value?.type === 'itinerary' && editingTarget.value.item.id) {
@@ -1309,34 +1190,6 @@ async function calculateTransportRoute() {
   }
 }
 
-function itineraryDescription(item: TravelPlanDetail['days'][number]['itineraries'][number]) {
-  return item.remark || item.address || item.poiName || '待补充详细说明'
-}
-
-function expenseNote(item: TravelPlanDetail['days'][number]['expenses'][number]) {
-  return expenseTypeLabel(item.type)
-}
-
-function expenseTypeLabel(type: string) {
-  if (type === 'transport') {
-    return '交通'
-  }
-  if (type === 'scenic') {
-    return '景区'
-  }
-  if (type === 'dining') {
-    return '餐饮'
-  }
-  if (type === 'accommodation') {
-    return '住宿'
-  }
-  return '其他'
-}
-
-function routeCountText(itineraryCount: number) {
-  return `${itineraryCount} 个点位`
-}
-
 function routeMapLastSpot() {
   const items = displayedCurrentDayItineraries.value
   return items[items.length - 1]?.title || '当天终点'
@@ -1345,14 +1198,6 @@ function routeMapLastSpot() {
 function overviewMapLastSpot() {
   const items = overviewMapPoints.value
   return items[items.length - 1]?.title || '旅行终点'
-}
-
-function routeTransferSummary(item: TravelPlanDetail['days'][number]['itineraries'][number]) {
-  const parts = [formatDistance(item.distanceMeters), formatDuration(item.durationSeconds)].filter(Boolean)
-  if (parts.length === 0) {
-    return '路程待补充'
-  }
-  return `路程 ${parts.join(' · ')}`
 }
 
 function openExpenseTitleResults() {
@@ -1434,143 +1279,6 @@ function triggerLocationSearch() {
   }
 
   void loadAmapSearchResults(keyword)
-}
-
-function parseAmapLocation(location?: string | null) {
-  if (!location) {
-    return [null, null] as const
-  }
-
-  const [longitudeText, latitudeText] = location.split(',')
-  const longitude = Number(longitudeText)
-  const latitude = Number(latitudeText)
-
-  return [
-    Number.isFinite(longitude) ? longitude : null,
-    Number.isFinite(latitude) ? latitude : null,
-  ] as const
-}
-
-async function renderTravelMap(kind: 'overview' | 'route') {
-  const mapRef = kind === 'overview' ? overviewMapRef.value : routeMapRef.value
-  if (!mapRef) {
-    return
-  }
-
-  const points = kind === 'overview' ? overviewMapPoints.value : currentRouteMapPoints.value
-  const messageRef = kind === 'overview' ? overviewMapMessage : routeMapMessage
-
-  if (!amapWebJsKey) {
-    messageRef.value = '请先配置高德地图 Key'
-    return
-  }
-
-  try {
-    const AMap = await ensureAmap()
-    let mapContainer = kind === 'overview' ? overviewMapContainer : routeMapContainer
-    let mapInstance = kind === 'overview' ? overviewMapInstance : routeMapInstance
-
-    if (mapContainer !== mapRef) {
-      mapInstance?.destroy()
-      mapInstance = null
-      mapContainer = mapRef
-    }
-
-    if (!mapInstance) {
-      mapInstance = new AMap.Map(mapRef, {
-        viewMode: '2D',
-        zoom: 11,
-        center: points[0]
-          ? [points[0].longitude, points[0].latitude]
-          : [116.397428, 39.90923],
-      })
-    }
-
-    mapInstance.clearMap()
-
-    if (points.length === 0) {
-      messageRef.value = kind === 'overview' ? '全程暂无可定位的行程点' : '当天暂无可定位的行程点'
-      if (detail.value?.startDate) {
-        mapInstance.setZoomAndCenter(5, [104.066301, 30.572961])
-      }
-      if (kind === 'overview') {
-        overviewMapInstance = mapInstance
-        overviewMapContainer = mapContainer
-      } else {
-        routeMapInstance = mapInstance
-        routeMapContainer = mapContainer
-      }
-      return
-    }
-
-    messageRef.value = ''
-    const overlays = points.map((point) => new AMap.Marker({
-      position: [point.longitude, point.latitude],
-      anchor: 'center',
-      offset: new AMap.Pixel(0, 0),
-      content: `<div class="travel-map-marker">${point.index}</div>`,
-      title: point.title,
-    }))
-
-    if (points.length > 1) {
-      overlays.push(
-        new AMap.Polyline({
-          path: points.map((point) => [point.longitude, point.latitude]),
-          strokeColor: '#2563EB',
-          strokeWeight: 4,
-          strokeOpacity: 0.9,
-          lineJoin: 'round',
-          lineCap: 'round',
-        }),
-      )
-    }
-
-    mapInstance.add(overlays)
-    mapInstance.setFitView(overlays, true, [28, 52, 28, 28])
-
-    if (kind === 'overview') {
-      overviewMapInstance = mapInstance
-      overviewMapContainer = mapContainer
-    } else {
-      routeMapInstance = mapInstance
-      routeMapContainer = mapContainer
-    }
-  } catch (error) {
-    messageRef.value = getErrorMessage(error, '高德地图加载失败')
-  }
-}
-
-async function renderOverviewMap() {
-  await renderTravelMap('overview')
-}
-
-async function renderRouteMap() {
-  await renderTravelMap('route')
-}
-
-async function ensureAmap() {
-  if (window.AMap) {
-    return window.AMap
-  }
-
-  if (!amapScriptPromise) {
-    amapScriptPromise = new Promise<AMapConstructor>((resolve, reject) => {
-      const script = document.createElement('script')
-      script.src = `https://webapi.amap.com/maps?v=2.0&key=${amapWebJsKey}`
-      script.async = true
-      script.onload = () => {
-        if (window.AMap) {
-          resolve(window.AMap)
-          return
-        }
-        reject(new Error('高德地图初始化失败'))
-      }
-      script.onerror = () => reject(new Error('高德地图脚本加载失败'))
-      document.head.appendChild(script)
-    })
-  }
-
-  return amapScriptPromise
 }
 
 function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['itineraries']) {

@@ -20,7 +20,6 @@ import {
   type Account,
   type AccountType,
 } from '@/api/modules/finance'
-import { getFamilyOverview, type FamilyMember } from '@/api/modules/auth'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import {
@@ -32,18 +31,12 @@ import type { AccountGroup, AccountOverview } from '@/types/account'
 import AccountGroupCard from '../components/AccountGroupCard/index.vue'
 import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
 import { getErrorMessage } from '@/api/request'
+import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
+import { buildAccountGroups } from './accountGroup'
+import { useCollapsedGroupState } from './useCollapsedGroupState'
 
-const DEBT_ACCOUNT_CODES = new Set(['debt'])
 const LIABILITY_ACCOUNT_CODES = new Set(['liability'])
 const CONTACT_LINKED_ACCOUNT_CODES = new Set(['debt', 'human_relation'])
-const ACCOUNT_GROUP_COLLAPSE_STORAGE_KEY = 'finance-account-management-group-collapse'
-
-type FamilyViewOption = {
-  value: string
-  label: string
-  userId?: number
-  kind: 'self' | 'member' | 'total'
-}
 
 const showCreateAccountModal = ref(false)
 const accountName = ref('')
@@ -71,9 +64,26 @@ const accountFormError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
-const collapsedGroupState = ref<Record<string, boolean>>({})
-const familyMembers = ref<FamilyMember[]>([])
-const familyView = ref('self')
+
+const {
+  currentUser,
+  familyView,
+  familyViewOptions,
+  selectedFamilyView,
+  canSwitchFamilyView,
+  isSelfView,
+  isReadOnlyFamilyView,
+  selectedViewerUserIds,
+  viewerNameByUserId,
+  loadFamilyMembers,
+} = useFinanceFamilyView()
+
+const {
+  collapsedGroupState,
+  restoreCollapsedGroupState,
+  toggleAccountGroup,
+} = useCollapsedGroupState()
+
 const isDebtAccountTypeSelected = computed(() => CONTACT_LINKED_ACCOUNT_CODES.has(accountType.value))
 const isCashAccountTypeSelected = computed(() => accountType.value === 'cash')
 const isInvestmentAccountTypeSelected = computed(() => accountType.value === 'investment')
@@ -90,82 +100,12 @@ const contactOptions = computed(() => [
     value: String(contact.id),
   })),
 ])
-const currentUser = computed(() => getStoredCurrentUser())
-const familyRoster = computed(() => {
-  const roster = new Map<number, { userId: number; displayName: string }>()
-  const me = currentUser.value
-
-  if (me) {
-    roster.set(me.id, {
-      userId: me.id,
-      displayName: me.displayName?.trim() || me.username || '我',
-    })
-  }
-
-  familyMembers.value.forEach((member) => {
-    roster.set(member.userId, {
-      userId: member.userId,
-      displayName: member.displayName?.trim() || `成员${member.userId}`,
-    })
-  })
-
-  return Array.from(roster.values())
-})
-const familyViewOptions = computed<FamilyViewOption[]>(() => {
-  const me = currentUser.value
-  if (!me) {
-    return []
-  }
-
-  const options: FamilyViewOption[] = [
-    { value: 'self', label: '我的数据', userId: me.id, kind: 'self' },
-  ]
-
-  if (familyRoster.value.length > 1) {
-    options.unshift({ value: 'total', label: '家庭总计', kind: 'total' })
-  }
-
-  familyRoster.value
-    .filter((member) => member.userId !== me.id)
-    .forEach((member) => {
-      options.push({
-        value: `member-${member.userId}`,
-        label: member.displayName,
-        userId: member.userId,
-        kind: 'member',
-      })
-    })
-
-  return options
-})
 const familyViewSelectOptions = computed<CommonSelectOption[]>(() =>
   familyViewOptions.value.map((option) => ({
     label: option.label,
     value: option.value,
   })),
 )
-const selectedFamilyView = computed<FamilyViewOption>(() =>
-  familyViewOptions.value.find((option) => option.value === familyView.value)
-  ?? familyViewOptions.value[0]
-  ?? { value: 'self', label: '我的数据', kind: 'self' },
-)
-const canSwitchFamilyView = computed(() => familyViewOptions.value.length > 1)
-const isSelfView = computed(() => selectedFamilyView.value.kind === 'self')
-const isReadOnlyFamilyView = computed(() => selectedFamilyView.value.kind !== 'self')
-const selectedViewerUserIds = computed(() => {
-  if (selectedFamilyView.value.kind === 'total') {
-    return familyRoster.value.map((member) => member.userId)
-  }
-
-  if (selectedFamilyView.value.userId) {
-    return [selectedFamilyView.value.userId]
-  }
-
-  return currentUser.value ? [currentUser.value.id] : []
-})
-const viewerNameByUserId = computed(() => new Map(
-  familyRoster.value.map((member) => [member.userId, member.displayName]),
-))
 const familyViewHint = computed(() => {
   if (!isReadOnlyFamilyView.value) {
     return ''
@@ -185,103 +125,16 @@ const accountOverview = computed<AccountOverview>(() => ({
   amount: overviewTotalAssets.value === null ? '--' : formatAmount(overviewTotalAssets.value),
 }))
 
-const accountGroups = computed<AccountGroup[]>(() => {
-  const groupedAccounts = new Map<number, Account[]>()
-
-  accounts.value.forEach((account) => {
-    if (account.status !== 'active') {
-      return
-    }
-    if (isZeroAmount(getSignedBalance(account))) {
-      return
-    }
-
-    const groupAccounts = groupedAccounts.get(account.accountTypeId) ?? []
-    groupAccounts.push(account)
-    groupedAccounts.set(account.accountTypeId, groupAccounts)
-  })
-
-  const typeById = new Map(accountTypes.value.map((type) => [type.id, type]))
-  const groupTypeIds = Array.from(groupedAccounts.keys()).sort((leftId, rightId) => {
-    const leftType = typeById.get(leftId)
-    const rightType = typeById.get(rightId)
-    const leftSort = leftType?.sortOrder ?? 0
-    const rightSort = rightType?.sortOrder ?? 0
-    return (leftSort - rightSort) || (leftId - rightId)
-  })
-
-  return groupTypeIds.map((accountTypeId) => {
-    const groupAccounts = groupedAccounts.get(accountTypeId) ?? []
-    const sortedGroupAccounts = [...groupAccounts].sort((left, right) => {
-      const amountDifference = getSignedBalance(right) - getSignedBalance(left)
-      if (amountDifference !== 0) {
-        return amountDifference
-      }
-
-      return left.name.localeCompare(right.name, 'zh-CN') || left.id - right.id
-    })
-    const firstAccount = sortedGroupAccounts[0]
-    const accountType = typeById.get(accountTypeId)
-    const groupCode = accountType?.code ?? firstAccount?.accountTypeCode
-    const groupStorageKey = buildGroupStorageKey(accountTypeId, groupCode, accountType?.name ?? firstAccount?.accountTypeName)
-    const title = DEBT_ACCOUNT_CODES.has(groupCode ?? '')
-      ? '债务账户'
-      : LIABILITY_ACCOUNT_CODES.has(groupCode ?? '')
-        ? '负债账户'
-      : groupCode === 'human_relation'
-        ? '人情账户'
-      : accountType?.name
-        ? `${accountType.name}账户`
-        : firstAccount?.accountTypeName
-          ? `${firstAccount.accountTypeName}账户`
-          : '其他账户'
-
-    return {
-      accountTypeId,
-      storageKey: groupStorageKey,
-      title,
-      amount: formatAmount(groupAccounts.reduce((total, account) => total + getSignedBalance(account), 0)),
-      path: isSelfView.value && groupCode === 'cash'
-        ? '/finance/accounts/cash'
-        : isSelfView.value && DEBT_ACCOUNT_CODES.has(groupCode ?? '')
-          ? '/finance/accounts/debt'
-        : isSelfView.value && LIABILITY_ACCOUNT_CODES.has(groupCode ?? '')
-          ? '/finance/accounts/liability'
-        : isSelfView.value && groupCode === 'human_relation'
-          ? '/finance/accounts/human-relation'
-        : isSelfView.value && groupCode === 'gold'
-          ? '/finance/accounts/gold'
-        : isSelfView.value && groupCode === 'investment'
-          ? '/finance/accounts/investment'
-        : undefined,
-      collapsed: collapsedGroupState.value[groupStorageKey] ?? false,
-      items: sortedGroupAccounts.map((account) => ({
-          id: account.id,
-          icon: account.icon?.trim() ?? '',
-          accountTypeCode: account.accountTypeCode ?? accountType?.code ?? 'other',
-          color: account.color?.trim() || undefined,
-          name: isReadOnlyFamilyView.value
-            ? `${account.name} · ${viewerNameByUserId.value.get(account.userId) ?? `成员${account.userId}`}`
-            : account.name,
-          subtitle: account.remark ?? account.accountTypeName ?? '',
-          amount: formatAmount(getSignedBalance(account)),
-          path: isSelfView.value && account.accountTypeCode === 'cash'
-            ? `/finance/accounts/cash/${account.id}`
-            : isSelfView.value && DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
-              ? `/finance/accounts/debt/${account.id}`
-            : isSelfView.value && LIABILITY_ACCOUNT_CODES.has(account.accountTypeCode ?? '')
-              ? `/finance/accounts/liability/${account.id}`
-              : isSelfView.value && account.accountTypeCode === 'human_relation'
-                ? `/finance/accounts/human-relation/${account.id}`
-              : isSelfView.value && account.accountTypeCode === 'gold'
-                ? `/finance/accounts/gold/position?accountId=${account.id}`
-            : isSelfView.value && account.accountTypeCode === 'investment'
-              ? `/finance/accounts/investment/${account.id}`
-              : undefined,
-      })),
-    }
-  })
-})
+const accountGroups = computed<AccountGroup[]>(() => buildAccountGroups(
+  accounts.value,
+  accountTypes.value,
+  collapsedGroupState.value,
+  {
+    isSelfView: isSelfView.value,
+    isReadOnly: isReadOnlyFamilyView.value,
+    viewerNameByUserId: viewerNameByUserId.value,
+  },
+))
 
 const accountTypeOptions = computed(() => {
   if (isLoadingAccountTypes.value) {
@@ -344,27 +197,6 @@ onMounted(() => {
 async function initializePage() {
   await loadFamilyMembers()
   await loadAccounts()
-}
-
-async function loadFamilyMembers() {
-  const me = currentUser.value
-  if (!me) {
-    familyMembers.value = []
-    familyView.value = 'self'
-    return
-  }
-
-  try {
-    const familyOverview = await getFamilyOverview()
-    familyMembers.value = familyOverview.hasFamily ? familyOverview.members : []
-  } catch {
-    familyMembers.value = []
-  }
-
-  const validValues = new Set(familyViewOptions.value.map((option) => option.value))
-  if (!validValues.has(familyView.value)) {
-    familyView.value = 'self'
-  }
 }
 
 function openCreateAccountModal() {
@@ -581,66 +413,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
-function buildGroupStorageKey(accountTypeId?: number, groupCode?: string | null, fallbackName?: string | null) {
-  if (typeof accountTypeId === 'number') {
-    return `type-${accountTypeId}`
-  }
-  if (groupCode?.trim()) {
-    return `code-${groupCode.trim()}`
-  }
-  if (fallbackName?.trim()) {
-    return `name-${fallbackName.trim()}`
-  }
-  return 'group-unknown'
-}
-
-function getCollapsedGroupStorageId() {
-  const currentUser = getStoredCurrentUser()
-  return `${ACCOUNT_GROUP_COLLAPSE_STORAGE_KEY}-${currentUser?.id ?? 'guest'}`
-}
-
-function restoreCollapsedGroupState() {
-  if (typeof window === 'undefined') {
-    return
-  }
-  const raw = window.localStorage.getItem(getCollapsedGroupStorageId())
-  if (!raw) {
-    collapsedGroupState.value = {}
-    return
-  }
-  try {
-    const parsed = JSON.parse(raw) as Record<string, boolean>
-    collapsedGroupState.value = Object.entries(parsed).reduce<Record<string, boolean>>((result, [key, value]) => {
-      if (typeof value === 'boolean') {
-        result[key] = value
-      }
-      return result
-    }, {})
-  } catch {
-    window.localStorage.removeItem(getCollapsedGroupStorageId())
-    collapsedGroupState.value = {}
-  }
-}
-
-function persistCollapsedGroupState() {
-  if (typeof window === 'undefined') {
-    return
-  }
-  window.localStorage.setItem(getCollapsedGroupStorageId(), JSON.stringify(collapsedGroupState.value))
-}
-
-function toggleAccountGroup(group: AccountGroup) {
-  const groupStorageKey = group.storageKey
-  if (!groupStorageKey) {
-    return
-  }
-  collapsedGroupState.value = {
-    ...collapsedGroupState.value,
-    [groupStorageKey]: !(collapsedGroupState.value[groupStorageKey] ?? false),
-  }
-  persistCollapsedGroupState()
-}
-
 function toNumber(value: unknown) {
   const parsed = Number(value ?? 0)
   return Number.isFinite(parsed) ? parsed : 0
@@ -671,19 +443,6 @@ function normalizeNullableAmount(value: string) {
   }
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) ? parsed : Number.NaN
-}
-
-function getSignedBalance(account: Account) {
-  const rawBalance = Number(account.currentBalance ?? 0)
-  if (CONTACT_LINKED_ACCOUNT_CODES.has(account.accountTypeCode ?? '')) {
-    return rawBalance
-  }
-  const accountType = accountTypes.value.find((type) => type.id === account.accountTypeId)
-  return accountType?.balanceDirection === 'credit' ? rawBalance * -1 : rawBalance
-}
-
-function isZeroAmount(value: number) {
-  return Math.abs(value) < 0.005
 }
 
 </script>

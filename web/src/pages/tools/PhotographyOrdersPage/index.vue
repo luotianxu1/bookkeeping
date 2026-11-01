@@ -25,6 +25,29 @@ import {
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
+import { useFeedback } from '@/composables/useFeedback'
+import {
+  amountTextClass,
+  buildCurrentMonth,
+  buildDefaultDateTimeLocal,
+  depositStatusClass,
+  depositStatusLabel,
+  finalStatusClass,
+  finalStatusLabel,
+  formatCurrency,
+  formatDateTime,
+  isCancelled,
+  isCashAccount,
+  isFinalPaid,
+  isShotByTime,
+  normalizeDateTimeInput,
+  normalizeDateTimeLocal,
+  nullableText,
+  orderTypeLabel,
+  parseAmount,
+  roundAmount,
+  typeOptions,
+} from './photographyOrderFormat'
 
 type TabKey = 'pending' | 'shot' | 'all'
 
@@ -39,16 +62,6 @@ const tabOptions = [
   { label: '未拍摄', value: 'pending' },
   { label: '已拍摄', value: 'shot' },
   { label: '全部', value: 'all' },
-]
-
-const typeOptions: Array<{ label: string; value: PhotographyOrderType }> = [
-  { label: '周岁', value: 'first_birthday' },
-  { label: '百天', value: 'hundred_days' },
-  { label: '订婚', value: 'engagement' },
-  { label: '答谢宴', value: 'thanks_banquet' },
-  { label: '婚礼', value: 'wedding' },
-  { label: '领证', value: 'marriage_registration' },
-  { label: '毕业照', value: 'graduation' },
 ]
 
 const summaryAccents = ['brand', 'blue', 'green'] as const
@@ -74,9 +87,7 @@ const showOrderModal = ref(false)
 const showCollectModal = ref(false)
 const showDeleteModal = ref(false)
 const showCancelModal = ref(false)
-const feedbackVisible = ref(false)
-const feedbackMessage = ref('')
-const feedbackType = ref<'success' | 'error'>('success')
+const { showFeedbackModal: feedbackVisible, feedbackMessage, feedbackType, showFeedback } = useFeedback()
 
 const selectedOrder = ref<PhotographyOrder | null>(null)
 const editingOrder = ref<PhotographyOrder | null>(null)
@@ -220,10 +231,6 @@ async function loadPage() {
   } finally {
     isLoading.value = false
   }
-}
-
-function isCashAccount(account: Account) {
-  return account.accountTypeCode === 'cash' || account.accountTypeName?.includes('现金')
 }
 
 function hydrateDefaultAccounts() {
@@ -518,130 +525,9 @@ function getNextSortOrder() {
   return orders.value.reduce((max, order) => Math.max(max, Number(order.sortOrder ?? 0)), 0) + 10
 }
 
-function isShotByTime(order: PhotographyOrder, now = Date.now()) {
-  if (isCancelled(order)) {
-    return false
-  }
-  const shootAt = new Date(order.shootAt).getTime()
-  return Number.isFinite(shootAt) && shootAt <= now
-}
-
-function showFeedback(message: string, type: 'success' | 'error') {
-  feedbackMessage.value = message
-  feedbackType.value = type
-  feedbackVisible.value = true
-}
-
-function parseAmount(value: string) {
-  const normalized = Number(value.trim() || '0')
-  if (!Number.isFinite(normalized)) {
-    return 0
-  }
-  return roundAmount(normalized)
-}
-
-function roundAmount(value: number) {
-  return Number(value.toFixed(2))
-}
-
-function nullableText(value: string) {
-  const trimmed = value.trim()
-  return trimmed ? trimmed : null
-}
-
-function normalizeDateTimeLocal(value: string) {
-  return value.length === 16 ? `${value}:00` : value
-}
-
-function normalizeDateTimeInput(value: string) {
-  return value.replace(' ', 'T').slice(0, 16)
-}
-
-function buildDefaultDateTimeLocal() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const hour = String(now.getHours()).padStart(2, '0')
-  const minute = String(now.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hour}:${minute}`
-}
-
-function formatDateTime(value: string) {
-  if (!value) {
-    return '--'
-  }
-
-  const [datePart = '', timePart = ''] = value.replace('T', ' ').split(' ')
-  const displayDate = datePart.replace(/-/g, '.')
-  return `${displayDate} ${timePart.slice(0, 5)}`
-}
-
-function formatCurrency(value: number | string | null | undefined) {
-  const amount = Number(value ?? 0)
-  return `¥${amount.toLocaleString('zh-CN', {
-    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`
-}
-
-function orderTypeLabel(type: string) {
-  return typeOptions.find((option) => option.value === type)?.label ?? type
-}
-
-function depositStatusLabel(order: PhotographyOrder) {
-  if (isShotByTime(order)) {
-    return '已拍摄'
-  }
-  return Number(order.depositAmount) > 0 ? '已付订金' : '未付订金'
-}
-
-function depositStatusClass(order: PhotographyOrder) {
-  return isShotByTime(order) ? 'order-card-deposit--shot' : 'order-card-deposit--pending'
-}
-
-function finalStatusLabel(order: PhotographyOrder) {
-  if (isCancelled(order)) {
-    return '已取消'
-  }
-  if (Number(order.finalAmount ?? 0) <= 0) {
-    return '无尾款'
-  }
-
-  return isFinalPaid(order) ? '尾款已收' : '待收尾款'
-}
-
-function finalStatusClass(order: PhotographyOrder) {
-  if (isCancelled(order)) {
-    return 'order-card-final--cancelled'
-  }
-  if (Number(order.finalAmount ?? 0) <= 0) {
-    return 'order-card-final--empty'
-  }
-
-  return isFinalPaid(order) ? 'order-card-final--paid' : 'order-card-final--pending'
-}
-
-function amountTextClass(value: number | string | null | undefined) {
-  return Number(value ?? 0) === 0 ? 'is-zero' : ''
-}
-
-function isFinalPaid(order: PhotographyOrder) {
-  return Boolean(order.finalReceivedAt)
-}
-
-function isCancelled(order: PhotographyOrder) {
-  return order.status === 'cancelled'
-}
-
 function openOverview() {
   const [year = String(new Date().getFullYear()), month = String(new Date().getMonth() + 1).padStart(2, '0')] = selectedMonth.value.split('-')
   void router.push(`/tools/photography-orders/overview?view=calendar&anchor=${year}-${month}`)
-}
-
-function buildCurrentMonth() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 </script>
 

@@ -26,15 +26,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * 金价服务（2026-10-30 自 app-service GoldPriceService 迁入并切换数据源）。
+ * 金价服务（2026-10-30 自 app-service GoldPriceService 迁入；数据源切回金投网）。
  *
- * <p>实时行情主源为新浪财经：上金所现货黄金9999（gds_AU9999，CNY/g，与原金投
- * JO_71 同一标的、口径一致）+ 伦敦金现（hf_XAU，USD/oz，/quotes/gold 同源）；
- * 走势主源为新浪沪金连续 AU0（1 分钟 / 60 分钟 / 日K，与现货同币种同单位，
- * 存在约 0.15% 期现基差）。品牌首饰金价为金投网独家数据，仍走金投源；
- * 新浪实时不可用时，现货/伦敦金降级金投（首饰同一请求顺带兜底），新浪K线
- * 不可用时走势降级金投 history。USD/CNY 汇率源 open.er-api.com 仅作人民币
- * 金价兜底换算。响应 DTO 与字段口径与迁移前完全一致。</p>
+ * <p>实时行情主源为金投网：黄金9999（JO_71，CNY/g）+ 伦敦金（JO_92233，USD/oz），
+ * 现货与走势同源同口径；新浪财经（上金所现货9999 gds_AU9999 + 伦敦金现 hf_XAU）
+ * 作为实时降级源，走势降级用新浪沪金连续 AU0（期现基差约 0.15%）。品牌首饰
+ * 金价为金投网独家数据，与实时同一请求顺带返回。USD/CNY 汇率源
+ * open.er-api.com 仅作金投缺人民币报价时的兜底换算。响应 DTO 与字段口径不变。</p>
  */
 @Service
 public class GoldPriceService {
@@ -198,19 +196,25 @@ public class GoldPriceService {
     }
 
     private GoldPriceResponse fetchCurrentPrice() throws Exception {
-        // 金投报价始终请求一次：首饰金价唯一来源，同时作为现货/伦敦金的降级源
+        // 金投报价始终请求一次：实时主源 + 首饰金价唯一来源，同一请求无额外开销
         JsonNode jijinhaoQuotes = fetchJijinhaoQuotes(jijinhaoQuoteCodes());
-        GoldPriceResponse response = buildCurrentResponseFromSina(jijinhaoQuotes);
+        GoldPriceResponse response;
+        try {
+            response = buildCurrentResponse(this::fetchUsdCny, jijinhaoQuotes);
+        } catch (Exception ex) {
+            log.warn("金投金价不可用，降级新浪: {}", ex.getMessage());
+            response = buildCurrentResponseFromSina(jijinhaoQuotes);
+        }
         if (response == null) {
-            response = buildCurrentResponse(fetchUsdCny(), jijinhaoQuotes);
+            throw new IllegalStateException("金投与新浪金价源均不可用");
         }
         return copyResponseWithoutChart(response);
     }
 
     /**
-     * 新浪主路径：gds_AU9999（上金所现货 9999）+ hf_XAU（伦敦金现）。
+     * 新浪降级路径：gds_AU9999（上金所现货 9999）+ hf_XAU（伦敦金现）。
      * 字段布局（两种代码一致）：f0 最新价 / f4 最高 / f5 最低 / f6 时间 /
-     * f7 昨收 / f8 今开 / f12 日期 / f13 名称。解析失败返回 null 走金投降级。
+     * f7 昨收 / f8 今开 / f12 日期 / f13 名称。解析失败返回 null。
      */
     private GoldPriceResponse buildCurrentResponseFromSina(JsonNode jijinhaoQuotes) {
         Map<String, List<String>> quotes;
@@ -290,8 +294,8 @@ public class GoldPriceService {
         return response;
     }
 
-    private GoldPriceResponse buildCurrentResponse(BigDecimal usdCny, JsonNode quotes) {
-        // 金投降级路径（原迁移逻辑保留，口径与迁移前逐行一致）
+    private GoldPriceResponse buildCurrentResponse(java.util.function.Supplier<BigDecimal> usdCnySupplier, JsonNode quotes) {
+        // 金投主路径（原迁移逻辑保留，口径与迁移前逐行一致）
         JsonNode domesticGoldNode = quotes.path(DOMESTIC_GOLD_CODE);
         JsonNode londonGoldNode = quotes.path(LONDON_GOLD_CODE);
         BigDecimal domesticPrice = firstDecimal(domesticGoldNode, "price", "last", "last_price", "close", "q63", "q2");
@@ -334,10 +338,14 @@ public class GoldPriceService {
         }
 
         if ((domesticPrice == null || domesticPrice.compareTo(BigDecimal.ZERO) <= 0)
-            && usdCny != null && usdCny.compareTo(BigDecimal.ZERO) > 0) {
-            domesticPrice = usdOzToCnyGram(londonPrice, usdCny);
-            domesticChange = londonChange == null ? null : usdOzToCnyGram(londonChange, usdCny);
-            domesticChangePercent = domesticChangePercent == null ? londonChangePercent : domesticChangePercent;
+            && londonPrice != null && londonPrice.compareTo(BigDecimal.ZERO) > 0) {
+            // 仅在金投缺人民币报价时才请求汇率接口（USD/oz → CNY/g 兜底换算）
+            BigDecimal usdCny = usdCnySupplier.get();
+            if (usdCny != null && usdCny.compareTo(BigDecimal.ZERO) > 0) {
+                domesticPrice = usdOzToCnyGram(londonPrice, usdCny);
+                domesticChange = londonChange == null ? null : usdOzToCnyGram(londonChange, usdCny);
+                domesticChangePercent = domesticChangePercent == null ? londonChangePercent : domesticChangePercent;
+            }
         }
         if (domesticPrice == null || domesticPrice.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("人民币金价数据缺少价格字段");
@@ -432,7 +440,7 @@ public class GoldPriceService {
     }
 
     private String jijinhaoQuoteCodes() {
-        // 首饰 8 家为金投独家；JO_71/JO_92233 仅作新浪实时降级兜底，同一请求无额外开销
+        // 首饰 8 家为金投独家；JO_71/JO_92233 为实时主源，同一请求无额外开销
         return DOMESTIC_GOLD_CODE + "," + LONDON_GOLD_CODE
             + ",JO_42657,JO_42660,JO_42625,JO_42634,JO_42653,JO_42646,JO_52678,JO_42638";
     }
@@ -548,20 +556,24 @@ public class GoldPriceService {
     }
 
     private List<GoldPriceResponse.GoldChartPoint> fetchChartPoints(String range) {
+        // 走势主源金投 history（与现货 9999 同源同口径）；新浪 AU0 仅作降级
+        List<GoldPriceResponse.GoldChartPoint> fallback = fetchUnifiedJijinhaoPoints(range);
+        if (!fallback.isEmpty()) {
+            return compactChartPoints(fallback, range);
+        }
         try {
             List<GoldPriceResponse.GoldChartPoint> points = fetchSinaChartPoints(range);
             if (!points.isEmpty()) {
                 return compactChartPoints(points, range);
             }
         } catch (Exception ignored) {
-            // 新浪K线不可用时降级金投 history
+            // 金投与新浪K线均不可用时返回空
         }
-        List<GoldPriceResponse.GoldChartPoint> fallback = fetchUnifiedJijinhaoPoints(range);
-        return fallback.isEmpty() ? List.of() : compactChartPoints(fallback, range);
+        return List.of();
     }
 
     /**
-     * 新浪走势主路径：沪金连续 AU0。1d 用 1 分钟线，7d/30d/3m 用 60 分钟线，
+     * 新浪降级走势：沪金连续 AU0。1d 用 1 分钟线，7d/30d/3m 用 60 分钟线，
      * 1y/3y 用日K（2008 年至今全量）。与现货 9999 同币种同单位，存在期现基差。
      */
     private List<GoldPriceResponse.GoldChartPoint> fetchSinaChartPoints(String range) {

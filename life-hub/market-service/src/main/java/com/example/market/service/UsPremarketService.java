@@ -1,6 +1,7 @@
 package com.example.market.service;
 
 import com.example.market.dto.UsPremarketResponse;
+import com.example.market.market.MarketUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,7 +20,6 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -44,7 +44,9 @@ public class UsPremarketService {
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final String quoteInfoApiUrl;
-    private final AtomicReference<CachedPremarket> cache = new AtomicReference<>();
+    private final MarketUtils.KeyedTtlCache<String, UsPremarketResponse> cache =
+        new MarketUtils.KeyedTtlCache<>(CACHE_MILLIS, 30_000L, 4);
+    private static final String CACHE_KEY = "us-premarket";
 
     public UsPremarketService(
         ObjectMapper objectMapper,
@@ -59,21 +61,11 @@ public class UsPremarketService {
     }
 
     public UsPremarketResponse getPremarket() {
-        long now = System.currentTimeMillis();
-        CachedPremarket cached = cache.get();
-        if (cached != null && now - cached.cachedAt() < CACHE_MILLIS) {
-            return cached.response();
+        UsPremarketResponse cached = cache.get(CACHE_KEY, k -> fetchPremarket());
+        if (cached == null) {
+            throw new IllegalStateException("美股指数盘前行情加载失败");
         }
-        try {
-            UsPremarketResponse response = fetchPremarket();
-            cache.set(new CachedPremarket(response, now));
-            return response;
-        } catch (Exception ex) {
-            if (cached != null) {
-                return cached.response();
-            }
-            throw new IllegalStateException("美股指数盘前行情加载失败", ex);
-        }
+        return cached;
     }
 
     private UsPremarketResponse fetchPremarket() {
@@ -346,8 +338,5 @@ public class UsPremarketService {
     }
 
     private record ExtendedQuote(String sessionStatus, JsonNode quote, LocalDateTime updatedAt) {
-    }
-
-    private record CachedPremarket(UsPremarketResponse response, long cachedAt) {
     }
 }

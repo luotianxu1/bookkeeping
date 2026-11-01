@@ -2,6 +2,7 @@ package com.example.market.service;
 
 import com.example.market.dto.MarketStatusResponse;
 import com.example.market.market.ActivityService;
+import com.example.market.market.MarketUtils;
 import com.example.market.market.SinaClient;
 import org.springframework.stereotype.Service;
 
@@ -14,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -47,24 +47,16 @@ public class MarketStatusService {
         new String[]{"sh000300", "沪深300"}
     );
 
-    private final AtomicReference<CachedStatus> cache = new AtomicReference<>();
+    private final MarketUtils.KeyedTtlCache<String, MarketStatusResponse> cache =
+        new MarketUtils.KeyedTtlCache<>(CACHE_MILLIS, 30_000L, 4);
+    private static final String CACHE_KEY = "market-status";
 
     public MarketStatusResponse getMarketStatus() {
-        long now = System.currentTimeMillis();
-        CachedStatus cached = cache.get();
-        if (cached != null && now - cached.cachedAt() < CACHE_MILLIS) {
-            return cached.response();
+        MarketStatusResponse cached = cache.get(CACHE_KEY, k -> fetchMarketStatus());
+        if (cached == null) {
+            throw new IllegalStateException("大盘状态加载失败");
         }
-        try {
-            MarketStatusResponse response = fetchMarketStatus();
-            cache.set(new CachedStatus(response, now));
-            return response;
-        } catch (Exception ex) {
-            if (cached != null) {
-                return cached.response();
-            }
-            throw new IllegalStateException("大盘状态加载失败", ex);
-        }
+        return cached;
     }
 
     private MarketStatusResponse fetchMarketStatus() {
@@ -158,8 +150,5 @@ public class MarketStatusService {
     }
 
     private record MarketRegime(String key, String label, String tone, String summary) {
-    }
-
-    private record CachedStatus(MarketStatusResponse response, long cachedAt) {
     }
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { formatAmount } from '@/utils/format'
 // 投资账户详情页：展示单个投资账户的汇总、持仓列表和新增持仓。
+// 持仓展示的纯函数见 ./holdingDisplay，新增资产弹窗逻辑见 ./useAddAsset。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AccountIcon from '@/components/common/AccountIcon/index.vue'
@@ -12,17 +13,15 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
-import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
+import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import FloatingAddButton from '@/components/common/FloatingAddButton/index.vue'
 import {
-  createInvestmentPosition,
   getAccounts,
   getInvestmentAutoInvestPlans,
   getInvestmentPositions,
-  getInvestmentProducts,
   getInvestmentSummary,
   getInvestmentTransactions,
   runInvestmentQuoteSyncTask,
@@ -30,8 +29,6 @@ import {
   type Account,
   type InvestmentAutoInvestPlan,
   type InvestmentPosition,
-  type InvestmentProduct,
-  type InvestmentProductType,
   type InvestmentSummary,
   type InvestmentTransaction,
 } from '@/api/modules/finance'
@@ -42,6 +39,42 @@ import {
 } from '@/data/account-icons'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
+import {
+  compareHoldingsByProfitRate,
+  formatCurrency,
+  getAllocationPercent,
+  getDividendReminderLabel,
+  getDividendReminderText,
+  getHoldingActionLabel,
+  getHoldingActionRate,
+  getHoldingActionTone,
+  getHoldingActionValue,
+  getHoldingBottomLabel,
+  getHoldingBottomRate,
+  getHoldingBottomValue,
+  getHoldingDayProfitRateText,
+  getHoldingDayProfitText,
+  getHoldingDayProfitTone,
+  getHoldingMarketValue,
+  getHoldingMarketValueLabel,
+  getHoldingPendingAmount,
+  getHoldingPrimaryLabel,
+  getHoldingPrimaryValue,
+  getHoldingProfitLabel,
+  getHoldingProfitRate,
+  getHoldingProfitValue,
+  getHoldingQuantityTag,
+  getHoldingSecondaryLabel,
+  getHoldingSecondaryValue,
+  getHoldingSyncText,
+  hasAutoInvestPlan,
+  hasRecentDividendReminder,
+  isAfterQuoteRefreshTime,
+  isInitialFundSubscriptionTransaction,
+  isPendingSubscription,
+  shouldDisplayHolding,
+} from './holdingDisplay'
+import { useAddAsset } from './useAddAsset'
 
 const router = useRouter()
 const route = useRoute()
@@ -51,13 +84,9 @@ const HOLDING_VIEW_MODE_STORAGE_KEY = 'bookkeeping_investment_holding_view_mode'
 type HoldingViewMode = 'card' | 'list'
 const activeTab = ref('A股')
 const holdingViewMode = ref<HoldingViewMode>('card')
-const showAddModal = ref(false)
 const showAccountSettingsModal = ref(false)
 const isLoading = ref(true)
-const isSaving = ref(false)
-const isSavingAccountSettings = ref(false)
 const pageError = ref('')
-const formError = ref('')
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
@@ -79,45 +108,47 @@ const positions = ref<InvestmentPosition[]>([])
 const transactions = ref<InvestmentTransaction[]>([])
 const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
 const isRefreshingQuotes = ref(false)
+const isSavingAccountSettings = ref(false)
 const accountSettingsName = ref('')
 const accountSettingsIcon = ref(DEFAULT_INVESTMENT_ACCOUNT_ICON)
 const accountSettingsRemark = ref('')
 const accountSettingsIncludeInNetWorth = ref(true)
 const accountSettingsError = ref('')
-
-const addAssetKeyword = ref('')
-const addAssetName = ref('')
-const addAssetSymbol = ref('')
-const addAssetMarket = ref('')
-const addAssetCategory = ref<InvestmentProductType>('fund')
-const addAssetFundingAccount = ref('')
-const addAssetDividendType = ref<'cash' | 'reinvest'>('cash')
-const addAssetQuantity = ref('')
-const addAssetAmount = ref('')
-const addAssetCurrentPrice = ref('')
-const addAssetSubscriptionTimeSlot = ref<'before_1500' | 'after_1500'>('before_1500')
-const isLookingUpProduct = ref(false)
-const addAssetSearchResults = ref<InvestmentProduct[]>([])
-const selectedAddAssetResultId = ref('')
-const productLookupMessage = ref('')
-let isFillingProduct = false
 let refreshVisibilityTimer: number | null = null
-const fundingAccountOptions = computed<CommonSelectOption[]>(() => [
-  { label: '不选择', value: '' },
-  ...fundingAccounts.value.map((account) => ({
-    label: `${account.name}（余额 ${formatAmount(account.currentBalance)}）`,
-    value: String(account.id),
-  })),
-])
 
-const subscriptionTimeSlotOptions = [
-  { label: '15点前', value: 'before_1500' },
-  { label: '15点后', value: 'after_1500' },
-]
-const dividendTypeOptions = [
-  { label: '现金分红', value: 'cash' },
-  { label: '红利再投资', value: 'reinvest' },
-]
+const {
+  showAddModal,
+  isSaving,
+  formError,
+  addAssetKeyword,
+  addAssetFundingAccount,
+  addAssetDividendType,
+  addAssetQuantity,
+  addAssetAmount,
+  addAssetSubscriptionTimeSlot,
+  isLookingUpProduct,
+  addAssetSearchResults,
+  fundingAccountOptions,
+  subscriptionTimeSlotOptions,
+  dividendTypeOptions,
+  isFundSubscriptionDraft,
+  isQuantityBasedDraft,
+  saveAsset,
+  lookupProductByKeyword,
+  getAddAssetResultKey,
+  selectAddAssetProduct,
+  getAddAssetResultLabel,
+  getAddAssetResultMeta,
+  isAddAssetProductSelected,
+  openAddModal,
+  closeAddModal,
+} = useAddAsset({
+  fundingAccounts,
+  getDefaultCategory: () => (activeTab.value === 'A股' ? 'stock' : 'fund'),
+  getAccountId: () => selectedAccountId.value,
+  onSaved: () => loadInvestmentData(),
+  showFeedback,
+})
 
 const visiblePositions = computed(() =>
   positions.value.filter((item) => shouldDisplayHolding(item)),
@@ -137,8 +168,6 @@ const showInvestmentTabSwitch = computed(() => {
   return hasStocks && hasFunds
 })
 
-const isFundSubscriptionDraft = computed(() => addAssetCategory.value === 'fund')
-const isQuantityBasedDraft = computed(() => addAssetCategory.value !== 'fund')
 const pendingAmountsByPositionId = computed(() => {
   const pendingMap = new Map<number, number>()
   for (const entry of transactions.value) {
@@ -210,23 +239,6 @@ onBeforeUnmount(() => {
 
 watch(() => route.params.accountId, () => {
   void loadInvestmentData()
-})
-
-watch(addAssetKeyword, (nextKeyword) => {
-  if (isFillingProduct) {
-    return
-  }
-
-  const keyword = nextKeyword.trim()
-  productLookupMessage.value = ''
-
-  if (keyword === `${addAssetSymbol.value} ${addAssetName.value}`.trim()) {
-    return
-  }
-
-  addAssetSearchResults.value = []
-  selectedAddAssetResultId.value = ''
-  clearProductFields()
 })
 
 watch(holdingViewMode, (nextMode) => {
@@ -394,9 +406,6 @@ async function loadInvestmentData() {
     transactions.value = transactionList
     autoInvestPlans.value = autoInvestPlanList
     syncActiveInvestmentTab()
-    if (addAssetFundingAccount.value && !fundingAccounts.value.some((account) => String(account.id) === addAssetFundingAccount.value)) {
-      addAssetFundingAccount.value = ''
-    }
   } catch (error) {
     pageError.value = getErrorMessage(error, '投资账户加载失败')
   } finally {
@@ -452,278 +461,6 @@ function syncActiveInvestmentTab() {
   }
 }
 
-async function saveAsset() {
-  if (isSaving.value) {
-    return
-  }
-
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
-    formError.value = '请先登录后再新增投资'
-    return
-  }
-
-  const accountId = selectedAccountId.value
-  const fundingAccountId = Number(addAssetFundingAccount.value)
-  const normalizedFundingAccountId = Number.isFinite(fundingAccountId) && fundingAccountId > 0 ? fundingAccountId : undefined
-  const currentPrice = Number(addAssetCurrentPrice.value)
-  const holdingQuantity = Number(addAssetQuantity.value)
-  const amountInput = Number(addAssetAmount.value)
-  const isFundProduct = addAssetCategory.value === 'fund'
-  let stockHoldingQuantity: number | undefined
-  let costAmount = 0
-
-  if (!addAssetName.value.trim() || !addAssetSymbol.value.trim()) {
-    formError.value = '请先搜索并选择有效资产'
-    return
-  }
-  if (!accountId) {
-    formError.value = '当前投资账户不存在'
-    return
-  }
-  if (isFundProduct) {
-    if (!Number.isFinite(amountInput) || amountInput <= 0) {
-      formError.value = '请输入买入金额'
-      return
-    }
-    if (addAssetDividendType.value === 'cash' && !normalizedFundingAccountId) {
-      formError.value = '现金分红必须选择到账资金账户'
-      return
-    }
-    costAmount = amountInput
-  } else {
-    if (!Number.isFinite(holdingQuantity) || holdingQuantity <= 0) {
-      formError.value = '请输入持仓份数'
-      return
-    }
-    if (!Number.isFinite(amountInput) || amountInput <= 0) {
-      formError.value = '请输入成本价'
-      return
-    }
-    if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
-      formError.value = '未获取到当前价格，请重新搜索资产'
-      return
-    }
-    const normalizedHoldingQuantity = Number(holdingQuantity.toFixed(6))
-    if (!Number.isFinite(normalizedHoldingQuantity) || normalizedHoldingQuantity <= 0) {
-      formError.value = '持仓份数或成本不正确'
-      return
-    }
-    stockHoldingQuantity = normalizedHoldingQuantity
-    costAmount = Number((normalizedHoldingQuantity * amountInput).toFixed(2))
-  }
-
-  isSaving.value = true
-  formError.value = ''
-
-  try {
-    const savedPosition = await createInvestmentPosition({
-      userId: currentUser.id,
-      accountId,
-      fundingAccountId: normalizedFundingAccountId,
-      product: {
-        productType: addAssetCategory.value as InvestmentProductType,
-        market: addAssetMarket.value.trim() || null,
-        symbol: addAssetSymbol.value.trim(),
-        name: addAssetName.value.trim(),
-        currencyCode: 'CNY',
-        unitName: addAssetCategory.value === 'stock' ? '股' : addAssetCategory.value === 'gold' ? '克' : '份',
-        status: 'active',
-        remark: null,
-      },
-      holdingQuantity: stockHoldingQuantity,
-      availableQuantity: stockHoldingQuantity,
-      frozenQuantity: 0,
-      costAmount: Number(costAmount.toFixed(2)),
-      currentPrice: isFundProduct ? undefined : currentPrice,
-      tradeAt: toApiDateTime(new Date()),
-      subscriptionTimeSlot: isFundProduct ? addAssetSubscriptionTimeSlot.value : undefined,
-      dividendType: isFundProduct ? addAssetDividendType.value : undefined,
-      includeInNetWorth: true,
-      status: 'active',
-      remark: null,
-    })
-    closeAddModal()
-    showFeedback(
-      isFundProduct ? getFundPositionSubmitMessage(savedPosition) : '新增成功',
-      'success',
-    )
-    await loadInvestmentData()
-  } catch (error) {
-    const message = getErrorMessage(error, '新增投资失败')
-    formError.value = message
-    showFeedback(message, 'error')
-  } finally {
-    isSaving.value = false
-  }
-}
-
-async function lookupProductByKeyword(keyword = addAssetKeyword.value) {
-  if (isLookingUpProduct.value) {
-    return
-  }
-
-  const searchKeyword = keyword.trim()
-  if (!searchKeyword) {
-    formError.value = '请输入代码或名称'
-    return
-  }
-
-  isLookingUpProduct.value = true
-  productLookupMessage.value = '正在搜索资产...'
-  formError.value = ''
-
-  try {
-    let products = await getInvestmentProducts({
-      keyword: searchKeyword,
-      productType: addAssetCategory.value,
-    })
-    if (products.length === 0) {
-      products = await getInvestmentProducts({
-        keyword: searchKeyword,
-      })
-    }
-    const normalizedKeyword = searchKeyword.toUpperCase()
-    const matchedProducts = products.slice().sort((left, right) => {
-      const leftScore = getProductMatchScore(left, searchKeyword, normalizedKeyword)
-      const rightScore = getProductMatchScore(right, searchKeyword, normalizedKeyword)
-      return rightScore - leftScore
-    })
-
-    if (matchedProducts.length === 0) {
-      addAssetSearchResults.value = []
-      selectedAddAssetResultId.value = ''
-      clearProductFields()
-      productLookupMessage.value = '未找到该资产，请确认代码或名称'
-      return
-    }
-
-    addAssetSearchResults.value = matchedProducts
-    selectedAddAssetResultId.value = ''
-    clearProductFields()
-    productLookupMessage.value = `找到 ${matchedProducts.length} 个资产，请选择`
-  } catch (error) {
-    addAssetSearchResults.value = []
-    selectedAddAssetResultId.value = ''
-    productLookupMessage.value = getErrorMessage(error, '代码识别失败')
-  } finally {
-    isLookingUpProduct.value = false
-  }
-}
-
-function getProductMatchScore(product: InvestmentProduct, keyword: string, normalizedKeyword: string) {
-  const symbol = product.symbol.toUpperCase()
-  const name = product.name
-
-  if (symbol === normalizedKeyword) {
-    return 400
-  }
-  if (symbol.startsWith(normalizedKeyword)) {
-    return 300
-  }
-  if (name === keyword) {
-    return 200
-  }
-  if (name.includes(keyword)) {
-    return 100
-  }
-  return 0
-}
-
-function getAddAssetResultKey(product: InvestmentProduct) {
-  const fallbackId = Number(product.id)
-  if (Number.isFinite(fallbackId) && fallbackId > 0) {
-    return `id:${fallbackId}`
-  }
-  return [
-    product.productType || 'unknown',
-    product.market || '',
-    product.exchangeCode || '',
-    product.symbol || '',
-    product.name || '',
-  ].join('|')
-}
-
-function selectAddAssetProduct(productKey: string) {
-  selectedAddAssetResultId.value = productKey
-  const targetProduct = addAssetSearchResults.value.find((item) => getAddAssetResultKey(item) === productKey)
-  if (!targetProduct) {
-    clearProductFields()
-    productLookupMessage.value = '未找到该资产，请重新选择'
-    return
-  }
-  fillProductFields(targetProduct)
-}
-
-function getAddAssetResultLabel(product: InvestmentProduct) {
-  return `${product.symbol} ${product.name}`
-}
-
-function getAddAssetResultMeta(product: InvestmentProduct) {
-  const typeLabel = product.productType === 'stock'
-    ? '股票'
-    : product.productType === 'fund'
-      ? '基金'
-      : '投资资产'
-  const marketLabel = product.market?.trim() ? ` · ${product.market}` : ''
-  return `${typeLabel}${marketLabel}`
-}
-
-function isAddAssetProductSelected(product: InvestmentProduct) {
-  return selectedAddAssetResultId.value === getAddAssetResultKey(product)
-}
-
-function fillProductFields(product: InvestmentProduct) {
-  isFillingProduct = true
-  addAssetName.value = product.name
-  addAssetSymbol.value = product.symbol
-  addAssetKeyword.value = `${product.symbol} ${product.name}`
-  isFillingProduct = false
-  selectedAddAssetResultId.value = getAddAssetResultKey(product)
-  addAssetMarket.value = product.market || ''
-  addAssetCategory.value = product.productType
-  addAssetCurrentPrice.value = product.latestPrice && product.latestPrice > 0 ? String(product.latestPrice) : ''
-  addAssetSearchResults.value = []
-  productLookupMessage.value = product.productType === 'fund'
-    ? `已识别：${product.name}，将按场外基金金额申购并在确认后生成份额`
-    : `已识别：${product.name}`
-}
-
-function clearProductFields() {
-  addAssetName.value = ''
-  addAssetSymbol.value = ''
-  addAssetMarket.value = ''
-  addAssetCurrentPrice.value = ''
-}
-
-function openAddModal() {
-  resetAddForm()
-  showAddModal.value = true
-}
-
-function closeAddModal() {
-  showAddModal.value = false
-  formError.value = ''
-}
-
-function resetAddForm() {
-  addAssetKeyword.value = ''
-  addAssetName.value = ''
-  addAssetSymbol.value = ''
-  addAssetMarket.value = ''
-  addAssetCategory.value = activeTab.value === 'A股' ? 'stock' : 'fund'
-  addAssetFundingAccount.value = ''
-  addAssetDividendType.value = 'cash'
-  addAssetQuantity.value = ''
-  addAssetAmount.value = ''
-  addAssetCurrentPrice.value = ''
-  addAssetSubscriptionTimeSlot.value = 'before_1500'
-  addAssetSearchResults.value = []
-  selectedAddAssetResultId.value = ''
-  productLookupMessage.value = ''
-  formError.value = ''
-}
-
 function openInvestmentDetail(positionId: number) {
   router.push({ path: '/finance/accounts/investment/detail', query: { positionId } })
 }
@@ -733,341 +470,6 @@ function openLiquidationList() {
     return
   }
   router.push(`/finance/accounts/investment/${selectedAccountId.value}/liquidations`)
-}
-
-function formatCurrency(value: number, digits = 2) {
-  const numeric = Number(value)
-  const sign = numeric < 0 ? '-' : ''
-  return `${sign}¥${new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Math.abs(numeric))}`
-}
-
-function isAfterQuoteRefreshTime(date: Date) {
-  const hours = date.getHours()
-  const minutes = date.getMinutes()
-  return hours > 21 || (hours === 21 && minutes >= 30)
-}
-
-function formatQuantity(value: number, unitName?: string | null) {
-  return `${new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(value)} ${unitName || '份'}`
-}
-
-function formatPrice(value: number) {
-  return formatCurrency(value, 4)
-}
-
-function formatMonthDay(value?: string | null) {
-  if (!value) {
-    return '--'
-  }
-  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value
-  const date = new Date(normalized)
-  if (Number.isNaN(date.getTime())) {
-    const matched = value.match(/^\d{4}-(\d{2})-(\d{2})/)
-    return matched ? `${matched[1]}-${matched[2]}` : value
-  }
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${month}-${day}`
-}
-
-function getAllocationPercent(position: InvestmentPosition) {
-  const total = Number(summary.value.totalMarketValue)
-  if (!Number.isFinite(total) || total <= 0) {
-    return 0
-  }
-  const percent = (Number(position.marketValue) / total) * 100
-  if (!Number.isFinite(percent)) {
-    return 0
-  }
-  return Math.min(Math.max(percent, 0), 100)
-}
-
-function compareHoldingsByProfitRate(a: InvestmentPosition, b: InvestmentPosition) {
-  const aPending = isPendingSubscription(a)
-  const bPending = isPendingSubscription(b)
-  if (aPending !== bPending) {
-    return aPending ? 1 : -1
-  }
-
-  const profitDiff = getHoldingTotalProfit(b) - getHoldingTotalProfit(a)
-  if (profitDiff !== 0) {
-    return profitDiff
-  }
-
-  const rateDiff = getHoldingTotalProfitRate(b) - getHoldingTotalProfitRate(a)
-  if (rateDiff !== 0) {
-    return rateDiff
-  }
-
-  return Number(b.marketValue ?? 0) - Number(a.marketValue ?? 0)
-}
-
-function isPendingSubscription(position: InvestmentPosition) {
-  return position.subscriptionStatus === 'pending'
-}
-
-function hasConfirmedHoldingQuantity(position: InvestmentPosition) {
-  const quantity = Number(position.holdingQuantity ?? 0)
-  return Number.isFinite(quantity) && quantity > 0
-}
-
-function shouldDisplayHolding(position: InvestmentPosition) {
-  if (position.productType !== 'fund') {
-    return true
-  }
-  return hasConfirmedHoldingQuantity(position) || isPendingSubscription(position)
-}
-
-function getHoldingStatusText(position: InvestmentPosition) {
-  if (!isPendingSubscription(position) || hasConfirmedHoldingQuantity(position)) {
-    return formatQuantity(position.holdingQuantity, position.unitName)
-  }
-
-  return ''
-}
-
-function getHoldingQuantityTag(position: InvestmentPosition) {
-  const quantityText = getHoldingStatusText(position)
-  return quantityText || '待确认'
-}
-
-function getHoldingSyncText(position: InvestmentPosition) {
-  const syncSource = resolveHoldingSyncTime(position)
-  if (!syncSource) {
-    return ''
-  }
-  const date = new Date(syncSource.value)
-  if (Number.isNaN(date.getTime())) {
-    return syncSource.value
-  }
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${month}-${day} ${hour}:${minute}`
-}
-
-function resolveHoldingSyncTime(position: InvestmentPosition) {
-  if (position.productType === 'fund' && position.lastSyncedAt) {
-    return {
-      value: position.lastSyncedAt,
-    }
-  }
-
-  if (position.productType === 'fund' && position.subscriptionConfirmedAt) {
-    return {
-      value: position.subscriptionConfirmedAt,
-    }
-  }
-
-  if (position.lastSyncedAt) {
-    return {
-      value: position.lastSyncedAt,
-    }
-  }
-
-  return null
-}
-
-function getHoldingMarketValueLabel(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? '申购金额' : '持仓市值'
-}
-
-function getHoldingMarketValue(position: InvestmentPosition) {
-  return isPendingSubscription(position)
-    ? formatCurrency(position.costAmount + (pendingAdditionalAmountsByPositionId.value.get(position.id) ?? 0), 2)
-    : formatCurrency(position.marketValue, 2)
-}
-
-function getHoldingActionLabel(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? '申购处理中' : '今日盈亏'
-}
-
-function getHoldingActionValue(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return formatCurrency(position.costAmount, 0)
-  }
-  return position.dayProfit === null || position.dayProfit === undefined ? '--' : formatCurrency(position.dayProfit)
-}
-
-function getHoldingActionRate(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return ''
-  }
-  return position.dayProfitRate === null || position.dayProfitRate === undefined ? '--' : `${formatAmount(position.dayProfitRate)}%`
-}
-
-function getHoldingActionTone(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return 'inherit' as const
-  }
-  if (position.dayProfit === null || position.dayProfit === undefined) {
-    return 'neutral' as const
-  }
-  const dayProfit = Number(position.dayProfit)
-  if (!Number.isFinite(dayProfit) || dayProfit === 0) {
-    return 'neutral' as const
-  }
-  return dayProfit > 0 ? 'positive' as const : 'negative' as const
-}
-
-function getHoldingDayProfitText(position: InvestmentPosition) {
-  if (isPendingSubscription(position) || position.dayProfit === null || position.dayProfit === undefined) {
-    return '--'
-  }
-  return formatCurrency(position.dayProfit)
-}
-
-function getHoldingDayProfitRateText(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return '待确认'
-  }
-  return position.dayProfitRate === null || position.dayProfitRate === undefined
-    ? '--'
-    : `${formatAmount(position.dayProfitRate)}%`
-}
-
-function getHoldingDayProfitTone(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return 'neutral' as const
-  }
-  return getHoldingActionTone(position)
-}
-
-function getHoldingPrimaryLabel(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return '确认净值'
-  }
-  return position.productType === 'stock' ? '最新价' : '最新净值'
-}
-
-function getHoldingPrimaryValue(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return formatMonthDay(position.subscriptionAppliedDate)
-  }
-  return formatPrice(position.currentPrice)
-}
-
-function getHoldingSecondaryLabel(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? '确认份额' : '成本价'
-}
-
-function getHoldingSecondaryValue(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return formatMonthDay(position.subscriptionExpectedConfirmDate || position.subscriptionAppliedDate)
-  }
-  return formatPrice(position.avgCostPrice)
-}
-
-function getHoldingBottomLabel(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? '申购金额' : '累计总收益'
-}
-
-function getHoldingTotalProfit(position: InvestmentPosition) {
-  return Number(position.cumulativeProfit ?? 0) + Number(position.holdingProfit ?? 0)
-}
-
-function getHoldingTotalProfitRate(position: InvestmentPosition) {
-  const costAmount = Number(position.costAmount ?? 0)
-  if (!Number.isFinite(costAmount) || costAmount <= 0) {
-    return 0
-  }
-  return (getHoldingTotalProfit(position) / costAmount) * 100
-}
-
-function getHoldingBottomValue(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? formatCurrency(position.costAmount, 0) : formatCurrency(getHoldingTotalProfit(position))
-}
-
-function getHoldingBottomRate(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? '待确认' : `${formatAmount(getHoldingTotalProfitRate(position))}%`
-}
-
-function getHoldingProfitLabel(position: InvestmentPosition) {
-  return isPendingSubscription(position) ? '持仓收益' : '持仓收益'
-}
-
-function getHoldingProfitValue(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return '--'
-  }
-  return formatCurrency(position.holdingProfit)
-}
-
-function getHoldingProfitRate(position: InvestmentPosition) {
-  if (isPendingSubscription(position)) {
-    return '待确认'
-  }
-  return `${formatAmount(position.holdingProfitRate)}%`
-}
-
-function getHoldingPendingAmount(position: InvestmentPosition) {
-  return pendingAmountsByPositionId.value.get(position.id) ?? 0
-}
-
-function isInitialFundSubscriptionTransaction(entry: InvestmentTransaction) {
-  return entry.remark === '基金首次申购'
-    || entry.transactionNo.startsWith('INIT-PENDING-')
-    || entry.transactionNo.startsWith('INIT-')
-}
-
-function hasAutoInvestPlan(position: InvestmentPosition) {
-  return position.productType === 'fund' && autoInvestPositionIds.value.has(position.id)
-}
-
-function hasRecentDividendReminder(position: InvestmentPosition) {
-  return position.productType === 'fund' && Boolean(position.hasRecentDividendPlan && position.recentDividendDate)
-}
-
-function getDividendReminderLabel(position: InvestmentPosition) {
-  const status = position.recentDividendStatus
-  if (status === 'paid') {
-    return '最近已分红'
-  }
-  if (status === 'planned') {
-    return '计划分红'
-  }
-  if (status === 'cancelled') {
-    return '分红取消'
-  }
-  return '已公告分红'
-}
-
-function getDividendReminderText(position: InvestmentPosition) {
-  const dateText = formatMonthDay(position.recentDividendDate)
-  const perUnit = Number(position.recentDividendPerUnit ?? 0)
-  if (!Number.isFinite(perUnit) || perUnit <= 0) {
-    return `${dateText} 分红`
-  }
-  return `${dateText} · ${perUnit.toFixed(4)}/${position.unitName || '份'}`
-}
-
-function toApiDateTime(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  const second = String(date.getSeconds()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}`
-}
-
-function getFundPositionSubmitMessage(position: InvestmentPosition) {
-  if (position.subscriptionStatus === 'confirmed') {
-    return '基金申购已按最新净值确认，份额已生成'
-  }
-  const appliedDate = position.subscriptionAppliedDate || '--'
-  const expectedDate = position.subscriptionExpectedConfirmDate || appliedDate
-  if (expectedDate === appliedDate) {
-    return `基金申购已提交，将按 ${appliedDate} 净值确认份额`
-  }
-  return `基金申购已提交，将按 ${appliedDate} 净值确认，预计 ${expectedDate} 完成`
 }
 
 function showFeedback(message: string, type: 'success' | 'error') {
@@ -1199,8 +601,8 @@ function showFeedback(message: string, type: 'success' | 'error') {
                 </div>
                 <div class="holding-value-line">
                   <span>{{ getHoldingMarketValueLabel(holding) }}</span>
-                  <AmountText tag="strong" class="holding-market-value" tone="inherit" :value="getHoldingMarketValue(holding)" />
-                  <span v-if="hasAutoInvestPlan(holding)" class="holding-auto-invest-tag">定投</span>
+                  <AmountText tag="strong" class="holding-market-value" tone="inherit" :value="getHoldingMarketValue(holding, pendingAdditionalAmountsByPositionId.get(holding.id) ?? 0)" />
+                  <span v-if="hasAutoInvestPlan(holding, autoInvestPositionIds)" class="holding-auto-invest-tag">定投</span>
                 </div>
               </div>
 
@@ -1241,12 +643,12 @@ function showFeedback(message: string, type: 'success' | 'error') {
               </div>
             </div>
 
-            <p v-if="getHoldingPendingAmount(holding) > 0" class="holding-pending-amount">
+            <p v-if="getHoldingPendingAmount(holding, pendingAmountsByPositionId) > 0" class="holding-pending-amount">
               待确认金额
               <AmountText
                 tag="span"
                 class="holding-pending-amount-value"
-                :value="formatCurrency(getHoldingPendingAmount(holding))"
+                :value="formatCurrency(getHoldingPendingAmount(holding, pendingAmountsByPositionId))"
               />
             </p>
 
@@ -1279,9 +681,9 @@ function showFeedback(message: string, type: 'success' | 'error') {
               <div class="holding-summary-allocation">
                 <div class="holding-allocation">
                   <div class="holding-allocation-track">
-                    <span :style="{ width: `${getAllocationPercent(holding)}%` }"></span>
+                    <span :style="{ width: `${getAllocationPercent(holding, summary.totalMarketValue)}%` }"></span>
                   </div>
-                  <AmountText tag="strong" tone="inherit" :value="`${formatAmount(getAllocationPercent(holding))}%`" />
+                  <AmountText tag="strong" tone="inherit" :value="`${formatAmount(getAllocationPercent(holding, summary.totalMarketValue))}%`" />
                 </div>
               </div>
             </div>
@@ -1306,7 +708,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
             <strong class="holding-list-name">{{ holding.productName }}</strong>
             <div class="holding-list-amount">
               <span>{{ getHoldingMarketValueLabel(holding) }}</span>
-              <AmountText tag="strong" tone="inherit" :value="getHoldingMarketValue(holding)" />
+              <AmountText tag="strong" tone="inherit" :value="getHoldingMarketValue(holding, pendingAdditionalAmountsByPositionId.get(holding.id) ?? 0)" />
             </div>
           </div>
 

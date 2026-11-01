@@ -14,6 +14,7 @@ import {
 } from '@/api/modules/finance'
 import { useTheme } from '@/utils/theme'
 import { getErrorMessage } from '@/api/request'
+import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
 
 type IndexConfig = {
   code: string
@@ -153,7 +154,6 @@ function clearProxyMarketState() {
 const chartEls = new Map<string, HTMLDivElement>()
 const chartInstances = new Map<string, ECharts>()
 let echartsLib: (typeof import('@/utils/echarts')) | null = null
-let refreshTimer: number | null = null
 
 function isUp(card: IndexCard) {
   return (card.change ?? 0) >= 0
@@ -370,34 +370,17 @@ function renderAllCards() {
   cards.forEach((card) => renderCard(card))
 }
 
+// 可见性感知轮询：隐藏时跳过，恢复可见立即刷新
+useVisibilityPolling(() => void refresh(), REFRESH_INTERVAL_MS)
+
 function onResize() {
   chartInstances.forEach((instance) => instance.resize())
-}
-
-function startRefreshTimer() {
-  if (refreshTimer !== null) {
-    window.clearInterval(refreshTimer)
-  }
-  refreshTimer = window.setInterval(() => {
-    if (document.visibilityState !== 'visible') {
-      return
-    }
-    void refresh()
-  }, REFRESH_INTERVAL_MS)
-}
-
-function handleVisibilityChange() {
-  if (document.visibilityState === 'visible') {
-    void refresh()
-  }
 }
 
 onMounted(async () => {
   echartsLib = await import('@/utils/echarts')
   await refresh()
   renderAllCards()
-  startRefreshTimer()
-  document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('resize', onResize)
 })
 
@@ -407,12 +390,7 @@ watch(isDark, () => {
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('resize', onResize)
-  if (refreshTimer !== null) {
-    window.clearInterval(refreshTimer)
-    refreshTimer = null
-  }
   chartInstances.forEach((instance) => instance.dispose())
   chartInstances.clear()
   chartEls.clear()

@@ -71,4 +71,4 @@ In `web/.env` or shell:
 
 ## Cloudflare Tunnel (External Access)
 
-Named tunnel `bookkeeping` is configured: <https://luotianxu.dpdns.org> → <http://localhost:4173> (Vite preview). Config at `~/.cloudflared/config.yml` (protocol http2). Start with `cloudflared tunnel run bookkeeping`. See README "外网访问（Cloudflare Tunnel）" for details. `vite.config.ts` `preview.allowedHosts` must include `luotianxu.dpdns.org`.
+Named tunnel `bookkeeping` is configured: <https://luotianxu.dpdns.org> → <http://localhost:4173> (Vite preview). Config at `~/.cloudflared/config.yml` (protocol auto: QUIC 优先，实测 2026-10-30 UDP 已通、边缘注册到 lax；UDP 被限制时自动回退 http2). Start with `cloudflared tunnel run bookkeeping`. See README "外网访问（Cloudflare Tunnel）" for details. `vite.config.ts` `preview.allowedHosts` must include `luotianxu.dpdns.org`; preview 静态资源由 `previewCacheHeaders` 插件下发长缓存头（immutable），HTML 不缓存。

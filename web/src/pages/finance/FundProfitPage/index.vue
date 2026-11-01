@@ -19,6 +19,23 @@ import {
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
+import { useFeedback } from '@/composables/useFeedback'
+import {
+  formatCurrency,
+  formatDateTime,
+  formatHoldingQuantity,
+  formatMonthLabel,
+  formatMonthValue,
+  formatRate,
+  formatSignedCurrency,
+  getDetailAccumulatedProfit,
+  getTone,
+  isAfterQuoteRefreshTime,
+  normalizeView,
+  shiftMonthValue,
+  sortSummaryShortcuts,
+  wait,
+} from './fundProfitFormat'
 
 type DetailFilter = 'all' | 'profit' | 'loss'
 
@@ -30,12 +47,6 @@ const viewOptions = [
   { label: '年视图', value: 'year' },
 ] as const
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
-const summaryShortcutOrder: Record<string, number> = {
-  today: 0,
-  '7d': 1,
-  month: 2,
-  cumulative: 3,
-}
 
 const selectedView = ref<FundProfitView>('day')
 const selectedAccountId = ref('all')
@@ -50,9 +61,7 @@ const isLoading = ref(true)
 const isDetailLoading = ref(false)
 const isCalendarLoading = ref(false)
 const isRefreshingPositions = ref(false)
-const showFeedbackModal = ref(false)
-const feedbackMessage = ref('')
-const feedbackType = ref<'success' | 'error'>('success')
+const { showFeedbackModal, feedbackMessage, feedbackType, showFeedback } = useFeedback()
 const pageError = ref('')
 const currentTime = ref(new Date())
 let refreshVisibilityTimer: number | null = null
@@ -481,33 +490,6 @@ function resolveAnchorValue() {
   return dayAnchor.value
 }
 
-function normalizeView(value: string) {
-  if (value === 'month' || value === 'year') {
-    return value
-  }
-  return 'day'
-}
-
-function sortSummaryShortcuts(items: FundProfitPageSummaryMetric[]) {
-  return [...items].sort((left, right) => {
-    const leftOrder = summaryShortcutOrder[left.key] ?? 99
-    const rightOrder = summaryShortcutOrder[right.key] ?? 99
-    return leftOrder - rightOrder
-  })
-}
-
-function isAfterQuoteRefreshTime(date: Date) {
-  const hours = date.getHours()
-  const minutes = date.getMinutes()
-  return hours > 21 || (hours === 21 && minutes >= 30)
-}
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms)
-  })
-}
-
 function handleCalendarSelect(item: FundProfitCalendarCell) {
   if (item.profit === null || item.profit === undefined || item.key === selectedKey.value) {
     return
@@ -561,82 +543,6 @@ function openDetail(item: FundProfitDetail) {
   })
 }
 
-function formatMonthValue(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
-}
-
-function formatMonthLabel(value: string) {
-  const matched = /^(\d{4})-(\d{2})$/.exec(value)
-  if (!matched) {
-    return value
-  }
-  return `${matched[1]}年${matched[2]}月`
-}
-
-function shiftMonthValue(value: string, offset: number) {
-  const [yearText, monthText] = value.split('-')
-  const date = new Date(Number(yearText), Number(monthText) - 1 + offset, 1)
-  return formatMonthValue(date)
-}
-
-function formatNumber(value: number, digits = 2) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(Math.abs(Number(value ?? 0)))
-}
-
-function formatCurrency(value: number, digits = 2) {
-  return `¥${formatNumber(value, digits)}`
-}
-
-function formatSignedCurrency(value: number, digits = 2) {
-  const normalized = Number(value ?? 0)
-  const sign = normalized > 0 ? '+' : normalized < 0 ? '-' : ''
-  return `${sign}${formatCurrency(normalized, digits)}`
-}
-
-function formatRate(value: number, digits = 2) {
-  const normalized = Number(value ?? 0)
-  const sign = normalized > 0 ? '+' : normalized < 0 ? '-' : ''
-  return `${sign}${formatNumber(normalized, digits)}%`
-}
-
-function formatHoldingQuantity(value: number) {
-  return `${formatNumber(value, 2)}份`
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) {
-    return ''
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
-}
-
-function getTone(value: number) {
-  if (value > 0) {
-    return 'positive'
-  }
-  if (value < 0) {
-    return 'negative'
-  }
-  return 'neutral'
-}
-
 function getTrendBarStyle(point: FundProfitTrendPoint) {
   if (point.profit === null || point.profit === undefined) {
     return { height: '18px' }
@@ -662,16 +568,6 @@ function getPeriodCardTone(item: FundProfitCalendarCell) {
     return 'negative'
   }
   return 'neutral'
-}
-
-function getDetailAccumulatedProfit(item: FundProfitDetail) {
-  return item.holdingAmount - item.costAmount
-}
-
-function showFeedback(message: string, type: 'success' | 'error') {
-  feedbackMessage.value = message
-  feedbackType.value = type
-  showFeedbackModal.value = true
 }
 </script>
 

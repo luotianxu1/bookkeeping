@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 投资详情页：负责数据加载与页面编排，行情/图表/弹窗/交易列表拆分至同目录子模块。
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -24,7 +24,6 @@ import {
   type InvestmentDividendRecord,
   type InvestmentPosition,
   type InvestmentTransaction,
-  type InvestmentTransactionPage,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { useTheme } from '@/utils/theme'
@@ -34,6 +33,8 @@ import AutoInvestModal from './AutoInvestModal.vue'
 import TransactionList from './TransactionList.vue'
 import { useFundMarket } from './useFundMarket'
 import { useTrendCharts } from './useTrendCharts'
+import { useTransactionPagination } from './useTransactionPagination'
+import { useFeedback } from '@/composables/useFeedback'
 import {
   TRANSACTION_PAGE_SIZE,
   formatCurrency,
@@ -63,15 +64,8 @@ const detail = ref<InvestmentAssetDetail | null>(null)
 const transactions = ref<InvestmentTransaction[]>([])
 const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
 const fundingAccounts = ref<Account[]>([])
-const showFeedbackModal = ref(false)
-const feedbackMessage = ref('')
-const feedbackType = ref<'success' | 'error'>('success')
+const { showFeedbackModal, feedbackMessage, feedbackType, showFeedback } = useFeedback()
 const selectedFundChartView = ref<'netValue' | 'profit'>('netValue')
-const currentTransactionPage = ref(1)
-const transactionPageItems = ref<InvestmentTransaction[]>([])
-const transactionTotal = ref(0)
-const transactionPageSize = ref(TRANSACTION_PAGE_SIZE)
-const isLoadingTransactionPage = ref(false)
 const showDeleteModal = ref(false)
 const isDeletingPosition = ref(false)
 const deleteError = ref('')
@@ -255,65 +249,19 @@ const showAutoInvestPlansSection = computed(() => showAutoInvestSection.value &&
 
 // ---------- 交易记录分页 ----------
 
-const totalTransactionPages = computed(() => Math.max(1, Math.ceil(transactionTotal.value / transactionPageSize.value)))
-const transactionPaginationSummary = computed(() =>
-  `第 ${currentTransactionPage.value} / ${totalTransactionPages.value} 页，共 ${transactionTotal.value} 条`,
-)
-const canGoPrevTransactionPage = computed(() => currentTransactionPage.value > 1)
-const canGoNextTransactionPage = computed(() => currentTransactionPage.value < totalTransactionPages.value)
-
-watch(totalTransactionPages, (totalPages) => {
-  if (currentTransactionPage.value > totalPages) {
-    currentTransactionPage.value = totalPages
-  }
-})
-
-function applyTransactionPage(pageData: InvestmentTransactionPage) {
-  transactionPageItems.value = pageData.items ?? []
-  transactionTotal.value = Number(pageData.total ?? 0)
-  transactionPageSize.value = Number(pageData.pageSize || TRANSACTION_PAGE_SIZE)
-  currentTransactionPage.value = Math.max(1, Number(pageData.page || 1))
-}
-
-async function loadTransactionPage(page: number) {
-  if (isLoadingTransactionPage.value || !positionId.value) {
-    return
-  }
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
-    applyTransactionPage({ items: [], total: 0, page: 1, pageSize: TRANSACTION_PAGE_SIZE, totalPages: 1 })
-    return
-  }
-
-  isLoadingTransactionPage.value = true
-  try {
-    const pageData = await getInvestmentTransactionPage({
-      userId: currentUser.id,
-      positionId: positionId.value,
-      page,
-      pageSize: TRANSACTION_PAGE_SIZE,
-    })
-    applyTransactionPage(pageData)
-  } catch (error) {
-    showFeedback(getErrorMessage(error, '交易记录加载失败'), 'error')
-  } finally {
-    isLoadingTransactionPage.value = false
-  }
-}
-
-function goToPrevTransactionPage() {
-  if (!canGoPrevTransactionPage.value || isLoadingTransactionPage.value) {
-    return
-  }
-  void loadTransactionPage(currentTransactionPage.value - 1)
-}
-
-function goToNextTransactionPage() {
-  if (!canGoNextTransactionPage.value || isLoadingTransactionPage.value) {
-    return
-  }
-  void loadTransactionPage(currentTransactionPage.value + 1)
-}
+const {
+  currentTransactionPage,
+  transactionPageItems,
+  transactionTotal,
+  isLoadingTransactionPage,
+  totalTransactionPages,
+  transactionPaginationSummary,
+  canGoPrevTransactionPage,
+  canGoNextTransactionPage,
+  applyTransactionPage,
+  goToPrevTransactionPage,
+  goToNextTransactionPage,
+} = useTransactionPagination({ positionId, showFeedback })
 
 function openPendingTransactionModal(entry: InvestmentTransaction) {
   tradeModalRef.value?.openPending(entry)
@@ -469,12 +417,6 @@ async function confirmDeletePosition() {
   } finally {
     isDeletingPosition.value = false
   }
-}
-
-function showFeedback(message: string, type: 'success' | 'error') {
-  feedbackMessage.value = message
-  feedbackType.value = type
-  showFeedbackModal.value = true
 }
 
 onMounted(() => {

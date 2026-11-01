@@ -1,6 +1,7 @@
 package com.example.market.service;
 
 import com.example.market.dto.MarketNewsResponse;
+import com.example.market.market.MarketUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,7 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class MarketNewsService {
@@ -45,7 +45,8 @@ public class MarketNewsService {
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final String eastMoneyFastNewsApiUrl;
-    private final Map<String, CachedMarketNews> cache = new ConcurrentHashMap<>();
+    private final MarketUtils.KeyedTtlCache<String, MarketNewsResponse> cache =
+        new MarketUtils.KeyedTtlCache<>(CACHE_MILLIS, 30_000L, 32);
 
     public MarketNewsService(
         ObjectMapper objectMapper,
@@ -65,22 +66,17 @@ public class MarketNewsService {
         CategorySpec spec = resolveCategory(category);
         int pageSize = normalizeLimit(limit);
         String cacheKey = spec.key() + ":" + pageSize;
-        long now = System.currentTimeMillis();
-        CachedMarketNews cached = cache.get(cacheKey);
-        if (cached != null && now - cached.cachedAt() < CACHE_MILLIS) {
-            return cached.response();
-        }
-
-        try {
-            MarketNewsResponse response = fetchMarketNews(spec, pageSize);
-            cache.put(cacheKey, new CachedMarketNews(response, now));
-            return response;
-        } catch (Exception ex) {
-            if (cached != null) {
-                return cached.response();
+        MarketNewsResponse cached = cache.get(cacheKey, k -> {
+            try {
+                return fetchMarketNews(spec, pageSize);
+            } catch (Exception ex) {
+                throw new IllegalStateException("市场快讯加载失败", ex);
             }
-            throw new IllegalStateException("市场快讯加载失败", ex);
+        });
+        if (cached == null) {
+            throw new IllegalStateException("市场快讯加载失败");
         }
+        return cached;
     }
 
     private MarketNewsResponse fetchMarketNews(CategorySpec spec, int pageSize) throws Exception {
@@ -198,8 +194,5 @@ public class MarketNewsService {
     }
 
     private record CategorySpec(String key, String label, String fastColumn) {
-    }
-
-    private record CachedMarketNews(MarketNewsResponse response, long cachedAt) {
     }
 }

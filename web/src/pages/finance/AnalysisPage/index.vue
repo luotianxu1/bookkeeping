@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { formatAmount } from '@/utils/format'
-import { readChartToken } from '@/utils/chart-theme'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { ECharts, EChartsCoreOption } from 'echarts'
+import { computed, onMounted, ref, watch } from 'vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CategoryIcon from '@/components/common/CategoryIcon/index.vue'
@@ -12,21 +10,42 @@ import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
 import YearPicker from '@/components/common/YearPicker/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
-import { useTheme } from '@/utils/theme'
 import {
   getTransactionAnalysis,
-  type Transaction,
   type TransactionAnalysis,
   type TransactionAnalysisCategoryBreakdownItem,
   type TransactionAnalysisPeriod,
   type TransactionAnalysisPeriodSummary,
-  type TransactionAnalysisTrendPoint,
 } from '@/api/modules/finance'
 import { getErrorMessage } from '@/api/request'
+import {
+  compareTransactionsDesc,
+  mergeTransactionAnalysisResults,
+  normalizeAnalysisForView,
+} from './analysisMerge'
+import {
+  amountValue,
+  breakdownDetailMetaText,
+  buildMetricAmount,
+  buildMetricTrend,
+  buildMonthKey,
+  detailAmountText,
+  detailMetaText,
+  findPreferredDayKey,
+  findPreferredSummaryKey,
+  formatIntegerAmount,
+  formatMonthDayLabel,
+  formatSignedAmount,
+  formatSignedIntegerAmount,
+  formatYearMonthLabel,
+  getBreakdownItemKey,
+  isTransactionInBreakdown,
+  type SummaryTab,
+  type TrendTone,
+} from './analysisFormat'
+import { useAnalysisCharts } from './useAnalysisCharts'
 
 type PeriodLabel = '月' | '年'
-type SummaryTab = '收入' | '支出' | '结余'
-type TrendTone = 'income' | 'expense' | 'neutral'
 
 type CalendarCell = {
   key: string
@@ -52,7 +71,6 @@ const analysis = ref<TransactionAnalysis | null>(null)
 const isLoading = ref(true)
 const pageError = ref('')
 const requestSerial = ref(0)
-const { isDark } = useTheme()
 
 const {
   familyView,
@@ -70,21 +88,6 @@ const summaryMetricMap: Record<SummaryTab, 'income' | 'expense' | 'surplus'> = {
   收入: 'income',
   支出: 'expense',
   结余: 'surplus',
-}
-const integerCurrencyFormatter = new Intl.NumberFormat('zh-CN', {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-})
-function getToneColor(metric: 'income' | 'expense' | 'surplus'): string {
-  // 依赖 isDark 让模板/配置在主题切换时重算取色
-  void isDark.value
-  if (metric === 'income') {
-    return readChartToken('--color-danger', '#f43f5e')
-  }
-  if (metric === 'expense') {
-    return readChartToken('--color-success', '#10b981')
-  }
-  return readChartToken('--color-brand-strong', '#2563eb')
 }
 const emptySummary = {
   income: 0,
@@ -180,8 +183,8 @@ const calendarRows = computed<CalendarCell[][]>(() => {
     cells.push({
       key: item.key,
       day: item.label,
-      amount: buildMetricAmount(item),
-      trend: buildMetricTrend(item),
+      amount: buildMetricAmount(item, analysisPeriod.value, summaryTab.value),
+      trend: buildMetricTrend(item, summaryTab.value),
     })
   })
 
@@ -281,11 +284,12 @@ const trendSectionTitle = computed(() => {
   return `${prefix}${summaryTab.value}趋势`
 })
 
-const pieRef = ref<HTMLDivElement | null>(null)
-const lineRef = ref<HTMLDivElement | null>(null)
-let echartsLib: (typeof import('@/utils/echarts')) | null = null
-let pieChart: ECharts | null = null
-let lineChart: ECharts | null = null
+const { pieRef, lineRef, syncCharts } = useAnalysisCharts({
+  breakdownItems,
+  summaryTab,
+  activeMetric,
+  analysis,
+})
 
 watch(requestKey, () => {
   void loadAnalysis()
@@ -305,10 +309,6 @@ watch(isLoading, (loading) => {
     void syncCharts()
   }
 }, { flush: 'post' })
-
-watch(isDark, () => {
-  void syncCharts()
-})
 
 watch([summaryTab, selectedDayKey, selectedYearMonthKey, analysisPeriod], () => {
   detailCurrentPage.value = 1
@@ -342,14 +342,7 @@ watch(breakdownDetailTotalPages, (totalPages) => {
 })
 
 onMounted(() => {
-  window.addEventListener('resize', handleResize)
   void initializePage()
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  pieChart?.dispose()
-  lineChart?.dispose()
 })
 
 async function initializePage() {
@@ -381,7 +374,11 @@ async function loadAnalysis() {
           year: analysisPeriod.value === 'year' ? activeYear.value : undefined,
         })
 
-        return normalizeAnalysisForView(result, userId)
+        return normalizeAnalysisForView(result, userId, {
+          isReadOnlyFamilyView: isReadOnlyFamilyView.value,
+          selectedFamilyViewKind: selectedFamilyView.value.kind,
+          viewerNameByUserId: viewerNameByUserId.value,
+        })
       }),
     )
 
@@ -389,7 +386,11 @@ async function loadAnalysis() {
       return
     }
 
-    const merged = mergeTransactionAnalysisResults(results)
+    const merged = mergeTransactionAnalysisResults(results, {
+      period: analysisPeriod.value,
+      activeMonth: activeMonth.value,
+      activeYear: activeYear.value,
+    })
     analysis.value = merged
     if (merged.month && merged.month !== activeMonth.value) {
       activeMonth.value = merged.month
@@ -411,166 +412,11 @@ async function loadAnalysis() {
   }
 }
 
-function normalizeAnalysisForView(source: TransactionAnalysis, userId: number) {
-  if (!isReadOnlyFamilyView.value || selectedFamilyView.value.kind !== 'total') {
-    return source
-  }
-
-  const viewerName = viewerNameByUserId.value.get(userId)
-  if (!viewerName) {
-    return source
-  }
-
-  return {
-    ...source,
-    periodSummaries: source.periodSummaries.map((item) => ({
-      ...item,
-      transactions: item.transactions.map((transaction) => ({
-        ...transaction,
-        accountName: `${viewerName} · ${transaction.accountName ?? '现金账户'}`,
-      })),
-    })),
-  }
-}
-
-function mergeTransactionAnalysisResults(results: TransactionAnalysis[]) {
-  const summary = {
-    income: 0,
-    expense: 0,
-    surplus: 0,
-    incomeCount: 0,
-    expenseCount: 0,
-    transactionCount: 0,
-  }
-
-  const incomeBreakdownMap = new Map<string, TransactionAnalysisCategoryBreakdownItem>()
-  const expenseBreakdownMap = new Map<string, TransactionAnalysisCategoryBreakdownItem>()
-  const trendMap = new Map<string, TransactionAnalysisTrendPoint>()
-  const periodSummaryMap = new Map<string, TransactionAnalysisPeriodSummary>()
-
-  results.forEach((result) => {
-    summary.income += Number(result.summary.income ?? 0)
-    summary.expense += Number(result.summary.expense ?? 0)
-    summary.surplus += Number(result.summary.surplus ?? 0)
-    summary.incomeCount += Number(result.summary.incomeCount ?? 0)
-    summary.expenseCount += Number(result.summary.expenseCount ?? 0)
-    summary.transactionCount += Number(result.summary.transactionCount ?? 0)
-
-    mergeBreakdownItems(incomeBreakdownMap, result.incomeBreakdown)
-    mergeBreakdownItems(expenseBreakdownMap, result.expenseBreakdown)
-
-    result.trendPoints.forEach((item) => {
-      const current = trendMap.get(item.key) ?? {
-        key: item.key,
-        label: item.label,
-        income: 0,
-        expense: 0,
-        surplus: 0,
-      }
-      current.income += Number(item.income ?? 0)
-      current.expense += Number(item.expense ?? 0)
-      current.surplus += Number(item.surplus ?? 0)
-      trendMap.set(item.key, current)
-    })
-
-    result.periodSummaries.forEach((item) => {
-      const current = periodSummaryMap.get(item.key) ?? {
-        key: item.key,
-        label: item.label,
-        income: 0,
-        expense: 0,
-        surplus: 0,
-        transactionCount: 0,
-        transactions: [],
-      }
-      current.income += Number(item.income ?? 0)
-      current.expense += Number(item.expense ?? 0)
-      current.surplus += Number(item.surplus ?? 0)
-      current.transactionCount += Number(item.transactionCount ?? 0)
-      current.transactions = [...current.transactions, ...item.transactions]
-      periodSummaryMap.set(item.key, current)
-    })
-  })
-
-  const incomeBreakdown = finalizeBreakdownItems(incomeBreakdownMap, summary.income)
-  const expenseBreakdown = finalizeBreakdownItems(expenseBreakdownMap, summary.expense)
-  const trendPoints = Array.from(trendMap.values()).sort((left, right) => left.key.localeCompare(right.key))
-  const periodSummaries = Array.from(periodSummaryMap.values())
-    .sort((left, right) => left.key.localeCompare(right.key))
-    .map((item) => ({
-      ...item,
-      transactions: [...item.transactions].sort(compareTransactionsDesc),
-    }))
-
-  const first = results[0]
-  return {
-    userId: first?.userId ?? 0,
-    period: analysisPeriod.value,
-    month: analysisPeriod.value === 'month' ? (first?.month ?? activeMonth.value) : null,
-    year: analysisPeriod.value === 'year' ? (first?.year ?? activeYear.value) : null,
-    summary,
-    incomeBreakdown,
-    expenseBreakdown,
-    trendPoints,
-    periodSummaries,
-  } satisfies TransactionAnalysis
-}
-
-function mergeBreakdownItems(
-  target: Map<string, TransactionAnalysisCategoryBreakdownItem>,
-  source: TransactionAnalysisCategoryBreakdownItem[],
-) {
-  source.forEach((item) => {
-    const key = `${item.categoryId ?? item.categoryName}`
-    const current = target.get(key) ?? {
-      categoryId: item.categoryId,
-      categoryName: item.categoryName,
-      categoryIcon: item.categoryIcon,
-      categoryColor: item.categoryColor,
-      amount: 0,
-      percent: 0,
-      transactionCount: 0,
-    }
-    current.amount += Number(item.amount ?? 0)
-    current.transactionCount += Number(item.transactionCount ?? 0)
-    target.set(key, current)
-  })
-}
-
-function finalizeBreakdownItems(
-  source: Map<string, TransactionAnalysisCategoryBreakdownItem>,
-  totalAmount: number,
-) {
-  return Array.from(source.values())
-    .map((item) => ({
-      ...item,
-      percent: totalAmount > 0 ? (Number(item.amount ?? 0) / totalAmount) * 100 : 0,
-    }))
-    .sort((left, right) => Number(right.amount ?? 0) - Number(left.amount ?? 0))
-}
-
-function compareTransactionsDesc(left: Transaction, right: Transaction) {
-  const leftTime = parseTime(left.occurredAt)
-  const rightTime = parseTime(right.occurredAt)
-  if (leftTime !== rightTime) {
-    return rightTime - leftTime
-  }
-  return Number(right.id ?? 0) - Number(left.id ?? 0)
-}
-
-function parseTime(value?: string | null) {
-  if (!value) {
-    return 0
-  }
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? 0 : date.getTime()
-}
-
 function syncSelectedSummary() {
   if (analysisPeriod.value === 'month') {
     const available = new Set(periodSummaries.value.map((item) => item.key))
     if (!available.has(selectedDayKey.value)) {
-      selectedDayKey.value = findPreferredDayKey(periodSummaries.value)
+      selectedDayKey.value = findPreferredDayKey(periodSummaries.value, analysis.value?.month)
     }
     return
   }
@@ -579,21 +425,6 @@ function syncSelectedSummary() {
   if (!available.has(selectedYearMonthKey.value)) {
     selectedYearMonthKey.value = findPreferredSummaryKey(periodSummaries.value)
   }
-}
-
-function findPreferredSummaryKey(items: TransactionAnalysisPeriodSummary[]) {
-  return items.find((item) => item.transactionCount > 0)?.key ?? items[0]?.key ?? ''
-}
-
-function findPreferredDayKey(items: TransactionAnalysisPeriodSummary[]) {
-  if (analysis.value?.month === buildMonthKey(new Date())) {
-    const todayKey = buildDateKey(new Date())
-    if (items.some((item) => item.key === todayKey)) {
-      return todayKey
-    }
-  }
-
-  return findPreferredSummaryKey(items)
 }
 
 function selectCalendarDay(key: string) {
@@ -616,10 +447,6 @@ function goToNextDetailPage() {
   detailCurrentPage.value += 1
 }
 
-function getBreakdownItemKey(item: TransactionAnalysisCategoryBreakdownItem) {
-  return item.categoryId == null ? `name:${item.categoryName}` : `id:${item.categoryId}`
-}
-
 function isBreakdownExpanded(item: TransactionAnalysisCategoryBreakdownItem) {
   return expandedBreakdownKey.value === getBreakdownItemKey(item)
 }
@@ -633,13 +460,6 @@ function getBreakdownDetailRows(item: TransactionAnalysisCategoryBreakdownItem) 
   return isBreakdownExpanded(item) ? breakdownDetailPagedTransactions.value : []
 }
 
-function isTransactionInBreakdown(transaction: Transaction, item: TransactionAnalysisCategoryBreakdownItem) {
-  if (item.categoryId != null) {
-    return transaction.categoryId === item.categoryId
-  }
-  return (transaction.categoryName || (transaction.type === 'income' ? '收入' : '支出')) === item.categoryName
-}
-
 function goToPrevBreakdownDetailPage() {
   if (!canGoPrevBreakdownDetailPage.value) return
   breakdownDetailCurrentPage.value -= 1
@@ -648,313 +468,6 @@ function goToPrevBreakdownDetailPage() {
 function goToNextBreakdownDetailPage() {
   if (!canGoNextBreakdownDetailPage.value) return
   breakdownDetailCurrentPage.value += 1
-}
-
-function buildMetricAmount(summaryItem: TransactionAnalysisPeriodSummary) {
-  const amountFormatter = analysisPeriod.value === 'month' ? formatIntegerAmount : formatAmount
-  const signedAmountFormatter = analysisPeriod.value === 'month' ? formatSignedIntegerAmount : formatSignedAmount
-
-  if (summaryTab.value === '收入') {
-    return summaryItem.income > 0 ? `+${amountFormatter(summaryItem.income)}` : amountFormatter(0)
-  }
-  if (summaryTab.value === '支出') {
-    return summaryItem.expense > 0 ? `-${amountFormatter(summaryItem.expense)}` : amountFormatter(0)
-  }
-  return signedAmountFormatter(summaryItem.surplus)
-}
-
-function buildMetricTrend(summaryItem: TransactionAnalysisPeriodSummary): TrendTone {
-  if (summaryTab.value === '收入') {
-    return summaryItem.income > 0 ? 'income' : 'neutral'
-  }
-  if (summaryTab.value === '支出') {
-    return summaryItem.expense > 0 ? 'expense' : 'neutral'
-  }
-  if (summaryItem.surplus > 0) return 'income'
-  if (summaryItem.surplus < 0) return 'expense'
-  return 'neutral'
-}
-
-function handleResize() {
-  pieChart?.resize()
-  lineChart?.resize()
-}
-
-async function ensureEcharts() {
-  if (!echartsLib) {
-    echartsLib = await import('@/utils/echarts')
-  }
-  return echartsLib
-}
-
-async function syncCharts() {
-  await ensureEcharts()
-  await nextTick()
-
-  if (!pieRef.value && !lineRef.value) {
-    return
-  }
-
-  if (!pieRef.value && pieChart) {
-    pieChart.dispose()
-    pieChart = null
-  }
-
-  if (pieRef.value) {
-    if (pieChart && pieChart.getDom() !== pieRef.value) {
-      pieChart.dispose()
-      pieChart = null
-    }
-    pieChart = pieChart ?? echartsLib!.init(pieRef.value)
-    pieChart.setOption(buildPieOption(), true)
-  }
-
-  if (lineRef.value) {
-    if (lineChart && lineChart.getDom() !== lineRef.value) {
-      lineChart.dispose()
-      lineChart = null
-    }
-    lineChart = lineChart ?? echartsLib!.init(lineRef.value)
-    lineChart.setOption(buildLineOption(), true)
-  }
-}
-
-function buildPieOption(): EChartsCoreOption {
-  const rootStyle = getComputedStyle(document.documentElement)
-  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
-  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
-  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
-  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
-
-  if (breakdownItems.value.length === 0) {
-    return {
-      animation: false,
-      graphic: [
-        {
-          type: 'text',
-          left: 'center',
-          top: 'middle',
-          style: {
-            text: summaryTab.value === '结余' ? '结余不按分类拆分' : '暂无数据',
-            fill: axisText,
-            fontSize: 12,
-            fontWeight: 500,
-          },
-        },
-      ],
-      series: [
-        {
-          type: 'pie',
-          radius: ['46%', '72%'],
-          center: ['50%', '50%'],
-          silent: true,
-          label: { show: false },
-          data: [{ value: 1, itemStyle: { color: splitLine } }],
-        },
-      ],
-    }
-  }
-
-  return {
-    animation: false,
-    tooltip: {
-      trigger: 'item',
-      backgroundColor: tooltipBg,
-      borderColor: tooltipBorder,
-      textStyle: { color: tooltipText },
-      valueFormatter: (value: unknown) => formatAmount(Number(value ?? 0)),
-    },
-    series: [
-      {
-        type: 'pie',
-        radius: ['46%', '72%'],
-        center: ['50%', '50%'],
-        label: { show: false },
-        data: breakdownItems.value.map((item) => ({
-          value: item.amount,
-          name: item.categoryName,
-          itemStyle: {
-            color: item.categoryColor || readChartToken('--color-chart-axis-strong', '#cbd5e1'),
-          },
-        })),
-      },
-    ],
-  }
-}
-
-function buildLineOption(): EChartsCoreOption {
-  const rootStyle = getComputedStyle(document.documentElement)
-  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const axisLine = rootStyle.getPropertyValue('--color-chart-axis-strong').trim()
-  const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
-  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
-  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
-  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
-  const metric = activeMetric.value
-  const color = getToneColor(metric)
-  const data = (analysis.value?.trendPoints ?? []).map((point) => Number(point[metric] ?? 0))
-  const seriesData = metric === 'surplus'
-    ? data.map((value) => ({
-      value,
-      itemStyle: {
-        color: value >= 0 ? getToneColor('income') : getToneColor('expense'),
-        borderRadius: value >= 0 ? [6, 6, 0, 0] : [0, 0, 6, 6],
-      },
-    }))
-    : data
-
-  return {
-    animation: false,
-    grid: { left: 44, right: 12, top: 14, bottom: 22 },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: {
-        type: 'shadow',
-      },
-      backgroundColor: tooltipBg,
-      borderColor: tooltipBorder,
-      textStyle: { color: tooltipText },
-      valueFormatter: (value: unknown) => {
-        const numericValue = Number(value ?? 0)
-        return metric === 'surplus' ? formatSignedAmount(numericValue) : formatAmount(numericValue)
-      },
-    },
-    xAxis: {
-      type: 'category',
-      boundaryGap: true,
-      data: (analysis.value?.trendPoints ?? []).map((point) => point.label),
-      axisLine: { lineStyle: { color: axisLine } },
-      axisTick: { show: false },
-      axisLabel: { color: axisText, fontSize: 11 },
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: {
-        show: true,
-        lineStyle: { color: axisLine },
-      },
-      axisTick: { show: false },
-      axisLabel: {
-        show: true,
-        color: axisText,
-        fontSize: 11,
-        formatter: (value: number) => formatAxisValue(value),
-      },
-      splitLine: { lineStyle: { color: splitLine } },
-    },
-    series: [
-      {
-        type: 'bar',
-        data: seriesData,
-        barMaxWidth: 18,
-        itemStyle: {
-          color,
-          borderRadius: [6, 6, 0, 0],
-        },
-      },
-    ],
-  }
-}
-
-function formatIntegerAmount(value: number) {
-  return integerCurrencyFormatter.format(Number(value ?? 0))
-}
-
-function formatSignedAmount(value: number) {
-  const numericValue = Number(value ?? 0)
-  if (numericValue > 0) return `+${formatAmount(numericValue)}`
-  if (numericValue < 0) return `-${formatAmount(Math.abs(numericValue))}`
-  return formatAmount(0)
-}
-
-function formatSignedIntegerAmount(value: number) {
-  const numericValue = Number(value ?? 0)
-  if (numericValue > 0) return `+${formatIntegerAmount(numericValue)}`
-  if (numericValue < 0) return `-${formatIntegerAmount(Math.abs(numericValue))}`
-  return formatIntegerAmount(0)
-}
-
-function amountValue(value: string) {
-  const normalized = value.replace(/[^\d.+-]/g, '')
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-function formatAxisValue(value: number) {
-  const numericValue = Number(value ?? 0)
-  const absoluteValue = Math.abs(numericValue)
-
-  if (absoluteValue >= 10000) {
-    return `${(numericValue / 10000).toFixed(1)}w`
-  }
-
-  return `${Math.round(numericValue)}`
-}
-
-function buildMonthKey(date: Date) {
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  return `${date.getFullYear()}-${month}`
-}
-
-function buildDateKey(date: Date) {
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${buildMonthKey(date)}-${day}`
-}
-
-function formatMonthDayLabel(key: string) {
-  const [, monthText, dayText] = key.split('-')
-  if (!monthText || !dayText) {
-    return key
-  }
-  return `${Number(monthText)}月${Number(dayText)}日`
-}
-
-function formatYearMonthLabel(key: string) {
-  const [yearText, monthText] = key.split('-')
-  if (!yearText || !monthText) {
-    return key
-  }
-  return `${yearText}年${Number(monthText)}月`
-}
-
-function detailMetaText(transaction: Transaction) {
-  const category = transaction.categoryName || (transaction.type === 'income' ? '收入' : '支出')
-  return [transaction.accountName, category, formatTime(transaction.occurredAt)]
-    .filter(Boolean)
-    .join(' · ')
-}
-
-function breakdownDetailMetaText(transaction: Transaction) {
-  const category = transaction.categoryName || (transaction.type === 'income' ? '收入' : '支出')
-  return [transaction.accountName, category, formatDateTime(transaction.occurredAt)]
-    .filter(Boolean)
-    .join(' · ')
-}
-
-function detailAmountText(transaction: Transaction) {
-  return transaction.type === 'income'
-    ? `+${formatAmount(transaction.amount)}`
-    : `-${formatAmount(transaction.amount)}`
-}
-
-function formatTime(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return [
-    `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
-    `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`,
-  ].join(' ')
 }
 </script>
 
@@ -1166,7 +679,7 @@ function formatDateTime(value: string) {
               @click="selectYearMonth(item.key)"
             >
               <strong>{{ item.label }}</strong>
-              <AmountText tag="span" :value="buildMetricAmount(item)" />
+              <AmountText tag="span" :value="buildMetricAmount(item, analysisPeriod, summaryTab)" />
             </button>
           </div>
         </div>

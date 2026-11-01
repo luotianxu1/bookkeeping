@@ -23,36 +23,24 @@ public final class StockListService {
     private static final int MAX_PAGES = 80;
     private static final long CACHE_TTL_MILLIS = TimeUnit.MINUTES.toMillis(30);
 
-    private static volatile List<Map<String, Object>> cache = List.of();
-    private static volatile long cacheLoadedAt = 0;
+    /**
+     * 全市场清单缓存：30 分钟 TTL；刷新失败时降级旧清单（60s 失败窗口后重试，
+     * 避免上游故障期间每个请求都串行触发 1 分钟+ 的全量分页重抓）。
+     */
+    private static final MarketUtils.KeyedTtlCache<String, List<Map<String, Object>>> UNIVERSE_CACHE =
+        new MarketUtils.KeyedTtlCache<>(CACHE_TTL_MILLIS, 60_000L, 4);
+    private static final String UNIVERSE_KEY = "hs_a";
 
     private StockListService() {
     }
 
     /** 全市场有效 A 股清单（带 30 分钟缓存）。行字段：code/name/symbol/market */
     public static List<Map<String, Object>> aShareUniverse() {
-        List<Map<String, Object>> snapshot = cache;
-        if (!snapshot.isEmpty() && System.currentTimeMillis() - cacheLoadedAt < CACHE_TTL_MILLIS) {
-            return snapshot;
+        List<Map<String, Object>> snapshot = UNIVERSE_CACHE.get(UNIVERSE_KEY, k -> fetchUniverse());
+        if (snapshot == null || snapshot.isEmpty()) {
+            throw new IllegalStateException("新浪A股清单暂不可用");
         }
-        synchronized (StockListService.class) {
-            snapshot = cache;
-            if (!snapshot.isEmpty() && System.currentTimeMillis() - cacheLoadedAt < CACHE_TTL_MILLIS) {
-                return snapshot;
-            }
-            try {
-                List<Map<String, Object>> loaded = fetchUniverse();
-                cache = loaded;
-                cacheLoadedAt = System.currentTimeMillis();
-                return loaded;
-            } catch (Exception e) {
-                // 刷新失败时回退旧缓存（宁旧勿缺），完全没有缓存才向上抛
-                if (!cache.isEmpty()) {
-                    return cache;
-                }
-                throw e;
-            }
-        }
+        return snapshot;
     }
 
     private static List<Map<String, Object>> fetchUniverse() {

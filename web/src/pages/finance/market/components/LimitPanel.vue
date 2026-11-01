@@ -2,7 +2,7 @@
 // 个股双列榜（通用模块）：
 // - a：涨跌停个股（/limits，按成交额降序）
 // - hk / us：领涨 / 领跌 TOP15（/movers，带流动性门槛，按涨跌幅排序）
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getLimits,
@@ -13,6 +13,7 @@ import {
 } from '@/api/modules/market'
 import { ApiError } from '@/api/request'
 import { amt, pct } from '@/utils/marketFormat'
+import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
 import { detailRoute } from '../routes'
 
 const props = defineProps<{ market?: ActivityMarket }>()
@@ -80,23 +81,12 @@ async function load(silent = false): Promise<void> {
   }
 }
 
-let timer: number | undefined
-
-function onVisible(): void {
-  if (!document.hidden) load(true)
-}
+// 可见性感知轮询：隐藏时跳过，恢复可见立即静默刷新（与后端 /activity 缓存 TTL 对齐）
+// 定时器与可见性监听由 useVisibilityPolling 自动清理
+useVisibilityPolling(() => void load(true), REFRESH_MS)
 
 onMounted(() => {
   load()
-  timer = window.setInterval(() => {
-    if (!document.hidden) load(true)
-  }, REFRESH_MS)
-  document.addEventListener('visibilitychange', onVisible)
-})
-
-onBeforeUnmount(() => {
-  if (timer) window.clearInterval(timer)
-  document.removeEventListener('visibilitychange', onVisible)
 })
 
 // 切市场（hk ↔ us）时重新拉取

@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 美股行情页聚合接口（2026-10-30 自前端东财 JSONP 直连收编而来）。
@@ -51,24 +50,16 @@ public class UsOverviewService {
         new IndexDef("ndx100", "纳斯达克100", "usQQQ", "QQQ", "etf", "QQQ", "Invesco QQQ ETF")
     );
 
-    private final AtomicReference<CachedOverview> cache = new AtomicReference<>();
+    private final MarketUtils.KeyedTtlCache<String, Map<String, Object>> cache =
+        new MarketUtils.KeyedTtlCache<>(CACHE_MILLIS, 30_000L, 4);
+    private static final String CACHE_KEY = "us-overview";
 
     public Map<String, Object> getOverview() {
-        CachedOverview cached = cache.get();
-        long now = System.currentTimeMillis();
-        if (cached != null && now - cached.cachedAt() < CACHE_MILLIS) {
-            return cached.payload();
+        Map<String, Object> payload = cache.get(CACHE_KEY, k -> fetchOverview());
+        if (payload == null) {
+            throw new IllegalStateException("美股行情加载失败");
         }
-        try {
-            Map<String, Object> payload = fetchOverview();
-            cache.set(new CachedOverview(payload, now));
-            return payload;
-        } catch (Exception ex) {
-            if (cached != null) {
-                return cached.payload();
-            }
-            throw new IllegalStateException("美股行情加载失败", ex);
-        }
+        return payload;
     }
 
     private Map<String, Object> fetchOverview() {
@@ -123,8 +114,5 @@ public class UsOverviewService {
         item.put("points", points instanceof List ? points : List.of());
         item.put("trendDate", trend.get("date"));
         item.put("trendPrevClose", trend.get("prev_close"));
-    }
-
-    private record CachedOverview(Map<String, Object> payload, long cachedAt) {
     }
 }

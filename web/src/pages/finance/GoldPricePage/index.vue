@@ -8,6 +8,7 @@ import AmountText from '@/components/common/AmountText/index.vue'
 import { getGoldPrices, type GoldPrice, type GoldPriceRange } from '@/api/modules/finance'
 import { useTheme } from '@/utils/theme'
 import { getErrorMessage } from '@/api/request'
+import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
 
 type TrendKey = '1日' | '7日' | '30日' | '3个月' | '1年' | '3年'
 type DeltaTone = 'positive' | 'negative' | 'neutral'
@@ -35,7 +36,6 @@ const isLoadingTrend = ref(false)
 const goldPriceError = ref('')
 let echartsLib: (typeof import('@/utils/echarts')) | null = null
 let chartIns: ECharts | null = null
-let priceRefreshTimer: number | null = null
 
 const trendRangeMap: Record<TrendKey, GoldPriceRange> = {
   '1日': '1d',
@@ -448,23 +448,8 @@ async function refreshCurrentGoldPrice() {
   }
 }
 
-function startPriceRefreshTimer() {
-  if (priceRefreshTimer !== null) {
-    window.clearInterval(priceRefreshTimer)
-  }
-  priceRefreshTimer = window.setInterval(() => {
-    if (document.visibilityState !== 'visible') {
-      return
-    }
-    void loadGoldPriceWithOptions({ includeChart: false })
-  }, PRICE_REFRESH_INTERVAL_MS)
-}
-
-function handleVisibilityChange() {
-  if (document.visibilityState === 'visible') {
-    void loadGoldPriceWithOptions({ includeChart: false })
-  }
-}
+// 可见性感知轮询：隐藏时跳过，恢复可见立即刷新（不含走势图，减少开销）
+useVisibilityPolling(() => void loadGoldPriceWithOptions({ includeChart: false }), PRICE_REFRESH_INTERVAL_MS)
 
 function formatTime(value?: string) {
   if (!value) {
@@ -489,9 +474,7 @@ function formatTime(value?: string) {
 onMounted(async () => {
   await ensureEcharts()
   await loadGoldPrice()
-  startPriceRefreshTimer()
   renderChart()
-  document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('resize', onResize)
 })
 
@@ -504,12 +487,7 @@ watch([chartPoints, isDark], () => {
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('resize', onResize)
-  if (priceRefreshTimer !== null) {
-    window.clearInterval(priceRefreshTimer)
-    priceRefreshTimer = null
-  }
   chartIns?.dispose()
   chartIns = null
 })

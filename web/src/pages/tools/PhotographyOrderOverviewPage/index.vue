@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import MonthPicker from '@/components/common/MonthPicker/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
@@ -17,6 +16,20 @@ import {
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
+import {
+  amountTextClass,
+  formatCurrency,
+  formatDateLabel,
+  hasOrderFoot,
+  isBucketWeekend,
+  orderTypeLabel,
+  receivedAmount,
+  statusClass,
+  statusLabel,
+  typeAccent,
+} from '../PhotographyOrdersPage/photographyOrderFormat'
+import { formatLunarLabel } from '../PhotographyOrdersPage/lunarCalendar'
+import { useOverviewCharts } from './useOverviewCharts'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,13 +55,6 @@ const calendarActiveDate = ref<string | null>(resolveInitialDate())
 const isLoading = ref(true)
 const pageError = ref('')
 
-const lineChartRef = ref<HTMLDivElement | null>(null)
-const pieChartRef = ref<HTMLDivElement | null>(null)
-const revenuePieChartRef = ref<HTMLDivElement | null>(null)
-let echartsLib: (typeof import('@/utils/echarts')) | null = null
-let lineChart: ECharts | null = null
-let pieChart: ECharts | null = null
-let revenuePieChart: ECharts | null = null
 let requestSerial = 0
 
 const summary = computed(() => overview.value?.summary ?? null)
@@ -90,19 +96,18 @@ const lineHasData = computed(() => trendPoints.value.some((item) => Number(item.
 const quantityPieHasData = computed(() => typeStats.value.some((item) => Number(item.orderCount) > 0))
 const revenuePieHasData = computed(() => typeStats.value.some((item) => Number(item.contractAmount) > 0))
 
+const {
+  lineChartRef,
+  pieChartRef,
+  revenuePieChartRef,
+  ensureCharts,
+  renderLineChart,
+  renderQuantityPieChart,
+  renderRevenuePieChart,
+} = useOverviewCharts({ trendPoints, typeStats, viewMode, trendSeriesName })
+
 onMounted(() => {
   void loadOverview()
-  window.addEventListener('resize', handleResize)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  lineChart?.dispose()
-  pieChart?.dispose()
-  revenuePieChart?.dispose()
-  lineChart = null
-  pieChart = null
-  revenuePieChart = null
 })
 
 watch(viewMode, () => {
@@ -334,287 +339,9 @@ function resolveInitialYear() {
   return Number.isFinite(raw) && raw > 2000 ? raw : new Date().getFullYear()
 }
 
-function formatCurrency(value: number | string | null | undefined) {
-  const amount = Number(value ?? 0)
-  return `¥${amount.toLocaleString('zh-CN', {
-    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`
-}
-
-function formatYAxisAmount(value: number) {
-  return `¥${(value / 1000).toLocaleString('zh-CN', {
-    maximumFractionDigits: 1,
-  })}k`
-}
-
-function formatDateLabel(value: string | null | undefined) {
-  if (!value) return ''
-  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (!matched) return value
-  return `${Number(matched[2])}月${Number(matched[3])}日`
-}
-
 function formatDateTime(value: string) {
   const [datePart = '', timePart = ''] = value.replace('T', ' ').split(' ')
   return `${datePart.replace(/-/g, '.')} ${timePart.slice(0, 5)}`
-}
-
-function orderTypeLabel(type: string) {
-  return {
-    first_birthday: '周岁',
-    hundred_days: '百天',
-    engagement: '订婚',
-    thanks_banquet: '答谢宴',
-    wedding: '婚礼',
-    marriage_registration: '领证',
-    graduation: '毕业照',
-  }[type] ?? type
-}
-
-function receivedAmount(order: PhotographyOrder) {
-  let total = 0
-  if (order.depositReceivedAt) {
-    total += Number(order.depositAmount ?? 0)
-  }
-  if (order.finalReceivedAt) {
-    total += Number(order.finalAmount ?? 0)
-  }
-  return total
-}
-
-function statusLabel(order: PhotographyOrder) {
-  if (isCancelled(order)) {
-    return '已取消'
-  }
-
-  if (isShotByTime(order)) {
-    return '已拍摄'
-  }
-
-  return Number(order.depositAmount ?? 0) > 0 ? '已付订金' : '未付订金'
-}
-
-function statusClass(order: PhotographyOrder) {
-  if (isCancelled(order)) {
-    return 'overview-order-tag--cancelled'
-  }
-
-  return isShotByTime(order) ? 'overview-order-tag--shot' : 'overview-order-tag--pending'
-}
-
-function isCancelled(order: PhotographyOrder) {
-  return order.status === 'cancelled'
-}
-
-function isShotByTime(order: PhotographyOrder, now = Date.now()) {
-  const shootAt = new Date(order.shootAt).getTime()
-  return Number.isFinite(shootAt) && shootAt <= now
-}
-
-function hasOrderFoot(order: PhotographyOrder) {
-  return Boolean(order.address || order.contactInfo || order.remark)
-}
-
-function typeAccent(type: string) {
-  const rootStyle = getComputedStyle(document.documentElement)
-  return {
-    wedding: rootStyle.getPropertyValue('--color-warning-strong').trim(),
-    graduation: rootStyle.getPropertyValue('--color-brand-strong').trim(),
-    first_birthday: rootStyle.getPropertyValue('--color-success-strong').trim(),
-    hundred_days: rootStyle.getPropertyValue('--color-teal').trim(),
-    engagement: rootStyle.getPropertyValue('--color-danger').trim(),
-    thanks_banquet: rootStyle.getPropertyValue('--color-purple').trim(),
-    marriage_registration: rootStyle.getPropertyValue('--color-orange').trim(),
-  }[type] ?? rootStyle.getPropertyValue('--color-brand').trim()
-}
-
-function isBucketWeekend(key: string) {
-  const weekday = new Date(`${key}T12:00:00`).getDay()
-  return weekday === 0 || weekday === 6
-}
-
-const lunarFormatter = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
-  month: 'long',
-  day: 'numeric',
-})
-const lunarLabelCache = new Map<string, string>()
-
-function formatLunarLabel(dateText: string) {
-  const cached = lunarLabelCache.get(dateText)
-  if (cached) {
-    return cached
-  }
-
-  const lunarText = lunarFormatter.format(new Date(`${dateText}T12:00:00`))
-  const matched = /^(.+?)(\d+)日$/.exec(lunarText)
-  if (!matched) {
-    lunarLabelCache.set(dateText, lunarText)
-    return lunarText
-  }
-
-  const monthLabel = matched[1]
-  const dayValue = Number(matched[2])
-  const label = dayValue === 1 ? monthLabel : toChineseDay(dayValue)
-  lunarLabelCache.set(dateText, label)
-  return label
-}
-
-function toChineseDay(day: number) {
-  const digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九']
-  if (day <= 10) {
-    return day === 10 ? '初十' : `初${digits[day]}`
-  }
-  if (day < 20) {
-    return `十${digits[day - 10]}`
-  }
-  if (day === 20) {
-    return '二十'
-  }
-  if (day < 30) {
-    return `廿${digits[day - 20]}`
-  }
-  return day === 30 ? '三十' : String(day)
-}
-
-function amountTextClass(value: number | string | null | undefined) {
-  return Number(value ?? 0) === 0 ? 'is-zero' : ''
-}
-
-function resolveDisplayedTrendPoints() {
-  return trendPoints.value
-}
-
-async function ensureCharts() {
-  if (!echartsLib) {
-    echartsLib = await import('@/utils/echarts')
-  }
-  if (lineChart && lineChartRef.value && lineChart.getDom() !== lineChartRef.value) {
-    lineChart.dispose()
-    lineChart = null
-  }
-  if (pieChart && pieChartRef.value && pieChart.getDom() !== pieChartRef.value) {
-    pieChart.dispose()
-    pieChart = null
-  }
-  if (revenuePieChart && revenuePieChartRef.value && revenuePieChart.getDom() !== revenuePieChartRef.value) {
-    revenuePieChart.dispose()
-    revenuePieChart = null
-  }
-  if (lineChartRef.value && !lineChart) {
-    lineChart = echartsLib.init(lineChartRef.value)
-  }
-  if (pieChartRef.value && !pieChart) {
-    pieChart = echartsLib.init(pieChartRef.value)
-  }
-  if (revenuePieChartRef.value && !revenuePieChart) {
-    revenuePieChart = echartsLib.init(revenuePieChartRef.value)
-  }
-}
-
-function renderLineChart() {
-  if (!lineChart) return
-
-  const displayedTrendPoints = resolveDisplayedTrendPoints()
-  const labels = displayedTrendPoints.map((item) => item.label)
-  const incomeValues = displayedTrendPoints.map((item) => Number(item.contractAmount ?? 0))
-  const rootStyle = getComputedStyle(document.documentElement)
-  const tooltipBg = rootStyle.getPropertyValue('--color-chart-tooltip-bg').trim()
-  const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
-  const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
-  const chartAxis = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const chartSplit = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
-  const incomeColor = rootStyle.getPropertyValue('--color-danger').trim()
-
-  const option: EChartsCoreOption = {
-    grid: { left: 0, right: 18, top: 28, bottom: 28, containLabel: true },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: tooltipBg,
-      borderColor: tooltipBorder,
-      textStyle: { color: tooltipText },
-    },
-    legend: {
-      top: 0,
-      right: 0,
-      itemWidth: 10,
-      itemHeight: 10,
-      textStyle: { color: chartAxis, fontSize: 11 },
-    },
-    xAxis: {
-      type: 'category',
-      data: labels,
-      axisLine: { lineStyle: { color: chartSplit } },
-      axisLabel: {
-        color: chartAxis,
-        fontSize: 11,
-        interval: viewMode.value === 'month' ? 0 : 'auto',
-      },
-    },
-    yAxis: [
-      {
-        type: 'value',
-        axisLine: { show: false },
-        splitLine: { lineStyle: { color: chartSplit } },
-        axisLabel: {
-          color: chartAxis,
-          fontSize: 11,
-          formatter: formatYAxisAmount,
-        },
-      },
-    ],
-    series: [
-      {
-        name: trendSeriesName.value,
-        type: 'bar',
-        data: incomeValues,
-        barMaxWidth: 18,
-        itemStyle: { color: incomeColor, borderRadius: [8, 8, 0, 0] },
-        emphasis: { itemStyle: { color: incomeColor } },
-      },
-    ],
-  }
-
-  lineChart.setOption(option, true)
-}
-
-function buildPieOption(valueGetter: (item: (typeof typeStats.value)[number]) => number): EChartsCoreOption {
-  return {
-    tooltip: { trigger: 'item' },
-    series: [
-      {
-        type: 'pie',
-        radius: ['58%', '78%'],
-        center: ['50%', '48%'],
-        avoidLabelOverlap: false,
-        label: { show: false },
-        emphasis: { scale: true },
-        data: typeStats.value.map((item) => ({
-          name: item.label,
-          value: valueGetter(item),
-          itemStyle: { color: typeAccent(item.type) },
-        })),
-      },
-    ],
-  }
-}
-
-function renderQuantityPieChart() {
-  if (!pieChart) return
-
-  pieChart.setOption(buildPieOption((item) => Number(item.orderCount || 0)), true)
-}
-
-function renderRevenuePieChart() {
-  if (!revenuePieChart) return
-
-  revenuePieChart.setOption(buildPieOption((item) => Number(item.contractAmount || 0)), true)
-}
-
-function handleResize() {
-  lineChart?.resize()
-  pieChart?.resize()
-  revenuePieChart?.resize()
 }
 </script>
 

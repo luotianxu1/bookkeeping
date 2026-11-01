@@ -1,5 +1,23 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
+
+// preview 静态资源缓存头：带 hash 的 assets 长缓存（Cloudflare 边缘 + 浏览器），
+// HTML 不缓存保证发版即时生效。文件名变化后旧缓存自然作废，无需清理。
+const previewCacheHeaders = (): Plugin => ({
+    name: 'preview-cache-headers',
+    configurePreviewServer(server) {
+        server.middlewares.use((req, res, next) => {
+            // 项目未装 @types/node，req 被解析成不含 url 的 IncomingMessage 空壳，这里自行收窄
+            const path = (req as { url?: string }).url ?? ''
+            if (path.startsWith('/assets/')) {
+                res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+            } else if (path === '/' || path.endsWith('.html')) {
+                res.setHeader('Cache-Control', 'no-cache')
+            }
+            next()
+        })
+    },
+})
 
 const apiProxy = {
     '/auth-api': {
@@ -69,5 +87,5 @@ export default defineConfig({
             },
         },
     },
-    plugins: [vue()],
+    plugins: [vue(), previewCacheHeaders()],
 })

@@ -21,11 +21,31 @@ import {
   updateLiabilityRecord,
   type Account,
   type LiabilityAccountSummary,
-  type LiabilityRepaymentStatus,
   type LiabilityRecord,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
+import { useFeedback } from '@/composables/useFeedback'
+import {
+  formatCurrency,
+  formatDate,
+  formatInstallmentLabel,
+  formatRecordAmount,
+  formatRemainingLabel,
+  formatRepaymentStatus,
+  normalizePositiveInteger,
+  parseDateTimeLocal,
+  parsePositiveAmount,
+  toDateTimeLocalValue,
+  toIsoLocalString,
+} from './liabilityFormat'
+import {
+  buildScheduledDate,
+  calculateInstallmentAmount,
+  formatRate,
+  resolveNextInstallmentPeriod,
+} from './liabilityLoanPlan'
+import { useLiabilityLoanPlan } from './useLiabilityLoanPlan'
 
 type InstallmentPreview = {
   amount: number
@@ -47,9 +67,7 @@ const summary = ref<LiabilityAccountSummary>({
 const records = ref<LiabilityRecord[]>([])
 const isLoading = ref(false)
 const pageError = ref('')
-const showFeedbackModal = ref(false)
-const feedbackMessage = ref('')
-const feedbackType = ref<'success' | 'error'>('success')
+const { showFeedbackModal, feedbackMessage, feedbackType, showFeedback } = useFeedback()
 const showRecordModal = ref(false)
 const showDeleteModal = ref(false)
 const showAccountDeleteModal = ref(false)
@@ -78,60 +96,20 @@ const prepayPaidAt = ref('')
 const prepayRemark = ref('')
 let requestVersion = 0
 
+const {
+  hasLoanPlan,
+  isSettled,
+  totalRepaymentAmount,
+  paidAmount,
+  monthlyPaymentAmount,
+  remainingInstallmentPeriods,
+} = useLiabilityLoanPlan({ account, records, summary })
+
 const accountId = computed(() => Number(route.params.accountId))
 const detailName = computed(() => account.value?.name || '负债账户')
 const detailNote = computed(() => account.value?.remark?.trim() || '')
 const summaryAmountText = computed(() => formatCurrency(summary.value.totalAmount))
-const hasLoanPlan = computed(() =>
-  account.value?.loanTotalAmount != null
-  && account.value?.loanTotalPeriods != null
-  && account.value?.loanRepaymentDay != null
-  && Boolean(account.value?.loanStartDate),
-)
-const isSettled = computed(() => Boolean(account.value?.loanSettledAt) || Number(summary.value.totalAmount ?? 0) <= 0)
-const paidRecords = computed(() => records.value.filter((record) => record.repaymentStatus === 'paid'))
 const recordModalTitle = computed(() => editingRecord.value ? '修改月账单' : '新增月账单')
-const interestAmount = computed(() => resolveInterestAmount(account.value))
-const totalRepaymentAmount = computed(() =>
-  Number(account.value?.loanTotalAmount ?? 0) + interestAmount.value,
-)
-const paidAmount = computed(() => Math.max(totalRepaymentAmount.value - Number(summary.value.totalAmount ?? 0), 0))
-const monthlyPaymentAmount = computed(() => {
-  const periods = Number(account.value?.loanTotalPeriods ?? 0)
-  if (periods <= 0) {
-    return 0
-  }
-  return roundCurrency(totalRepaymentAmount.value / periods)
-})
-const monthlyPaidPeriods = computed(() => {
-  if (!hasLoanPlan.value) {
-    return paidRecords.value.length
-  }
-  if (isSettled.value) {
-    return Number(account.value?.loanTotalPeriods ?? 0)
-  }
-  const periods = new Set(
-    paidRecords.value
-      .filter((record) => record.repaymentType !== 'prepayment')
-      .map((record) => Number(record.installmentCurrentPeriod ?? 0))
-      .filter((period) => period > 0),
-  )
-  return periods.size
-})
-const remainingInstallmentPeriods = computed(() => {
-  if (!hasLoanPlan.value) {
-    return records.value.reduce((total, record) => {
-      if (record.repaymentStatus === 'paid') {
-        return total
-      }
-      if (!record.installmentTotalPeriods || !record.installmentCurrentPeriod) {
-        return total
-      }
-      return total + Math.max(record.installmentTotalPeriods - record.installmentCurrentPeriod, 0)
-    }, 0)
-  }
-  return Math.max(Number(account.value?.loanTotalPeriods ?? 0) - monthlyPaidPeriods.value, 0)
-})
 const nextInstallmentPreview = computed<InstallmentPreview | null>(() => {
   const currentAccount = account.value
   if (!currentAccount || !hasLoanPlan.value || isSettled.value) {
@@ -576,166 +554,6 @@ async function confirmDeleteAccount() {
   } finally {
     isDeletingAccount.value = false
   }
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Math.abs(value))
-}
-
-function formatCurrency(value: number) {
-  return `¥${formatNumber(value)}`
-}
-
-function roundCurrency(value: number) {
-  return Math.round(value * 100) / 100
-}
-
-function resolveInterestAmount(currentAccount: Account | null) {
-  if (!currentAccount) {
-    return 0
-  }
-  const principal = Number(currentAccount.loanTotalAmount ?? 0)
-  const rate = currentAccount.loanInterestRate
-  if (rate != null && Number.isFinite(Number(rate))) {
-    return roundCurrency((principal * Number(rate)) / 100)
-  }
-  return Number(currentAccount.loanInterestAmount ?? 0)
-}
-
-function formatRate(currentAccount: Account | null) {
-  if (!currentAccount) {
-    return '--'
-  }
-  if (currentAccount.loanInterestRate != null && Number.isFinite(Number(currentAccount.loanInterestRate))) {
-    return `${Number(currentAccount.loanInterestRate).toFixed(2)}%`
-  }
-  const principal = Number(currentAccount.loanTotalAmount ?? 0)
-  const interestAmount = Number(currentAccount.loanInterestAmount ?? 0)
-  if (principal > 0 && interestAmount > 0) {
-    return `${((interestAmount / principal) * 100).toFixed(2)}%`
-  }
-  return '未设置'
-}
-
-function formatDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
-}
-
-function formatRecordAmount(record: LiabilityRecord) {
-  return formatCurrency(Number(record.amount ?? 0))
-}
-
-function formatInstallmentLabel(record: LiabilityRecord) {
-  if (record.repaymentType === 'prepayment') {
-    return '提前还款结清'
-  }
-  if (!record.installmentTotalPeriods || !record.installmentCurrentPeriod) {
-    return '单笔待还'
-  }
-  return `第 ${record.installmentCurrentPeriod}/${record.installmentTotalPeriods} 期`
-}
-
-function formatRemainingLabel(record: LiabilityRecord) {
-  if (record.repaymentType === 'prepayment') {
-    return '结清剩余贷款'
-  }
-  if (!record.installmentTotalPeriods || !record.installmentCurrentPeriod) {
-    return '未设置分期'
-  }
-  return `剩余 ${Math.max(record.installmentTotalPeriods - record.installmentCurrentPeriod, 0)} 期`
-}
-
-function formatRepaymentStatus(status: LiabilityRepaymentStatus, repaymentType?: string | null) {
-  if (repaymentType === 'prepayment') {
-    return '提前结清'
-  }
-  return status === 'paid' ? '已还' : '待还'
-}
-
-function normalizePositiveInteger(value: string) {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return null
-  }
-  const parsed = Number(trimmed)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    return Number.NaN
-  }
-  return parsed
-}
-
-function parsePositiveAmount(value: string) {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return Number.NaN
-  }
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) ? parsed : Number.NaN
-}
-
-function parseDateTimeLocal(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
-function resolveNextInstallmentPeriod(recordList: LiabilityRecord[], totalPeriods: number) {
-  const maxPeriod = recordList.reduce((max, record) => Math.max(max, Number(record.installmentCurrentPeriod ?? 0)), 0)
-  return Math.min(maxPeriod + 1, totalPeriods + 1)
-}
-
-function buildScheduledDate(currentAccount: Account, period: number) {
-  if (!currentAccount.loanStartDate) {
-    return null
-  }
-  const baseDate = new Date(`${currentAccount.loanStartDate}T09:00:00`)
-  if (Number.isNaN(baseDate.getTime())) {
-    return null
-  }
-  const scheduleMonth = new Date(baseDate)
-  scheduleMonth.setMonth(scheduleMonth.getMonth() + Math.max(period - 1, 0))
-  const repaymentDay = Number(currentAccount.loanRepaymentDay ?? baseDate.getDate())
-  const monthEnd = new Date(scheduleMonth.getFullYear(), scheduleMonth.getMonth() + 1, 0).getDate()
-  scheduleMonth.setDate(Math.min(repaymentDay, monthEnd))
-  return scheduleMonth
-}
-
-function calculateInstallmentAmount(totalAmount: number, totalPeriods: number, currentPeriod: number) {
-  const averageAmount = roundCurrency(totalAmount / totalPeriods)
-  if (currentPeriod >= totalPeriods) {
-    return roundCurrency(totalAmount - averageAmount * (totalPeriods - 1))
-  }
-  return averageAmount
-}
-
-function toDateTimeLocalValue(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hours}:${minutes}`
-}
-
-function toIsoLocalString(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toISOString().slice(0, 19)
-}
-
-function showFeedback(message: string, type: 'success' | 'error') {
-  feedbackMessage.value = message
-  feedbackType.value = type
-  showFeedbackModal.value = true
 }
 </script>
 
