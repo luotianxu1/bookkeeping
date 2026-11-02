@@ -9,6 +9,7 @@ import com.example.tool.dto.CalendarMonthResponse;
 import com.example.tool.dto.CalendarOverviewResponse;
 import com.example.tool.entity.AnniversaryEntity;
 import com.example.tool.mapper.AnniversaryMapper;
+import com.example.common.util.KeyedTtlCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -22,7 +23,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.Instant;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -35,8 +35,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 @Service
 public class CalendarService {
@@ -55,7 +53,9 @@ public class CalendarService {
     private final AnniversaryMapper anniversaryMapper;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
-    private final ConcurrentMap<Integer, HolidayYearCache> holidayCache = new ConcurrentHashMap<>();
+    /** 节假日缓存：按年 key，统一 KeyedTtlCache（single-flight + 失败降级），TTL 12h / 失败窗口 5min */
+    private final KeyedTtlCache<Integer, Map<LocalDate, CalendarDayMark>> holidayCache =
+        new KeyedTtlCache<>(HOLIDAY_CACHE_TTL.toMillis(), Duration.ofMinutes(5).toMillis(), 32);
 
     public CalendarService(
         AnniversaryMapper anniversaryMapper,
@@ -237,23 +237,15 @@ public class CalendarService {
     }
 
     private Map<LocalDate, CalendarDayMark> buildOfficialDayMarks(int year) {
-        HolidayYearCache cached = holidayCache.get(year);
-        Instant now = Instant.now();
-        if (cached != null && cached.expiresAt().isAfter(now)) {
-            return cached.dayMarks();
-        }
-
-        Map<LocalDate, CalendarDayMark> dayMarks = fetchDayMarks(year);
-        if (!dayMarks.isEmpty()) {
-            Map<LocalDate, CalendarDayMark> immutableDayMarks = Map.copyOf(dayMarks);
-            holidayCache.put(year, new HolidayYearCache(immutableDayMarks, now.plus(HOLIDAY_CACHE_TTL)));
-            return immutableDayMarks;
-        }
-
-        if (cached != null) {
-            return cached.dayMarks();
-        }
-        return Map.of();
+        Map<LocalDate, CalendarDayMark> dayMarks = holidayCache.get(year, y -> {
+            Map<LocalDate, CalendarDayMark> fetched = fetchDayMarks(y);
+            if (fetched.isEmpty()) {
+                // 抛错走失败降级：有旧值回吐旧值，无旧值返回 null（调用方兜底空标记）
+                throw new IllegalStateException("节假日数据源全部不可用");
+            }
+            return Map.copyOf(fetched);
+        });
+        return dayMarks == null ? Map.of() : dayMarks;
     }
 
     private Map<LocalDate, CalendarDayMark> fetchDayMarks(int year) {
@@ -478,12 +470,6 @@ public class CalendarService {
             throw new IllegalArgumentException("日历视图类型不支持");
         }
         return normalized;
-    }
-
-    private record HolidayYearCache(
-        Map<LocalDate, CalendarDayMark> dayMarks,
-        Instant expiresAt
-    ) {
     }
 
     public record CalendarDayMark(

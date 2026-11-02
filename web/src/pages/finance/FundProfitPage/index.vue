@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
@@ -18,7 +18,9 @@ import {
   type FundProfitView,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
-import { getErrorMessage } from '@/api/request'
+import { getErrorMessage, isCancelRequest } from '@/api/request'
+import { useRequestAbort } from '@/composables/useRequestAbort'
+import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
 import { useFeedback } from '@/composables/useFeedback'
 import {
   formatCurrency,
@@ -40,6 +42,9 @@ import {
 type DetailFilter = 'all' | 'profit' | 'loss'
 
 const router = useRouter()
+// 数据加载防竞态：新加载先 abort 旧请求，旧响应按代际号静默丢弃
+const { signalFor } = useRequestAbort()
+let loadSeq = 0
 
 const viewOptions = [
   { label: '日视图', value: 'day' },
@@ -64,7 +69,6 @@ const isRefreshingPositions = ref(false)
 const { showFeedbackModal, feedbackMessage, feedbackType, showFeedback } = useFeedback()
 const pageError = ref('')
 const currentTime = ref(new Date())
-let refreshVisibilityTimer: number | null = null
 
 const isDayView = computed(() => selectedView.value === 'day')
 const shouldShowPositionRefreshButton = computed(() => isAfterQuoteRefreshTime(currentTime.value))
@@ -315,16 +319,12 @@ const viewModel = computed({
 onMounted(() => {
   void loadPage()
   currentTime.value = new Date()
-  refreshVisibilityTimer = window.setInterval(() => {
-    currentTime.value = new Date()
-  }, 30 * 1000)
 })
 
-onBeforeUnmount(() => {
-  if (refreshVisibilityTimer !== null) {
-    window.clearInterval(refreshVisibilityTimer)
-  }
-})
+// 时钟轮询感知页面可见性：后台标签页跳过，恢复可见立即校准
+useVisibilityPolling(() => {
+  currentTime.value = new Date()
+}, 30 * 1000)
 
 async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean }) {
   const currentUser = getStoredCurrentUser()
@@ -337,6 +337,9 @@ async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean
 
   const detailOnly = Boolean(options?.detailOnly && pageData.value)
   const calendarOnly = Boolean(options?.calendarOnly && pageData.value && !detailOnly)
+  const seq = ++loadSeq
+  const signal = signalFor()
+
   if (detailOnly) {
     isDetailLoading.value = true
   } else if (calendarOnly) {
@@ -353,7 +356,11 @@ async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean
       view: selectedView.value,
       anchor: resolveAnchorValue(),
       selected: selectedKey.value || undefined,
-    })
+    }, { signal })
+
+    if (seq !== loadSeq) {
+      return
+    }
 
     if (detailOnly && pageData.value) {
       mergeDetailSelection(data)
@@ -364,9 +371,15 @@ async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean
       syncPageState(data)
     }
   } catch (error) {
+    if (isCancelRequest(error) || seq !== loadSeq) {
+      return
+    }
     pageData.value = null
     pageError.value = getErrorMessage(error, '基金收益加载失败')
   } finally {
+    if (seq !== loadSeq) {
+      return
+    }
     if (detailOnly) {
       isDetailLoading.value = false
     } else if (calendarOnly) {

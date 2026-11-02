@@ -65,6 +65,7 @@ import com.example.app.mapper.InvestmentTransactionMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,6 +88,12 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -283,6 +290,8 @@ public class InvestmentService {
     private final TransactionTemplate transactionTemplate;
     private final Set<LocalDate> marketClosedDates;
     private final MarketQuoteClient marketQuoteClient;
+    /** 夜间同步的行情抓取线程池：净值/分红同步按产品并发化，缩短任务窗口 */
+    private final ExecutorService fundSyncExecutor;
 
     public InvestmentService(
         InvestmentProductMapper productMapper,
@@ -299,6 +308,7 @@ public class InvestmentService {
         ObjectMapper objectMapper,
         PlatformTransactionManager transactionManager,
         @Value("${finance.investment.market-closed-dates:}") String marketClosedDatesConfig,
+        @Value("${finance.investment.sync-concurrency:8}") Integer syncConcurrency,
         MarketQuoteClient marketQuoteClient
     ) {
         this.productMapper = productMapper;
@@ -316,6 +326,23 @@ public class InvestmentService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.marketClosedDates = parseMarketClosedDates(marketClosedDatesConfig);
         this.marketQuoteClient = marketQuoteClient;
+        this.fundSyncExecutor = Executors.newFixedThreadPool(
+            syncConcurrency == null || syncConcurrency <= 0 ? 8 : syncConcurrency,
+            daemonThreadFactory("invest-sync-"));
+    }
+
+    @PreDestroy
+    public void shutdownExecutor() {
+        fundSyncExecutor.shutdownNow();
+    }
+
+    private static ThreadFactory daemonThreadFactory(String prefix) {
+        AtomicInteger seq = new AtomicInteger();
+        return task -> {
+            Thread thread = new Thread(task, prefix + seq.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        };
     }
 
     public List<InvestmentProductResponse> listProducts(String productType, String keyword) {
@@ -2023,13 +2050,18 @@ public class InvestmentService {
     }
 
     public int syncDailyFundProfits(Long userId, Long accountId) {
+        return syncDailyFundProfits(userId, accountId, null);
+    }
+
+    private int syncDailyFundProfits(Long userId, Long accountId, Map<Long, FundQuoteSnapshot> sharedFundQuotes) {
         List<InvestmentPositionEntity> positions = loadActiveInvestmentPositions(userId, accountId).stream()
             .filter(position -> !isPendingFundSubscription(position) || position.getProductId() != null)
             .toList();
-        return syncDailyFundProfits(positions, userId, accountId);
+        return syncDailyFundProfits(positions, userId, accountId, sharedFundQuotes);
     }
 
-    private int syncDailyFundProfits(List<InvestmentPositionEntity> positions, Long userId, Long accountId) {
+    private int syncDailyFundProfits(List<InvestmentPositionEntity> positions, Long userId, Long accountId,
+        Map<Long, FundQuoteSnapshot> sharedFundQuotes) {
         if (positions.isEmpty()) {
             log.info("基金收益同步跳过：当前没有基金持仓，userId={}, accountId={}", userId, accountId);
             return 0;
@@ -2041,30 +2073,34 @@ public class InvestmentService {
             return 0;
         }
 
-        Map<Long, Long> accountUsers = new HashMap<>();
-        int syncedProducts = 0;
-        int syncedPositions = 0;
-        for (Map.Entry<Long, List<InvestmentPositionEntity>> entry : groupPositionsByProduct(positions, products).entrySet()) {
-            InvestmentProductEntity product = products.get(entry.getKey());
-            if (product == null) {
-                continue;
-            }
-            try {
-                int updatedCount = syncFundProfitForProduct(product, entry.getValue(), accountUsers);
-                if (updatedCount > 0) {
-                    syncedProducts++;
-                    syncedPositions += updatedCount;
+        // 按产品并发同步：每个产品的行情抓取+持仓更新互不依赖，DB 写入经 Hikari 池化
+        Map<Long, Long> accountUsers = new ConcurrentHashMap<>();
+        AtomicInteger syncedProducts = new AtomicInteger();
+        AtomicInteger syncedPositions = new AtomicInteger();
+        List<CompletableFuture<Void>> futures = groupPositionsByProduct(positions, products).entrySet().stream()
+            .map(entry -> CompletableFuture.runAsync(() -> {
+                InvestmentProductEntity product = products.get(entry.getKey());
+                if (product == null) {
+                    return;
                 }
-            } catch (Exception ex) {
-                log.warn("基金收益同步失败，productId={}, symbol={}, reason={}",
-                    product.getId(), product.getSymbol(), ex.getMessage());
-            }
-        }
+                try {
+                    int updatedCount = syncFundProfitForProduct(product, entry.getValue(), accountUsers, sharedFundQuotes);
+                    if (updatedCount > 0) {
+                        syncedProducts.incrementAndGet();
+                        syncedPositions.addAndGet(updatedCount);
+                    }
+                } catch (Exception ex) {
+                    log.warn("基金收益同步失败，productId={}, symbol={}, reason={}",
+                        product.getId(), product.getSymbol(), ex.getMessage());
+                }
+            }, fundSyncExecutor))
+            .toList();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
         accountUsers.forEach((targetAccountId, targetUserId) -> syncInvestmentAccountBalance(targetUserId, targetAccountId));
         log.info("基金收益同步完成：{} 个基金产品，{} 条持仓已更新，userId={}, accountId={}",
-            syncedProducts, syncedPositions, userId, accountId);
-        return syncedPositions;
+            syncedProducts.get(), syncedPositions.get(), userId, accountId);
+        return syncedPositions.get();
     }
 
     public int syncFundDividendPlans() {
@@ -2080,23 +2116,27 @@ public class InvestmentService {
             return 0;
         }
 
-        int syncedProducts = 0;
-        int syncedPlans = 0;
-        for (InvestmentProductEntity product : products.values()) {
-            try {
-                int updatedCount = syncFundDividendPlansForProduct(product);
-                if (updatedCount > 0) {
-                    syncedProducts++;
-                    syncedPlans += updatedCount;
+        // 按产品并发抓取分红计划（外部 HTTP 为主，串行会显著拉长夜间窗口）
+        AtomicInteger syncedProducts = new AtomicInteger();
+        AtomicInteger syncedPlans = new AtomicInteger();
+        List<CompletableFuture<Void>> futures = products.values().stream()
+            .map(product -> CompletableFuture.runAsync(() -> {
+                try {
+                    int updatedCount = syncFundDividendPlansForProduct(product);
+                    if (updatedCount > 0) {
+                        syncedProducts.incrementAndGet();
+                        syncedPlans.addAndGet(updatedCount);
+                    }
+                } catch (Exception ex) {
+                    log.warn("基金分红计划同步失败，productId={}, symbol={}, reason={}",
+                        product.getId(), product.getSymbol(), ex.getMessage());
                 }
-            } catch (Exception ex) {
-                log.warn("基金分红计划同步失败，productId={}, symbol={}, reason={}",
-                    product.getId(), product.getSymbol(), ex.getMessage());
-            }
-        }
+            }, fundSyncExecutor))
+            .toList();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-        log.info("基金分红计划同步完成：{} 个基金产品，{} 条计划已写入", syncedProducts, syncedPlans);
-        return syncedPlans;
+        log.info("基金分红计划同步完成：{} 个基金产品，{} 条计划已写入", syncedProducts.get(), syncedPlans.get());
+        return syncedPlans.get();
     }
 
     public int syncStockDividendProfiles() {
@@ -2112,21 +2152,25 @@ public class InvestmentService {
             return 0;
         }
 
-        int syncedProducts = 0;
-        for (InvestmentProductEntity product : products.values()) {
-            try {
-                if (!evaluateDividendProfile(product)) {
-                    continue;
+        // 按产品并发评估股票分红画像（外部 HTTP 为主）
+        AtomicInteger syncedProducts = new AtomicInteger();
+        List<CompletableFuture<Void>> futures = products.values().stream()
+            .map(product -> CompletableFuture.runAsync(() -> {
+                try {
+                    if (!evaluateDividendProfile(product)) {
+                        return;
+                    }
+                    productMapper.updateById(product);
+                    syncedProducts.incrementAndGet();
+                } catch (Exception ex) {
+                    log.warn("股票分红画像同步失败，productId={}, symbol={}, reason={}",
+                        product.getId(), product.getSymbol(), ex.getMessage());
                 }
-                productMapper.updateById(product);
-                syncedProducts++;
-            } catch (Exception ex) {
-                log.warn("股票分红画像同步失败，productId={}, symbol={}, reason={}",
-                    product.getId(), product.getSymbol(), ex.getMessage());
-            }
-        }
-        log.info("股票分红画像同步完成：{} 个股票产品已重新评估", syncedProducts);
-        return syncedProducts;
+            }, fundSyncExecutor))
+            .toList();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        log.info("股票分红画像同步完成：{} 个股票产品已重新评估", syncedProducts.get());
+        return syncedProducts.get();
     }
 
     public Map<String, Object> runNightlyInvestmentSyncCycle(String trigger) {
@@ -2144,11 +2188,13 @@ public class InvestmentService {
         boolean evaluateDividendIncomeEligibility
     ) {
         LocalDateTime startedAt = LocalDateTime.now();
-        int syncedFundPositions = syncDailyFundProfits(userId, accountId);
+        // 同步周期内共享的基金净值快照：净值同步与结算对同一基金只抓一次行情
+        Map<Long, FundQuoteSnapshot> sharedFundQuotes = new ConcurrentHashMap<>();
+        int syncedFundPositions = syncDailyFundProfits(userId, accountId, sharedFundQuotes);
         int syncedStockPositions = syncDailyStockQuotes(userId, accountId);
         int syncedDividendPlans = evaluateDividendIncomeEligibility ? syncFundDividendPlans() : 0;
         int syncedStockDividendProfiles = evaluateDividendIncomeEligibility ? syncStockDividendProfiles() : 0;
-        int settledCount = (userId == null && accountId == null) ? settlePendingFundTrades() : 0;
+        int settledCount = (userId == null && accountId == null) ? settlePendingFundTrades(sharedFundQuotes) : 0;
         LocalDateTime finishedAt = LocalDateTime.now();
 
         Map<String, Object> summary = new LinkedHashMap<>();
@@ -2179,6 +2225,10 @@ public class InvestmentService {
 
     public int settlePendingFundTrades() {
         return settlePendingFundTradesAt(LocalDateTime.now());
+    }
+
+    private int settlePendingFundTrades(Map<Long, FundQuoteSnapshot> sharedFundQuotes) {
+        return settlePendingFundTradesAt(LocalDateTime.now(), sharedFundQuotes);
     }
 
     public int syncDailyStockQuotes() {
@@ -2229,12 +2279,16 @@ public class InvestmentService {
     }
 
     public int settlePendingFundTradesAt(LocalDateTime settlementDateTime) {
-        int settledPositions = settlePendingFundPositions(settlementDateTime);
-        int settledTransactions = settlePendingFundTransactions(settlementDateTime);
+        return settlePendingFundTradesAt(settlementDateTime, null);
+    }
+
+    private int settlePendingFundTradesAt(LocalDateTime settlementDateTime, Map<Long, FundQuoteSnapshot> sharedFundQuotes) {
+        int settledPositions = settlePendingFundPositions(settlementDateTime, sharedFundQuotes);
+        int settledTransactions = settlePendingFundTransactions(settlementDateTime, sharedFundQuotes);
         return settledPositions + settledTransactions;
     }
 
-    private int settlePendingFundPositions(LocalDateTime settlementDateTime) {
+    private int settlePendingFundPositions(LocalDateTime settlementDateTime, Map<Long, FundQuoteSnapshot> sharedFundQuotes) {
         List<InvestmentPositionEntity> positions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
             .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)
             .eq(InvestmentPositionEntity::getSubscriptionStatus, SUBSCRIPTION_STATUS_PENDING));
@@ -2258,7 +2312,7 @@ public class InvestmentService {
                 continue;
             }
             try {
-                int updatedCount = settlePendingFundTradesForProduct(product, entry.getValue(), accountUsers, settlementDateTime);
+                int updatedCount = settlePendingFundTradesForProduct(product, entry.getValue(), accountUsers, settlementDateTime, sharedFundQuotes);
                 if (updatedCount > 0) {
                     settledProducts++;
                     settledPositions += updatedCount;
@@ -2274,7 +2328,7 @@ public class InvestmentService {
         return settledPositions;
     }
 
-    private int settlePendingFundTransactions(LocalDateTime settlementDateTime) {
+    private int settlePendingFundTransactions(LocalDateTime settlementDateTime, Map<Long, FundQuoteSnapshot> sharedFundQuotes) {
         List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(new LambdaQueryWrapper<InvestmentTransactionEntity>()
             .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
             .eq(InvestmentTransactionEntity::getSettlementStatus, SETTLEMENT_STATUS_PENDING));
@@ -2307,7 +2361,7 @@ public class InvestmentService {
                 continue;
             }
             try {
-                int updatedCount = settlePendingFundTransactionsForProduct(product, entry.getValue(), accountUsers, settlementDateTime);
+                int updatedCount = settlePendingFundTransactionsForProduct(product, entry.getValue(), accountUsers, settlementDateTime, sharedFundQuotes);
                 if (updatedCount > 0) {
                     settledProducts++;
                     settledTransactions += updatedCount;
@@ -2486,7 +2540,6 @@ public class InvestmentService {
         return true;
     }
 
-    @Transactional
     public Optional<InvestmentTransactionResponse> updatePendingTransaction(Long id, InvestmentTransactionRequest request) {
         InvestmentTransactionEntity entity = transactionMapper.selectById(id);
         if (entity == null || !request.getUserId().equals(entity.getUserId())
@@ -2501,6 +2554,19 @@ public class InvestmentService {
             throw new IllegalArgumentException("待确认交易的账户、持仓、产品和类型不可修改");
         }
         InvestmentProductEntity product = requireProduct(entity.getProductId());
+        // 行情 HTTP 调用放在事务外，避免最长 20s 的远端调用占用 DB 连接与行锁
+        int confirmDelayDays = resolveFundConfirmDelayDays(fetchFundBaseInfo(product.getSymbol()), product);
+        return transactionTemplate.execute(status -> doUpdatePendingTransaction(id, request, product, confirmDelayDays));
+    }
+
+    private Optional<InvestmentTransactionResponse> doUpdatePendingTransaction(Long id, InvestmentTransactionRequest request,
+        InvestmentProductEntity product, int confirmDelayDays) {
+        InvestmentTransactionEntity entity = transactionMapper.selectById(id);
+        if (entity == null || !request.getUserId().equals(entity.getUserId())
+            || !NORMAL_STATUS.equals(entity.getStatus())
+            || !SETTLEMENT_STATUS_PENDING.equals(entity.getSettlementStatus())) {
+            return Optional.empty();
+        }
         InvestmentPositionEntity position = requirePosition(request);
         rollbackPendingTransaction(entity);
         if (isFundSubscriptionProduct(product) && "buy".equals(entity.getTradeType())) {
@@ -2531,7 +2597,7 @@ public class InvestmentService {
         entity.setFundingAccountId(request.getFundingAccountId());
         entity.setTradeAt(request.getTradeAt());
         entity.setSettlementAppliedDate(resolveFundSubscriptionTradeDate(request.getSubscriptionTimeSlot(), request.getTradeAt()));
-        entity.setSettlementExpectedDate(resolveFundExpectedConfirmDate(entity.getSettlementAppliedDate(), fetchFundBaseInfo(product.getSymbol()).path("Datas"), product));
+        entity.setSettlementExpectedDate(resolveFundExpectedConfirmDate(entity.getSettlementAppliedDate(), confirmDelayDays));
         entity.setRemark(request.getRemark());
         transactionMapper.updateById(entity);
         positionMapper.updateById(position);
@@ -3599,6 +3665,10 @@ public class InvestmentService {
         return addTradingDays(appliedDate, resolveFundConfirmDelayDays(baseInfo, product));
     }
 
+    private LocalDate resolveFundExpectedConfirmDate(LocalDate appliedDate, int confirmDelayDays) {
+        return addTradingDays(appliedDate, confirmDelayDays);
+    }
+
     private int resolveFundConfirmDelayDays(JsonNode baseInfo, InvestmentProductEntity product) {
         return isQdiiFund(baseInfo, product)
             ? QDII_FUND_CONFIRM_DAYS
@@ -4359,7 +4429,8 @@ public class InvestmentService {
     private int syncFundProfitForProduct(
         InvestmentProductEntity product,
         List<InvestmentPositionEntity> positions,
-        Map<Long, Long> accountUsers
+        Map<Long, Long> accountUsers,
+        Map<Long, FundQuoteSnapshot> sharedFundQuotes
     ) {
         // 先刷新计划，确保当天派息计划已经可用于结算；计划源失败不应阻断净值同步。
         try {
@@ -4368,7 +4439,7 @@ public class InvestmentService {
             log.warn("基金分红计划刷新失败，继续同步净值：productId={}, symbol={}, reason={}",
                 product.getId(), product.getSymbol(), ex.getMessage());
         }
-        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product);
+        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product, sharedFundQuotes);
         if (snapshot == null) {
             return 0;
         }
@@ -4585,9 +4656,10 @@ public class InvestmentService {
         InvestmentProductEntity product,
         List<InvestmentPositionEntity> positions,
         Map<Long, Long> accountUsers,
-        LocalDateTime settlementDateTime
+        LocalDateTime settlementDateTime,
+        Map<Long, FundQuoteSnapshot> sharedFundQuotes
     ) {
-        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product);
+        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product, sharedFundQuotes);
         if (snapshot == null) {
             return 0;
         }
@@ -4610,9 +4682,10 @@ public class InvestmentService {
         InvestmentProductEntity product,
         List<InvestmentTransactionEntity> transactions,
         Map<Long, Long> accountUsers,
-        LocalDateTime settlementDateTime
+        LocalDateTime settlementDateTime,
+        Map<Long, FundQuoteSnapshot> sharedFundQuotes
     ) {
-        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product);
+        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product, sharedFundQuotes);
         if (snapshot == null) {
             return 0;
         }
@@ -4679,6 +4752,22 @@ public class InvestmentService {
     }
 
     private FundQuoteSnapshot fetchAndSaveLatestFundQuote(InvestmentProductEntity product) {
+        return fetchAndSaveLatestFundQuote(product, null);
+    }
+
+    /**
+     * 抓取并落库基金最新净值。sharedFundQuotes 非空时（同步周期内）优先复用同周期快照，
+     * 避免净值同步与多段结算对同一基金重复发起行情 HTTP；抓取成功后写回共享缓存。
+     */
+    private FundQuoteSnapshot fetchAndSaveLatestFundQuote(InvestmentProductEntity product,
+        Map<Long, FundQuoteSnapshot> sharedFundQuotes) {
+        if (sharedFundQuotes != null) {
+            FundQuoteSnapshot cached = sharedFundQuotes.get(product.getId());
+            if (cached != null) {
+                return cached;
+            }
+        }
+
         JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
         BigDecimal latestPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
         LocalDate quoteDate = safeDate(baseInfo.path("FSRQ").asText(null));
@@ -4708,7 +4797,11 @@ public class InvestmentService {
         LocalDateTime syncedAt = LocalDateTime.now();
 
         saveFundQuote(product.getId(), existingQuote, quoteDate, syncedAt, latestPrice, preClosePrice, changeAmount, normalizedChangeRate);
-        return new FundQuoteSnapshot(quoteDate, latestPrice, preClosePrice, syncedAt);
+        FundQuoteSnapshot snapshot = new FundQuoteSnapshot(quoteDate, latestPrice, preClosePrice, syncedAt);
+        if (sharedFundQuotes != null) {
+            sharedFundQuotes.put(product.getId(), snapshot);
+        }
+        return snapshot;
     }
 
     private void saveFundQuote(

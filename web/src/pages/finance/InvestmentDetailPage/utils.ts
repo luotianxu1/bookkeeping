@@ -392,8 +392,35 @@ export function formatAutoInvestStatus(value: string) {
 
 // ---------- 外部行情接口（经行情中心 /api/market/quote/**，不再浏览器直连东财/腾讯） ----------
 
+/** 原东财 pingzhongdata 单位净值点：x=时间戳(ms)，y=单位净值 */
+export interface FundNavTrendPoint {
+  x: number
+  y: number
+  equityReturn?: number
+}
+
+/** 原东财 pingzhongdata 累计净值点：[时间戳(ms), 累计净值] */
+export type FundAccTrendPoint = [number, number]
+
+/** 基金净值走势数据（pingzhongdata 兼容形状，图表/收益计算零改动） */
+export interface FundTrendData {
+  netWorthTrend: FundNavTrendPoint[]
+  acWorthTrend: FundAccTrendPoint[]
+}
+
+/** echarts tooltip 回调条目的最小形状（本目录图表只用到的字段） */
+export interface EChartsTooltipItem {
+  seriesName?: string
+  seriesType?: string
+  marker?: string
+  axisValue?: string | number
+  axisValueLabel?: string
+  value?: unknown
+  data?: unknown
+}
+
 /** 基金净值走势：行情中心近4年日频净值 → 原东财 pingzhongdata 兼容形状（图表/收益计算零改动） */
-export async function fetchFundTrend(fundCode: string): Promise<{ netWorthTrend: any[]; acWorthTrend: any[] }> {
+export async function fetchFundTrend(fundCode: string): Promise<FundTrendData> {
   const data = await getInvestmentFundTrend(fundCode)
   const items = data?.items ?? []
   const toTs = (date: string) => {
@@ -458,7 +485,7 @@ export function toTencentSymbol(code: string, market?: string | null) {
 // ---------- 基金走势点位构建 ----------
 
 export function buildFundTrendPoints(
-  trend: { netWorthTrend: any[]; acWorthTrend?: any[] },
+  trend: { netWorthTrend: FundNavTrendPoint[]; acWorthTrend?: FundAccTrendPoint[] },
   latestAccumulativePoint?: { label?: string | null; value?: number | null },
   latestNetPoint?: { label?: string | null; value?: number | null },
 ) {
@@ -490,7 +517,7 @@ export function buildFundTrendPoints(
 }
 
 export function buildFundTrendValueContext(
-  trend: { netWorthTrend: any[]; acWorthTrend?: any[] },
+  trend: { netWorthTrend: FundNavTrendPoint[]; acWorthTrend?: FundAccTrendPoint[] },
   latestAccumulativePoint?: { label?: string | null; value?: number | null },
   latestNetPoint?: { label?: string | null; value?: number | null },
 ) {
@@ -800,9 +827,10 @@ export function buildFundProfitChartSeriesData(points: InvestmentChartPoint[]) {
 
 // ---------- 图表 tooltip 取值 ----------
 
-export function getTooltipPointValue(item: any) {
-  if (Array.isArray(item?.value)) {
-    return item.value[item.value.length - 1]
+export function getTooltipPointValue(item?: EChartsTooltipItem): unknown {
+  const value = item?.value
+  if (Array.isArray(value)) {
+    return value[value.length - 1]
   }
-  return item?.value
+  return value
 }

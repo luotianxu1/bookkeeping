@@ -2,7 +2,7 @@
 import { formatAmount } from '@/utils/format'
 // 投资账户详情页：展示单个投资账户的汇总、持仓列表和新增持仓。
 // 持仓展示的纯函数见 ./holdingDisplay，新增资产弹窗逻辑见 ./useAddAsset。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AccountIcon from '@/components/common/AccountIcon/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
@@ -38,7 +38,9 @@ import {
   resolveInvestmentAccountIcon,
 } from '@/data/account-icons'
 import { getStoredCurrentUser } from '@/utils/current-user'
-import { getErrorMessage } from '@/api/request'
+import { getErrorMessage, isCancelRequest } from '@/api/request'
+import { useRequestAbort } from '@/composables/useRequestAbort'
+import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
 import {
   compareHoldingsByProfitRate,
   formatCurrency,
@@ -78,6 +80,9 @@ import { useAddAsset } from './useAddAsset'
 
 const router = useRouter()
 const route = useRoute()
+// 数据加载防竞态：新加载先 abort 旧请求，旧响应按代际号静默丢弃
+const { signalFor } = useRequestAbort()
+let loadSeq = 0
 
 const investmentTabs = ['A股', '基金']
 const HOLDING_VIEW_MODE_STORAGE_KEY = 'bookkeeping_investment_holding_view_mode'
@@ -114,7 +119,6 @@ const accountSettingsIcon = ref(DEFAULT_INVESTMENT_ACCOUNT_ICON)
 const accountSettingsRemark = ref('')
 const accountSettingsIncludeInNetWorth = ref(true)
 const accountSettingsError = ref('')
-let refreshVisibilityTimer: number | null = null
 
 const {
   showAddModal,
@@ -226,16 +230,12 @@ onMounted(() => {
   restoreHoldingViewMode()
   void loadInvestmentData()
   currentTime.value = new Date()
-  refreshVisibilityTimer = window.setInterval(() => {
-    currentTime.value = new Date()
-  }, 30 * 1000)
 })
 
-onBeforeUnmount(() => {
-  if (refreshVisibilityTimer !== null) {
-    window.clearInterval(refreshVisibilityTimer)
-  }
-})
+// 时钟轮询感知页面可见性：后台标签页跳过，恢复可见立即校准
+useVisibilityPolling(() => {
+  currentTime.value = new Date()
+}, 30 * 1000)
 
 watch(() => route.params.accountId, () => {
   void loadInvestmentData()
@@ -364,12 +364,15 @@ async function loadInvestmentData() {
     return
   }
 
+  const seq = ++loadSeq
+  const signal = signalFor()
+
   isLoading.value = true
   pageError.value = ''
 
   try {
     const [accountList] = await Promise.all([
-      getAccounts({ userId: currentUser.id, status: 'active' }),
+      getAccounts({ userId: currentUser.id, status: 'active' }, { signal }),
     ])
     investmentAccounts.value = accountList.filter((account) => account.accountTypeCode === 'investment')
     fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
@@ -395,11 +398,15 @@ async function loadInvestmentData() {
     }
 
     const [summaryData, positionList, transactionList, autoInvestPlanList] = await Promise.all([
-      getInvestmentSummary({ userId: currentUser.id, accountId: targetAccount.id }),
-      getInvestmentPositions({ userId: currentUser.id, accountId: targetAccount.id }),
-      getInvestmentTransactions({ userId: currentUser.id, accountId: targetAccount.id }),
-      getInvestmentAutoInvestPlans({ userId: currentUser.id, accountId: targetAccount.id }),
+      getInvestmentSummary({ userId: currentUser.id, accountId: targetAccount.id }, { signal }),
+      getInvestmentPositions({ userId: currentUser.id, accountId: targetAccount.id }, { signal }),
+      getInvestmentTransactions({ userId: currentUser.id, accountId: targetAccount.id }, { signal }),
+      getInvestmentAutoInvestPlans({ userId: currentUser.id, accountId: targetAccount.id }, { signal }),
     ])
+
+    if (seq !== loadSeq) {
+      return
+    }
 
     summary.value = summaryData
     positions.value = positionList
@@ -407,9 +414,14 @@ async function loadInvestmentData() {
     autoInvestPlans.value = autoInvestPlanList
     syncActiveInvestmentTab()
   } catch (error) {
+    if (isCancelRequest(error) || seq !== loadSeq) {
+      return
+    }
     pageError.value = getErrorMessage(error, '投资账户加载失败')
   } finally {
-    isLoading.value = false
+    if (seq === loadSeq) {
+      isLoading.value = false
+    }
   }
 }
 

@@ -36,6 +36,7 @@ import {
   toTencentSymbol,
   toneByNumber,
   type FundTrendRange,
+  type FundTrendData,
   type FundTrendValueEntry,
   type FundTrendValueMode,
 } from './utils'
@@ -43,8 +44,8 @@ import { getErrorMessage } from '@/api/request'
 
 type FundMarketSnapshot = {
   expiresAt: number
-  baseInfo: Record<string, any>
-  trend: { netWorthTrend: any[]; acWorthTrend: any[] }
+  baseInfo: Record<string, string | null>
+  trend: FundTrendData
   periodReturns: Record<string, number | null>
 }
 
@@ -375,8 +376,8 @@ export function useFundMarket(options: UseFundMarketOptions) {
 
   async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: string) {
     const cached = fundMarketCache.get(fundCode)
-    let baseInfo: Record<string, any>
-    let trend: { netWorthTrend: any[]; acWorthTrend: any[] }
+    let baseInfo: Record<string, string | null>
+    let trend: FundTrendData
     let periodReturns: Record<string, number | null>
     if (cached && cached.expiresAt > Date.now()) {
       baseInfo = cached.baseInfo

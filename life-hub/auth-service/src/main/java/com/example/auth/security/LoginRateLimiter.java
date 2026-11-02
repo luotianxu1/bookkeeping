@@ -28,7 +28,11 @@ public class LoginRateLimiter {
         long windowStart = System.currentTimeMillis() - WINDOW_MILLIS;
         synchronized (timestamps) {
             evictExpired(timestamps, windowStart);
-            return timestamps.size() >= MAX_FAILURES;
+            boolean blocked = timestamps.size() >= MAX_FAILURES;
+            if (!blocked) {
+                evictKeyIfEmpty(key, timestamps);
+            }
+            return blocked;
         }
     }
 
@@ -50,6 +54,13 @@ public class LoginRateLimiter {
     private void evictExpired(Deque<Long> timestamps, long windowStart) {
         while (!timestamps.isEmpty() && timestamps.peekFirst() < windowStart) {
             timestamps.pollFirst();
+        }
+    }
+
+    /** 窗口清空后移除 map 条目，防止 key 无限累积（按引用条件删除，不影响并发新建的条目） */
+    private void evictKeyIfEmpty(String key, Deque<Long> timestamps) {
+        if (timestamps.isEmpty()) {
+            failures.remove(key, timestamps);
         }
     }
 }

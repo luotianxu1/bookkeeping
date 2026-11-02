@@ -9,6 +9,11 @@ import java.util.List;
 @Data
 public class GoldPriceResponse {
 
+    /**
+     * ⚠️ 镜像类：与本文件逐字段对应的副本位于
+     * market-service 的 com.example.market.gold.dto.GoldPriceResponse（行情中心权威定义）。
+     * 两边字段必须同步修改，改前先 grep 对端类名。
+     */
     private GoldMarketQuote spotGold;
     private GoldMarketQuote londonGold;
     private GoldMarketStats stats;

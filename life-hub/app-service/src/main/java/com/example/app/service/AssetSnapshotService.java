@@ -11,6 +11,8 @@ import com.example.app.mapper.AccountMapper;
 import com.example.app.mapper.AccountTypeMapper;
 import com.example.app.mapper.AssetDailySnapshotMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -34,17 +36,20 @@ public class AssetSnapshotService {
     private final AccountTypeMapper accountTypeMapper;
     private final AssetDailySnapshotMapper assetDailySnapshotMapper;
     private final AccountService accountService;
+    private final TransactionTemplate transactionTemplate;
 
     public AssetSnapshotService(
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         AssetDailySnapshotMapper assetDailySnapshotMapper,
-        AccountService accountService
+        AccountService accountService,
+        PlatformTransactionManager transactionManager
     ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.assetDailySnapshotMapper = assetDailySnapshotMapper;
         this.accountService = accountService;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     public int captureDailySnapshots(LocalDate snapshotDate) {
@@ -60,22 +65,30 @@ public class AssetSnapshotService {
             .map(AccountEntity::getUserId)
             .filter(userId -> userId != null && userId > 0)
             .collect(Collectors.toSet());
+        // 按用户粒度加事务：单户写入原子化，某户失败不影响其他户，可整户重跑
         int savedCount = 0;
         for (Long userId : userIds) {
-            List<AccountResponse> activeAccounts = accountService.listNetWorthAccounts(userId, ACTIVE_STATUS);
-            BigDecimal totalAssets = accountService.calculateTotalAssets(activeAccounts);
-            for (AccountResponse account : activeAccounts) {
-                saveOrUpdateSnapshot(
-                    userId,
-                    account.getId(),
-                    targetDate,
-                    accountService.resolveSignedNetWorthBalance(account)
-                );
-                savedCount++;
-            }
-            saveOrUpdateSnapshot(userId, 0L, targetDate, totalAssets);
+            Integer userSaved = transactionTemplate.execute(status -> captureUserSnapshots(userId, targetDate));
+            savedCount += userSaved == null ? 0 : userSaved;
+        }
+        return savedCount;
+    }
+
+    private int captureUserSnapshots(Long userId, LocalDate targetDate) {
+        List<AccountResponse> activeAccounts = accountService.listNetWorthAccounts(userId, ACTIVE_STATUS);
+        BigDecimal totalAssets = accountService.calculateTotalAssets(activeAccounts);
+        int savedCount = 0;
+        for (AccountResponse account : activeAccounts) {
+            saveOrUpdateSnapshot(
+                userId,
+                account.getId(),
+                targetDate,
+                accountService.resolveSignedNetWorthBalance(account)
+            );
             savedCount++;
         }
+        saveOrUpdateSnapshot(userId, 0L, targetDate, totalAssets);
+        savedCount++;
         return savedCount;
     }
 

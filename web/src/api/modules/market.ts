@@ -482,3 +482,218 @@ export const getInvestmentStockSnapshot = (code: string) =>
   requestGet<Record<string, string | null>>(marketRequest, '/api/market/quote/stock/snapshot', {
     params: { code },
   })
+
+/* ==================== market 域接口（自 api/modules/finance.ts 迁入，finance.ts 保留 re-export 兼容） ==================== */
+
+export type GoldPriceRange = '1d' | '7d' | '30d' | '3m' | '1y' | '3y'
+
+export interface GoldRealtimePrice {
+  name: string
+  unit: string
+  price: number
+  change: number
+  changePercent: number
+  updatedAt: string
+  source: string
+}
+
+export interface GoldMarketQuote {
+  name: string
+  unit: string
+  price: number
+  change: number
+  changePercent: number
+  updatedAt: string
+}
+
+export interface GoldMarketStats {
+  openPrice: number
+  highPrice: number
+  lowPrice: number
+  buyPrice: number
+  sellPrice: number
+  unit: string
+}
+
+export interface JewelryGoldPrice {
+  brandName: string
+  price: number
+  unit: string
+  updatedAt: string
+}
+
+export interface GoldChartPoint {
+  label: string
+  price: number
+}
+
+export interface GoldPrice {
+  spotGold: GoldMarketQuote
+  londonGold: GoldMarketQuote
+  stats: GoldMarketStats
+  jewelryPrices: JewelryGoldPrice[]
+  chartPoints: GoldChartPoint[]
+  updatedAt: string
+  source: string
+}
+
+export type MarketNewsCategory = 'all' | 'focus' | 'china' | 'stock' | 'commodity' | 'fund' | 'macro'
+
+export interface MarketNewsItem {
+  code: string
+  title: string
+  summary: string
+  url: string
+  publishedAt: string | null
+  commentCount: number
+  shareCount: number
+  relatedStockCount: number
+  highlight: boolean
+}
+
+export interface MarketNews {
+  categoryKey: MarketNewsCategory
+  categoryLabel: string
+  count: number
+  updatedAt: string
+  source: string
+  items: MarketNewsItem[]
+}
+
+export interface MarketStatusIndex {
+  code: string
+  name: string
+  value: number
+  change: number
+  changePercent: number
+}
+
+export interface MarketStatus {
+  statusKey: 'strong' | 'rebound' | 'balanced' | 'weak' | 'panic' | string
+  statusLabel: string
+  tone: 'positive' | 'neutral' | 'negative' | string
+  summary: string
+  advanceCount: number
+  declineCount: number
+  flatCount: number
+  advanceRatio: number
+  turnover: number
+  updatedAt: string
+  source: string
+  indices: MarketStatusIndex[]
+}
+
+export interface LimitUpDownStock {
+  code: string
+  name: string
+  changePercent: number
+  industry: string
+}
+
+export interface LimitUpDownStatistics {
+  limitUpCount: number
+  limitDownCount: number
+  brokenLimitCount: number
+  sealRate: number
+  updatedAt: string
+  source: string
+  limitUps: LimitUpDownStock[]
+  limitDowns: LimitUpDownStock[]
+}
+
+export interface UsPremarketIndex {
+  indexCode: string
+  indexName: string
+  proxySymbol: string
+  proxyName: string
+  price: number
+  change?: number | null
+  changePercent?: number | null
+  volume?: number | null
+  bidPrice?: number | null
+  askPrice?: number | null
+  lastTradeTime?: string | null
+}
+
+export interface UsPremarketData {
+  sessionStatus: string
+  sessionLabel: string
+  updatedAt: string
+  source: string
+  indices: UsPremarketIndex[]
+}
+
+export interface UsOverviewTrendPoint {
+  time: string
+  price: number
+  avg?: number | null
+  volume?: number | null
+}
+
+export interface UsOverviewIndex {
+  code: string
+  name: string
+  proxySymbol?: string | null
+  proxyName?: string | null
+  price?: number | null
+  change?: number | null
+  changePercent?: number | null
+  open?: number | null
+  high?: number | null
+  low?: number | null
+  preClose?: number | null
+  quoteTime?: string | null
+  trendDate?: string | null
+  trendPrevClose?: number | null
+  points: UsOverviewTrendPoint[]
+}
+
+export interface UsOverviewData {
+  updatedAt: string
+  indices: UsOverviewIndex[]
+}
+
+export function getGoldPrices(
+  range: GoldPriceRange = '1d',
+  forceRefreshCurrent = false,
+  includeChart = true,
+) {
+  // 金价数据源为行情中心 market-service（金投网）
+  return requestGet<GoldPrice>(marketRequest, '/api/market/gold-prices', {
+    params: {
+      range,
+      forceRefreshCurrent,
+      includeChart,
+      ...(forceRefreshCurrent ? { _: Date.now() } : {}),
+    },
+  })
+}
+
+export function getRealtimeGoldPrice(forceRefreshCurrent = false) {
+  return requestGet<GoldRealtimePrice>(marketRequest, '/api/market/gold-prices/realtime', {
+    params: {
+      forceRefreshCurrent,
+      ...(forceRefreshCurrent ? { _: Date.now() } : {}),
+    },
+  })
+}
+
+export function getMarketNews(params: { category?: MarketNewsCategory; limit?: number } = {}) {
+  return requestGet<MarketNews>(marketRequest, '/api/market/news', { params })
+}
+
+export function getLimitUpDownStatistics() {
+  return requestGet<LimitUpDownStatistics>(marketRequest, '/api/market/limit-up-down')
+}
+
+export function getMarketStatus() {
+  return requestGet<MarketStatus>(marketRequest, '/api/market/status')
+}
+
+export function getUsPremarket() {
+  return requestGet<UsPremarketData>(marketRequest, '/api/market/us/premarket', { timeout: 15000 })
+}
+
+export function getUsOverview() {
+  return requestGet<UsOverviewData>(marketRequest, '/api/market/us/overview', { timeout: 15000 })
+}

@@ -18,6 +18,7 @@ import {
   normalizeDateLabel,
   resolveTradeMarkerDateLabel,
   TRADE_MARKER_COLORS,
+  type EChartsTooltipItem,
 } from './utils'
 
 export type UseTrendChartsOptions = {
@@ -29,6 +30,41 @@ export type UseTrendChartsOptions = {
   showFundCumulativeProfitChart: ComputedRef<boolean>
   cumulativeProfitChartAriaLabel: ComputedRef<string>
   selectedFundChartView: Ref<'netValue' | 'profit'>
+}
+
+/** 交易标记数据点（挂在 scatter 系列上，附带交易信息供 tooltip 使用） */
+type TradeMarkerPoint = {
+  value: [string, number]
+  tradeAt: string
+  amount: number
+  price: number
+  settlementStatus: string | null | undefined
+}
+
+/** 交易标记 scatter 系列的形状 */
+type TradeMarkerSeries = {
+  name: string
+  type: 'scatter'
+  data: TradeMarkerPoint[]
+  xAxisIndex: number
+  yAxisIndex: number
+  symbol: string
+  symbolSize: number
+  itemStyle: { color: string }
+  emphasis: { scale: number }
+  z: number
+}
+
+/** 走势折线系列的形状 */
+type LineTrendSeries = {
+  name: string
+  type: 'line'
+  smooth: boolean
+  showSymbol: boolean
+  data: Array<number | null>
+  lineStyle?: { width: number; type?: string; color?: string }
+  areaStyle?: { opacity: number }
+  itemStyle?: { color: string }
 }
 
 export function useTrendCharts(options: UseTrendChartsOptions) {
@@ -111,8 +147,8 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
   function buildTradeMarkerSeries(points: InvestmentChartPoint[], chartType: 'line' | 'candlestick') {
     const isFundLineChart = chartType === 'line' && detail.value?.productType === 'fund'
     const pointMap = new Map(points.map((point) => [normalizeDateLabel(point.label), point]))
-    const buyData: Array<Record<string, any>> = []
-    const sellData: Array<Record<string, any>> = []
+    const buyData: TradeMarkerPoint[] = []
+    const sellData: TradeMarkerPoint[] = []
 
     for (const entry of transactions.value) {
       if (entry.tradeType !== 'buy' && entry.tradeType !== 'sell') {
@@ -136,7 +172,7 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
         continue
       }
 
-      const marker = {
+      const marker: TradeMarkerPoint = {
         value: [point.label, targetPrice],
         tradeAt: entry.tradeAt,
         amount: entry.amount,
@@ -151,7 +187,7 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
       }
     }
 
-    const result: Array<Record<string, any>> = []
+    const result: TradeMarkerSeries[] = []
     if (buyData.length > 0) {
       result.push({
         name: '买入点',
@@ -225,7 +261,7 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
     const baselineValue = resolveLineChartBaseline(points, isFundTrendChart)
     const costPrice = chartCostBaseline.value
     const tradeMarkerSeries = buildTradeMarkerSeries(points, 'line')
-    const series: Array<Record<string, any>> = [
+    const series: Array<LineTrendSeries | TradeMarkerSeries> = [
       {
         name: isFundTrendChart ? '累计净值' : '单位净值',
         type: 'line',
@@ -263,8 +299,8 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
         backgroundColor: tooltipBg,
         borderColor: tooltipBorder,
         textStyle: { color: tooltipText },
-        formatter: (params: any) => {
-          const items = Array.isArray(params) ? params : [params]
+        formatter: (params: unknown) => {
+          const items = (Array.isArray(params) ? params : [params]) as EChartsTooltipItem[]
           if (items.length === 0) {
             return '--'
           }
@@ -339,8 +375,8 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
         backgroundColor: tooltipBg,
         borderColor: tooltipBorder,
         textStyle: { color: tooltipText },
-        formatter: (params: any) => {
-          const items = Array.isArray(params) ? params : [params]
+        formatter: (params: unknown) => {
+          const items = (Array.isArray(params) ? params : [params]) as EChartsTooltipItem[]
           if (items.length === 0) {
             return '--'
           }
@@ -455,9 +491,9 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
         backgroundColor: tooltipBg,
         borderColor: tooltipBorder,
         textStyle: { color: tooltipText },
-        formatter: (params: any) => {
-          const items = Array.isArray(params) ? params : [params]
-          const item = items.find((entry: any) => {
+        formatter: (params: unknown) => {
+          const items = (Array.isArray(params) ? params : [params]) as EChartsTooltipItem[]
+          const item = items.find((entry) => {
             const entryValue = Array.isArray(entry?.value) ? entry.value[1] : entry?.value
             return entryValue !== null && entryValue !== undefined && Number.isFinite(Number(entryValue))
           }) ?? items[0]

@@ -1,4 +1,37 @@
-import { financeRequest, marketRequest, requestDelete, requestGet, requestPost, requestPut } from '@/api/request'
+import type { AxiosRequestConfig } from 'axios'
+import { financeRequest, requestDelete, requestGet, requestPost, requestPut } from '@/api/request'
+
+// market 域接口（金价/快讯/涨跌停/市场状态/美股）已迁至 ./market，此处 re-export 保持既有 import 路径兼容
+export {
+  getGoldPrices,
+  getRealtimeGoldPrice,
+  getMarketNews,
+  getLimitUpDownStatistics,
+  getMarketStatus,
+  getUsPremarket,
+  getUsOverview,
+} from './market'
+export type {
+  GoldPriceRange,
+  GoldRealtimePrice,
+  GoldMarketQuote,
+  GoldMarketStats,
+  JewelryGoldPrice,
+  GoldChartPoint,
+  GoldPrice,
+  MarketNewsCategory,
+  MarketNewsItem,
+  MarketNews,
+  MarketStatusIndex,
+  MarketStatus,
+  LimitUpDownStock,
+  LimitUpDownStatistics,
+  UsPremarketIndex,
+  UsPremarketData,
+  UsOverviewTrendPoint,
+  UsOverviewIndex,
+  UsOverviewData,
+} from './market'
 
 export interface AccountType {
   id: number
@@ -182,87 +215,12 @@ export interface CategoryQuery {
   status?: string
 }
 
-export type GoldPriceRange = '1d' | '7d' | '30d' | '3m' | '1y' | '3y'
-
-export interface GoldRealtimePrice {
-  name: string
-  unit: string
-  price: number
-  change: number
-  changePercent: number
-  updatedAt: string
-  source: string
-}
-
-export interface GoldMarketQuote {
-  name: string
-  unit: string
-  price: number
-  change: number
-  changePercent: number
-  updatedAt: string
-}
-
-export interface GoldMarketStats {
-  openPrice: number
-  highPrice: number
-  lowPrice: number
-  buyPrice: number
-  sellPrice: number
-  unit: string
-}
-
-export interface JewelryGoldPrice {
-  brandName: string
-  price: number
-  unit: string
-  updatedAt: string
-}
-
-export interface GoldChartPoint {
-  label: string
-  price: number
-}
-
-export interface GoldPrice {
-  spotGold: GoldMarketQuote
-  londonGold: GoldMarketQuote
-  stats: GoldMarketStats
-  jewelryPrices: JewelryGoldPrice[]
-  chartPoints: GoldChartPoint[]
-  updatedAt: string
-  source: string
-}
-
 export interface ExchangeRate {
   fromCurrency: string
   toCurrency: string
   rate: number
   updatedAt: string
   source: string
-}
-
-export type MarketNewsCategory = 'all' | 'focus' | 'china' | 'stock' | 'commodity' | 'fund' | 'macro'
-
-export interface MarketNewsItem {
-  code: string
-  title: string
-  summary: string
-  url: string
-  publishedAt: string | null
-  commentCount: number
-  shareCount: number
-  relatedStockCount: number
-  highlight: boolean
-}
-
-export interface MarketNews {
-  categoryKey: MarketNewsCategory
-  categoryLabel: string
-  count: number
-  updatedAt: string
-  source: string
-  items: MarketNewsItem[]
 }
 
 export type StockScreenMarket = 'ALL' | 'SH' | 'SZ' | 'BJ'
@@ -375,99 +333,6 @@ export interface StockScreenStopSubmission {
   message: string
   runId?: number | null
   submittedAt: string
-}
-
-export interface MarketStatusIndex {
-  code: string
-  name: string
-  value: number
-  change: number
-  changePercent: number
-}
-
-export interface MarketStatus {
-  statusKey: 'strong' | 'rebound' | 'balanced' | 'weak' | 'panic' | string
-  statusLabel: string
-  tone: 'positive' | 'neutral' | 'negative' | string
-  summary: string
-  advanceCount: number
-  declineCount: number
-  flatCount: number
-  advanceRatio: number
-  turnover: number
-  updatedAt: string
-  source: string
-  indices: MarketStatusIndex[]
-}
-
-export interface LimitUpDownStock {
-  code: string
-  name: string
-  changePercent: number
-  industry: string
-}
-
-export interface LimitUpDownStatistics {
-  limitUpCount: number
-  limitDownCount: number
-  brokenLimitCount: number
-  sealRate: number
-  updatedAt: string
-  source: string
-  limitUps: LimitUpDownStock[]
-  limitDowns: LimitUpDownStock[]
-}
-
-export interface UsPremarketIndex {
-  indexCode: string
-  indexName: string
-  proxySymbol: string
-  proxyName: string
-  price: number
-  change?: number | null
-  changePercent?: number | null
-  volume?: number | null
-  bidPrice?: number | null
-  askPrice?: number | null
-  lastTradeTime?: string | null
-}
-
-export interface UsPremarketData {
-  sessionStatus: string
-  sessionLabel: string
-  updatedAt: string
-  source: string
-  indices: UsPremarketIndex[]
-}
-
-export interface UsOverviewTrendPoint {
-  time: string
-  price: number
-  avg?: number | null
-  volume?: number | null
-}
-
-export interface UsOverviewIndex {
-  code: string
-  name: string
-  proxySymbol?: string | null
-  proxyName?: string | null
-  price?: number | null
-  change?: number | null
-  changePercent?: number | null
-  open?: number | null
-  high?: number | null
-  low?: number | null
-  preClose?: number | null
-  quoteTime?: string | null
-  trendDate?: string | null
-  trendPrevClose?: number | null
-  points: UsOverviewTrendPoint[]
-}
-
-export interface UsOverviewData {
-  updatedAt: string
-  indices: UsOverviewIndex[]
 }
 
 export type TransactionType = 'expense' | 'income' | 'transfer'
@@ -1450,8 +1315,8 @@ export function updateAccountTypeSortOrders(params: SaveAccountTypeSortOrdersPar
   return requestPut<void, SaveAccountTypeSortOrdersParams>(financeRequest, '/api/finance/account-types/actions/sort-orders', params)
 }
 
-export function getAccounts(params: AccountQuery = {}) {
-  return requestGet<Account[]>(financeRequest, '/api/finance/accounts', { params })
+export function getAccounts(params: AccountQuery = {}, config?: AxiosRequestConfig) {
+  return requestGet<Account[]>(financeRequest, '/api/finance/accounts', { params, ...config })
 }
 
 export function getAccount(id: number) {
@@ -1611,40 +1476,10 @@ export function deleteCategory(id: number, userId: number) {
   })
 }
 
-export function getGoldPrices(
-  range: GoldPriceRange = '1d',
-  forceRefreshCurrent = false,
-  includeChart = true,
-) {
-  // 金价已迁至行情中心 market-service（响应结构不变）
-  return requestGet<GoldPrice>(marketRequest, '/api/market/gold-prices', {
-    params: {
-      range,
-      forceRefreshCurrent,
-      includeChart,
-      ...(forceRefreshCurrent ? { _: Date.now() } : {}),
-    },
-  })
-}
-
-export function getRealtimeGoldPrice(forceRefreshCurrent = false) {
-  // 金价已迁至行情中心 market-service（响应结构不变）
-  return requestGet<GoldRealtimePrice>(marketRequest, '/api/market/gold-prices/realtime', {
-    params: {
-      forceRefreshCurrent,
-      ...(forceRefreshCurrent ? { _: Date.now() } : {}),
-    },
-  })
-}
-
 export function getExchangeRate(from: string, to: string) {
   return requestGet<ExchangeRate>(financeRequest, '/api/finance/exchange-rates', {
     params: { from, to },
   })
-}
-
-export function getMarketNews(params: { category?: MarketNewsCategory; limit?: number } = {}) {
-  return requestGet<MarketNews>(marketRequest, '/api/market/news', { params })
 }
 
 export function getStockScreenStatus() {
@@ -1681,22 +1516,6 @@ export function stopStockScreenRun() {
     '/api/finance/stock-screener/runs/stop',
     {},
   )
-}
-
-export function getLimitUpDownStatistics() {
-  return requestGet<LimitUpDownStatistics>(marketRequest, '/api/market/limit-up-down')
-}
-
-export function getMarketStatus() {
-  return requestGet<MarketStatus>(marketRequest, '/api/market/status')
-}
-
-export function getUsPremarket() {
-  return requestGet<UsPremarketData>(marketRequest, '/api/market/us/premarket', { timeout: 15000 })
-}
-
-export function getUsOverview() {
-  return requestGet<UsOverviewData>(marketRequest, '/api/market/us/overview', { timeout: 15000 })
 }
 
 export function createTransaction(params: CreateTransactionParams) {
@@ -1813,8 +1632,8 @@ export function createInvestmentProduct(params: SaveInvestmentProductParams) {
   return requestPost<InvestmentProduct, SaveInvestmentProductParams>(financeRequest, '/api/finance/investments/products', params)
 }
 
-export function getInvestmentSummary(params: { userId: number; accountId?: number }) {
-  return requestGet<InvestmentSummary>(financeRequest, '/api/finance/investments/summary', { params })
+export function getInvestmentSummary(params: { userId: number; accountId?: number }, config?: AxiosRequestConfig) {
+  return requestGet<InvestmentSummary>(financeRequest, '/api/finance/investments/summary', { params, ...config })
 }
 
 export function getInvestmentTrend(params: { userId: number; accountId?: number; range?: InvestmentTrendRange }) {
@@ -1839,12 +1658,12 @@ export function getFundProfitPage(params: {
   view?: FundProfitView
   anchor?: string
   selected?: string
-}) {
-  return requestGet<FundProfitPage>(financeRequest, '/api/finance/investments/fund-profit', { params })
+}, config?: AxiosRequestConfig) {
+  return requestGet<FundProfitPage>(financeRequest, '/api/finance/investments/fund-profit', { params, ...config })
 }
 
-export function getInvestmentPositions(params: InvestmentPositionQuery) {
-  return requestGet<InvestmentPosition[]>(financeRequest, '/api/finance/investments/positions', { params })
+export function getInvestmentPositions(params: InvestmentPositionQuery, config?: AxiosRequestConfig) {
+  return requestGet<InvestmentPosition[]>(financeRequest, '/api/finance/investments/positions', { params, ...config })
 }
 
 export function getInvestmentPosition(id: number) {
@@ -1878,8 +1697,8 @@ export function deleteInvestmentPosition(id: number, userId: number) {
   })
 }
 
-export function getInvestmentTransactions(params: { userId: number; accountId?: number; positionId?: number }) {
-  return requestGet<InvestmentTransaction[]>(financeRequest, '/api/finance/investments/transactions', { params })
+export function getInvestmentTransactions(params: { userId: number; accountId?: number; positionId?: number }, config?: AxiosRequestConfig) {
+  return requestGet<InvestmentTransaction[]>(financeRequest, '/api/finance/investments/transactions', { params, ...config })
 }
 
 export function getInvestmentTransactionPage(params: { userId: number; accountId?: number; positionId?: number; page?: number; pageSize?: number }) {
@@ -1898,8 +1717,8 @@ export function deleteInvestmentTransaction(id: number, userId: number) {
   return requestDelete<void>(financeRequest, `/api/finance/investments/transactions/${id}`, { params: { userId } })
 }
 
-export function getInvestmentAutoInvestPlans(params: { userId: number; accountId?: number; positionId?: number; status?: string }) {
-  return requestGet<InvestmentAutoInvestPlan[]>(financeRequest, '/api/finance/investments/auto-invest-plans', { params })
+export function getInvestmentAutoInvestPlans(params: { userId: number; accountId?: number; positionId?: number; status?: string }, config?: AxiosRequestConfig) {
+  return requestGet<InvestmentAutoInvestPlan[]>(financeRequest, '/api/finance/investments/auto-invest-plans', { params, ...config })
 }
 
 export function createInvestmentAutoInvestPlan(params: SaveInvestmentAutoInvestPlanParams) {

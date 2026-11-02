@@ -27,6 +27,7 @@ public class RegisterRateLimiter {
         long windowStart = System.currentTimeMillis() - WINDOW_MILLIS;
         synchronized (timestamps) {
             evictExpired(timestamps, windowStart);
+            evictKeyIfEmpty(key, timestamps);
             return timestamps.size() >= MAX_ATTEMPTS;
         }
     }
@@ -44,6 +45,13 @@ public class RegisterRateLimiter {
     private void evictExpired(Deque<Long> timestamps, long windowStart) {
         while (!timestamps.isEmpty() && timestamps.peekFirst() < windowStart) {
             timestamps.pollFirst();
+        }
+    }
+
+    /** 窗口清空后移除 map 条目，防止 key 无限累积（按引用条件删除，不影响并发新建的条目） */
+    private void evictKeyIfEmpty(String key, Deque<Long> timestamps) {
+        if (timestamps.isEmpty()) {
+            attempts.remove(key, timestamps);
         }
     }
 }

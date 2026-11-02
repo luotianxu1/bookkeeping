@@ -167,43 +167,30 @@ public final class F10Service {
         return out;
     }
 
-    /** lru_cache 等价物：按日 LRU 缓存（容量 64），非交易日结果不缓存 */
-    private static final Map<String, Map<String, Map<String, Object>>> SSE_CACHE = new LinkedHashMap<>(64, 0.75f, true);
-    private static final Map<String, Map<String, Map<String, Object>>> SZSE_CACHE = new LinkedHashMap<>(64, 0.75f, true);
-    private static final Object CACHE_LOCK = new Object();
+    /** 融资融券日数据缓存：按日 key（历史日数据不可变，TTL 仅用于限制内存），容量 64 */
+    private static final MarketUtils.KeyedTtlCache<String, Map<String, Map<String, Object>>> SSE_CACHE =
+        new MarketUtils.KeyedTtlCache<>(12 * 3600_000L, 30_000L, 64);
+    private static final MarketUtils.KeyedTtlCache<String, Map<String, Map<String, Object>>> SZSE_CACHE =
+        new MarketUtils.KeyedTtlCache<>(12 * 3600_000L, 30_000L, 64);
 
     private interface DayFetcher {
         Map<String, Map<String, Object>> fetch(String day) throws Exception;
     }
 
     private static Map<String, Map<String, Object>> cachedDay(
-        Map<String, Map<String, Map<String, Object>>> cache, String day, DayFetcher fetcher) {
-        synchronized (CACHE_LOCK) {
-            Map<String, Map<String, Object>> hit = cache.get(day);
-            if (hit != null) {
-                return hit;
-            }
-        }
-        Map<String, Map<String, Object>> value;
-        try {
-            value = fetcher.fetch(day);
-        } catch (Exception e) {
-            if (e instanceof RuntimeException re) {
+        MarketUtils.KeyedTtlCache<String, Map<String, Map<String, Object>>> cache, String day, DayFetcher fetcher) {
+        Map<String, Map<String, Object>> value = cache.get(day, d -> {
+            try {
+                return fetcher.fetch(d);
+            } catch (RuntimeException re) {
                 throw re;
+            } catch (Exception e) {
+                throw new IllegalStateException(e.getMessage(), e);
             }
-            throw new IllegalStateException(e.getMessage(), e);
-        }
-        if (value.isEmpty()) {
+        });
+        if (value == null) {
+            // loader 失败且无同日旧值可降级：非交易日或数据源暂不可用
             throw new IllegalStateException("无融资融券数据（非交易日）");
-        }
-        synchronized (CACHE_LOCK) {
-            if (cache.size() >= 64) {
-                for (String oldest : cache.keySet()) {
-                    cache.remove(oldest);
-                    break;
-                }
-            }
-            cache.put(day, value);
         }
         return value;
     }

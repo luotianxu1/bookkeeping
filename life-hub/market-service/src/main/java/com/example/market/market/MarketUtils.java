@@ -59,79 +59,16 @@ public final class MarketUtils {
 
     /**
      * 带 TTL + single-flight + 失败降级的键值缓存（线程安全）。
-     *
-     * <p>语义：</p>
-     * <ul>
-     *   <li>命中未过期条目直接返回；过期后回源，同一 key 的并发回源按 key 串行化
-     *       （等待者在锁上拿到回源后的新值），不同 key 互不影响；</li>
-     *   <li>回源成功 → 写入正常条目（TTL 内有效）；</li>
-     *   <li>回源失败 → 有旧值时降级为 stale 条目（仅 failureTtl 窗口内有效，
-     *       避免上游故障期间每请求都直打上游），无旧值时写入 null 负条目；
-     *       窗口过后下一次 get 自动重试上游；</li>
-     *   <li>get 返回 null 表示「上游失败且窗口内无可用值」，调用方自行兜底；
-     *       loader 正常路径不得返回 null（用异常表达失败）。</li>
-     * </ul>
+     * 实现已上移至 common（com.example.common.util.KeyedTtlCache）供各服务复用，
+     * 此处仅保留原类型别名，既有调用点零改动。
      *
      * @param ttlMillis        成功回源的有效期
      * @param failureTtlMillis 失败降级条目（stale/null）的有效期，窗口过后重试
      * @param maxSize          容量上限；满时先清过期条目，仍满则整体清空（0 = 不限）
      */
-    public static final class KeyedTtlCache<K, V> {
-        private final long ttlMillis;
-        private final long failureTtlMillis;
-        private final int maxSize;
-        private final java.util.concurrent.ConcurrentHashMap<K, Entry<V>> map = new java.util.concurrent.ConcurrentHashMap<>();
-        private final java.util.concurrent.ConcurrentHashMap<K, Object> keyLocks = new java.util.concurrent.ConcurrentHashMap<>();
-
-        private record Entry<V>(V value, long validUntil, boolean stale) {
-        }
-
+    public static final class KeyedTtlCache<K, V> extends com.example.common.util.KeyedTtlCache<K, V> {
         public KeyedTtlCache(long ttlMillis, long failureTtlMillis, int maxSize) {
-            this.ttlMillis = ttlMillis;
-            this.failureTtlMillis = failureTtlMillis;
-            this.maxSize = maxSize;
-        }
-
-        public V get(K key, java.util.function.Function<K, V> loader) {
-            Entry<V> entry = map.get(key);
-            if (entry != null && System.currentTimeMillis() < entry.validUntil()) {
-                return entry.value();
-            }
-            Object lock = keyLocks.computeIfAbsent(key, k -> new Object());
-            synchronized (lock) {
-                // double-check：等锁期间同 key 可能已被其他线程回源
-                entry = map.get(key);
-                long now = System.currentTimeMillis();
-                if (entry != null && now < entry.validUntil()) {
-                    return entry.value();
-                }
-                try {
-                    V value = loader.apply(key);
-                    put(key, new Entry<>(value, now + ttlMillis, false));
-                    return value;
-                } catch (Exception ex) {
-                    V stale = entry == null ? null : entry.value();
-                    put(key, new Entry<>(stale, now + failureTtlMillis, true));
-                    return stale;
-                }
-            }
-        }
-
-        /** 当前未过期（含失败降级窗口内）的值，不回源；无则返回 null */
-        public V peek(K key) {
-            Entry<V> entry = map.get(key);
-            return entry != null && System.currentTimeMillis() < entry.validUntil() ? entry.value() : null;
-        }
-
-        private void put(K key, Entry<V> entry) {
-            if (maxSize > 0 && !map.containsKey(key) && map.size() >= maxSize) {
-                long now = System.currentTimeMillis();
-                map.values().removeIf(e -> now >= e.validUntil());
-                if (map.size() >= maxSize) {
-                    map.clear();
-                }
-            }
-            map.put(key, entry);
+            super(ttlMillis, failureTtlMillis, maxSize);
         }
     }
 
