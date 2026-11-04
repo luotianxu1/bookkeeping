@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AmountText from '@/components/common/AmountText/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
@@ -7,44 +6,86 @@ import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshBu
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
-import {
-  getFundProfitPage,
-  runInvestmentQuoteSyncTask,
-  type FundProfitCalendarCell,
-  type FundProfitDetail,
-  type FundProfitPage,
-  type FundProfitPageSummaryMetric,
-  type FundProfitTrendPoint,
-  type FundProfitView,
-} from '@/api/modules/finance'
-import { getStoredCurrentUser } from '@/utils/current-user'
-import { getErrorMessage, isCancelRequest } from '@/api/request'
-import { useRequestAbort } from '@/composables/useRequestAbort'
-import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
-import { useFeedback } from '@/composables/useFeedback'
+import type { FundProfitDetail } from '@/api/modules/finance'
 import {
   formatCurrency,
-  formatDateTime,
   formatHoldingQuantity,
-  formatMonthLabel,
-  formatMonthValue,
   formatRate,
   formatSignedCurrency,
   getDetailAccumulatedProfit,
   getTone,
-  isAfterQuoteRefreshTime,
-  normalizeView,
-  shiftMonthValue,
-  sortSummaryShortcuts,
-  wait,
 } from './fundProfitFormat'
-
-type DetailFilter = 'all' | 'profit' | 'loss'
+import { useFundProfitData } from './useFundProfitData'
+import { useFundProfitView } from './useFundProfitView'
 
 const router = useRouter()
-// 数据加载防竞态：新加载先 abort 旧请求，旧响应按代际号静默丢弃
-const { signalFor } = useRequestAbort()
-let loadSeq = 0
+
+const {
+  selectedView,
+  selectedAccountId,
+  selectedSummaryShortcut,
+  selectedDetailFilter,
+  dayAnchor,
+  monthAnchor,
+  yearAnchor,
+  pageData,
+  isLoading,
+  isDetailLoading,
+  isCalendarLoading,
+  isRefreshingPositions,
+  pageError,
+  shouldShowPositionRefreshButton,
+  viewModel,
+  refreshPositionData,
+  handlePeriodSelect,
+  shiftCalendarAnchor,
+  showFeedbackModal,
+  feedbackMessage,
+  feedbackType,
+} = useFundProfitData()
+
+const {
+  isDayView,
+  summaryShortcutOptions,
+  summaryTitle,
+  summaryPillText,
+  summaryMetricProfitText,
+  summaryMetricProfitTone,
+  summaryMetricRateText,
+  summaryMetricRateTone,
+  summaryHint,
+  trendPoints,
+  trendStats,
+  trendPositiveRate,
+  trendNegativeRate,
+  trendFootnote,
+  calendarTitle,
+  selectionLabel,
+  calendarHeadLabel,
+  detailTitle,
+  dayCalendarCells,
+  periodCards,
+  yearPeriodCards,
+  visibleDetails,
+  detailFilterOptions,
+  calendarAnchorLabel,
+  calendarStatePillText,
+  calendarFootnote,
+  showCalendarLegend,
+  calendarLegendItems,
+  getTrendBarStyle,
+  getTrendTone,
+  getPeriodCardTone,
+} = useFundProfitView({
+  pageData,
+  selectedView,
+  selectedAccountId,
+  selectedSummaryShortcut,
+  selectedDetailFilter,
+  dayAnchor,
+  monthAnchor,
+  yearAnchor,
+})
 
 const viewOptions = [
   { label: '日视图', value: 'day' },
@@ -53,500 +94,6 @@ const viewOptions = [
 ] as const
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日']
 
-const selectedView = ref<FundProfitView>('day')
-const selectedAccountId = ref('all')
-const selectedSummaryShortcut = ref('')
-const selectedDetailFilter = ref<DetailFilter>('all')
-const selectedKey = ref('')
-const dayAnchor = ref(formatMonthValue(new Date()))
-const monthAnchor = ref(new Date().getFullYear())
-const yearAnchor = ref(new Date().getFullYear())
-const pageData = ref<FundProfitPage | null>(null)
-const isLoading = ref(true)
-const isDetailLoading = ref(false)
-const isCalendarLoading = ref(false)
-const isRefreshingPositions = ref(false)
-const { showFeedbackModal, feedbackMessage, feedbackType, showFeedback } = useFeedback()
-const pageError = ref('')
-const currentTime = ref(new Date())
-
-const isDayView = computed(() => selectedView.value === 'day')
-const shouldShowPositionRefreshButton = computed(() => isAfterQuoteRefreshTime(currentTime.value))
-
-const selectedAccountLabel = computed(() =>
-  pageData.value?.accounts.find((account) => String(account.accountId) === selectedAccountId.value)?.accountName ?? '全部账户',
-)
-
-const summaryShortcuts = computed(() =>
-  sortSummaryShortcuts(pageData.value?.summary.shortcuts ?? []),
-)
-
-const selectedSummaryMetric = computed<FundProfitPageSummaryMetric | null>(() => {
-  const items = summaryShortcuts.value
-  return items.find((item) => item.key === selectedSummaryShortcut.value) ?? items[0] ?? null
-})
-
-const summaryShortcutOptions = computed(() =>
-  summaryShortcuts.value.map((item) => ({
-    label: item.label,
-    value: item.key,
-  })),
-)
-
-const summaryTitle = computed(() => {
-  if (selectedAccountId.value === 'all') {
-    return '基金收益总览'
-  }
-  return `${selectedAccountLabel.value}收益总览`
-})
-
-const summaryPillText = computed(() => `${pageData.value?.summary.fundCount ?? 0}只持仓基金`)
-const summaryMetricProfitText = computed(() =>
-  selectedSummaryMetric.value?.profit === null || selectedSummaryMetric.value?.profit === undefined
-    ? '--'
-    : formatSignedCurrency(selectedSummaryMetric.value.profit),
-)
-const summaryMetricProfitTone = computed(() =>
-  selectedSummaryMetric.value?.profit === null || selectedSummaryMetric.value?.profit === undefined
-    ? 'neutral'
-    : getTone(Number(selectedSummaryMetric.value.profit)),
-)
-const summaryMetricRateText = computed(() =>
-  selectedSummaryMetric.value?.profitRate === null || selectedSummaryMetric.value?.profitRate === undefined
-    ? '--'
-    : formatRate(selectedSummaryMetric.value.profitRate),
-)
-const summaryMetricRateTone = computed(() =>
-  selectedSummaryMetric.value?.profitRate === null || selectedSummaryMetric.value?.profitRate === undefined
-    ? 'neutral'
-    : getTone(Number(selectedSummaryMetric.value.profitRate)),
-)
-
-const summaryHint = computed(() => {
-  const syncText = formatDateTime(pageData.value?.summary.lastSyncedAt ?? pageData.value?.lastSyncedAt)
-  return syncText ? `含分红再投资，数据更新时间 ${syncText}` : '含分红再投资'
-})
-
-const trendPoints = computed(() => pageData.value?.trendPoints ?? [])
-const trendMaxAbsProfit = computed(() => {
-  const max = trendPoints.value.reduce((current, item) => {
-    if (item.profit === null || item.profit === undefined) {
-      return current
-    }
-    return Math.max(current, Math.abs(Number(item.profit)))
-  }, 0)
-  return max > 0 ? max : 1
-})
-
-const trendStats = computed(() => {
-  const items = trendPoints.value.filter((item) => item.profit !== null && item.profit !== undefined)
-  const positiveDays = items.filter((item) => Number(item.profit) > 0).length
-  const negativeDays = items.filter((item) => Number(item.profit) < 0).length
-  const sorted = [...items].sort((left, right) => Number(right.profit) - Number(left.profit))
-  return {
-    positiveDays,
-    negativeDays,
-    peak: sorted[0] ?? null,
-    trough: sorted[sorted.length - 1] ?? null,
-  }
-})
-
-const trendPositiveRate = computed(() => {
-  const availableCount = trendPoints.value.filter((item) => item.profit !== null && item.profit !== undefined).length
-  if (!availableCount) {
-    return '--'
-  }
-  return `${Math.round((trendStats.value.positiveDays / availableCount) * 100)}%`
-})
-
-const trendNegativeRate = computed(() => {
-  const availableCount = trendPoints.value.filter((item) => item.profit !== null && item.profit !== undefined).length
-  if (!availableCount) {
-    return '--'
-  }
-  return `${Math.round((trendStats.value.negativeDays / availableCount) * 100)}%`
-})
-
-const trendFootnote = computed(() => {
-  if (!trendStats.value.peak || !trendStats.value.trough) {
-    return '近 7 日收益变化将按上方所选账户持续更新。'
-  }
-  return `${trendStats.value.peak.label} 录得最高 ${formatSignedCurrency(Number(trendStats.value.peak.profit ?? 0))}，${trendStats.value.trough.label} 最低 ${formatSignedCurrency(Number(trendStats.value.trough.profit ?? 0))}。`
-})
-
-const calendarTitle = computed(() => {
-  if (selectedView.value === 'month') {
-    return '收益月历'
-  }
-  if (selectedView.value === 'year') {
-    return '收益年历'
-  }
-  return '收益日历'
-})
-
-const selection = computed(() => pageData.value?.selection ?? null)
-const selectionLabel = computed(() => selection.value?.label ?? '--')
-const calendarHeadLabel = computed(() => {
-  if (selectedView.value === 'month') {
-    return '月视图'
-  }
-  if (selectedView.value === 'year') {
-    return '年视图'
-  }
-  return '日视图'
-})
-const detailTitle = computed(() => `${selectionLabel.value}收益明细`)
-
-const dayCalendarCells = computed<Array<FundProfitCalendarCell | null>>(() => {
-  if (!isDayView.value) {
-    return []
-  }
-
-  const items = pageData.value?.calendarItems ?? []
-  if (!items.length) {
-    return []
-  }
-
-  const firstDate = new Date(`${items[0].startDate}T00:00:00`)
-  const offset = (firstDate.getDay() + 6) % 7
-  const cells = [...Array.from({ length: offset }, () => null), ...items]
-  const remainder = cells.length % 7
-  if (remainder === 0) {
-    return cells
-  }
-  return [...cells, ...Array.from({ length: 7 - remainder }, () => null)]
-})
-
-const periodCards = computed(() => (isDayView.value ? [] : pageData.value?.calendarItems ?? []))
-const yearPeriodCards = computed<Array<FundProfitCalendarCell | null>>(() => {
-  if (selectedView.value !== 'year') {
-    return []
-  }
-  const items = [...periodCards.value]
-  const remainder = items.length % 3
-  if (remainder === 0) {
-    return items
-  }
-  return [...items, ...Array.from({ length: 3 - remainder }, () => null)]
-})
-
-const visibleDetails = computed(() => {
-  const details = pageData.value?.details ?? []
-  const sortedDetails = [...details].sort((left, right) => Number(right.periodProfit ?? 0) - Number(left.periodProfit ?? 0))
-
-  if (selectedDetailFilter.value === 'profit') {
-    return sortedDetails.filter((item) => Number(item.periodProfit ?? 0) > 0)
-  }
-  if (selectedDetailFilter.value === 'loss') {
-    return sortedDetails.filter((item) => Number(item.periodProfit ?? 0) < 0)
-  }
-  return sortedDetails
-})
-
-const detailFilterOptions = computed(() => {
-  const details = pageData.value?.details ?? []
-  const profitCount = details.filter((item) => Number(item.periodProfit ?? 0) > 0).length
-  const lossCount = details.filter((item) => Number(item.periodProfit ?? 0) < 0).length
-  return [
-    { label: `全部 ${details.length}`, value: 'all' as const },
-    { label: `盈利 ${profitCount}`, value: 'profit' as const },
-    { label: `亏损 ${lossCount}`, value: 'loss' as const },
-  ]
-})
-
-const calendarAnchorLabel = computed(() => {
-  if (selectedView.value === 'month') {
-    return `${monthAnchor.value}年`
-  }
-  if (selectedView.value === 'year') {
-    return '近5年'
-  }
-  return formatMonthLabel(dayAnchor.value)
-})
-
-const calendarStatePillText = computed(() => {
-  const items = pageData.value?.calendarItems ?? []
-  if (selectedView.value === 'month') {
-    const positiveMonths = items.filter((item) => Number(item.profit ?? 0) > 0).length
-    return `正收益月 ${positiveMonths} / ${items.length || 0}`
-  }
-  if (selectedView.value === 'year') {
-    return `${yearAnchor.value} 为当前年`
-  }
-  const positiveDays = items.filter((item) => Number(item.profit ?? 0) > 0).length
-  return `正收益 ${positiveDays} 天`
-})
-
-const calendarFootnote = computed(() => {
-  if (selectedView.value === 'month') {
-    return '点击月份可切换到日视图查看当月每日收益表现。'
-  }
-  if (selectedView.value === 'year') {
-    return '点击年份卡片可切换到月视图查看当年各月收益表现。'
-  }
-  return '点击日期可下钻查看当日基金收益构成，红色为上涨、绿色为回撤。'
-})
-
-const showCalendarLegend = computed(() => selectedView.value !== 'year')
-
-const calendarLegendItems = computed(() => {
-  if (selectedView.value === 'month') {
-    return [
-      { label: '盈利月', tone: 'positive' },
-      { label: '回撤月', tone: 'negative' },
-      { label: '当前月', tone: 'selected' },
-    ]
-  }
-  return [
-    { label: '上涨', tone: 'positive' },
-    { label: '下跌', tone: 'negative' },
-    { label: '选中', tone: 'selected' },
-  ]
-})
-
-const viewModel = computed({
-  get: () => selectedView.value,
-  set: (value: string) => {
-    if (value === selectedView.value) {
-      return
-    }
-    selectedView.value = value as FundProfitView
-    selectedKey.value = ''
-    void loadPage({ calendarOnly: true })
-  },
-})
-
-onMounted(() => {
-  void loadPage()
-  currentTime.value = new Date()
-})
-
-// 时钟轮询感知页面可见性：后台标签页跳过，恢复可见立即校准
-useVisibilityPolling(() => {
-  currentTime.value = new Date()
-}, 30 * 1000)
-
-async function loadPage(options?: { detailOnly?: boolean; calendarOnly?: boolean }) {
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
-    pageError.value = '请先登录后查看基金收益'
-    pageData.value = null
-    isLoading.value = false
-    return
-  }
-
-  const detailOnly = Boolean(options?.detailOnly && pageData.value)
-  const calendarOnly = Boolean(options?.calendarOnly && pageData.value && !detailOnly)
-  const seq = ++loadSeq
-  const signal = signalFor()
-
-  if (detailOnly) {
-    isDetailLoading.value = true
-  } else if (calendarOnly) {
-    isCalendarLoading.value = true
-  } else {
-    isLoading.value = true
-  }
-  pageError.value = ''
-
-  try {
-    const data = await getFundProfitPage({
-      userId: currentUser.id,
-      accountId: selectedAccountId.value === 'all' ? undefined : Number(selectedAccountId.value),
-      view: selectedView.value,
-      anchor: resolveAnchorValue(),
-      selected: selectedKey.value || undefined,
-    }, { signal })
-
-    if (seq !== loadSeq) {
-      return
-    }
-
-    if (detailOnly && pageData.value) {
-      mergeDetailSelection(data)
-    } else if (calendarOnly && pageData.value) {
-      mergeCalendarSelection(data)
-    } else {
-      pageData.value = data
-      syncPageState(data)
-    }
-  } catch (error) {
-    if (isCancelRequest(error) || seq !== loadSeq) {
-      return
-    }
-    pageData.value = null
-    pageError.value = getErrorMessage(error, '基金收益加载失败')
-  } finally {
-    if (seq !== loadSeq) {
-      return
-    }
-    if (detailOnly) {
-      isDetailLoading.value = false
-    } else if (calendarOnly) {
-      isCalendarLoading.value = false
-    } else {
-      isLoading.value = false
-    }
-  }
-}
-
-async function refreshPositionData() {
-  if (!shouldShowPositionRefreshButton.value || isRefreshingPositions.value) {
-    return
-  }
-
-  const currentUser = getStoredCurrentUser()
-  if (!currentUser) {
-    showFeedback('请先登录后刷新持仓数据', 'error')
-    return
-  }
-
-  isRefreshingPositions.value = true
-  try {
-    await runInvestmentQuoteSyncTask({
-      userId: currentUser.id,
-      accountId: selectedAccountId.value === 'all' ? undefined : Number(selectedAccountId.value),
-    })
-    showFeedback('已提交刷新任务，正在更新基金收益', 'success')
-    await wait(2000)
-    await loadPage()
-  } catch (error) {
-    const message = getErrorMessage(error, '基金持仓刷新失败')
-    showFeedback(message, 'error')
-  } finally {
-    isRefreshingPositions.value = false
-  }
-}
-
-function syncPageState(data: FundProfitPage) {
-  selectedView.value = normalizeView(data.view)
-  selectedKey.value = data.selectedKey
-
-  if (selectedView.value === 'day') {
-    dayAnchor.value = data.anchor || dayAnchor.value
-  } else if (selectedView.value === 'month') {
-    monthAnchor.value = Number.parseInt(data.anchor, 10) || monthAnchor.value
-  } else {
-    yearAnchor.value = Number.parseInt(data.anchor, 10) || yearAnchor.value
-  }
-
-  const shortcutKeys = new Set(
-    (data.summary.shortcuts ?? []).map((item) => item.key),
-  )
-  if (!shortcutKeys.has(selectedSummaryShortcut.value)) {
-    const nextShortcut = sortSummaryShortcuts(data.summary.shortcuts ?? [])[0]
-    selectedSummaryShortcut.value = nextShortcut?.key || data.summary.activeShortcut || 'cumulative'
-  }
-
-  const validAccountIds = new Set(['all', ...data.accounts.map((account) => String(account.accountId))])
-  if (!validAccountIds.has(selectedAccountId.value)) {
-    selectedAccountId.value = 'all'
-  }
-}
-
-function mergeDetailSelection(data: FundProfitPage) {
-  if (!pageData.value) {
-    pageData.value = data
-    syncPageState(data)
-    return
-  }
-
-  selectedKey.value = data.selectedKey
-  pageData.value = {
-    ...pageData.value,
-    selectedKey: data.selectedKey,
-    selection: data.selection,
-    details: data.details,
-    calendarItems: pageData.value.calendarItems.map((item) => ({
-      ...item,
-      selected: item.key === data.selectedKey,
-    })),
-  }
-}
-
-function mergeCalendarSelection(data: FundProfitPage) {
-  if (!pageData.value) {
-    pageData.value = data
-    syncPageState(data)
-    return
-  }
-
-  selectedView.value = normalizeView(data.view)
-  selectedKey.value = data.selectedKey
-
-  if (selectedView.value === 'day') {
-    dayAnchor.value = data.anchor || dayAnchor.value
-  } else if (selectedView.value === 'month') {
-    monthAnchor.value = Number.parseInt(data.anchor, 10) || monthAnchor.value
-  } else {
-    yearAnchor.value = Number.parseInt(data.anchor, 10) || yearAnchor.value
-  }
-
-  pageData.value = {
-    ...pageData.value,
-    view: data.view,
-    anchor: data.anchor,
-    selectedKey: data.selectedKey,
-    calendarItems: data.calendarItems,
-    selection: data.selection,
-    details: data.details,
-  }
-}
-
-function resolveAnchorValue() {
-  if (selectedView.value === 'month') {
-    return String(monthAnchor.value)
-  }
-  if (selectedView.value === 'year') {
-    return String(yearAnchor.value)
-  }
-  return dayAnchor.value
-}
-
-function handleCalendarSelect(item: FundProfitCalendarCell) {
-  if (item.profit === null || item.profit === undefined || item.key === selectedKey.value) {
-    return
-  }
-  selectedKey.value = item.key
-  void loadPage({ detailOnly: true })
-}
-
-function handlePeriodSelect(item: FundProfitCalendarCell) {
-  if (item.profit === null || item.profit === undefined) {
-    return
-  }
-
-  if (selectedView.value === 'month') {
-    dayAnchor.value = item.startDate.slice(0, 7)
-    selectedView.value = 'day'
-    selectedKey.value = ''
-    void loadPage({ calendarOnly: true })
-    return
-  }
-
-  if (selectedView.value === 'year') {
-    monthAnchor.value = Number.parseInt(item.startDate.slice(0, 4), 10) || monthAnchor.value
-    selectedView.value = 'month'
-    selectedKey.value = ''
-    void loadPage({ calendarOnly: true })
-    return
-  }
-
-  handleCalendarSelect(item)
-}
-
-function shiftCalendarAnchor(offset: number) {
-  if (selectedView.value === 'day') {
-    dayAnchor.value = shiftMonthValue(dayAnchor.value, offset)
-  } else if (selectedView.value === 'month') {
-    monthAnchor.value += offset
-  } else {
-    yearAnchor.value += offset
-  }
-  selectedKey.value = ''
-  void loadPage({ calendarOnly: true })
-}
-
 function openDetail(item: FundProfitDetail) {
   router.push({
     path: '/finance/accounts/investment/detail',
@@ -554,33 +101,6 @@ function openDetail(item: FundProfitDetail) {
       positionId: String(item.positionId),
     },
   })
-}
-
-function getTrendBarStyle(point: FundProfitTrendPoint) {
-  if (point.profit === null || point.profit === undefined) {
-    return { height: '18px' }
-  }
-  const value = Math.abs(Number(point.profit ?? 0))
-  const height = value === 0 ? 18 : Math.max(18, (value / trendMaxAbsProfit.value) * 132)
-  return { height: `${height}px` }
-}
-
-function getTrendTone(point: FundProfitTrendPoint) {
-  if (point.profit === null || point.profit === undefined) {
-    return 'muted'
-  }
-  return getTone(Number(point.profit))
-}
-
-function getPeriodCardTone(item: FundProfitCalendarCell) {
-  const value = Number(item.profit ?? 0)
-  if (value > 0) {
-    return 'positive'
-  }
-  if (value < 0) {
-    return 'negative'
-  }
-  return 'neutral'
 }
 </script>
 
