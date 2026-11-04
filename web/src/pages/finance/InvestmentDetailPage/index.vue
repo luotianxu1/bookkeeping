@@ -293,9 +293,10 @@ async function loadDetail() {
     const currentUser = getStoredCurrentUser()
     const [detailData, transactionList, transactionPage, planList, accountList] = await Promise.all([
       getInvestmentPositionDetail(positionId.value),
-      // 仅用于「待确认买入金额」汇总，服务端过滤 pending；完整分页列表走 getInvestmentTransactionPage
+      // 全量交易：走势图买卖点标记、基金累计成本基线/累计收益点位都依赖完整历史；
+      // 「待确认买入金额」汇总在 pendingAdditionalPurchaseAmount 内本地过滤 pending
       currentUser
-        ? getInvestmentTransactions({ userId: currentUser.id, positionId: positionId.value, settlementStatus: 'pending' })
+        ? getInvestmentTransactions({ userId: currentUser.id, positionId: positionId.value })
         : Promise.resolve([]),
       currentUser
         ? getInvestmentTransactionPage({ userId: currentUser.id, positionId: positionId.value, page: 1, pageSize: TRANSACTION_PAGE_SIZE })
