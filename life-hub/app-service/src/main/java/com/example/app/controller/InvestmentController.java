@@ -22,6 +22,7 @@ import com.example.app.dto.InvestmentTransactionPageResponse;
 import com.example.app.dto.InvestmentTransactionResponse;
 import com.example.app.dto.FundProfitForecastResponse;
 import com.example.app.dto.FundProfitPageResponse;
+import com.example.app.service.InvestmentFundProfitService;
 import com.example.app.service.InvestmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,9 +50,11 @@ import java.util.Map;
 public class InvestmentController {
 
     private final InvestmentService investmentService;
+    private final InvestmentFundProfitService investmentFundProfitService;
 
-    public InvestmentController(InvestmentService investmentService) {
+    public InvestmentController(InvestmentService investmentService, InvestmentFundProfitService investmentFundProfitService) {
         this.investmentService = investmentService;
+        this.investmentFundProfitService = investmentFundProfitService;
     }
 
     @GetMapping("/products")
@@ -94,7 +97,7 @@ public class InvestmentController {
         @RequestParam(name = "userId") @NotNull Long userId,
         @RequestParam(name = "accountId", required = false) Long accountId
     ) {
-        return Result.ok(investmentService.fundProfitForecast(userId, accountId));
+        return Result.ok(investmentFundProfitService.fundProfitForecast(userId, accountId));
     }
 
     @GetMapping("/fund-profit")
@@ -106,7 +109,7 @@ public class InvestmentController {
         @RequestParam(name = "anchor", required = false) String anchor,
         @RequestParam(name = "selected", required = false) String selected
     ) {
-        return Result.ok(investmentService.fundProfitPage(userId, accountId, view, anchor, selected));
+        return Result.ok(investmentFundProfitService.fundProfitPage(userId, accountId, view, anchor, selected));
     }
 
     @PostMapping("/tasks/quote-sync")
