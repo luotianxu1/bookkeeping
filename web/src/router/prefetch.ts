@@ -43,9 +43,13 @@ function collectSectionLoads(router: Router, section: string): Array<() => Promi
       continue
     }
     const component = record.components?.default
-    if (typeof component === 'function' && !loadedComponents.has(component)) {
-      loadedComponents.add(component as () => Promise<unknown>)
-      loads.push(component as () => Promise<unknown>)
+    if (typeof component === 'function') {
+      // 懒加载组件是 () => Promise<Component>；函数式组件虽同为 function 但不会出现在路由懒加载里
+      const load = component as unknown as () => Promise<unknown>
+      if (!loadedComponents.has(load)) {
+        loadedComponents.add(load)
+        loads.push(load)
+      }
     }
   }
   return loads

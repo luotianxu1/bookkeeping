@@ -1,0 +1,74 @@
+// 收支交易/分析/预算接口（由 finance.ts 拆出；类型定义见 ./types）
+import { financeRequest, requestDelete, requestGet, requestPost, requestPut } from '@/api/request'
+import type {
+  FreeEstimate,
+  Transaction,
+  TransactionQuery,
+  TransactionPageQuery,
+  TransactionPage,
+  TransactionAnalysis,
+  TransactionAnalysisQuery,
+  MonthlyBudget,
+  MonthlyBudgetQuery,
+  CreateTransactionParams,
+  UpdateTransactionParams,
+  SaveMonthlyBudgetParams,
+} from './types'
+
+export function createTransaction(params: CreateTransactionParams) {
+  return requestPost<Transaction, CreateTransactionParams>(financeRequest, '/api/finance/transactions', params)
+}
+
+export function updateTransaction(id: number, params: UpdateTransactionParams) {
+  return requestPut<Transaction, UpdateTransactionParams>(financeRequest, `/api/finance/transactions/${id}`, params)
+}
+
+export function getTransactions(params: TransactionQuery = {}) {
+  return requestGet<Transaction[]>(financeRequest, '/api/finance/transactions', { params })
+}
+
+export function getTransactionPage(params: TransactionPageQuery = {}) {
+  return requestGet<TransactionPage>(financeRequest, '/api/finance/transactions/page', { params })
+}
+
+export function getTransactionAnalysis(params: TransactionAnalysisQuery) {
+  return requestGet<TransactionAnalysis>(financeRequest, '/api/finance/transactions/analysis', { params })
+}
+
+export function getFreeEstimate(params: { userId: number }) {
+  return requestGet<FreeEstimate>(financeRequest, '/api/finance/accounts/free-estimate', { params })
+}
+
+export function getAccountTransactions(accountId: number, params: Omit<TransactionQuery, 'accountId'> = {}) {
+  return requestGet<Transaction[]>(financeRequest, `/api/finance/transactions/accounts/${accountId}`, { params })
+}
+
+export function deleteTransaction(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/transactions/${id}`, {
+    params: { userId },
+  })
+}
+
+export function getMonthlyBudgets(params: MonthlyBudgetQuery) {
+  return requestGet<MonthlyBudget[]>(financeRequest, '/api/finance/monthly-budgets', { params })
+}
+
+export function getCurrentMonthlyBudget(userId: number, budgetMonth: string) {
+  return requestGet<MonthlyBudget | null>(financeRequest, '/api/finance/monthly-budgets/current', {
+    params: { userId, budgetMonth },
+  })
+}
+
+export function createMonthlyBudget(params: SaveMonthlyBudgetParams) {
+  return requestPost<MonthlyBudget, SaveMonthlyBudgetParams>(financeRequest, '/api/finance/monthly-budgets', params)
+}
+
+export function updateMonthlyBudget(id: number, params: SaveMonthlyBudgetParams) {
+  return requestPut<MonthlyBudget, SaveMonthlyBudgetParams>(financeRequest, `/api/finance/monthly-budgets/${id}`, params)
+}
+
+export function deleteMonthlyBudget(id: number, userId: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/monthly-budgets/${id}`, {
+    params: { userId },
+  })
+}
