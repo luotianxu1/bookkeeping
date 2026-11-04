@@ -20,7 +20,9 @@ import com.example.app.mapper.SalaryMonthRecordMapper;
 import com.example.app.mapper.SalaryProfileMapper;
 import com.example.app.mapper.SalarySpecialDeductionMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -70,17 +72,24 @@ public class SalaryService {
     private final SalarySpecialDeductionMapper salarySpecialDeductionMapper;
     private final SalaryAccountRecordMapper salaryAccountRecordMapper;
     private final SalaryMonthRecordMapper salaryMonthRecordMapper;
+    private final TransactionTemplate transactionTemplate;
 
     public SalaryService(
         SalaryProfileMapper salaryProfileMapper,
         SalarySpecialDeductionMapper salarySpecialDeductionMapper,
         SalaryAccountRecordMapper salaryAccountRecordMapper,
-        SalaryMonthRecordMapper salaryMonthRecordMapper
+        SalaryMonthRecordMapper salaryMonthRecordMapper,
+        PlatformTransactionManager transactionManager
     ) {
         this.salaryProfileMapper = salaryProfileMapper;
         this.salarySpecialDeductionMapper = salarySpecialDeductionMapper;
         this.salaryAccountRecordMapper = salaryAccountRecordMapper;
         this.salaryMonthRecordMapper = salaryMonthRecordMapper;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
+    /** 事务内的写操作结果，供事务提交后构建聚合响应页使用（deduction 仅 saveSettings 使用） */
+    private record MutationContext(SalaryProfileEntity profile, SalarySpecialDeductionEntity deduction, int year) {
     }
 
     public SalaryOverviewResponse getOverview(Long userId, String month) {
@@ -144,24 +153,28 @@ public class SalaryService {
         return toSettingsResponse(profile, deduction, year, computation);
     }
 
-    @Transactional
     public SalarySettingsResponse saveSettings(SalarySettingsRequest request) {
-        SalaryProfileEntity profile = ensureProfile(request.getUserId());
-        fillProfile(profile, request);
-        profile.setUpdatedAt(LocalDateTime.now(SHANGHAI_ZONE));
-        salaryProfileMapper.updateById(profile);
+        // 事务只包写操作，响应聚合（compute 含多次查询）移到事务提交后执行
+        MutationContext saved = transactionTemplate.execute(status -> {
+            SalaryProfileEntity profile = ensureProfile(request.getUserId());
+            fillProfile(profile, request);
+            profile.setUpdatedAt(LocalDateTime.now(SHANGHAI_ZONE));
+            salaryProfileMapper.updateById(profile);
 
-        SalarySpecialDeductionEntity deduction = ensureSpecialDeduction(request.getUserId(), request.getTaxYear());
-        fillDeduction(deduction, request);
-        if (deduction.getId() == null) {
-            salarySpecialDeductionMapper.insert(deduction);
-        } else {
-            deduction.setUpdatedAt(LocalDateTime.now(SHANGHAI_ZONE));
-            salarySpecialDeductionMapper.updateById(deduction);
-        }
+            SalarySpecialDeductionEntity deduction = ensureSpecialDeduction(request.getUserId(), request.getTaxYear());
+            fillDeduction(deduction, request);
+            if (deduction.getId() == null) {
+                salarySpecialDeductionMapper.insert(deduction);
+            } else {
+                deduction.setUpdatedAt(LocalDateTime.now(SHANGHAI_ZONE));
+                salarySpecialDeductionMapper.updateById(deduction);
+            }
 
-        refreshLatestDueMonthData(request.getUserId(), profile, request.getTaxYear());
-        return toSettingsResponse(profile, deduction, request.getTaxYear(), compute(request.getUserId(), profile, deduction, request.getTaxYear(), resolveCurrentPaidMonths(request.getTaxYear(), profile.getPayDay())));
+            refreshLatestDueMonthData(request.getUserId(), profile, request.getTaxYear());
+            return new MutationContext(profile, deduction, 0);
+        });
+        SalaryProfileEntity profile = saved.profile();
+        return toSettingsResponse(profile, saved.deduction(), request.getTaxYear(), compute(request.getUserId(), profile, saved.deduction(), request.getTaxYear(), resolveCurrentPaidMonths(request.getTaxYear(), profile.getPayDay())));
     }
 
     public SalaryMonthPageResponse getSalaryMonthPage(Long userId, Integer year) {
@@ -171,56 +184,63 @@ public class SalaryService {
         return buildSalaryMonthPage(userId, resolvedYear, profile);
     }
 
-    @Transactional
     public SalaryMonthPageResponse createSalaryMonthRecord(SalaryMonthRecordRequest request) {
-        SalaryProfileEntity profile = ensureProfile(request.getUserId());
         LocalDate salaryMonth = normalizeMonth(request.getSalaryMonth());
-        SalaryMonthRecordEntity existing = salaryMonthRecordMapper.selectOne(new LambdaQueryWrapper<SalaryMonthRecordEntity>()
-            .eq(SalaryMonthRecordEntity::getUserId, request.getUserId())
-            .eq(SalaryMonthRecordEntity::getSalaryMonth, salaryMonth)
-            .last("LIMIT 1"));
-        if (existing == null) {
-            existing = new SalaryMonthRecordEntity();
-            existing.setUserId(request.getUserId());
-            existing.setSalaryMonth(salaryMonth);
-            existing.setGrossSalary(scale(request.getGrossSalary()));
-            existing.setNote(resolveSalaryMonthNote(request.getNote()));
-            salaryMonthRecordMapper.insert(existing);
-        } else {
-            existing.setGrossSalary(scale(request.getGrossSalary()));
-            existing.setNote(resolveSalaryMonthNote(request.getNote()));
-            salaryMonthRecordMapper.updateById(existing);
-        }
-        return buildSalaryMonthPage(request.getUserId(), salaryMonth.getYear(), profile);
+        // 事务只包写操作，聚合页查询移到事务提交后执行
+        MutationContext saved = transactionTemplate.execute(status -> {
+            SalaryProfileEntity profile = ensureProfile(request.getUserId());
+            SalaryMonthRecordEntity existing = salaryMonthRecordMapper.selectOne(new LambdaQueryWrapper<SalaryMonthRecordEntity>()
+                .eq(SalaryMonthRecordEntity::getUserId, request.getUserId())
+                .eq(SalaryMonthRecordEntity::getSalaryMonth, salaryMonth)
+                .last("LIMIT 1"));
+            if (existing == null) {
+                existing = new SalaryMonthRecordEntity();
+                existing.setUserId(request.getUserId());
+                existing.setSalaryMonth(salaryMonth);
+                existing.setGrossSalary(scale(request.getGrossSalary()));
+                existing.setNote(resolveSalaryMonthNote(request.getNote()));
+                salaryMonthRecordMapper.insert(existing);
+            } else {
+                existing.setGrossSalary(scale(request.getGrossSalary()));
+                existing.setNote(resolveSalaryMonthNote(request.getNote()));
+                salaryMonthRecordMapper.updateById(existing);
+            }
+            return new MutationContext(profile, null, salaryMonth.getYear());
+        });
+        return buildSalaryMonthPage(request.getUserId(), salaryMonth.getYear(), saved.profile());
     }
 
-    @Transactional
     public SalaryMonthPageResponse updateSalaryMonthRecord(Long recordId, SalaryMonthRecordRequest request) {
-        SalaryProfileEntity profile = ensureProfile(request.getUserId());
-        SalaryMonthRecordEntity entity = requireSalaryMonthRecord(recordId, request.getUserId());
         LocalDate salaryMonth = normalizeMonth(request.getSalaryMonth());
-        SalaryMonthRecordEntity duplicate = salaryMonthRecordMapper.selectOne(new LambdaQueryWrapper<SalaryMonthRecordEntity>()
-            .eq(SalaryMonthRecordEntity::getUserId, request.getUserId())
-            .eq(SalaryMonthRecordEntity::getSalaryMonth, salaryMonth)
-            .ne(SalaryMonthRecordEntity::getId, recordId)
-            .last("LIMIT 1"));
-        if (duplicate != null) {
-            throw new IllegalArgumentException("该月份工资记录已存在");
-        }
-        entity.setSalaryMonth(salaryMonth);
-        entity.setGrossSalary(scale(request.getGrossSalary()));
-        entity.setNote(resolveSalaryMonthNote(request.getNote()));
-        salaryMonthRecordMapper.updateById(entity);
-        return buildSalaryMonthPage(request.getUserId(), salaryMonth.getYear(), profile);
+        MutationContext saved = transactionTemplate.execute(status -> {
+            SalaryProfileEntity profile = ensureProfile(request.getUserId());
+            SalaryMonthRecordEntity entity = requireSalaryMonthRecord(recordId, request.getUserId());
+            SalaryMonthRecordEntity duplicate = salaryMonthRecordMapper.selectOne(new LambdaQueryWrapper<SalaryMonthRecordEntity>()
+                .eq(SalaryMonthRecordEntity::getUserId, request.getUserId())
+                .eq(SalaryMonthRecordEntity::getSalaryMonth, salaryMonth)
+                .ne(SalaryMonthRecordEntity::getId, recordId)
+                .last("LIMIT 1"));
+            if (duplicate != null) {
+                throw new IllegalArgumentException("该月份工资记录已存在");
+            }
+            entity.setSalaryMonth(salaryMonth);
+            entity.setGrossSalary(scale(request.getGrossSalary()));
+            entity.setNote(resolveSalaryMonthNote(request.getNote()));
+            salaryMonthRecordMapper.updateById(entity);
+            return new MutationContext(profile, null, salaryMonth.getYear());
+        });
+        return buildSalaryMonthPage(request.getUserId(), salaryMonth.getYear(), saved.profile());
     }
 
-    @Transactional
     public SalaryMonthPageResponse deleteSalaryMonthRecord(Long recordId, Long userId) {
-        SalaryProfileEntity profile = ensureProfile(userId);
-        SalaryMonthRecordEntity entity = requireSalaryMonthRecord(recordId, userId);
-        int year = entity.getSalaryMonth() == null ? LocalDate.now(SHANGHAI_ZONE).getYear() : entity.getSalaryMonth().getYear();
-        salaryMonthRecordMapper.deleteById(recordId);
-        return buildSalaryMonthPage(userId, year, profile);
+        MutationContext saved = transactionTemplate.execute(status -> {
+            SalaryProfileEntity profile = ensureProfile(userId);
+            SalaryMonthRecordEntity entity = requireSalaryMonthRecord(recordId, userId);
+            int year = entity.getSalaryMonth() == null ? LocalDate.now(SHANGHAI_ZONE).getYear() : entity.getSalaryMonth().getYear();
+            salaryMonthRecordMapper.deleteById(recordId);
+            return new MutationContext(profile, null, year);
+        });
+        return buildSalaryMonthPage(userId, saved.year(), saved.profile());
     }
 
     public SalaryAccountPageResponse getAccountPage(Long userId, String accountType, Integer year) {
@@ -243,96 +263,105 @@ public class SalaryService {
         }
     }
 
-    @Transactional
     public SalaryAccountPageResponse saveAccountBalance(String accountType, SalaryAccountBalanceRequest request) {
         String normalizedAccountType = normalizeAccountType(accountType);
-        SalaryProfileEntity profile = ensureProfile(request.getUserId());
         LocalDate recordMonth = LocalDate.now(SHANGHAI_ZONE).withDayOfMonth(1);
         int responseYear = request.getYear() == null ? recordMonth.getYear() : request.getYear();
+        // 事务只包写操作，聚合页查询移到事务提交后执行
+        MutationContext saved = transactionTemplate.execute(status -> {
+            SalaryProfileEntity profile = ensureProfile(request.getUserId());
 
-        ensureYearData(request.getUserId(), profile, recordMonth.getYear());
-        if (responseYear != recordMonth.getYear()) {
-            ensureYearData(request.getUserId(), profile, responseYear);
-        }
-        recalculateBalances(request.getUserId(), normalizedAccountType);
+            ensureYearData(request.getUserId(), profile, recordMonth.getYear());
+            if (responseYear != recordMonth.getYear()) {
+                ensureYearData(request.getUserId(), profile, responseYear);
+            }
+            recalculateBalances(request.getUserId(), normalizedAccountType);
 
-        BigDecimal targetBalance = scale(request.getAmount());
-        BigDecimal currentBalance = resolveCurrentBalance(request.getUserId(), normalizedAccountType);
-        BigDecimal adjustmentAmount = targetBalance.subtract(currentBalance).setScale(2, RoundingMode.HALF_UP);
-        if (adjustmentAmount.compareTo(BigDecimal.ZERO) != 0) {
+            BigDecimal targetBalance = scale(request.getAmount());
+            BigDecimal currentBalance = resolveCurrentBalance(request.getUserId(), normalizedAccountType);
+            BigDecimal adjustmentAmount = targetBalance.subtract(currentBalance).setScale(2, RoundingMode.HALF_UP);
+            if (adjustmentAmount.compareTo(BigDecimal.ZERO) != 0) {
+                SalaryAccountRecordEntity entity = new SalaryAccountRecordEntity();
+                entity.setUserId(request.getUserId());
+                entity.setAccountType(normalizedAccountType);
+                entity.setRecordType(RECORD_MANUAL);
+                entity.setRecordMonth(recordMonth);
+                entity.setAmount(adjustmentAmount);
+                entity.setPersonalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+                entity.setCompanyAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+                entity.setSyncToCurrent(true);
+                entity.setNote(StringUtils.hasText(request.getNote()) ? request.getNote().trim() : "手动修改账户总额");
+                salaryAccountRecordMapper.insert(entity);
+                recalculateBalances(request.getUserId(), normalizedAccountType);
+            }
+            return new MutationContext(profile, null, responseYear);
+        });
+
+        return buildAccountPage(request.getUserId(), normalizedAccountType, saved.year(), saved.profile());
+    }
+
+    public SalaryAccountPageResponse createAccountRecord(String accountType, SalaryAccountRecordRequest request) {
+        String normalizedAccountType = normalizeAccountType(accountType);
+        MutationContext saved = transactionTemplate.execute(status -> {
+            SalaryProfileEntity profile = ensureProfile(request.getUserId());
             SalaryAccountRecordEntity entity = new SalaryAccountRecordEntity();
             entity.setUserId(request.getUserId());
             entity.setAccountType(normalizedAccountType);
             entity.setRecordType(RECORD_MANUAL);
-            entity.setRecordMonth(recordMonth);
-            entity.setAmount(adjustmentAmount);
+            entity.setRecordMonth(normalizeMonth(request.getRecordMonth()));
+            entity.setAmount(scale(request.getAmount()));
             entity.setPersonalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             entity.setCompanyAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             entity.setSyncToCurrent(true);
-            entity.setNote(StringUtils.hasText(request.getNote()) ? request.getNote().trim() : "手动修改账户总额");
+            entity.setNote(resolveManualNote(request));
             salaryAccountRecordMapper.insert(entity);
+
+            ensureYearData(request.getUserId(), profile, entity.getRecordMonth().getYear());
             recalculateBalances(request.getUserId(), normalizedAccountType);
-        }
-
-        return buildAccountPage(request.getUserId(), normalizedAccountType, responseYear, profile);
+            return new MutationContext(profile, null, entity.getRecordMonth().getYear());
+        });
+        return buildAccountPage(request.getUserId(), normalizedAccountType, saved.year(), saved.profile());
     }
 
-    @Transactional
-    public SalaryAccountPageResponse createAccountRecord(String accountType, SalaryAccountRecordRequest request) {
-        String normalizedAccountType = normalizeAccountType(accountType);
-        SalaryProfileEntity profile = ensureProfile(request.getUserId());
-        SalaryAccountRecordEntity entity = new SalaryAccountRecordEntity();
-        entity.setUserId(request.getUserId());
-        entity.setAccountType(normalizedAccountType);
-        entity.setRecordType(RECORD_MANUAL);
-        entity.setRecordMonth(normalizeMonth(request.getRecordMonth()));
-        entity.setAmount(scale(request.getAmount()));
-        entity.setPersonalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        entity.setCompanyAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        entity.setSyncToCurrent(true);
-        entity.setNote(resolveManualNote(request));
-        salaryAccountRecordMapper.insert(entity);
-
-        ensureYearData(request.getUserId(), profile, entity.getRecordMonth().getYear());
-        recalculateBalances(request.getUserId(), normalizedAccountType);
-        return buildAccountPage(request.getUserId(), normalizedAccountType, entity.getRecordMonth().getYear(), profile);
-    }
-
-    @Transactional
     public SalaryAccountPageResponse updateAccountRecord(String accountType, Long recordId, SalaryAccountRecordRequest request) {
         String normalizedAccountType = normalizeAccountType(accountType);
-        SalaryProfileEntity profile = ensureProfile(request.getUserId());
-        SalaryAccountRecordEntity entity = requireEditableRecord(recordId, request.getUserId(), normalizedAccountType);
-        entity.setRecordMonth(normalizeMonth(request.getRecordMonth()));
-        entity.setAmount(scale(request.getAmount()));
-        entity.setNote(resolveRecordUpdateNote(entity, request));
-        salaryAccountRecordMapper.updateById(entity);
+        MutationContext saved = transactionTemplate.execute(status -> {
+            SalaryProfileEntity profile = ensureProfile(request.getUserId());
+            SalaryAccountRecordEntity entity = requireEditableRecord(recordId, request.getUserId(), normalizedAccountType);
+            entity.setRecordMonth(normalizeMonth(request.getRecordMonth()));
+            entity.setAmount(scale(request.getAmount()));
+            entity.setNote(resolveRecordUpdateNote(entity, request));
+            salaryAccountRecordMapper.updateById(entity);
 
-        ensureYearData(request.getUserId(), profile, entity.getRecordMonth().getYear());
-        recalculateBalances(request.getUserId(), normalizedAccountType);
-        return buildAccountPage(request.getUserId(), normalizedAccountType, entity.getRecordMonth().getYear(), profile);
+            ensureYearData(request.getUserId(), profile, entity.getRecordMonth().getYear());
+            recalculateBalances(request.getUserId(), normalizedAccountType);
+            return new MutationContext(profile, null, entity.getRecordMonth().getYear());
+        });
+        return buildAccountPage(request.getUserId(), normalizedAccountType, saved.year(), saved.profile());
     }
 
-    @Transactional
     public SalaryAccountPageResponse deleteAccountRecord(String accountType, Long recordId, Long userId) {
         String normalizedAccountType = normalizeAccountType(accountType);
-        SalaryProfileEntity profile = ensureProfile(userId);
-        SalaryAccountRecordEntity entity = requireEditableRecord(recordId, userId, normalizedAccountType);
-        int year = entity.getRecordMonth() == null ? LocalDate.now(SHANGHAI_ZONE).getYear() : entity.getRecordMonth().getYear();
-        if (RECORD_AUTO.equals(entity.getRecordType())) {
-            entity.setAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            entity.setPersonalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            entity.setCompanyAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            entity.setSyncToCurrent(false);
-            entity.setNote(AUTO_RECORD_DELETED_NOTE);
-            salaryAccountRecordMapper.updateById(entity);
+        MutationContext saved = transactionTemplate.execute(status -> {
+            SalaryProfileEntity profile = ensureProfile(userId);
+            SalaryAccountRecordEntity entity = requireEditableRecord(recordId, userId, normalizedAccountType);
+            int year = entity.getRecordMonth() == null ? LocalDate.now(SHANGHAI_ZONE).getYear() : entity.getRecordMonth().getYear();
+            if (RECORD_AUTO.equals(entity.getRecordType())) {
+                entity.setAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+                entity.setPersonalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+                entity.setCompanyAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+                entity.setSyncToCurrent(false);
+                entity.setNote(AUTO_RECORD_DELETED_NOTE);
+                salaryAccountRecordMapper.updateById(entity);
+                recalculateBalances(userId, normalizedAccountType);
+                return new MutationContext(profile, null, year);
+            }
+            salaryAccountRecordMapper.deleteById(recordId);
+            ensureYearData(userId, profile, year);
             recalculateBalances(userId, normalizedAccountType);
-            return buildAccountPage(userId, normalizedAccountType, year, profile);
-        }
-        salaryAccountRecordMapper.deleteById(recordId);
-        ensureYearData(userId, profile, year);
-        recalculateBalances(userId, normalizedAccountType);
-        return buildAccountPage(userId, normalizedAccountType, year, profile);
+            return new MutationContext(profile, null, year);
+        });
+        return buildAccountPage(userId, normalizedAccountType, saved.year(), saved.profile());
     }
 
     public SalaryTaxPageResponse getTaxPage(Long userId, Integer year) {

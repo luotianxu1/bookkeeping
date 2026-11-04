@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -16,6 +17,8 @@ public class LoginRateLimiter {
 
     private static final int MAX_FAILURES = 5;
     private static final long WINDOW_MILLIS = 15 * 60 * 1000L;
+    /** 跟踪 key 数上限：超过后触发全表过期清扫，封住「失败后不再访问的 key」造成的缓慢累积 */
+    private static final int MAX_TRACKED_KEYS = 10_000;
 
     private final ConcurrentHashMap<String, Deque<Long>> failures = new ConcurrentHashMap<>();
 
@@ -44,6 +47,9 @@ public class LoginRateLimiter {
             evictExpired(timestamps, now - WINDOW_MILLIS);
             timestamps.addLast(now);
         }
+        if (failures.size() > MAX_TRACKED_KEYS) {
+            sweepExpired();
+        }
     }
 
     /** 登录成功后清除失败记录 */
@@ -54,6 +60,20 @@ public class LoginRateLimiter {
     private void evictExpired(Deque<Long> timestamps, long windowStart) {
         while (!timestamps.isEmpty() && timestamps.peekFirst() < windowStart) {
             timestamps.pollFirst();
+        }
+    }
+
+    /** 全表清扫：移除窗口内已无失败记录的 key（与条目级操作共用同一把 Deque 锁，并发安全） */
+    private void sweepExpired() {
+        long windowStart = System.currentTimeMillis() - WINDOW_MILLIS;
+        for (Map.Entry<String, Deque<Long>> entry : failures.entrySet()) {
+            Deque<Long> timestamps = entry.getValue();
+            synchronized (timestamps) {
+                evictExpired(timestamps, windowStart);
+                if (timestamps.isEmpty()) {
+                    failures.remove(entry.getKey(), timestamps);
+                }
+            }
         }
     }
 

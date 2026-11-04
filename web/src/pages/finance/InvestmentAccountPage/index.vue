@@ -400,7 +400,8 @@ async function loadInvestmentData() {
     const [summaryData, positionList, transactionList, autoInvestPlanList] = await Promise.all([
       getInvestmentSummary({ userId: currentUser.id, accountId: targetAccount.id }, { signal }),
       getInvestmentPositions({ userId: currentUser.id, accountId: targetAccount.id }, { signal }),
-      getInvestmentTransactions({ userId: currentUser.id, accountId: targetAccount.id }, { signal }),
+      // 该列表仅用于汇总各持仓的待确认金额，服务端过滤 pending 避免全量拉取交易流水
+      getInvestmentTransactions({ userId: currentUser.id, accountId: targetAccount.id, settlementStatus: 'pending' }, { signal }),
       getInvestmentAutoInvestPlans({ userId: currentUser.id, accountId: targetAccount.id }, { signal }),
     ])
 

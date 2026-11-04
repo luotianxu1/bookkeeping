@@ -2323,10 +2323,20 @@ public class InvestmentService {
     }
 
     public List<InvestmentTransactionResponse> listTransactions(Long userId, Long accountId, Long positionId) {
-        List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(buildTransactionQuery(userId, accountId, positionId)
-            .orderByDesc(InvestmentTransactionEntity::getTradeAt)
-            .orderByDesc(InvestmentTransactionEntity::getId));
-        if (transactions.isEmpty() && positionId != null) {
+        return listTransactions(userId, accountId, positionId, null);
+    }
+
+    public List<InvestmentTransactionResponse> listTransactions(
+        Long userId,
+        Long accountId,
+        Long positionId,
+        String settlementStatus
+    ) {
+        List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(
+            buildTransactionQuery(userId, accountId, positionId, settlementStatus)
+                .orderByDesc(InvestmentTransactionEntity::getTradeAt)
+                .orderByDesc(InvestmentTransactionEntity::getId));
+        if (transactions.isEmpty() && positionId != null && !StringUtils.hasText(settlementStatus)) {
             return inferInitialTransaction(userId, accountId, positionId);
         }
         return mergeMissingPendingInitialTransaction(
@@ -2382,11 +2392,22 @@ public class InvestmentService {
     }
 
     private LambdaQueryWrapper<InvestmentTransactionEntity> buildTransactionQuery(Long userId, Long accountId, Long positionId) {
+        return buildTransactionQuery(userId, accountId, positionId, null);
+    }
+
+    private LambdaQueryWrapper<InvestmentTransactionEntity> buildTransactionQuery(
+        Long userId,
+        Long accountId,
+        Long positionId,
+        String settlementStatus
+    ) {
         return new LambdaQueryWrapper<InvestmentTransactionEntity>()
             .eq(userId != null, InvestmentTransactionEntity::getUserId, userId)
             .eq(accountId != null, InvestmentTransactionEntity::getAccountId, accountId)
             .eq(positionId != null, InvestmentTransactionEntity::getPositionId, positionId)
-            .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS);
+            .eq(InvestmentTransactionEntity::getStatus, NORMAL_STATUS)
+            // 结算状态过滤：列表页只关心 pending 金额时下推到 SQL，避免全量捞取
+            .eq(StringUtils.hasText(settlementStatus), InvestmentTransactionEntity::getSettlementStatus, settlementStatus);
     }
 
     private int sanitizePageSize(Integer pageSize) {

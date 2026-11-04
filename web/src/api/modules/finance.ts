@@ -1665,7 +1665,7 @@ export function deleteInvestmentPosition(id: number, userId: number) {
   })
 }
 
-export function getInvestmentTransactions(params: { userId: number; accountId?: number; positionId?: number }, config?: AxiosRequestConfig) {
+export function getInvestmentTransactions(params: { userId: number; accountId?: number; positionId?: number; settlementStatus?: string }, config?: AxiosRequestConfig) {
   return requestGet<InvestmentTransaction[]>(financeRequest, '/api/finance/investments/transactions', { params, ...config })
 }
 

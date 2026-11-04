@@ -186,9 +186,10 @@ public class InvestmentController {
     public Result<List<InvestmentTransactionResponse>> listTransactions(
         @RequestParam(name = "userId") @NotNull Long userId,
         @RequestParam(name = "accountId", required = false) Long accountId,
-        @RequestParam(name = "positionId", required = false) Long positionId
+        @RequestParam(name = "positionId", required = false) Long positionId,
+        @RequestParam(name = "settlementStatus", required = false) String settlementStatus
     ) {
-        return Result.ok(investmentService.listTransactions(userId, accountId, positionId));
+        return Result.ok(investmentService.listTransactions(userId, accountId, positionId, settlementStatus));
     }
 
     @GetMapping("/transactions/page")
