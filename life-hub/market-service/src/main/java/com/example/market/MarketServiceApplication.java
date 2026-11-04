@@ -2,6 +2,8 @@ package com.example.market;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -9,10 +11,14 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * <p>行情聚合（新浪/腾讯/东财/纳斯达克公开源）+ 与 app-service 同一套安全体系：
  * 全量扫描 com.example 复用 common 的 JWT 过滤器、InternalApiKeyFilter 与 DefaultSecurityConfig
- * （/api/market/** 需登录，/api/internal/** 走 X-Internal-Key）。用户状态校验（UserStatusChecker，
- * 30 秒缓存）连同一 MySQL，无业务表，仅 jdbc 只读访问。</p>
+ * （/api/market/** 需登录，/api/internal/** 走 X-Internal-Key）。用户状态校验与家庭范围判定
+ * 走 auth-service 内部接口的远程实现（RemoteUserStatusChecker/RemoteFamilyScopeChecker），
+ * 本服务零数据库依赖（2026-11-04 起）。</p>
  */
-@SpringBootApplication(scanBasePackages = "com.example")
+@SpringBootApplication(
+    scanBasePackages = "com.example",
+    exclude = {DataSourceAutoConfiguration.class, JdbcTemplateAutoConfiguration.class}
+)
 @EnableScheduling
 public class MarketServiceApplication {
 
