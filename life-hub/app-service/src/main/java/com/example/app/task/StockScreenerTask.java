@@ -1,18 +1,15 @@
 package com.example.app.task;
 
+import com.example.app.service.MarketCalendarService;
 import com.example.app.service.ScheduledTaskRunService;
 import com.example.app.service.StockScreenerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Component
 public class StockScreenerTask {
@@ -23,25 +20,22 @@ public class StockScreenerTask {
 
     private final StockScreenerService stockScreenerService;
     private final ScheduledTaskRunService scheduledTaskRunService;
-    private final Set<String> marketClosedDates;
+    private final MarketCalendarService marketCalendarService;
 
     public StockScreenerTask(
         StockScreenerService stockScreenerService,
         ScheduledTaskRunService scheduledTaskRunService,
-        @Value("${finance.investment.market-closed-dates:}") String marketClosedDates
+        MarketCalendarService marketCalendarService
     ) {
         this.stockScreenerService = stockScreenerService;
         this.scheduledTaskRunService = scheduledTaskRunService;
-        this.marketClosedDates = Arrays.stream(marketClosedDates.split(","))
-            .map(String::trim)
-            .filter(value -> !value.isEmpty())
-            .collect(Collectors.toSet());
+        this.marketCalendarService = marketCalendarService;
     }
 
     @Scheduled(cron = "${finance.stock-screener.cron:0 10 16 * * MON-FRI}", zone = "Asia/Shanghai")
     public void scanAfterMarketClose() {
-        String today = LocalDate.now(ZoneId.of("Asia/Shanghai")).toString();
-        if (marketClosedDates.contains(today)) {
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        if (marketCalendarService.isClosed(today)) {
             log.info("A股收盘选股任务跳过：date={}, reason=market-closed", today);
             return;
         }

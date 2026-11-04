@@ -24,7 +24,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -75,23 +74,19 @@ public class StockScreenerService {
     private final ExecutorService manualScanExecutor;
     private final AtomicBoolean scanRunning = new AtomicBoolean(false);
     private final AtomicBoolean cancelRequested = new AtomicBoolean(false);
-    private final Set<LocalDate> marketClosedDates;
+    private final MarketCalendarService marketCalendarService;
 
     public StockScreenerService(
         StockScreenRunMapper runMapper,
         StockScreenSnapshotMapper snapshotMapper,
         MarketClient marketClient,
-        @Value("${finance.stock-screener.fetch-concurrency:12}") Integer fetchConcurrency,
-        @Value("${finance.investment.market-closed-dates:}") String marketClosedDates
+        MarketCalendarService marketCalendarService,
+        @Value("${finance.stock-screener.fetch-concurrency:12}") Integer fetchConcurrency
     ) {
         this.runMapper = runMapper;
         this.snapshotMapper = snapshotMapper;
         this.marketClient = marketClient;
-        this.marketClosedDates = Arrays.stream(marketClosedDates.split(","))
-            .map(String::trim)
-            .filter(value -> !value.isEmpty())
-            .map(LocalDate::parse)
-            .collect(Collectors.toSet());
+        this.marketCalendarService = marketCalendarService;
 
         int concurrency = Math.max(2, Math.min(24, fetchConcurrency));
         this.quoteFetchExecutor = Executors.newFixedThreadPool(concurrency, daemonThreadFactory("stock-quote-"));
@@ -900,7 +895,7 @@ public class StockScreenerService {
         LocalDate candidate = now.toLocalTime().isBefore(MARKET_DATA_READY_TIME)
             ? now.toLocalDate().minusDays(1)
             : now.toLocalDate();
-        while (candidate.getDayOfWeek().getValue() >= 6 || marketClosedDates.contains(candidate)) {
+        while (marketCalendarService.isClosed(candidate)) {
             candidate = candidate.minusDays(1);
         }
         return candidate;

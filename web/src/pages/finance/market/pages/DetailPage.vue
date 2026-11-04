@@ -262,12 +262,17 @@ watch(() => [kind.value, code.value], loadHeader)
 onMounted(load)
 onMounted(loadHeader)
 
+/** 次级资料（资金流向/公告/F10/报表/分时回看）加载失败标记：面板本体静默隐藏，统一给轻提示与重试 */
+const secondaryError = ref('')
+
 /** 扩展信息（资金流向/公告/分红）只在切换标时加载一次，与周期切换无关 */
 async function loadExtra(): Promise<void> {
   try {
     extra.value = await getExtra(kind.value, code.value, { signal: metaSignal() })
-  } catch {
+  } catch (e) {
+    if (isCancelRequest(e)) return
     extra.value = { moneyflow: [], announcements: [], dividends: [] }
+    secondaryError.value = getErrorMessage(e, '扩展资料加载失败')
   }
 }
 watch(() => [kind.value, code.value], loadExtra)
@@ -277,12 +282,23 @@ onMounted(loadExtra)
 async function loadF10(): Promise<void> {
   try {
     f10.value = await getF10(kind.value, code.value, { signal: metaSignal() })
-  } catch {
+  } catch (e) {
+    if (isCancelRequest(e)) return
     f10.value = { financials: null, holders: null, margin: null, profile: null, sectors: null }
+    secondaryError.value = getErrorMessage(e, 'F10 资料加载失败')
   }
 }
 watch(() => [kind.value, code.value], loadF10)
 onMounted(loadF10)
+
+/** 次级资料统一重试：先清提示，任一再次失败会重新置位 */
+function retrySecondary(): void {
+  secondaryError.value = ''
+  loadExtra()
+  loadF10()
+  loadStatements()
+  loadTrendHistory()
+}
 
 /** 股东人数趋势视图已移至 HoldersPanel（ holders.trend → 行内计算） */
 
@@ -292,8 +308,10 @@ const statements = ref<StatementsData | null>(null)
 async function loadStatements(): Promise<void> {
   try {
     statements.value = await getStatements(kind.value, code.value, 5, { signal: metaSignal() })
-  } catch {
+  } catch (e) {
+    if (isCancelRequest(e)) return
     statements.value = null
+    secondaryError.value = getErrorMessage(e, '财务报表加载失败')
   }
 }
 
@@ -316,12 +334,19 @@ async function loadTrendHistory(): Promise<void> {
   try {
     const data = await getTrendHistory(kind.value, code.value, 5, { signal: metaSignal() })
     trendHistory.value = data?.days ?? null
-  } catch {
+  } catch (e) {
+    if (isCancelRequest(e)) return
     trendHistory.value = null
+    secondaryError.value = getErrorMessage(e, '分时回看加载失败')
   }
 }
 watch(() => [kind.value, code.value], loadTrendHistory)
 onMounted(loadTrendHistory)
+
+/** 切换标的时清掉上一次的次级资料错误提示 */
+watch(() => [kind.value, code.value], () => {
+  secondaryError.value = ''
+})
 
 /** 日期切换按钮：实时 + 历史日（最后一日为今日 5 分钟数据，与实时重复，不显示） */
 const trendPills = computed(() => {
@@ -851,6 +876,12 @@ const tableRows = computed(() => kline.value.slice(-12).reverse())
       <MarginFinancialsPanel v-if="f10" :f10="f10" />
       <HoldersPanel v-if="f10?.holders" :holders="f10.holders" />
       <StatementsPanel v-if="hasStatements" :statements="statements" />
+
+      <!-- 次级资料（资金流向/公告/F10/报表/分时回看）加载失败：面板静默隐藏，统一给轻提示 -->
+      <p v-if="secondaryError" class="error-box" role="alert">
+        {{ secondaryError }}
+        <button class="retry" type="button" @click="retrySecondary">重试</button>
+      </p>
 
       <!-- 行情明细表 -->
       <section class="kline-section" aria-labelledby="kline-title">

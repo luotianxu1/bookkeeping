@@ -11,7 +11,7 @@ import {
   getUsPremarket,
   type UsOverviewIndex,
   type UsPremarketData,
-} from '@/api/modules/finance'
+} from '@/api/modules/market'
 import { useTheme } from '@/utils/theme'
 import { getErrorMessage } from '@/api/request'
 import { useVisibilityPolling } from '@/composables/useVisibilityPolling'

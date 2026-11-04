@@ -9,14 +9,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Component
 public class GoldPriceCacheTask {
@@ -26,9 +22,9 @@ public class GoldPriceCacheTask {
 
     private final GoldPriceService goldPriceService;
     private final ScheduledTaskRunService scheduledTaskRunService;
+    private final com.example.app.service.MarketCalendarService marketCalendarService;
     private final long retryDelayMillis;
     private final int maxRetryAttempts;
-    private final Set<LocalDate> marketClosedDates;
     // 上金所交易时段（可配置）：日盘 09:00-15:30，夜盘 21:00-次日 02:30。
     private final LocalTime daySessionStart;
     private final LocalTime daySessionEnd;
@@ -39,9 +35,9 @@ public class GoldPriceCacheTask {
     public GoldPriceCacheTask(
         GoldPriceService goldPriceService,
         ScheduledTaskRunService scheduledTaskRunService,
+        com.example.app.service.MarketCalendarService marketCalendarService,
         @Value("${finance.gold-price.retry-delay-millis:10000}") long retryDelayMillis,
         @Value("${finance.gold-price.max-retry-attempts:3}") int maxRetryAttempts,
-        @Value("${finance.investment.market-closed-dates:}") String marketClosedDates,
         @Value("${finance.gold-price.trading-session.day-start:09:00}") String daySessionStart,
         @Value("${finance.gold-price.trading-session.day-end:15:30}") String daySessionEnd,
         @Value("${finance.gold-price.trading-session.night-start:21:00}") String nightSessionStart,
@@ -49,13 +45,9 @@ public class GoldPriceCacheTask {
     ) {
         this.goldPriceService = goldPriceService;
         this.scheduledTaskRunService = scheduledTaskRunService;
+        this.marketCalendarService = marketCalendarService;
         this.retryDelayMillis = Math.max(1000L, retryDelayMillis);
         this.maxRetryAttempts = Math.max(1, maxRetryAttempts);
-        this.marketClosedDates = Arrays.stream(marketClosedDates.split(","))
-            .map(String::trim)
-            .filter(value -> !value.isEmpty())
-            .map(LocalDate::parse)
-            .collect(Collectors.toSet());
         this.daySessionStart = LocalTime.parse(daySessionStart.trim());
         this.daySessionEnd = LocalTime.parse(daySessionEnd.trim());
         this.nightSessionStart = LocalTime.parse(nightSessionStart.trim());
@@ -111,11 +103,8 @@ public class GoldPriceCacheTask {
     }
 
     private boolean isTradingDay(LocalDate date) {
-        DayOfWeek dayOfWeek = date.getDayOfWeek();
-        if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
-            return false;
-        }
-        return !marketClosedDates.contains(date);
+        // 市场日历统一判定：周末 + 节假日 API + yml 静态兜底（见 MarketCalendarService）
+        return marketCalendarService.isTradingDay(date);
     }
 
     @PreDestroy

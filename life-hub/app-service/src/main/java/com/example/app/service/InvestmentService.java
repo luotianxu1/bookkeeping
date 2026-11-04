@@ -254,7 +254,7 @@ public class InvestmentService {
     private final GoldPriceService goldPriceService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
-    private final Set<LocalDate> marketClosedDates;
+    private final MarketCalendarService marketCalendarService;
     private final MarketQuoteClient marketQuoteClient;
     private final InvestmentDividendService dividendService;
     private final InvestmentQuoteSyncService quoteSyncService;
@@ -275,7 +275,7 @@ public class InvestmentService {
         GoldPriceService goldPriceService,
         ObjectMapper objectMapper,
         PlatformTransactionManager transactionManager,
-        @Value("${finance.investment.market-closed-dates:}") String marketClosedDatesConfig,
+        MarketCalendarService marketCalendarService,
         @Value("${finance.investment.sync-concurrency:8}") Integer syncConcurrency,
         MarketQuoteClient marketQuoteClient,
         InvestmentDividendService dividendService,
@@ -294,7 +294,7 @@ public class InvestmentService {
         this.goldPriceService = goldPriceService;
         this.objectMapper = objectMapper;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
-        this.marketClosedDates = parseMarketClosedDates(marketClosedDatesConfig);
+        this.marketCalendarService = marketCalendarService;
         this.marketQuoteClient = marketQuoteClient;
         this.dividendService = dividendService;
         this.quoteSyncService = quoteSyncService;
@@ -569,7 +569,6 @@ public class InvestmentService {
         return Optional.of(response);
     }
 
-    @Transactional
     public InvestmentPositionResponse createPosition(InvestmentPositionRequest request) {
         AccountEntity account = requireInvestmentAccount(request.getUserId(), request.getAccountId());
         AccountEntity fundingAccount = resolveFundingAccountForCreate(request, account);
@@ -577,8 +576,26 @@ public class InvestmentService {
             ? requireProduct(request.getProductId())
             : createOrLoadProduct(request.getProduct());
 
+        // 行情 HTTP 调用放在事务外，避免最长 20s 的远端调用占用 DB 连接与行锁
+        final JsonNode baseInfo;
         if (isFundSubscriptionProduct(product)) {
-            return createFundSubscriptionPosition(request, account, fundingAccount, product);
+            baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
+        } else {
+            baseInfo = null;
+        }
+        return transactionTemplate.execute(status ->
+            doCreatePosition(request, account, fundingAccount, product, baseInfo));
+    }
+
+    private InvestmentPositionResponse doCreatePosition(
+        InvestmentPositionRequest request,
+        AccountEntity account,
+        AccountEntity fundingAccount,
+        InvestmentProductEntity product,
+        JsonNode baseInfo
+    ) {
+        if (isFundSubscriptionProduct(product)) {
+            return createFundSubscriptionPosition(request, account, fundingAccount, product, baseInfo);
         }
 
         validateDirectPositionRequest(request);
@@ -2398,17 +2415,34 @@ public class InvestmentService {
         return response;
     }
 
-    @Transactional
     public InvestmentTransactionResponse createTransaction(InvestmentTransactionRequest request) {
         AccountEntity investmentAccount = requireInvestmentAccount(request.getUserId(), request.getAccountId());
         InvestmentProductEntity product = requireProduct(request.getProductId());
         InvestmentPositionEntity position = requirePosition(request);
+        // 行情 HTTP 调用放在事务外，避免最长 20s 的远端调用占用 DB 连接与行锁
+        final JsonNode baseInfo;
+        if (isFundSubscriptionProduct(product)) {
+            baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
+        } else {
+            baseInfo = null;
+        }
+        return transactionTemplate.execute(status ->
+            doCreateTransaction(request, investmentAccount, position, product, baseInfo));
+    }
+
+    private InvestmentTransactionResponse doCreateTransaction(
+        InvestmentTransactionRequest request,
+        AccountEntity investmentAccount,
+        InvestmentPositionEntity position,
+        InvestmentProductEntity product,
+        JsonNode baseInfo
+    ) {
         if (isFundSubscriptionProduct(product)) {
             if ("buy".equals(request.getTradeType())) {
                 applyDividendPreference(position, request.getDividendType(), request.getFundingAccountId());
                 positionMapper.updateById(position);
             }
-            return createPendingFundTransaction(request, investmentAccount, position, product);
+            return createPendingFundTransaction(request, investmentAccount, position, product, baseInfo);
         }
         BigDecimal quantity = defaultZero(request.getQuantity()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal price = defaultZero(request.getPrice()).setScale(6, RoundingMode.HALF_UP);
@@ -3090,7 +3124,8 @@ public class InvestmentService {
     private int executeAutoInvestPlan(Long planId, LocalDate today) {
         int executedCount = 0;
         while (true) {
-            Integer executed = transactionTemplate.execute(status -> executeSingleAutoInvestPlan(planId, today));
+            // 事务边界在 executeSingleAutoInvestPlan 内部：行情 HTTP 在事务外，DB 写入在事务内
+            Integer executed = executeSingleAutoInvestPlan(planId, today);
             if (executed == null || executed <= 0) {
                 return executedCount;
             }
@@ -3145,20 +3180,25 @@ public class InvestmentService {
         request.setFundingAccountId(plan.getFundingAccountId());
         request.setSubscriptionTimeSlot(SUBSCRIPTION_TIME_SLOT_BEFORE_1500);
         request.setRemark(buildAutoInvestExecutionRemark(plan));
-        createPendingFundTransaction(request, investmentAccount, position, product);
-        LocalDate nextExecuteDate = resolveNextAutoInvestExecuteDate(plan.getFrequency(), currentExecuteDate, effectiveExecuteDate);
-        int updatedRows = autoInvestPlanMapper.update(null, new LambdaUpdateWrapper<InvestmentAutoInvestPlanEntity>()
-            .set(InvestmentAutoInvestPlanEntity::getLastExecutedAt, executedAt)
-            .set(InvestmentAutoInvestPlanEntity::getNextExecuteDate, nextExecuteDate)
-            .eq(InvestmentAutoInvestPlanEntity::getId, planId)
-            .eq(InvestmentAutoInvestPlanEntity::getStatus, AUTO_INVEST_STATUS_ACTIVE)
-            .eq(InvestmentAutoInvestPlanEntity::getNextExecuteDate, currentExecuteDate));
-        if (updatedRows == 0) {
-            throw new IllegalStateException("基金定投计划状态已变化，请稍后重试");
-        }
-        log.info("基金定投执行成功：planId={}, executeDate={}, effectiveExecuteDate={}, nextExecuteDate={}",
-            planId, currentExecuteDate, effectiveExecuteDate, nextExecuteDate);
-        return 1;
+        // 行情 HTTP 调用放在事务外，避免最长 20s 的远端调用占用 DB 连接与行锁
+        JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
+        Integer executed = transactionTemplate.execute(status -> {
+            createPendingFundTransaction(request, investmentAccount, position, product, baseInfo);
+            LocalDate nextExecuteDate = resolveNextAutoInvestExecuteDate(plan.getFrequency(), currentExecuteDate, effectiveExecuteDate);
+            int updatedRows = autoInvestPlanMapper.update(null, new LambdaUpdateWrapper<InvestmentAutoInvestPlanEntity>()
+                .set(InvestmentAutoInvestPlanEntity::getLastExecutedAt, executedAt)
+                .set(InvestmentAutoInvestPlanEntity::getNextExecuteDate, nextExecuteDate)
+                .eq(InvestmentAutoInvestPlanEntity::getId, planId)
+                .eq(InvestmentAutoInvestPlanEntity::getStatus, AUTO_INVEST_STATUS_ACTIVE)
+                .eq(InvestmentAutoInvestPlanEntity::getNextExecuteDate, currentExecuteDate));
+            if (updatedRows == 0) {
+                throw new IllegalStateException("基金定投计划状态已变化，请稍后重试");
+            }
+            log.info("基金定投执行成功：planId={}, executeDate={}, effectiveExecuteDate={}, nextExecuteDate={}",
+                planId, currentExecuteDate, effectiveExecuteDate, nextExecuteDate);
+            return 1;
+        });
+        return executed == null ? 0 : executed;
     }
 
     private void validateAutoInvestPlanUniqueness(Long userId, Long positionId, Long currentPlanId) {
@@ -3277,9 +3317,9 @@ public class InvestmentService {
         InvestmentPositionRequest request,
         AccountEntity account,
         AccountEntity fundingAccount,
-        InvestmentProductEntity product
+        InvestmentProductEntity product,
+        JsonNode baseInfo
     ) {
-        JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
         requireFundSubscribable(product, baseInfo);
         BigDecimal officialPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
         LocalDateTime tradeAt = request.getTradeAt() == null ? LocalDateTime.now() : request.getTradeAt();
@@ -3355,9 +3395,9 @@ public class InvestmentService {
         InvestmentTransactionRequest request,
         AccountEntity investmentAccount,
         InvestmentPositionEntity position,
-        InvestmentProductEntity product
+        InvestmentProductEntity product,
+        JsonNode baseInfo
     ) {
-        JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
         LocalDateTime tradeAt = request.getTradeAt() == null ? LocalDateTime.now() : request.getTradeAt();
         LocalDate appliedDate = resolveFundSubscriptionTradeDate(request.getSubscriptionTimeSlot(), tradeAt);
         LocalDate expectedSettlementDate = resolveFundExpectedConfirmDate(appliedDate, baseInfo, product);
@@ -3621,21 +3661,6 @@ public class InvestmentService {
             || containsIgnoreCase(productName, "QDII");
     }
 
-    private Set<LocalDate> parseMarketClosedDates(String marketClosedDatesConfig) {
-        if (!StringUtils.hasText(marketClosedDatesConfig)) {
-            return Collections.emptySet();
-        }
-        Set<LocalDate> dates = new HashSet<>();
-        for (String rawDate : marketClosedDatesConfig.split(",")) {
-            String value = rawDate.trim();
-            if (value.isEmpty()) {
-                continue;
-            }
-            dates.add(LocalDate.parse(value));
-        }
-        return Collections.unmodifiableSet(dates);
-    }
-
     private LocalDate resolveFundSubscriptionTradeDate(String subscriptionTimeSlot, LocalDateTime tradeAt) {
         LocalDateTime effectiveTradeAt = tradeAt == null ? LocalDateTime.now() : tradeAt;
         LocalDate candidateDate = effectiveTradeAt.toLocalDate();
@@ -3675,10 +3700,8 @@ public class InvestmentService {
     }
 
     private boolean isNonTradingDay(LocalDate date) {
-        return switch (date.getDayOfWeek()) {
-            case SATURDAY, SUNDAY -> true;
-            default -> marketClosedDates.contains(date);
-        };
+        // 市场日历统一判定：周末 + 节假日 API + yml 静态兜底（见 MarketCalendarService）
+        return marketCalendarService.isClosed(date);
     }
 
     private void deductFundingAccount(AccountEntity account, BigDecimal amount) {
@@ -5110,7 +5133,8 @@ public class InvestmentService {
                 return basePrice != null && baseDate != null && !baseDate.isAfter(LocalDate.now())
                     ? new ForecastPriceSnapshot(baseDate, basePrice)
                     : null;
-            } catch (Exception ignored) {
+            } catch (Exception fallbackEx) {
+                log.warn("基金预测价兜底获取失败，code={}，预测收益将按 0 处理", code, fallbackEx);
                 return null;
             }
         }

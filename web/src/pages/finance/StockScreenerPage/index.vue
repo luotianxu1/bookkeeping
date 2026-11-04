@@ -10,13 +10,15 @@ import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
   getLimitUpDownStatistics,
   getMarketStatus,
+  type LimitUpDownStatistics,
+  type MarketStatus,
+  type MarketStatusIndex,
+} from '@/api/modules/market'
+import {
   getStockScreenResults,
   getStockScreenStatus,
   stopStockScreenRun,
   triggerStockScreenRun,
-  type LimitUpDownStatistics,
-  type MarketStatus,
-  type MarketStatusIndex,
   type StockScreenItem,
   type StockScreenPage,
   type StockScreenRun,

@@ -4,7 +4,7 @@ import BackToTopButton from '@/components/common/BackToTopButton/index.vue'
 import CommonHeaderRefreshButton from '@/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
-import { getMarketNews, type MarketNews, type MarketNewsCategory } from '@/api/modules/finance'
+import { getMarketNews, type MarketNews, type MarketNewsCategory } from '@/api/modules/market'
 import { getErrorMessage } from '@/api/request'
 
 type CategoryOption = {

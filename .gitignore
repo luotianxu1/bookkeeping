@@ -20,3 +20,7 @@ dist/
 
 # 系统文件
 .DS_Store
+
+# 运行时数据与历史备份（不跟踪）
+life-hub/data/backup-*/
+life-hub/data/us-turnover.json

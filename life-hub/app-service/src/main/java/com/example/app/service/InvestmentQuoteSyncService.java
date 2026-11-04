@@ -6,6 +6,7 @@ import com.example.app.entity.InvestmentPositionEntity;
 import com.example.app.entity.InvestmentPriceQuoteEntity;
 import com.example.app.entity.InvestmentProductEntity;
 import com.example.app.mapper.InvestmentPriceQuoteMapper;
+import com.example.common.util.KeyedTtlCache;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -36,6 +37,11 @@ public class InvestmentQuoteSyncService {
     private static final String FUND_QUOTE_SOURCE = "EASTMONEY_FUND_DAILY";
     private static final String STOCK_QUOTE_SOURCE = "TENCENT_STOCK_LATEST";
     private static final LocalTime FUND_CONFIRM_READY_TIME = LocalTime.of(9, 5);
+
+    // 基金估值缓存：估值盘中为分钟级更新，30s TTL 足够新鲜；失败降级 60s 内回吐旧值（或负缓存），
+    // 避免预测页/详情页高频回源打挂行情中心（KeyedTtlCache 自带 single-flight 串行）
+    private final KeyedTtlCache<String, JsonNode> fundEstimateCache =
+        new KeyedTtlCache<>(30_000L, 60_000L, 512);
 
     private final InvestmentPriceQuoteMapper priceQuoteMapper;
     private final MarketQuoteClient marketQuoteClient;
@@ -404,16 +410,26 @@ public class InvestmentQuoteSyncService {
         try {
             return marketQuoteClient.fundBase(code);
         } catch (Exception ex) {
+            log.warn("基金基础信息获取失败，code={}", code, ex);
             return objectMapper.createObjectNode();
         }
     }
 
         public JsonNode fetchFundEstimateInfo(String code) {
-        try {
-            return marketQuoteClient.fundEstimate(code);
-        } catch (Exception ex) {
-            return objectMapper.createObjectNode();
-        }
+        JsonNode cached = fundEstimateCache.get(code, c -> {
+            try {
+                JsonNode node = marketQuoteClient.fundEstimate(c);
+                if (node == null) {
+                    // 缓存约定：loader 失败用异常表达，交给失败降级窗口处理
+                    throw new IllegalStateException("行情中心返回空估值: " + c);
+                }
+                return node;
+            } catch (Exception ex) {
+                log.warn("基金估值获取失败，code={}", code, ex);
+                throw ex;
+            }
+        });
+        return cached != null ? cached : objectMapper.createObjectNode();
     }
 
         public JsonNode fetchTencentQuoteFields(String symbol) {

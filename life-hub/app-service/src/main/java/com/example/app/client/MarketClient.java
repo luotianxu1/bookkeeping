@@ -3,7 +3,6 @@ package com.example.app.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -19,31 +18,18 @@ import java.util.Map;
  * 调用行情中心，新浪同源同封装。异常向上抛出，由调用方（重试/降级）处理。</p>
  */
 @Component
-public class MarketClient {
+public class MarketClient extends InternalMarketClientSupport {
 
-    private final RestTemplate restTemplate;
     private final RestTemplate longReadRestTemplate;
-    private final ObjectMapper objectMapper;
-    private final String baseUrl;
-    private final String internalApiKey;
 
     public MarketClient(
         ObjectMapper objectMapper,
         @Value("${market.center.base-url:http://localhost:8083}") String baseUrl,
         @Value("${internal.api-key:dev-internal-key}") String internalApiKey
     ) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(3000);
-        factory.setReadTimeout(5000);
-        this.restTemplate = new RestTemplate(factory);
+        super(objectMapper, baseUrl, internalApiKey, "行情", 5000);
         // 清单接口行情中心冷缓存时需分页抓取 5000+ 只（约 20~40s），用长读超时模板
-        SimpleClientHttpRequestFactory longReadFactory = new SimpleClientHttpRequestFactory();
-        longReadFactory.setConnectTimeout(3000);
-        longReadFactory.setReadTimeout(60_000);
-        this.longReadRestTemplate = new RestTemplate(longReadFactory);
-        this.objectMapper = objectMapper;
-        this.baseUrl = baseUrl;
-        this.internalApiKey = internalApiKey;
+        this.longReadRestTemplate = newRestTemplate(60_000);
     }
 
     /**
@@ -62,13 +48,13 @@ public class MarketClient {
      * @throws IllegalStateException 行情中心不可用或响应异常
      */
     public List<Map<String, Object>> sinaKline(String symbol, int datalen, String scale) {
-        String url = baseUrl + "/api/internal/market/kline?symbol=" + symbol
-            + "&datalen=" + datalen + "&scale=" + scale;
+        String url = baseUrl + "/api/internal/market/kline?symbol=" + encode(symbol)
+            + "&datalen=" + datalen + "&scale=" + encode(scale);
         return fetchRows(url, restTemplate);
     }
 
     private List<Map<String, Object>> fetchRows(String url, RestTemplate template) {
-        JsonNode data = fetch(url, template);
+        JsonNode data = fetchNode(url, template);
         List<Map<String, Object>> rows = new ArrayList<>();
         if (data != null && data.isArray()) {
             for (JsonNode row : data) {
@@ -76,24 +62,5 @@ public class MarketClient {
             }
         }
         return rows;
-    }
-
-    private JsonNode fetch(String url, RestTemplate template) {
-        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-        headers.set("X-Internal-Key", internalApiKey);
-        org.springframework.http.ResponseEntity<String> response =
-            template.exchange(url, org.springframework.http.HttpMethod.GET,
-                new org.springframework.http.HttpEntity<>(headers), String.class);
-        try {
-            JsonNode root = objectMapper.readTree(response.getBody());
-            if (root.path("code").asInt(-1) != 0) {
-                throw new IllegalStateException("行情中心返回错误: " + root.path("message").asText());
-            }
-            return root.path("data");
-        } catch (IllegalStateException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new IllegalStateException("行情中心响应解析失败", e);
-        }
     }
 }

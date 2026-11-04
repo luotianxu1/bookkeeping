@@ -1,38 +1,6 @@
 import type { AxiosRequestConfig } from 'axios'
 import { financeRequest, requestDelete, requestGet, requestPost, requestPut } from '@/api/request'
 
-// market 域接口（金价/快讯/涨跌停/市场状态/美股）已迁至 ./market，此处 re-export 保持既有 import 路径兼容
-export {
-  getGoldPrices,
-  getRealtimeGoldPrice,
-  getMarketNews,
-  getLimitUpDownStatistics,
-  getMarketStatus,
-  getUsPremarket,
-  getUsOverview,
-} from './market'
-export type {
-  GoldPriceRange,
-  GoldRealtimePrice,
-  GoldMarketQuote,
-  GoldMarketStats,
-  JewelryGoldPrice,
-  GoldChartPoint,
-  GoldPrice,
-  MarketNewsCategory,
-  MarketNewsItem,
-  MarketNews,
-  MarketStatusIndex,
-  MarketStatus,
-  LimitUpDownStock,
-  LimitUpDownStatistics,
-  UsPremarketIndex,
-  UsPremarketData,
-  UsOverviewTrendPoint,
-  UsOverviewIndex,
-  UsOverviewData,
-} from './market'
-
 export interface AccountType {
   id: number
   code: string

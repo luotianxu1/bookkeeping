@@ -4,16 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.app.dto.ScheduledTaskStatusResponse;
 import com.example.app.entity.ScheduledTaskRunEntity;
 import com.example.app.mapper.ScheduledTaskRunMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,7 +30,7 @@ public class ScheduledTaskStatusService {
     private final InvestmentService investmentService;
     private final GoldPriceService goldPriceService;
     private final StockScreenerService stockScreenerService;
-    private final Set<String> marketClosedDates;
+    private final MarketCalendarService marketCalendarService;
 
     public ScheduledTaskStatusService(
         ScheduledTaskRunMapper scheduledTaskRunMapper,
@@ -44,7 +41,7 @@ public class ScheduledTaskStatusService {
         InvestmentService investmentService,
         GoldPriceService goldPriceService,
         StockScreenerService stockScreenerService,
-        @Value("${finance.investment.market-closed-dates:}") String marketClosedDates
+        MarketCalendarService marketCalendarService
     ) {
         this.scheduledTaskRunMapper = scheduledTaskRunMapper;
         this.scheduledTaskRunService = scheduledTaskRunService;
@@ -54,10 +51,7 @@ public class ScheduledTaskStatusService {
         this.investmentService = investmentService;
         this.goldPriceService = goldPriceService;
         this.stockScreenerService = stockScreenerService;
-        this.marketClosedDates = Arrays.stream(marketClosedDates.split(","))
-            .map(String::trim)
-            .filter(value -> !value.isEmpty())
-            .collect(Collectors.toCollection(HashSet::new));
+        this.marketCalendarService = marketCalendarService;
     }
 
     public List<ScheduledTaskStatusResponse> getTodayTaskStatuses() {
@@ -271,7 +265,8 @@ public class ScheduledTaskStatusService {
     }
 
     private boolean isMarketClosed(LocalDate date) {
-        return date.getDayOfWeek().getValue() >= 6 || marketClosedDates.contains(date.toString());
+        // 市场日历统一判定：周末 + 节假日 API + yml 静态兜底（见 MarketCalendarService）
+        return marketCalendarService.isClosed(date);
     }
 
     private void runDueRenewals(String taskName, String triggerName, LocalDate today) {

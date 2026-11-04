@@ -1,5 +1,5 @@
 import { computed, reactive, readonly } from 'vue'
-import { getRealtimeGoldPrice, type GoldRealtimePrice } from '@/api/modules/finance'
+import { getRealtimeGoldPrice, type GoldRealtimePrice } from '@/api/modules/market'
 
 const AUTO_REFRESH_INTERVAL_MS = 3 * 60 * 1000
 

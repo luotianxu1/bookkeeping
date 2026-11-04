@@ -36,7 +36,8 @@ setupRem()
 async function bootstrapApp() {
   await router.isReady()
   if (getStoredCurrentUser()) {
-    await initializeGoldPriceCache()
+    // 后台预热金价缓存，不阻塞 mount——登录后行情接口慢时页面照常渲染
+    void initializeGoldPriceCache()
   }
   app.mount('#app')
 }
