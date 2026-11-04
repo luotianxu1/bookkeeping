@@ -1,8 +1,5 @@
 // 面板子组件共享基础样式（在子组件的 scoped 样式里 @use，会被打上该组件的 scope 属性）。
 // 与 DetailPage 主文件的对应规则保持一致：数值/涨跌色/面板卡片/表头/表格。
-.num {
-  font-variant-numeric: tabular-nums;
-}
 
 .muted {
   color: var(--color-text-muted);

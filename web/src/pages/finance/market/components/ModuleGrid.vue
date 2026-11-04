@@ -136,9 +136,6 @@ function openModule(m: GlobalModule, row: GlobalModule['rows'][number]): void {
 </template>
 
 <style scoped lang="scss">
-.num {
-  font-variant-numeric: tabular-nums;
-}
 
 /* ---------- 模块信息头：编号 + 标题 + 涨跌统计 ---------- */
 .module {

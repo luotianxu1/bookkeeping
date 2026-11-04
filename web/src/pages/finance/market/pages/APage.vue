@@ -141,10 +141,6 @@ onMounted(loadAll)
   }
 }
 
-.num {
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---------- 核心指数方块阵（与分组页 tiles 同款密度） ---------- */
 .retry {
   min-height: 34px;

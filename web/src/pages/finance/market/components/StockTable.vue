@@ -77,10 +77,6 @@ function open(code: number | string): void {
   padding-top: var(--space-4);
 }
 
-.num {
-  font-variant-numeric: tabular-nums;
-}
-
 .spot-head {
   display: flex;
   align-items: baseline;

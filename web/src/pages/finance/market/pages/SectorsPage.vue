@@ -139,10 +139,6 @@ onMounted(load)
   }
 }
 
-.num {
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---------- 页头 ---------- */
 .page-head {
   display: flex;

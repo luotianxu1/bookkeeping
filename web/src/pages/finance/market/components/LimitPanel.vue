@@ -201,10 +201,6 @@ function stagger(i: number): number {
   padding-top: var(--space-4);
 }
 
-.num {
-  font-variant-numeric: tabular-nums;
-}
-
 /* ---------- 头部 ---------- */
 .spot-head {
   display: flex;

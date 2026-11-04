@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import './styles/base.css'
+import './styles/shared.scss'
 import { router } from './router'
 import { getStoredCurrentUser } from './utils/current-user'
 import { initializeGoldPriceCache } from './utils/gold-price-cache'

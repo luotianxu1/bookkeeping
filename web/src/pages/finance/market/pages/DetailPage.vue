@@ -936,10 +936,6 @@ const tableRows = computed(() => kline.value.slice(-12).reverse())
   }
 }
 
-.num {
-  font-variant-numeric: tabular-nums;
-}
-
 .muted {
   color: var(--color-text-muted);
 }
@@ -1148,7 +1144,6 @@ const tableRows = computed(() => kline.value.slice(-12).reverse())
   gap: var(--space-2);
   padding: var(--space-2) 0 var(--space-8);
 }
-
 
 .sub-legend {
   display: flex;

@@ -131,10 +131,6 @@ function openQuote(code: string): void {
   }
 }
 
-.num {
-  font-variant-numeric: tabular-nums;
-}
-
 /* 方块阵样式已抽到 ../tiles.scss（.mkt-tiles/.mkt-tile*），与 A 股核心指数共用 */
 
 .error-box {

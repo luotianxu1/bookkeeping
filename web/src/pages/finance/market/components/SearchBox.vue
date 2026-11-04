@@ -230,7 +230,4 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.num {
-  font-variant-numeric: tabular-nums;
-}
 </style>

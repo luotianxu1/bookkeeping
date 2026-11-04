@@ -1,0 +1,11 @@
+// 跨页面完全重复的原子样式（由各页面 scoped 块收敛而来，见 2026-11-04 优化批次）。
+// 仅收录「全局语义、无变体冲突」的规则；页面特化样式仍保留在各页面内。
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.search-bar span {
+  color: var(--color-brand);
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
