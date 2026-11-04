@@ -5,64 +5,37 @@ import CommonButton from '@/components/common/CommonButton/index.vue'
 import CommonInput from '@/components/common/CommonInput/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
-import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
+import CommonSelect from '@/components/common/CommonSelect/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import {
-  createTravelPlanDay,
-  createTravelPlanExpense,
-  createTravelPlanItinerary,
-  deleteTravelPlanExpense,
-  deleteTravelPlanItinerary,
   getTravelPlan,
-  type TravelExpenseType,
-  type TravelItineraryType,
   type TravelPlanDetail,
-  updateTravelPlanExpense,
-  updateTravelPlanItinerary,
 } from '@/api/modules/tool'
-import { getApiBaseUrl } from '@/api/api-base-url'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
-import { parseAmapLocation, useTravelMaps, type TravelMapPoint } from './useTravelMaps'
-import type { TravelTone } from './travelFormat'
+import { useTravelMaps, type TravelMapPoint } from './useTravelMaps'
 import {
   addDays,
   calculateDayCount,
   expenseAmountText,
   expenseNote,
-  expenseTypeLabel,
   formatDayTabLabel,
   formatDate,
-  formatDistance,
-  formatDuration,
   formatMetric,
   formatStartTime,
   itineraryDescription,
-  normalizeTimeValue,
   overviewExpenseRowAmount,
   routeCountText,
   routeTransferSummary,
   typeTone,
 } from './travelFormat'
+import { openOverviewNavigation } from './travelNavigation'
+import { buildOverviewEntries, prependPreviousAccommodation } from './travelPoints'
+import { useTravelPlanEditor, type ModalType } from './useTravelPlanEditor'
 
 type DetailTab = 'overview' | 'route' | 'expense'
-type ModalType = 'transport' | 'scenic' | 'dining' | 'accommodation'
 type FocusMapTarget = TravelMapPoint & {
   key: string
-}
-
-type TravelSearchResult = {
-  id: string
-  title: string
-  address: string
-  longitude?: number | null
-  latitude?: number | null
-}
-
-type ExpenseTitleOption = {
-  id: string
-  title: string
-  meta: string
 }
 
 type RouteDisplayDay = {
@@ -70,33 +43,6 @@ type RouteDisplayDay = {
   itineraries: TravelPlanDetail['days'][number]['itineraries']
   expenses: TravelPlanDetail['days'][number]['expenses']
 }
-
-type TransportMode = 'driving' | 'walking' | 'riding'
-type NavigationPoint = {
-  title: string
-  longitude: number
-  latitude: number
-  poiId?: string | null
-  poiName?: string | null
-}
-
-type EditTarget =
-  | {
-      type: 'itinerary'
-      item: TravelPlanDetail['days'][number]['itineraries'][number]
-      dayId: number
-      dayIndex: number
-    }
-  | {
-      type: 'expense'
-      item: TravelPlanDetail['days'][number]['expenses'][number]
-      dayId: number
-      dayIndex: number
-      isNew?: boolean
-    }
-
-let searchDebounceTimer: number | null = null
-let searchRequestSequence = 0
 
 const route = useRoute()
 const router = useRouter()
@@ -109,23 +55,13 @@ const activeTab = ref<DetailTab>('overview')
 const activeDayIndex = ref(1)
 const activeOverviewDayIndex = ref(0)
 const isEditingCurrentPage = ref(false)
-const showAddModal = ref(false)
-const showEditModal = ref(false)
-const showDeleteModal = ref(false)
-const selectedModalType = ref<ModalType>('scenic')
-const selectedTransportMode = ref<TransportMode>('driving')
-const searchKeyword = ref('')
-const selectedSearchResultId = ref('')
-const selectedSearchResult = ref<TravelSearchResult | null>(null)
-const searchResults = ref<TravelSearchResult[]>([])
-const startTime = ref('')
-const expenseTitle = ref('')
-const expenseAmount = ref('')
-const modalRemark = ref('')
-const editingTarget = ref<EditTarget | null>(null)
-const deletingTarget = ref<EditTarget | null>(null)
-const searchStackRef = ref<HTMLDivElement | null>(null)
-const expenseTitleSearchStackRef = ref<HTMLDivElement | null>(null)
+const detail = ref<TravelPlanDetail | null>(null)
+const isLoading = ref(true)
+const loadError = ref('')
+const showFeedbackModal = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
+
 const {
   overviewMapRef,
   routeMapRef,
@@ -140,43 +76,6 @@ const {
   routePoints: () => currentRouteMapPoints.value,
   hasPlanStartDate: () => !!detail.value?.startDate,
 })
-const detail = ref<TravelPlanDetail | null>(null)
-const isLoading = ref(true)
-const isSearchingLocation = ref(false)
-const isCalculatingRoute = ref(false)
-const isSavingItinerary = ref(false)
-const isSavingExpense = ref(false)
-const isDeletingItem = ref(false)
-const modalError = ref('')
-const editModalError = ref('')
-const loadError = ref('')
-const showFeedbackModal = ref(false)
-const feedbackMessage = ref('')
-const feedbackType = ref<'success' | 'error'>('success')
-
-// 路线规划 / 地点搜索的 Key 保存在 tool-service，前端经 /tool-api 代理调用
-const amapProxyBaseUrl = `${getApiBaseUrl('tool').replace(/\/$/, '')}/api/tool/amap`
-
-const itineraryTypeOptions: CommonSelectOption[] = [
-  { label: '交通', value: 'transport' },
-  { label: '景区', value: 'scenic' },
-  { label: '餐饮', value: 'dining' },
-  { label: '住宿', value: 'accommodation' },
-]
-
-const transportModeOptions: CommonSelectOption[] = [
-  { label: '驾车', value: 'driving' },
-  { label: '步行', value: 'walking' },
-  { label: '骑车', value: 'riding' },
-]
-
-const expenseTypeOptions: CommonSelectOption[] = [
-  { label: '交通', value: 'transport' },
-  { label: '景区', value: 'scenic' },
-  { label: '餐饮', value: 'dining' },
-  { label: '住宿', value: 'accommodation' },
-  { label: '其他', value: 'other' },
-]
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
@@ -189,10 +88,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
-  if (searchDebounceTimer) {
-    window.clearTimeout(searchDebounceTimer)
-    searchDebounceTimer = null
-  }
   destroyMaps()
 })
 
@@ -270,41 +165,9 @@ const currentRouteDay = computed<RouteDisplayDay>(() => currentDay.value ?? ({
   expenses: [],
 }))
 
-const displayedCurrentDayItineraries = computed(() => {
-  const day = currentRouteDay.value
-  const currentItems = day.itineraries ?? []
-  const previousDay = orderedDays.value.find((item) => item.dayIndex === day.dayIndex - 1)
-  const previousLastItem = previousDay?.itineraries?.[previousDay.itineraries.length - 1]
-
-  if (!previousLastItem || previousLastItem.type !== 'accommodation') {
-    return currentItems
-  }
-
-  const alreadyStartsWithSameAccommodation = currentItems.some((item, index) => {
-    if (index !== 0) {
-      return false
-    }
-    return item.id === previousLastItem.id
-      || (
-        item.type === 'accommodation'
-        && item.title === previousLastItem.title
-        && item.poiId === previousLastItem.poiId
-      )
-  })
-
-  if (alreadyStartsWithSameAccommodation) {
-    return currentItems
-  }
-
-  return [
-    {
-      ...previousLastItem,
-      id: -previousLastItem.id,
-      remark: previousLastItem.remark || previousLastItem.address || previousLastItem.poiName || '延续前一晚住宿',
-    },
-    ...currentItems,
-  ]
-})
+const displayedCurrentDayItineraries = computed(() =>
+  prependPreviousAccommodation(currentRouteDay.value.itineraries ?? [], orderedDays.value, currentRouteDay.value.dayIndex),
+)
 
 const currentRouteMapPoints = computed<TravelMapPoint[]>(() =>
   displayedCurrentDayItineraries.value
@@ -346,7 +209,7 @@ const overviewMapPoints = computed<TravelMapPoint[]>(() => {
     : orderedDays.value.filter((day) => day.dayIndex === activeOverviewDayIndex.value)
 
   return days.flatMap((day) =>
-    prependPreviousAccommodation(day.itineraries ?? [], day.dayIndex)
+    prependPreviousAccommodation(day.itineraries ?? [], orderedDays.value, day.dayIndex)
       .filter(
         (item): item is TravelPlanDetail['days'][number]['itineraries'][number] & { longitude: number; latitude: number } =>
           typeof item.longitude === 'number' && Number.isFinite(item.longitude)
@@ -382,7 +245,7 @@ const overviewMapFocusTargets = computed<FocusMapTarget[]>(() => {
     : orderedDays.value.filter((day) => day.dayIndex === activeOverviewDayIndex.value)
 
   return days.flatMap((day) =>
-    prependPreviousAccommodation(day.itineraries ?? [], day.dayIndex)
+    prependPreviousAccommodation(day.itineraries ?? [], orderedDays.value, day.dayIndex)
       .filter(
         (item): item is TravelPlanDetail['days'][number]['itineraries'][number] & { longitude: number; latitude: number } =>
           typeof item.longitude === 'number' && Number.isFinite(item.longitude)
@@ -421,47 +284,10 @@ const summaryMeta = computed(() => {
   return `${datePart} · ${resolvedDayCount.value} 天 · ${travelerCount} 人同行`
 })
 
-function prependPreviousAccommodation(
-  currentItems: TravelPlanDetail['days'][number]['itineraries'],
-  dayIndex: number,
-) {
-  const previousDay = orderedDays.value.find((item) => item.dayIndex === dayIndex - 1)
-  const previousLastItem = previousDay?.itineraries?.[previousDay.itineraries.length - 1]
-
-  if (!previousLastItem || previousLastItem.type !== 'accommodation') {
-    return currentItems
-  }
-
-  const alreadyStartsWithSameAccommodation = currentItems.some((item, index) => {
-    if (index !== 0) {
-      return false
-    }
-    return item.id === previousLastItem.id
-      || (
-        item.type === 'accommodation'
-        && item.title === previousLastItem.title
-        && item.poiId === previousLastItem.poiId
-      )
-  })
-
-  if (alreadyStartsWithSameAccommodation) {
-    return currentItems
-  }
-
-  return [
-    {
-      ...previousLastItem,
-      id: -previousLastItem.id,
-      remark: previousLastItem.remark || previousLastItem.address || previousLastItem.poiName || '延续前一晚住宿',
-    },
-    ...currentItems,
-  ]
-}
-
 const currentDayOverviewEntries = computed(() =>
   orderedDays.value.map((day) => ({
     ...day,
-    entries: buildOverviewEntries(prependPreviousAccommodation(day.itineraries ?? [], day.dayIndex)),
+    entries: buildOverviewEntries(prependPreviousAccommodation(day.itineraries ?? [], orderedDays.value, day.dayIndex)),
   })),
 )
 
@@ -494,37 +320,69 @@ const hasOverviewExpenseData = computed(() => {
 
 const hasOverviewExpenseRows = computed(() => overviewExpenses.value.length > 0)
 
-const visibleSearchResults = computed(() => searchResults.value)
-const showExpenseTitleResults = ref(false)
-const expenseTitleOptions = computed<ExpenseTitleOption[]>(() => {
-  const items = displayedCurrentDayItineraries.value
-  const keyword = expenseTitle.value.trim().toLowerCase()
-  const unique = new Map<string, ExpenseTitleOption>()
+// ---------- 行程编辑弹窗 / 地点搜索 / 路程计算（见 useTravelPlanEditor） ----------
 
-  items.forEach((item) => {
-    const title = item.title.trim()
-    if (!title) {
-      return
-    }
-    const meta = `${formatStartTime(item.startTime)} · ${expenseTypeLabel(item.type)}`
-    if (keyword && !title.toLowerCase().includes(keyword) && !meta.toLowerCase().includes(keyword)) {
-      return
-    }
-    if (!unique.has(title)) {
-      unique.set(title, {
-        id: `${item.id}-${title}`,
-        title,
-        meta,
-      })
-    }
-  })
-
-  return [...unique.values()]
+const {
+  showAddModal,
+  showEditModal,
+  showDeleteModal,
+  selectedModalType,
+  selectedTransportMode,
+  searchKeyword,
+  selectedSearchResultId,
+  startTime,
+  expenseTitle,
+  expenseAmount,
+  modalRemark,
+  editingTarget,
+  deletingTarget,
+  searchStackRef,
+  expenseTitleSearchStackRef,
+  isSearchingLocation,
+  isCalculatingRoute,
+  isSavingItinerary,
+  isSavingExpense,
+  isDeletingItem,
+  modalError,
+  editModalError,
+  showExpenseTitleResults,
+  routePreviewDistanceText,
+  routePreviewDurationText,
+  visibleSearchResults,
+  expenseTitleOptions,
+  itineraryTypeOptions,
+  transportModeOptions,
+  expenseTypeOptions,
+  openEditItemModal,
+  openDeleteItemModal,
+  closeEditItemModal,
+  closeDeleteItemModal,
+  closeModal,
+  toggleAddModal,
+  openCreateExpenseModal,
+  saveModal,
+  saveEditModal,
+  confirmDeleteItem,
+  selectSearchResult,
+  triggerLocationSearch,
+  openExpenseTitleResults,
+  selectExpenseTitleOption,
+  handleDocumentPointerDown,
+  itineraryEditTarget,
+  expenseEditTarget,
+} = useTravelPlanEditor({
+  detail,
+  currentDay,
+  orderedDays,
+  activeDayIndex,
+  routeDateItems,
+  currentPlanId,
+  displayedDayItineraries: displayedCurrentDayItineraries,
+  loadDetail,
+  showFeedback,
 })
-const routePreviewDistanceText = ref('')
-const routePreviewDurationText = ref('')
-const routeDistanceMeters = ref<number | null>(null)
-const routeDurationSeconds = ref<number | null>(null)
+
+// ---------- 页面骨架动作 ----------
 
 function setTab(tab: DetailTab) {
   activeTab.value = tab
@@ -587,140 +445,25 @@ function focusRouteEntry(item: TravelPlanDetail['days'][number]['itineraries'][n
   focusMapPoint(target)
 }
 
-function openSystemNavigation(origin: NavigationPoint, destination: NavigationPoint, mode: TransportMode = 'driving') {
-  const travelMode = mode === 'walking'
-    ? 'walking'
-    : mode === 'riding'
-      ? 'transit'
-      : 'driving'
-  const isIOS = /iPhone|iPad|iPod/i.test(window.navigator.userAgent)
-  const destinationName = destination.poiName?.trim() || destination.title.trim()
-
-  if (isIOS) {
-    const params = new URLSearchParams({
-      sourceApplication: 'vue3-ts-app',
-      poiname: destinationName,
-      lat: String(destination.latitude),
-      lon: String(destination.longitude),
-      dev: '1',
-    })
-    window.location.href = `iosamap://navi?${params.toString()}`
-    return
-  }
-
-  if (destinationName) {
-    const keywordParams = new URLSearchParams({
-      sourceApplication: 'vue3-ts-app',
-      keyword: destinationName,
-      style: travelMode === 'walking' ? '2' : '0',
-    })
-    window.location.href = `androidamap://keywordNavi?${keywordParams.toString()}`
-    return
-  }
-
-  const params = new URLSearchParams({
-    sourceApplication: 'vue3-ts-app',
-    poiname: destinationName || '目的地',
-    poiid: destination.poiId?.trim() || '',
-    lat: String(destination.latitude),
-    lon: String(destination.longitude),
-    dev: '1',
-    style: travelMode === 'walking' ? '2' : '0',
-  })
-
-  void origin
-  window.location.href = `androidamap://navi?${params.toString()}`
-}
-
-function openOverviewNavigation(entry: {
-  navigation?: {
-    origin: NavigationPoint
-    destination: NavigationPoint
-    mode: TransportMode
-  } | null
-}) {
-  if (!entry.navigation) {
-    return
-  }
-  openSystemNavigation(entry.navigation.origin, entry.navigation.destination, entry.navigation.mode)
-}
-
 function toggleCurrentPageEditor() {
   isEditingCurrentPage.value = !isEditingCurrentPage.value
 }
 
-function openEditItemModal(target: EditTarget) {
-  editingTarget.value = target
-  editModalError.value = ''
-  showEditModal.value = true
-  if (target.type === 'itinerary') {
-    selectedModalType.value = target.item.type as ModalType
-    selectedSearchResult.value = {
-      id: target.item.poiId || target.item.title,
-      title: target.item.poiName || target.item.title,
-      address: target.item.address || '',
-      longitude: target.item.longitude ?? null,
-      latitude: target.item.latitude ?? null,
-    }
-    selectedSearchResultId.value = selectedSearchResult.value.id
-    searchKeyword.value = selectedSearchResult.value.title
-    startTime.value = target.item.startTime ? target.item.startTime.slice(0, 5) : ''
-    selectedTransportMode.value = (target.item.transportMode as TransportMode | null) || 'driving'
-    routeDistanceMeters.value = target.item.distanceMeters ?? null
-    routeDurationSeconds.value = target.item.durationSeconds ?? null
-    routePreviewDistanceText.value = formatDistance(target.item.distanceMeters)
-    routePreviewDurationText.value = formatDuration(target.item.durationSeconds)
-    modalRemark.value = target.item.remark || ''
-    searchResults.value = []
-    void calculateTransportRoute()
-  } else {
-    selectedModalType.value = target.item.type as ModalType
-    expenseTitle.value = target.item.title || ''
-    showExpenseTitleResults.value = false
-    expenseAmount.value = String(target.item.amount ?? '')
-    modalRemark.value = target.item.remark || ''
-  }
-}
-
-function openDeleteItemModal(target: EditTarget) {
-  deletingTarget.value = target
-  showDeleteModal.value = true
-}
-
-function closeEditItemModal(force = false) {
-  if ((isSavingItinerary.value || isSavingExpense.value) && !force) {
+function goToEditPage() {
+  if (activeTab.value === 'route' || activeTab.value === 'expense') {
+    toggleCurrentPageEditor()
     return
   }
-  showEditModal.value = false
-  editingTarget.value = null
-  resetEditForm()
-}
-
-function closeDeleteItemModal(force = false) {
-  if (isDeletingItem.value && !force) {
+  if (!Number.isFinite(currentPlanId.value)) {
     return
   }
-  showDeleteModal.value = false
-  deletingTarget.value = null
+  void router.push(`/tools/travel-plans/${currentPlanId.value}/edit`)
 }
 
-function resetEditForm() {
-  selectedModalType.value = 'scenic'
-  searchKeyword.value = ''
-  selectedSearchResultId.value = ''
-  selectedSearchResult.value = null
-  searchResults.value = []
-  startTime.value = ''
-  selectedTransportMode.value = 'driving'
-  routeDistanceMeters.value = null
-  routeDurationSeconds.value = null
-  routePreviewDistanceText.value = ''
-  routePreviewDurationText.value = ''
-  expenseTitle.value = ''
-  expenseAmount.value = ''
-  modalRemark.value = ''
-  showExpenseTitleResults.value = false
-  editModalError.value = ''
+function showFeedback(message: string, type: 'success' | 'error') {
+  feedbackMessage.value = message
+  feedbackType.value = type
+  showFeedbackModal.value = true
 }
 
 async function loadDetail(silent = false) {
@@ -754,6 +497,16 @@ async function loadDetail(silent = false) {
   }
 }
 
+function routeMapLastSpot() {
+  const items = displayedCurrentDayItineraries.value
+  return items[items.length - 1]?.title || '当天终点'
+}
+
+function overviewMapLastSpot() {
+  const items = overviewMapPoints.value
+  return items[items.length - 1]?.title || '旅行终点'
+}
+
 watch(
   () => [activeTab.value, detail.value?.id, overviewMapPoints.value.length, activeOverviewDayIndex.value] as const,
   async ([tab]) => {
@@ -777,565 +530,6 @@ watch(
   },
   { immediate: true },
 )
-
-watch(searchKeyword, (value) => {
-  const keyword = value.trim()
-
-  if (!keyword) {
-    selectedSearchResult.value = null
-    selectedSearchResultId.value = ''
-    searchResults.value = []
-    if (searchDebounceTimer) {
-      window.clearTimeout(searchDebounceTimer)
-      searchDebounceTimer = null
-    }
-    return
-  }
-
-  if (selectedSearchResult.value && selectedSearchResult.value.title !== keyword) {
-    selectedSearchResult.value = null
-    selectedSearchResultId.value = ''
-  }
-
-  searchResults.value = []
-})
-
-watch(selectedTransportMode, () => {
-  if (selectedSearchResult.value) {
-    void calculateTransportRoute()
-  }
-})
-
-function toggleAddModal() {
-  if (!showAddModal.value) {
-    resetModalForm()
-  }
-  showAddModal.value = !showAddModal.value
-}
-
-function goToEditPage() {
-  if (activeTab.value === 'route' || activeTab.value === 'expense') {
-    toggleCurrentPageEditor()
-    return
-  }
-  if (!Number.isFinite(currentPlanId.value)) {
-    return
-  }
-  void router.push(`/tools/travel-plans/${currentPlanId.value}/edit`)
-}
-
-function itineraryEditTarget(dayId: number, dayIndex: number, item: TravelPlanDetail['days'][number]['itineraries'][number]): EditTarget {
-  return { type: 'itinerary', dayId, dayIndex, item }
-}
-
-function expenseEditTarget(dayId: number, dayIndex: number, item: TravelPlanDetail['days'][number]['expenses'][number]): EditTarget {
-  return { type: 'expense', dayId, dayIndex, item }
-}
-
-function openCreateExpenseModal() {
-  const day = currentDay.value
-  if (!day?.id) {
-    showFeedback('当前日期还没有生成行程日，暂时无法新增费用', 'error')
-    return
-  }
-
-  openEditItemModal({
-    type: 'expense',
-    dayId: day.id,
-    dayIndex: day.dayIndex,
-    isNew: true,
-    item: {
-      id: 0,
-      travelPlanId: detail.value?.id ?? 0,
-      travelPlanDayId: day.id,
-      type: 'other',
-      title: '',
-      amount: 0,
-      remark: '',
-      sortOrder: (day.expenses?.length ?? 0) + 1,
-      createdAt: '',
-      updatedAt: '',
-    },
-  })
-}
-
-function closeModal() {
-  modalError.value = ''
-  searchResults.value = []
-  showExpenseTitleResults.value = false
-  showAddModal.value = false
-}
-
-async function saveModal() {
-  const currentUser = getStoredCurrentUser()
-  const keyword = searchKeyword.value.trim()
-
-  if (!currentUser) {
-    modalError.value = '请先登录后再保存行程'
-    return
-  }
-
-  if (!keyword) {
-    modalError.value = '请输入并选择行程地点'
-    return
-  }
-
-  if (!selectedSearchResult.value) {
-    modalError.value = '请从高德搜索结果中选择一个地点'
-    return
-  }
-
-  isSavingItinerary.value = true
-  modalError.value = ''
-
-  try {
-    let dayId = currentDay.value?.id
-    if (!dayId) {
-      const createdDay = await createTravelPlanDay(currentPlanId.value, {
-        userId: currentUser.id,
-        dayIndex: activeDayIndex.value,
-        title: `第 ${activeDayIndex.value} 天`,
-        travelDate: (
-          routeDateItems.value.find((item) => item.dayIndex === activeDayIndex.value)?.day?.travelDate
-          ?? addDays(detail.value?.startDate, Math.max(activeDayIndex.value - 1, 0))
-        ) || undefined,
-        sortOrder: activeDayIndex.value,
-      })
-      dayId = createdDay.id
-    }
-
-    await createTravelPlanItinerary(dayId, {
-      userId: currentUser.id,
-      type: selectedModalType.value,
-      title: selectedSearchResult.value.title,
-      poiName: selectedSearchResult.value.title,
-      poiId: selectedSearchResult.value.id,
-      address: selectedSearchResult.value.address,
-      longitude: selectedSearchResult.value.longitude ?? undefined,
-      latitude: selectedSearchResult.value.latitude ?? undefined,
-      startTime: normalizeTimeValue(startTime.value),
-      transportMode: selectedTransportMode.value,
-      distanceMeters: routeDistanceMeters.value,
-      durationSeconds: routeDurationSeconds.value,
-      remark: modalRemark.value.trim() || undefined,
-      sortOrder: ((currentDay.value?.itineraries?.length ?? 0) + 1),
-    })
-
-    await loadDetail(true)
-    closeModal()
-    resetModalForm()
-  } catch (error) {
-    modalError.value = getErrorMessage(error, '保存行程失败')
-  } finally {
-    isSavingItinerary.value = false
-  }
-}
-
-async function saveEditModal() {
-  const currentUser = getStoredCurrentUser()
-  const target = editingTarget.value
-  if (!currentUser || !target) {
-    editModalError.value = '请先登录后再保存'
-    return
-  }
-
-  if (target.type === 'itinerary') {
-    if (!selectedSearchResult.value) {
-      editModalError.value = '请先选择行程地点'
-      return
-    }
-
-    isSavingItinerary.value = true
-    editModalError.value = ''
-    try {
-      await updateTravelPlanItinerary(target.item.id, {
-        userId: currentUser.id,
-        type: selectedModalType.value as TravelItineraryType,
-        title: selectedSearchResult.value.title,
-        poiName: selectedSearchResult.value.title,
-        poiId: selectedSearchResult.value.id,
-        address: selectedSearchResult.value.address,
-        longitude: selectedSearchResult.value.longitude ?? undefined,
-        latitude: selectedSearchResult.value.latitude ?? undefined,
-        startTime: normalizeTimeValue(startTime.value),
-        transportMode: selectedTransportMode.value,
-        distanceMeters: routeDistanceMeters.value,
-        durationSeconds: routeDurationSeconds.value,
-        remark: modalRemark.value.trim() || undefined,
-        sortOrder: target.item.sortOrder,
-      })
-      closeEditItemModal(true)
-      showFeedback('行程已更新', 'success')
-      await loadDetail(true)
-    } catch (error) {
-      editModalError.value = getErrorMessage(error, '行程保存失败')
-    } finally {
-      isSavingItinerary.value = false
-    }
-    return
-  }
-
-  const amount = Number(expenseAmount.value)
-  if (!Number.isFinite(amount) || amount < 0) {
-    editModalError.value = '请输入正确的费用金额'
-    return
-  }
-
-  isSavingExpense.value = true
-  editModalError.value = ''
-  try {
-    if (!expenseTitle.value.trim()) {
-      editModalError.value = '请输入费用名称'
-      return
-    }
-
-    const payload = {
-      userId: currentUser.id,
-      type: selectedModalType.value as TravelExpenseType,
-      title: expenseTitle.value.trim(),
-      amount,
-      remark: modalRemark.value.trim() || undefined,
-      sortOrder: target.item.sortOrder,
-    }
-
-    if (target.isNew) {
-      await createTravelPlanExpense(target.dayId, payload)
-    } else {
-      await updateTravelPlanExpense(target.item.id, payload)
-    }
-    closeEditItemModal(true)
-    showFeedback(target.isNew ? '费用已新增' : '费用已更新', 'success')
-    await loadDetail(true)
-  } catch (error) {
-    editModalError.value = getErrorMessage(error, '费用保存失败')
-  } finally {
-    isSavingExpense.value = false
-  }
-}
-
-async function confirmDeleteItem() {
-  const currentUser = getStoredCurrentUser()
-  const target = deletingTarget.value
-  if (!currentUser || !target) {
-    return
-  }
-
-  isDeletingItem.value = true
-  try {
-    if (target.type === 'itinerary') {
-      await deleteTravelPlanItinerary(target.item.id, currentUser.id)
-      showFeedback('行程已删除', 'success')
-    } else {
-      await deleteTravelPlanExpense(target.item.id, currentUser.id)
-      showFeedback('费用已删除', 'success')
-    }
-    closeDeleteItemModal(true)
-    await loadDetail()
-  } catch (error) {
-    showFeedback(getErrorMessage(error, '删除失败'), 'error')
-  } finally {
-    isDeletingItem.value = false
-  }
-}
-
-function showFeedback(message: string, type: 'success' | 'error') {
-  feedbackMessage.value = message
-  feedbackType.value = type
-  showFeedbackModal.value = true
-}
-
-function selectSearchResult(result: TravelSearchResult) {
-  selectedSearchResult.value = result
-  selectedSearchResultId.value = result.id
-  searchKeyword.value = result.title
-  searchResults.value = []
-  void calculateTransportRoute()
-}
-
-function resetModalForm() {
-  selectedModalType.value = 'scenic'
-  searchKeyword.value = ''
-  selectedSearchResultId.value = ''
-  selectedSearchResult.value = null
-  searchResults.value = []
-  startTime.value = ''
-  selectedTransportMode.value = 'driving'
-  routeDistanceMeters.value = null
-  routeDurationSeconds.value = null
-  routePreviewDistanceText.value = ''
-  routePreviewDurationText.value = ''
-  modalRemark.value = ''
-  expenseTitle.value = ''
-  showExpenseTitleResults.value = false
-  modalError.value = ''
-}
-
-function handleDocumentPointerDown(event: PointerEvent) {
-  if (!showAddModal.value && !showEditModal.value) {
-    return
-  }
-
-  const target = event.target
-  if (!(target instanceof Node)) {
-    return
-  }
-
-  if (searchResults.value.length > 0) {
-    if (searchStackRef.value?.contains(target)) {
-      return
-    }
-    searchResults.value = []
-  }
-
-  if (showExpenseTitleResults.value) {
-    if (expenseTitleSearchStackRef.value?.contains(target)) {
-      return
-    }
-    showExpenseTitleResults.value = false
-  }
-}
-
-function getPreviousRoutePoint() {
-  const items = currentDay.value?.itineraries ?? []
-  if (editingTarget.value?.type === 'itinerary' && editingTarget.value.item.id) {
-    const currentIndex = items.findIndex((item) => item.id === editingTarget.value?.item.id)
-    if (currentIndex > 0) {
-      return items[currentIndex - 1]
-    }
-    if (currentIndex === 0) {
-      const previousDay = orderedDays.value.find((item) => item.dayIndex === (currentDay.value?.dayIndex ?? 0) - 1)
-      const previousLastItem = previousDay?.itineraries?.[previousDay.itineraries.length - 1] ?? null
-      return previousLastItem?.type === 'accommodation' ? previousLastItem : null
-    }
-  }
-
-  if (items.length > 0) {
-    return items[items.length - 1] ?? null
-  }
-
-  const previousDay = orderedDays.value.find((item) => item.dayIndex === (currentDay.value?.dayIndex ?? 0) - 1)
-  const previousLastItem = previousDay?.itineraries?.[previousDay.itineraries.length - 1] ?? null
-  return previousLastItem?.type === 'accommodation' ? previousLastItem : null
-}
-
-async function calculateTransportRoute() {
-  const destination = selectedSearchResult.value
-  const previous = getPreviousRoutePoint()
-  const originLng = previous?.longitude
-  const originLat = previous?.latitude
-  const destinationLng = destination?.longitude
-  const destinationLat = destination?.latitude
-
-  if (
-    typeof originLng !== 'number' || typeof originLat !== 'number'
-    || typeof destinationLng !== 'number' || typeof destinationLat !== 'number'
-  ) {
-    routeDistanceMeters.value = null
-    routeDurationSeconds.value = null
-    routePreviewDistanceText.value = ''
-    routePreviewDurationText.value = ''
-    return
-  }
-
-  const mode = selectedTransportMode.value === 'driving'
-    ? 'driving'
-    : selectedTransportMode.value === 'walking'
-      ? 'walking'
-      : 'bicycling'
-
-  const params = new URLSearchParams({
-    origin: `${originLng},${originLat}`,
-    destination: `${destinationLng},${destinationLat}`,
-  })
-
-  try {
-    isCalculatingRoute.value = true
-    const response = await fetch(`${amapProxyBaseUrl}/direction?mode=${mode}&${params.toString()}`)
-    const payload = await response.json() as {
-      status?: string
-      errcode?: number | string
-      route?: {
-        paths?: Array<{
-          distance?: string | number
-          duration?: string | number
-        }>
-      }
-      data?: {
-        paths?: Array<{
-          distance?: string | number
-          duration?: string | number
-        }>
-      }
-    }
-
-    if (payload.status === '0' || payload.errcode) {
-      throw new Error('路线计算失败')
-    }
-
-    const pathItem = payload.route?.paths?.[0] ?? payload.data?.paths?.[0]
-    const distance = Number(pathItem?.distance ?? 0)
-    const duration = Number(pathItem?.duration ?? 0)
-
-    routeDistanceMeters.value = Number.isFinite(distance) && distance > 0 ? distance : null
-    routeDurationSeconds.value = Number.isFinite(duration) && duration > 0 ? duration : null
-    routePreviewDistanceText.value = formatDistance(routeDistanceMeters.value)
-    routePreviewDurationText.value = formatDuration(routeDurationSeconds.value)
-  } catch {
-    routeDistanceMeters.value = null
-    routeDurationSeconds.value = null
-    routePreviewDistanceText.value = ''
-    routePreviewDurationText.value = ''
-  } finally {
-    isCalculatingRoute.value = false
-  }
-}
-
-function routeMapLastSpot() {
-  const items = displayedCurrentDayItineraries.value
-  return items[items.length - 1]?.title || '当天终点'
-}
-
-function overviewMapLastSpot() {
-  const items = overviewMapPoints.value
-  return items[items.length - 1]?.title || '旅行终点'
-}
-
-function openExpenseTitleResults() {
-  showExpenseTitleResults.value = true
-}
-
-function selectExpenseTitleOption(option: ExpenseTitleOption) {
-  expenseTitle.value = option.title
-  showExpenseTitleResults.value = false
-}
-
-async function loadAmapSearchResults(keyword: string) {
-  const currentRequest = ++searchRequestSequence
-  const query = new URLSearchParams({
-    keywords: keyword,
-    offset: '8',
-    page: '1',
-    extensions: 'base',
-  })
-
-  try {
-    isSearchingLocation.value = true
-    const response = await fetch(`${amapProxyBaseUrl}/place/text?${query.toString()}`)
-    const payload = await response.json() as {
-      status?: string
-      info?: string
-      pois?: Array<{
-        id?: string
-        name?: string
-        address?: string
-        pname?: string
-        cityname?: string
-        adname?: string
-        location?: string
-      }>
-    }
-
-    if (currentRequest !== searchRequestSequence) {
-      return
-    }
-
-    if (payload.status !== '1') {
-      searchResults.value = []
-      return
-    }
-
-    searchResults.value = (payload.pois ?? []).map((poi) => {
-      const [longitude, latitude] = parseAmapLocation(poi.location)
-      const areaText = [poi.pname, poi.cityname, poi.adname].filter(Boolean).join(' ')
-      return {
-        id: poi.id || `${poi.name}-${poi.location || areaText}`,
-        title: poi.name || keyword,
-        address: poi.address || areaText || '暂无地址信息',
-        longitude,
-        latitude,
-      }
-    })
-  } catch {
-    if (currentRequest === searchRequestSequence) {
-      searchResults.value = []
-    }
-  } finally {
-    if (currentRequest === searchRequestSequence) {
-      isSearchingLocation.value = false
-    }
-  }
-}
-
-function triggerLocationSearch() {
-  const keyword = searchKeyword.value.trim()
-  if (!keyword) {
-    searchResults.value = []
-    return
-  }
-
-  if (searchDebounceTimer) {
-    window.clearTimeout(searchDebounceTimer)
-    searchDebounceTimer = null
-  }
-
-  void loadAmapSearchResults(keyword)
-}
-
-function buildOverviewEntries(itineraries: TravelPlanDetail['days'][number]['itineraries']) {
-  return itineraries.flatMap((item, index) => {
-    const nextItem = itineraries[index + 1]
-    const tone = typeTone(item.type)
-    const entries: Array<
-      | { kind: 'item'; tone: TravelTone; title: string; description: string }
-      | {
-          kind: 'transfer'
-          text: string
-          navigation?: {
-            origin: NavigationPoint
-            destination: NavigationPoint
-            mode: TransportMode
-          } | null
-        }
-    > = [
-      {
-        kind: 'item',
-        tone,
-        title: item.title,
-        description: itineraryDescription(item),
-      },
-    ]
-
-    if (nextItem) {
-      const hasOrigin = typeof item.longitude === 'number' && Number.isFinite(item.longitude)
-        && typeof item.latitude === 'number' && Number.isFinite(item.latitude)
-      const hasDestination = typeof nextItem.longitude === 'number' && Number.isFinite(nextItem.longitude)
-        && typeof nextItem.latitude === 'number' && Number.isFinite(nextItem.latitude)
-      entries.push({
-        kind: 'transfer',
-        text: routeTransferSummary(nextItem),
-        navigation: hasOrigin && hasDestination ? {
-          origin: {
-            title: item.title,
-            longitude: item.longitude as number,
-            latitude: item.latitude as number,
-            poiId: item.poiId,
-            poiName: item.poiName,
-          },
-          destination: {
-            title: nextItem.title,
-            longitude: nextItem.longitude as number,
-            latitude: nextItem.latitude as number,
-            poiId: nextItem.poiId,
-            poiName: nextItem.poiName,
-          },
-          mode: (item.transportMode as TransportMode | null) || 'driving',
-        } : null,
-      })
-    }
-
-    return entries
-  })
-}
 </script>
 
 <template>
