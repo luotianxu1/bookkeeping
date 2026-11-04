@@ -1,8 +1,0 @@
-server:
-  port: 8084
-
-spring:
-  application:
-    name: food-service
-  config:
-    import: classpath:config/common-base.yml
