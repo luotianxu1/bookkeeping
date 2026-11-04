@@ -1,6 +1,7 @@
 package com.example.app.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.toolkit.Db;
 import com.example.app.dto.StockScreenItemResponse;
 import com.example.app.dto.StockScreenPageResponse;
 import com.example.app.dto.StockScreenRunResponse;
@@ -42,6 +43,7 @@ public class StockScreenerService {
 
     private static final Logger log = LoggerFactory.getLogger(StockScreenerService.class);
     private static final ZoneId MARKET_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final int BATCH_INSERT_SIZE = 500;
     private static final String STATUS_RUNNING = "running";
     private static final String STATUS_SUCCESS = "success";
     private static final String STATUS_FAILED = "failed";
@@ -300,16 +302,17 @@ public class StockScreenerService {
 
             int matched = 0;
             for (StockScreenSnapshotEntity snapshot : currentTradeDateSnapshots) {
-                if (cancelRequested.get()) {
-                    return finishCanceledRun(run, processed, failed, currentTradeDateSnapshots);
-                }
                 snapshot.setRunId(run.getId());
                 snapshot.setTradeDate(tradeDate);
-                snapshotMapper.insert(snapshot);
                 if (Boolean.TRUE.equals(snapshot.getDefaultMatched())) {
                     matched++;
                 }
             }
+            if (cancelRequested.get()) {
+                return finishCanceledRun(run, processed, failed, currentTradeDateSnapshots);
+            }
+            // 全市场几千行快照一次性批量写入，配合 JDBC rewriteBatchedStatements 合并为多值 INSERT
+            Db.saveBatch(currentTradeDateSnapshots, BATCH_INSERT_SIZE);
 
             if (cancelRequested.get()) {
                 return finishCanceledRun(run, processed, failed, currentTradeDateSnapshots);

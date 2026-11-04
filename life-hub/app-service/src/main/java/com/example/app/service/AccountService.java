@@ -251,8 +251,14 @@ public class AccountService {
 
     @Transactional
     public void updateSortOrders(AccountSortOrderRequest request) {
+        // 一次批量取回全部账户，避免循环内逐条 select 的 N+1 查询
+        List<Long> ids = request.getItems().stream().map(AccountSortOrderRequest.AccountSortOrderItem::getId).toList();
+        Map<Long, AccountEntity> accountMap = ids.isEmpty()
+            ? Map.of()
+            : accountMapper.selectBatchIds(ids).stream()
+                .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
         for (AccountSortOrderRequest.AccountSortOrderItem item : request.getItems()) {
-            AccountEntity account = accountMapper.selectById(item.getId());
+            AccountEntity account = accountMap.get(item.getId());
             if (account == null || !request.getUserId().equals(account.getUserId())) {
                 throw new IllegalArgumentException("账户不存在");
             }

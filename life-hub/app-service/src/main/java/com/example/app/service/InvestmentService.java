@@ -87,6 +87,10 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
+import static com.example.app.service.InvestmentCalcUtils.*;
+import static com.example.app.service.InvestmentDividendService.*;
+import static com.example.app.service.InvestmentQuoteSyncService.*;
+
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -102,22 +106,6 @@ import java.util.stream.Stream;
 
 @Service
 public class InvestmentService {
-
-    private record FundQuoteSnapshot(
-        LocalDate quoteDate,
-        BigDecimal latestPrice,
-        BigDecimal preClosePrice,
-        LocalDateTime syncedAt
-    ) {
-    }
-
-    private record StockQuoteSnapshot(
-        LocalDate quoteDate,
-        BigDecimal latestPrice,
-        BigDecimal preClosePrice,
-        LocalDateTime syncedAt
-    ) {
-    }
 
     private record ForecastPriceSnapshot(
         LocalDate quoteDate,
@@ -197,21 +185,6 @@ public class InvestmentService {
     }
 
 
-    private record DividendProfile(
-        boolean stable,
-        BigDecimal annualDividendPerUnit,
-        int stableYears,
-        LocalDate lastDividendDate,
-        String source
-    ) {
-    }
-
-    private record DividendHistoryFetchResult(
-        boolean success,
-        List<InvestmentDividendPlanEntity> plans
-    ) {
-    }
-
     private static final Logger log = LoggerFactory.getLogger(InvestmentService.class);
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_UNIT_NAME = "份";
@@ -225,10 +198,6 @@ public class InvestmentService {
     private static final String STOCK_PRODUCT_TYPE = "stock";
     private static final String DIVIDEND_TYPE_CASH = "cash";
     private static final String DIVIDEND_TYPE_REINVEST = "reinvest";
-    private static final String FUND_QUOTE_SOURCE = "EASTMONEY_FUND_DAILY";
-    private static final String STOCK_QUOTE_SOURCE = "TENCENT_STOCK_LATEST";
-    private static final String FUND_DIVIDEND_PLAN_SOURCE = "EASTMONEY_FUND_FHSP";
-    private static final String STOCK_DIVIDEND_HISTORY_SOURCE = "EASTMONEY_STOCK_BONUS";
     private static final String SUBSCRIPTION_STATUS_CONFIRMED = "confirmed";
     private static final String SUBSCRIPTION_STATUS_PENDING = "pending";
     private static final String SETTLEMENT_STATUS_CONFIRMED = "confirmed";
@@ -244,12 +213,9 @@ public class InvestmentService {
     private static final String SUBSCRIPTION_TIME_SLOT_AFTER_1500 = "after_1500";
     private static final int DEFAULT_FUND_CONFIRM_DAYS = 1;
     private static final int QDII_FUND_CONFIRM_DAYS = 2;
-    private static final int DIVIDEND_HISTORY_YEARS = 3;
-    private static final int MIN_STABLE_DIVIDEND_YEARS = 2;
     private static final BigDecimal MIN_DIVIDEND_INCOME_RATE = new BigDecimal("3.00");
     private static final int RECENT_DIVIDEND_PLAN_WINDOW_DAYS = 30;
     private static final LocalTime FUND_SUBSCRIPTION_CUTOFF_TIME = LocalTime.of(15, 0);
-    private static final LocalTime FUND_CONFIRM_READY_TIME = LocalTime.of(9, 5);
     private static final LocalTime FUND_PROFIT_SYNC_READY_TIME = LocalTime.of(21, 30);
     private static final Set<String> POSITION_ACCOUNT_TYPE_CODES = Set.of("investment", "gold");
     private static final Set<String> FUND_SUBSCRIPTION_OPEN_STATUS_KEYWORDS = Set.of(
@@ -290,6 +256,8 @@ public class InvestmentService {
     private final TransactionTemplate transactionTemplate;
     private final Set<LocalDate> marketClosedDates;
     private final MarketQuoteClient marketQuoteClient;
+    private final InvestmentDividendService dividendService;
+    private final InvestmentQuoteSyncService quoteSyncService;
     /** 夜间同步的行情抓取线程池：净值/分红同步按产品并发化，缩短任务窗口 */
     private final ExecutorService fundSyncExecutor;
 
@@ -309,7 +277,9 @@ public class InvestmentService {
         PlatformTransactionManager transactionManager,
         @Value("${finance.investment.market-closed-dates:}") String marketClosedDatesConfig,
         @Value("${finance.investment.sync-concurrency:8}") Integer syncConcurrency,
-        MarketQuoteClient marketQuoteClient
+        MarketQuoteClient marketQuoteClient,
+        InvestmentDividendService dividendService,
+        InvestmentQuoteSyncService quoteSyncService
     ) {
         this.productMapper = productMapper;
         this.positionMapper = positionMapper;
@@ -326,6 +296,8 @@ public class InvestmentService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.marketClosedDates = parseMarketClosedDates(marketClosedDatesConfig);
         this.marketQuoteClient = marketQuoteClient;
+        this.dividendService = dividendService;
+        this.quoteSyncService = quoteSyncService;
         this.fundSyncExecutor = Executors.newFixedThreadPool(
             syncConcurrency == null || syncConcurrency <= 0 ? 8 : syncConcurrency,
             daemonThreadFactory("invest-sync-"));
@@ -400,11 +372,11 @@ public class InvestmentService {
             ))
             .values());
         lastYearPlans = lastYearPlans.stream()
-            .sorted(Comparator.comparing(this::dividendPlanRecencyDate))
+            .sorted(Comparator.comparing(InvestmentDividendService::dividendPlanRecencyDate))
             .toList();
 
         long positivePlanCount = lastYearPlans.stream()
-            .map(this::resolveNetDividendPerUnit)
+            .map(InvestmentDividendService::resolveNetDividendPerUnit)
             .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
             .count();
         if (positivePlanCount <= 0) {
@@ -412,7 +384,7 @@ public class InvestmentService {
         }
 
         BigDecimal lastYearDividendPerUnit = lastYearPlans.stream()
-            .map(this::resolveNetDividendPerUnit)
+            .map(InvestmentDividendService::resolveNetDividendPerUnit)
             .filter(Objects::nonNull)
             .reduce(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP), BigDecimal::add)
             .setScale(6, RoundingMode.HALF_UP);
@@ -1986,65 +1958,6 @@ public class InvestmentService {
         return YearMonth.from(period.startDate()).toString();
     }
 
-    private Integer parseYearValue(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException ex) {
-            return null;
-        }
-    }
-
-    private YearMonth parseYearMonthValue(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        try {
-            return YearMonth.parse(value.trim());
-        } catch (Exception ex) {
-            return null;
-        }
-    }
-
-    private LocalDate parseDateValue(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(value.trim());
-        } catch (Exception ex) {
-            return null;
-        }
-    }
-
-    private int clampYear(Integer value, int min, int max, int fallback) {
-        int resolved = value == null ? fallback : value;
-        return Math.max(min, Math.min(max, resolved));
-    }
-
-    private YearMonth clampYearMonth(YearMonth value, YearMonth min, YearMonth max, YearMonth fallback) {
-        YearMonth resolved = value == null ? fallback : value;
-        if (resolved.isBefore(min)) {
-            return min;
-        }
-        if (resolved.isAfter(max)) {
-            return max;
-        }
-        return resolved;
-    }
-
-    private LocalDate minDate(LocalDate current, LocalDate candidate) {
-        if (candidate == null) {
-            return current;
-        }
-        if (current == null || candidate.isBefore(current)) {
-            return candidate;
-        }
-        return current;
-    }
-
     public int syncDailyFundProfits() {
         return syncDailyFundProfits(null, null);
     }
@@ -2104,73 +2017,88 @@ public class InvestmentService {
     }
 
     public int syncFundDividendPlans() {
-        List<InvestmentPositionEntity> positions = listActiveFundPositions();
-        if (positions.isEmpty()) {
-            log.info("基金分红计划同步跳过：当前没有基金持仓");
-            return 0;
-        }
-
-        Map<Long, InvestmentProductEntity> products = loadFundProducts(positions);
-        if (products.isEmpty()) {
-            log.info("基金分红计划同步跳过：当前没有可同步的基金产品");
-            return 0;
-        }
-
-        // 按产品并发抓取分红计划（外部 HTTP 为主，串行会显著拉长夜间窗口）
-        AtomicInteger syncedProducts = new AtomicInteger();
-        AtomicInteger syncedPlans = new AtomicInteger();
-        List<CompletableFuture<Void>> futures = products.values().stream()
-            .map(product -> CompletableFuture.runAsync(() -> {
-                try {
-                    int updatedCount = syncFundDividendPlansForProduct(product);
-                    if (updatedCount > 0) {
-                        syncedProducts.incrementAndGet();
-                        syncedPlans.addAndGet(updatedCount);
-                    }
-                } catch (Exception ex) {
-                    log.warn("基金分红计划同步失败，productId={}, symbol={}, reason={}",
-                        product.getId(), product.getSymbol(), ex.getMessage());
-                }
-            }, fundSyncExecutor))
-            .toList();
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-        log.info("基金分红计划同步完成：{} 个基金产品，{} 条计划已写入", syncedProducts.get(), syncedPlans.get());
-        return syncedPlans.get();
+        return dividendService.syncFundDividendPlans();
     }
 
     public int syncStockDividendProfiles() {
-        List<InvestmentPositionEntity> positions = listActiveStockPositions();
-        if (positions.isEmpty()) {
-            log.info("股票分红画像同步跳过：当前没有股票持仓");
-            return 0;
-        }
+        return dividendService.syncStockDividendProfiles();
+    }
 
-        Map<Long, InvestmentProductEntity> products = loadStockProducts(positions);
-        if (products.isEmpty()) {
-            log.info("股票分红画像同步跳过：当前没有可同步的股票产品");
-            return 0;
-        }
+    private int syncFundDividendPlansForProduct(InvestmentProductEntity product) {
+        return dividendService.syncFundDividendPlansForProduct(product);
+    }
 
-        // 按产品并发评估股票分红画像（外部 HTTP 为主）
-        AtomicInteger syncedProducts = new AtomicInteger();
-        List<CompletableFuture<Void>> futures = products.values().stream()
-            .map(product -> CompletableFuture.runAsync(() -> {
-                try {
-                    if (!evaluateDividendProfile(product)) {
-                        return;
-                    }
-                    productMapper.updateById(product);
-                    syncedProducts.incrementAndGet();
-                } catch (Exception ex) {
-                    log.warn("股票分红画像同步失败，productId={}, symbol={}, reason={}",
-                        product.getId(), product.getSymbol(), ex.getMessage());
-                }
-            }, fundSyncExecutor))
-            .toList();
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        log.info("股票分红画像同步完成：{} 个股票产品已重新评估", syncedProducts.get());
-        return syncedProducts.get();
+    private List<InvestmentDividendPlanEntity> fetchFundHistoricalDividendPlans(InvestmentProductEntity product) {
+        return dividendService.fetchFundHistoricalDividendPlans(product);
+    }
+
+    private List<InvestmentDividendPlanEntity> fetchStockHistoricalDividendPlans(InvestmentProductEntity product) {
+        return dividendService.fetchStockHistoricalDividendPlans(product);
+    }
+
+    private FundQuoteSnapshot fetchAndSaveLatestFundQuote(InvestmentProductEntity product,
+        Map<Long, FundQuoteSnapshot> sharedFundQuotes) {
+        return quoteSyncService.fetchAndSaveLatestFundQuote(product, sharedFundQuotes);
+    }
+
+    private StockQuoteSnapshot fetchAndSaveLatestStockQuote(InvestmentProductEntity product) {
+        return quoteSyncService.fetchAndSaveLatestStockQuote(product);
+    }
+
+    private void applyFundQuoteToPosition(
+        InvestmentPositionEntity position,
+        BigDecimal latestPrice,
+        BigDecimal preClosePrice,
+        LocalDateTime syncedAt
+    ) {
+        quoteSyncService.applyFundQuoteToPosition(position, latestPrice, preClosePrice, syncedAt);
+    }
+
+    private void applyStockQuoteToPosition(
+        InvestmentPositionEntity position,
+        BigDecimal latestPrice,
+        BigDecimal preClosePrice,
+        LocalDateTime syncedAt
+    ) {
+        quoteSyncService.applyStockQuoteToPosition(position, latestPrice, preClosePrice, syncedAt);
+    }
+
+    private void updatePendingFundPositionSnapshot(
+        InvestmentPositionEntity position,
+        BigDecimal latestPrice,
+        LocalDateTime syncedAt
+    ) {
+        quoteSyncService.updatePendingFundPositionSnapshot(position, latestPrice, syncedAt);
+    }
+
+    private InvestmentPriceQuoteEntity findSettlementQuoteByProductAndDate(Long productId, LocalDate quoteDate) {
+        return quoteSyncService.findSettlementQuoteByProductAndDate(productId, quoteDate);
+    }
+
+    private BigDecimal resolveConfirmedFundPrice(InvestmentPriceQuoteEntity appliedQuote) {
+        return quoteSyncService.resolveConfirmedFundPrice(appliedQuote);
+    }
+
+    private InvestmentPriceQuoteEntity resolveImmediateSettlementQuote(
+        InvestmentProductEntity product,
+        JsonNode baseInfo,
+        LocalDate appliedDate,
+        LocalDate expectedConfirmDate,
+        LocalDateTime syncedAt
+    ) {
+        return quoteSyncService.resolveImmediateSettlementQuote(product, baseInfo, appliedDate, expectedConfirmDate, syncedAt);
+    }
+
+    private JsonNode fetchFundBaseInfo(String code) {
+        return quoteSyncService.fetchFundBaseInfo(code);
+    }
+
+    private JsonNode fetchFundEstimateInfo(String code) {
+        return quoteSyncService.fetchFundEstimateInfo(code);
+    }
+
+    private JsonNode fetchTencentQuoteFields(String symbol) {
+        return quoteSyncService.fetchTencentQuoteFields(symbol);
     }
 
     public Map<String, Object> runNightlyInvestmentSyncCycle(String trigger) {
@@ -2396,19 +2324,27 @@ public class InvestmentService {
         int resolvedPageSize = sanitizePageSize(pageSize);
         int resolvedPage = Math.max(1, page == null ? 1 : page);
         if (positionId != null) {
+            // 单持仓分支同样下推到 SQL 分页（持仓交易可能跨多年，避免全量捞取内存截取）
+            Long positionTotalCount = transactionMapper.selectCount(buildTransactionQuery(userId, accountId, positionId));
+            long positionTotal = positionTotalCount == null ? 0 : positionTotalCount;
+            if (positionTotal == 0) {
+                List<InvestmentTransactionResponse> inferredTransactions = inferInitialTransaction(userId, accountId, positionId);
+                return buildTransactionPageResponse(inferredTransactions, inferredTransactions.size(), resolvedPage, resolvedPageSize);
+            }
+            int positionTotalPages = Math.max(1, (int) Math.ceil(positionTotal / (double) resolvedPageSize));
+            int positionPage = Math.min(resolvedPage, positionTotalPages);
+            long positionOffset = (long) (positionPage - 1) * resolvedPageSize;
             List<InvestmentTransactionEntity> transactions = transactionMapper.selectList(buildTransactionQuery(userId, accountId, positionId)
                 .orderByDesc(InvestmentTransactionEntity::getTradeAt)
-                .orderByDesc(InvestmentTransactionEntity::getId));
+                .orderByDesc(InvestmentTransactionEntity::getId)
+                .last("LIMIT " + positionOffset + ", " + resolvedPageSize));
             List<InvestmentTransactionResponse> items = mergeMissingPendingInitialTransaction(
                 toTransactionResponses(transactions),
                 userId,
                 accountId,
                 positionId
             );
-            if (items.isEmpty()) {
-                items = inferInitialTransaction(userId, accountId, positionId);
-            }
-            return buildTransactionPageResponse(items, items.size(), resolvedPage, resolvedPageSize);
+            return buildTransactionPageResponse(items, positionTotal, resolvedPage, resolvedPageSize);
         }
         Long totalCount = transactionMapper.selectCount(buildTransactionQuery(userId, accountId, positionId));
         long total = totalCount == null ? 0 : totalCount;
@@ -2887,7 +2823,7 @@ public class InvestmentService {
                     .map(InvestmentPositionEntity::getProductId)
                     .collect(Collectors.toSet()))
                 .stream()
-                .filter(this::supportsDividendProfile)
+                .filter(InvestmentDividendService::supportsDividendProfile)
                 .collect(Collectors.toMap(InvestmentProductEntity::getId, Function.identity()));
             // 东方财富对外部抓取有频率限制，并发或高频请求会返回 514 反爬状态码，
             // 因此按产品串行逐个刷新并在请求间留出间隔（与夜间定时同步的节奏一致）。
@@ -2899,7 +2835,7 @@ public class InvestmentService {
                         Thread.sleep(400);
                         continue;
                     }
-                    if (evaluateDividendProfile(product)) {
+                    if (dividendService.evaluateDividendProfile(product)) {
                         evaluatedProducts.add(product);
                     }
                 } catch (Exception ex) {
@@ -3685,12 +3621,6 @@ public class InvestmentService {
             || containsIgnoreCase(productName, "QDII");
     }
 
-    private boolean containsIgnoreCase(String value, String keyword) {
-        return StringUtils.hasText(value)
-            && StringUtils.hasText(keyword)
-            && value.toUpperCase(Locale.ROOT).contains(keyword.toUpperCase(Locale.ROOT));
-    }
-
     private Set<LocalDate> parseMarketClosedDates(String marketClosedDatesConfig) {
         if (!StringUtils.hasText(marketClosedDatesConfig)) {
             return Collections.emptySet();
@@ -3724,53 +3654,6 @@ public class InvestmentService {
         }
         LocalTime effectiveTradeTime = tradeTime == null ? LocalTime.now() : tradeTime;
         return !effectiveTradeTime.isBefore(FUND_SUBSCRIPTION_CUTOFF_TIME);
-    }
-
-    private InvestmentPriceQuoteEntity resolveImmediateSettlementQuote(
-        InvestmentProductEntity product,
-        JsonNode baseInfo,
-        LocalDate appliedDate,
-        LocalDate expectedConfirmDate,
-        LocalDateTime syncedAt
-    ) {
-        upsertFundQuoteFromBaseInfo(product, baseInfo, syncedAt);
-        LocalDate effectiveExpectedConfirmDate = expectedConfirmDate == null ? appliedDate : expectedConfirmDate;
-        if (!isFundConfirmationReady(effectiveExpectedConfirmDate, syncedAt)) {
-            return null;
-        }
-        return findSettlementQuoteByProductAndDate(product.getId(), appliedDate);
-    }
-
-    private void upsertFundQuoteFromBaseInfo(InvestmentProductEntity product, JsonNode baseInfo, LocalDateTime syncedAt) {
-        if (product == null || baseInfo == null) {
-            return;
-        }
-        BigDecimal latestPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
-        LocalDate quoteDate = safeDate(baseInfo.path("FSRQ").asText(null));
-        if (latestPrice == null || quoteDate == null) {
-            return;
-        }
-
-        InvestmentPriceQuoteEntity existingQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
-            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
-            .eq(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
-            .last("LIMIT 1"));
-        InvestmentPriceQuoteEntity previousQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
-            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
-            .lt(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
-            .orderByDesc(InvestmentPriceQuoteEntity::getQuoteDate)
-            .last("LIMIT 1"));
-
-        BigDecimal changeRate = safeDecimal(baseInfo.path("RZDF").asText(null));
-        BigDecimal preClosePrice = resolveFundPreClose(existingQuote, previousQuote, latestPrice, changeRate);
-        BigDecimal changeAmount = preClosePrice == null
-            ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
-            : latestPrice.subtract(preClosePrice).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal normalizedChangeRate = changeRate != null
-            ? changeRate.setScale(4, RoundingMode.HALF_UP)
-            : rate(changeAmount, preClosePrice);
-
-        saveFundQuote(product.getId(), existingQuote, quoteDate, syncedAt, latestPrice, preClosePrice, changeAmount, normalizedChangeRate);
     }
 
     private LocalDate addTradingDays(LocalDate baseDate, int tradingDays) {
@@ -4169,7 +4052,7 @@ public class InvestmentService {
                 .orderByDesc(InvestmentDividendPlanEntity::getUpdatedAt))
             .stream()
             .filter(plan -> isRecentDividendPlan(plan, windowStart, windowEnd))
-            .forEach(plan -> recentPlans.merge(plan.getProductId(), plan, this::pickLaterDividendPlan));
+            .forEach(plan -> recentPlans.merge(plan.getProductId(), plan, InvestmentDividendService::pickLaterDividendPlan));
         return recentPlans;
     }
 
@@ -4577,61 +4460,6 @@ public class InvestmentService {
         transactionMapper.insert(transaction);
     }
 
-    private int syncFundDividendPlansForProduct(InvestmentProductEntity product) {
-        DividendHistoryFetchResult fetchResult = fetchFundDividendPlansResult(product);
-        if (!fetchResult.success()) {
-            throw new IllegalStateException("基金分红历史获取失败");
-        }
-        List<InvestmentDividendPlanEntity> remotePlans = fetchResult.plans();
-        int changedCount = 0;
-        // 远端获取成功后，本地不存在于远端结果中的同源计划一律删除；
-        // 远端为空表示该基金当前无分红记录，需要清掉历史上可能串入的脏数据。
-        Set<String> remotePlanKeys = remotePlans.stream()
-            .map(plan -> dividendPlanKey(plan.getDividendYear(), plan.getPayDate()))
-            .collect(Collectors.toSet());
-        List<InvestmentDividendPlanEntity> stalePlans = dividendPlanMapper.selectList(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
-                .eq(InvestmentDividendPlanEntity::getProductId, product.getId())
-                .eq(InvestmentDividendPlanEntity::getSource, FUND_DIVIDEND_PLAN_SOURCE))
-            .stream()
-            .filter(existing -> !remotePlanKeys.contains(dividendPlanKey(existing.getDividendYear(), existing.getPayDate())))
-            .toList();
-        for (InvestmentDividendPlanEntity stalePlan : stalePlans) {
-            dividendPlanMapper.deleteById(stalePlan.getId());
-            changedCount++;
-        }
-        for (InvestmentDividendPlanEntity remotePlan : remotePlans) {
-            InvestmentDividendPlanEntity existing = dividendPlanMapper.selectOne(new LambdaQueryWrapper<InvestmentDividendPlanEntity>()
-                .eq(InvestmentDividendPlanEntity::getProductId, remotePlan.getProductId())
-                .eq(InvestmentDividendPlanEntity::getDividendYear, remotePlan.getDividendYear())
-                .eq(InvestmentDividendPlanEntity::getPayDate, remotePlan.getPayDate())
-                .last("LIMIT 1"));
-
-            if (existing == null) {
-                dividendPlanMapper.insert(remotePlan);
-                changedCount++;
-                continue;
-            }
-
-            boolean changed = mergeFundDividendPlan(existing, remotePlan);
-            if (changed) {
-                dividendPlanMapper.updateById(existing);
-                changedCount++;
-            }
-        }
-        List<InvestmentDividendPlanEntity> historicalPlans = remotePlans.stream()
-            .filter(plan -> isHistoricalDividendPlan(plan, LocalDate.now()))
-            .toList();
-        applyDividendProfile(product, buildDividendProfile(historicalPlans, FUND_DIVIDEND_PLAN_SOURCE));
-        if (product.getId() != null) {
-            productMapper.updateById(product);
-        }
-        return changedCount;
-    }
-
-    private String dividendPlanKey(Integer dividendYear, LocalDate payDate) {
-        return String.valueOf(dividendYear) + '|' + String.valueOf(payDate);
-    }
-
     private int syncStockQuoteForProduct(
         InvestmentProductEntity product,
         List<InvestmentPositionEntity> positions,
@@ -4664,9 +4492,20 @@ public class InvestmentService {
             return 0;
         }
 
+        // 不同持仓的申购确认日大量重合，按日期记忆化避免循环内重复报价查询
+        Map<LocalDate, InvestmentPriceQuoteEntity> quoteByAppliedDate = new HashMap<>();
         int updatedCount = 0;
         for (InvestmentPositionEntity position : positions) {
-            InvestmentPriceQuoteEntity appliedQuote = findSettlementQuoteByProductAndDate(product.getId(), position.getSubscriptionAppliedDate());
+            LocalDate appliedDate = position.getSubscriptionAppliedDate();
+            InvestmentPriceQuoteEntity appliedQuote;
+            if (appliedDate == null) {
+                appliedQuote = null;
+            } else if (quoteByAppliedDate.containsKey(appliedDate)) {
+                appliedQuote = quoteByAppliedDate.get(appliedDate);
+            } else {
+                appliedQuote = findSettlementQuoteByProductAndDate(product.getId(), appliedDate);
+                quoteByAppliedDate.put(appliedDate, appliedQuote);
+            }
             if (shouldConfirmFundSubscription(position, settlementDateTime) && appliedQuote != null) {
                 confirmPendingFundSubscription(position, appliedQuote, snapshot.syncedAt());
                 applyFundQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
@@ -4690,17 +4529,50 @@ public class InvestmentService {
             return 0;
         }
 
+        // 批量预取交易与持仓，消除循环内逐笔 selectById 的 N+1 查询；
+        // 持仓处理后回写 map（内存实体与落库一致），与原来逐笔重查语义等价
+        List<Long> transactionIds = transactions.stream()
+            .map(InvestmentTransactionEntity::getId)
+            .filter(Objects::nonNull)
+            .toList();
+        Map<Long, InvestmentTransactionEntity> transactionMap = transactionIds.isEmpty()
+            ? Map.of()
+            : transactionMapper.selectBatchIds(transactionIds).stream()
+                .collect(Collectors.toMap(InvestmentTransactionEntity::getId, Function.identity()));
+        List<Long> positionIds = transactionMap.values().stream()
+            .map(InvestmentTransactionEntity::getPositionId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        Map<Long, InvestmentPositionEntity> positionMap = positionIds.isEmpty()
+            ? Map.of()
+            : positionMapper.selectBatchIds(positionIds).stream()
+                .collect(Collectors.toMap(InvestmentPositionEntity::getId, Function.identity()));
+        // 同一产品内不同交易的 settlementAppliedDate 大量重合，按日期记忆化避免重复报价查询
+        Map<LocalDate, InvestmentPriceQuoteEntity> quoteByAppliedDate = new HashMap<>();
+
         int updatedCount = 0;
-        for (InvestmentTransactionEntity transaction : transactions) {
-            transaction = transactionMapper.selectById(transaction.getId());
+        for (InvestmentTransactionEntity original : transactions) {
+            InvestmentTransactionEntity transaction = transactionMap.get(original.getId());
             if (transaction == null) {
                 continue;
             }
-            InvestmentPriceQuoteEntity appliedQuote = findSettlementQuoteByProductAndDate(product.getId(), transaction.getSettlementAppliedDate());
+            LocalDate appliedDate = transaction.getSettlementAppliedDate();
+            InvestmentPriceQuoteEntity appliedQuote;
+            if (appliedDate == null) {
+                appliedQuote = null;
+            } else if (quoteByAppliedDate.containsKey(appliedDate)) {
+                appliedQuote = quoteByAppliedDate.get(appliedDate);
+            } else {
+                appliedQuote = findSettlementQuoteByProductAndDate(product.getId(), appliedDate);
+                quoteByAppliedDate.put(appliedDate, appliedQuote);
+            }
             if (!shouldSettlePendingFundTransaction(transaction, settlementDateTime) || appliedQuote == null) {
                 continue;
             }
-            InvestmentPositionEntity position = positionMapper.selectById(transaction.getPositionId());
+            InvestmentPositionEntity position = transaction.getPositionId() == null
+                ? null
+                : positionMap.get(transaction.getPositionId());
             if (position == null) {
                 continue;
             }
@@ -4745,235 +4617,17 @@ public class InvestmentService {
             applyFundQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
             positionMapper.updateById(position);
             transactionMapper.updateById(transaction);
+            positionMap.put(position.getId(), position);
             accountUsers.put(position.getAccountId(), position.getUserId());
             updatedCount++;
         }
         return updatedCount;
     }
 
-    private FundQuoteSnapshot fetchAndSaveLatestFundQuote(InvestmentProductEntity product) {
-        return fetchAndSaveLatestFundQuote(product, null);
-    }
-
     /**
      * 抓取并落库基金最新净值。sharedFundQuotes 非空时（同步周期内）优先复用同周期快照，
      * 避免净值同步与多段结算对同一基金重复发起行情 HTTP；抓取成功后写回共享缓存。
      */
-    private FundQuoteSnapshot fetchAndSaveLatestFundQuote(InvestmentProductEntity product,
-        Map<Long, FundQuoteSnapshot> sharedFundQuotes) {
-        if (sharedFundQuotes != null) {
-            FundQuoteSnapshot cached = sharedFundQuotes.get(product.getId());
-            if (cached != null) {
-                return cached;
-            }
-        }
-
-        JsonNode baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
-        BigDecimal latestPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
-        LocalDate quoteDate = safeDate(baseInfo.path("FSRQ").asText(null));
-        if (latestPrice == null || quoteDate == null) {
-            log.warn("基金净值同步跳过：symbol={} 未返回有效净值或净值日期", product.getSymbol());
-            return null;
-        }
-
-        InvestmentPriceQuoteEntity existingQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
-            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
-            .eq(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
-            .last("LIMIT 1"));
-        InvestmentPriceQuoteEntity previousQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
-            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
-            .lt(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
-            .orderByDesc(InvestmentPriceQuoteEntity::getQuoteDate)
-            .last("LIMIT 1"));
-
-        BigDecimal changeRate = safeDecimal(baseInfo.path("RZDF").asText(null));
-        BigDecimal preClosePrice = resolveFundPreClose(existingQuote, previousQuote, latestPrice, changeRate);
-        BigDecimal changeAmount = preClosePrice == null
-            ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
-            : latestPrice.subtract(preClosePrice).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal normalizedChangeRate = changeRate != null
-            ? changeRate.setScale(4, RoundingMode.HALF_UP)
-            : rate(changeAmount, preClosePrice);
-        LocalDateTime syncedAt = LocalDateTime.now();
-
-        saveFundQuote(product.getId(), existingQuote, quoteDate, syncedAt, latestPrice, preClosePrice, changeAmount, normalizedChangeRate);
-        FundQuoteSnapshot snapshot = new FundQuoteSnapshot(quoteDate, latestPrice, preClosePrice, syncedAt);
-        if (sharedFundQuotes != null) {
-            sharedFundQuotes.put(product.getId(), snapshot);
-        }
-        return snapshot;
-    }
-
-    private void saveFundQuote(
-        Long productId,
-        InvestmentPriceQuoteEntity existingQuote,
-        LocalDate quoteDate,
-        LocalDateTime syncedAt,
-        BigDecimal latestPrice,
-        BigDecimal preClosePrice,
-        BigDecimal changeAmount,
-        BigDecimal changeRate
-    ) {
-        InvestmentPriceQuoteEntity quote = existingQuote == null ? new InvestmentPriceQuoteEntity() : existingQuote;
-        quote.setProductId(productId);
-        quote.setQuoteDate(quoteDate);
-        quote.setQuoteTime(syncedAt);
-        quote.setClosePrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
-        quote.setLatestPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
-        quote.setPreClosePrice(preClosePrice == null ? null : preClosePrice.setScale(6, RoundingMode.HALF_UP));
-        quote.setChangeAmount(changeAmount.setScale(6, RoundingMode.HALF_UP));
-        quote.setChangeRate(changeRate.setScale(4, RoundingMode.HALF_UP));
-        quote.setSource(FUND_QUOTE_SOURCE);
-        if (existingQuote == null) {
-            priceQuoteMapper.insert(quote);
-        } else {
-            priceQuoteMapper.updateById(quote);
-        }
-    }
-
-    private void applyFundQuoteToPosition(
-        InvestmentPositionEntity position,
-        BigDecimal latestPrice,
-        BigDecimal preClosePrice,
-        LocalDateTime syncedAt
-    ) {
-        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal marketValue = holdingQuantity.multiply(latestPrice).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal previousMarketValue = preClosePrice == null
-            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-            : holdingQuantity.multiply(preClosePrice).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal dayProfit = preClosePrice == null
-            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-            : marketValue.subtract(previousMarketValue).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
-
-        position.setCurrentPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
-        position.setMarketValue(marketValue);
-        position.setDayProfit(dayProfit);
-        position.setDayProfitRate(rate(dayProfit, previousMarketValue));
-        position.setHoldingProfit(holdingProfit);
-        position.setHoldingProfitRate(rate(holdingProfit, costAmount));
-        position.setLastSyncedAt(syncedAt);
-    }
-
-    private StockQuoteSnapshot fetchAndSaveLatestStockQuote(InvestmentProductEntity product) {
-        String symbol = toTencentSymbol(product.getSymbol(), product.getExchangeCode());
-        JsonNode quote = fetchTencentQuoteFields(symbol);
-        BigDecimal latestPrice = safeDecimal(quote.path("price").asText(null));
-        BigDecimal preClosePrice = safeDecimal(quote.path("prevClose").asText(null));
-        if (latestPrice == null || latestPrice.compareTo(BigDecimal.ZERO) <= 0) {
-            log.warn("股票行情同步跳过：symbol={} 未返回有效最新价", product.getSymbol());
-            return null;
-        }
-
-        LocalDate quoteDate = resolveStockQuoteDate(quote.path("timeRaw").asText(null));
-        if (quoteDate == null) {
-            quoteDate = LocalDate.now();
-        }
-        LocalDateTime syncedAt = LocalDateTime.now();
-        BigDecimal normalizedPreClosePrice = preClosePrice != null && preClosePrice.compareTo(BigDecimal.ZERO) > 0
-            ? preClosePrice.setScale(6, RoundingMode.HALF_UP)
-            : null;
-        BigDecimal changeAmount = normalizedPreClosePrice == null
-            ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
-            : latestPrice.subtract(normalizedPreClosePrice).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal changeRate = rate(changeAmount, normalizedPreClosePrice);
-
-        InvestmentPriceQuoteEntity existingQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
-            .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
-            .eq(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
-            .last("LIMIT 1"));
-
-        saveStockQuote(
-            product.getId(),
-            existingQuote,
-            quoteDate,
-            syncedAt,
-            safeDecimal(quote.path("open").asText(null)),
-            safeDecimal(quote.path("high").asText(null)),
-            safeDecimal(quote.path("low").asText(null)),
-            latestPrice,
-            normalizedPreClosePrice,
-            changeAmount,
-            changeRate
-        );
-        return new StockQuoteSnapshot(quoteDate, latestPrice, normalizedPreClosePrice, syncedAt);
-    }
-
-    private void saveStockQuote(
-        Long productId,
-        InvestmentPriceQuoteEntity existingQuote,
-        LocalDate quoteDate,
-        LocalDateTime syncedAt,
-        BigDecimal openPrice,
-        BigDecimal highPrice,
-        BigDecimal lowPrice,
-        BigDecimal latestPrice,
-        BigDecimal preClosePrice,
-        BigDecimal changeAmount,
-        BigDecimal changeRate
-    ) {
-        InvestmentPriceQuoteEntity quote = existingQuote == null ? new InvestmentPriceQuoteEntity() : existingQuote;
-        quote.setProductId(productId);
-        quote.setQuoteDate(quoteDate);
-        quote.setQuoteTime(syncedAt);
-        quote.setOpenPrice(scaleStockQuoteValue(openPrice));
-        quote.setHighPrice(scaleStockQuoteValue(highPrice));
-        quote.setLowPrice(scaleStockQuoteValue(lowPrice));
-        quote.setClosePrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
-        quote.setLatestPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
-        quote.setPreClosePrice(preClosePrice == null ? null : preClosePrice.setScale(6, RoundingMode.HALF_UP));
-        quote.setChangeAmount(changeAmount.setScale(6, RoundingMode.HALF_UP));
-        quote.setChangeRate(changeRate.setScale(4, RoundingMode.HALF_UP));
-        quote.setSource(STOCK_QUOTE_SOURCE);
-        if (existingQuote == null) {
-            priceQuoteMapper.insert(quote);
-        } else {
-            priceQuoteMapper.updateById(quote);
-        }
-    }
-
-    private void applyStockQuoteToPosition(
-        InvestmentPositionEntity position,
-        BigDecimal latestPrice,
-        BigDecimal preClosePrice,
-        LocalDateTime syncedAt
-    ) {
-        BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal marketValue = holdingQuantity.multiply(latestPrice).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal previousMarketValue = preClosePrice == null
-            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-            : holdingQuantity.multiply(preClosePrice).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal dayProfit = preClosePrice == null
-            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-            : marketValue.subtract(previousMarketValue).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
-
-        position.setCurrentPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
-        position.setMarketValue(marketValue);
-        position.setDayProfit(dayProfit);
-        position.setDayProfitRate(rate(dayProfit, previousMarketValue));
-        position.setHoldingProfit(holdingProfit);
-        position.setHoldingProfitRate(rate(holdingProfit, costAmount));
-        position.setLastSyncedAt(syncedAt);
-    }
-
-    private void updatePendingFundPositionSnapshot(
-        InvestmentPositionEntity position,
-        BigDecimal latestPrice,
-        LocalDateTime syncedAt
-    ) {
-        position.setCurrentPrice(defaultZero(latestPrice).setScale(6, RoundingMode.HALF_UP));
-        position.setDayProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        position.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
-        position.setHoldingProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        position.setHoldingProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
-        position.setMarketValue(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-        position.setLastSyncedAt(syncedAt);
-    }
-
     private boolean shouldConfirmFundSubscription(InvestmentPositionEntity position, LocalDateTime settlementDateTime) {
         if (!isPendingFundSubscription(position)) {
             return false;
@@ -4992,37 +4646,6 @@ public class InvestmentService {
             ? transaction.getSettlementAppliedDate()
             : transaction.getSettlementExpectedDate();
         return isFundConfirmationReady(expectedSettlementDate, settlementDateTime);
-    }
-
-    private boolean isFundConfirmationReady(LocalDate expectedConfirmDate, LocalDateTime settlementDateTime) {
-        if (expectedConfirmDate == null) {
-            return false;
-        }
-        LocalDateTime effectiveSettlementDateTime = settlementDateTime == null ? LocalDateTime.now() : settlementDateTime;
-        return !effectiveSettlementDateTime.isBefore(expectedConfirmDate.atTime(FUND_CONFIRM_READY_TIME));
-    }
-
-    private InvestmentPriceQuoteEntity findSettlementQuoteByProductAndDate(Long productId, LocalDate quoteDate) {
-        if (productId == null || quoteDate == null) {
-            return null;
-        }
-        return priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
-            .eq(InvestmentPriceQuoteEntity::getProductId, productId)
-            .ge(InvestmentPriceQuoteEntity::getQuoteDate, quoteDate)
-            .orderByAsc(InvestmentPriceQuoteEntity::getQuoteDate)
-            .last("LIMIT 1"));
-    }
-
-    private BigDecimal resolveConfirmedFundPrice(InvestmentPriceQuoteEntity appliedQuote) {
-        return defaultZero(
-            appliedQuote == null
-                ? null
-                : (appliedQuote.getClosePrice() != null ? appliedQuote.getClosePrice() : appliedQuote.getLatestPrice())
-        ).setScale(6, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal scaleFundQuantity(BigDecimal quantity) {
-        return defaultZero(quantity).setScale(2, RoundingMode.HALF_UP);
     }
 
     private void confirmPendingFundSubscription(
@@ -5074,32 +4697,6 @@ public class InvestmentService {
         createBuyTransaction(position, quantity, confirmedPrice, costAmount, "基金申购确认", tradeAt);
     }
 
-    private BigDecimal resolveFundPreClose(
-        InvestmentPriceQuoteEntity existingQuote,
-        InvestmentPriceQuoteEntity previousQuote,
-        BigDecimal latestPrice,
-        BigDecimal changeRate
-    ) {
-        if (existingQuote != null && existingQuote.getPreClosePrice() != null) {
-            return existingQuote.getPreClosePrice().setScale(6, RoundingMode.HALF_UP);
-        }
-        if (previousQuote != null) {
-            BigDecimal previousPrice = previousQuote.getClosePrice() != null
-                ? previousQuote.getClosePrice()
-                : previousQuote.getLatestPrice();
-            if (previousPrice != null) {
-                return previousPrice.setScale(6, RoundingMode.HALF_UP);
-            }
-        }
-        if (changeRate != null && latestPrice != null && changeRate.compareTo(BigDecimal.valueOf(-100)) > 0) {
-            BigDecimal divisor = BigDecimal.ONE.add(changeRate.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
-            if (divisor.compareTo(BigDecimal.ZERO) != 0) {
-                return latestPrice.divide(divisor, 6, RoundingMode.HALF_UP);
-            }
-        }
-        return null;
-    }
-
     private List<InvestmentDetailStatResponse> buildHoldingStats(InvestmentPositionResponse position) {
         if (SUBSCRIPTION_STATUS_PENDING.equals(position.getSubscriptionStatus())) {
             return List.of(
@@ -5133,27 +4730,11 @@ public class InvestmentService {
      * 基金基础信息：经行情中心 /api/internal/quote/fund/base（新浪基金频道源），
      * 字段名与原东财 FundBaseTypeInformation 保持一致（SHORTNAME/DWJZ/FSRQ/RZDF/LJJZ/SGZT/SHZT/FTYPE/JJGS）。
      */
-    private JsonNode fetchFundBaseInfo(String code) {
-        try {
-            return marketQuoteClient.fundBase(code);
-        } catch (Exception ex) {
-            return objectMapper.createObjectNode();
-        }
-    }
-
 
     /**
      * 基金盘中估值：经行情中心 /api/internal/quote/fund/estimate（新浪 fu_ 源），
      * 字段名与原东财 funddataforgznew 一致（fundcode/name/jzrq/dwjz/gsz/gztime）。
      */
-    private JsonNode fetchFundEstimateInfo(String code) {
-        try {
-            return marketQuoteClient.fundEstimate(code);
-        } catch (Exception ex) {
-            return objectMapper.createObjectNode();
-        }
-    }
-
 
 
     private BigDecimal calculateFundSellFeeAmount(
@@ -5403,130 +4984,11 @@ public class InvestmentService {
      * 基金分红历史：经行情中心 /api/internal/quote/fund/dividends（东财独家数据源，
      * 页面解析与代码校验逻辑已整体迁出行情中心，此处仅做实体映射）。
      */
-    private DividendHistoryFetchResult fetchFundDividendPlansResult(InvestmentProductEntity product) {
-        if (product == null || !StringUtils.hasText(product.getSymbol())) {
-            return new DividendHistoryFetchResult(false, Collections.emptyList());
-        }
-        try {
-            JsonNode payload = marketQuoteClient.fundDividends(product.getSymbol());
-            if (payload == null || !payload.path("matched").asBoolean(false)) {
-                log.warn("基金分红历史获取失败，productId={}, symbol={}, reason=页面基金代码不匹配",
-                    product.getId(), product.getSymbol());
-                return new DividendHistoryFetchResult(false, Collections.emptyList());
-            }
-            JsonNode items = payload.path("items");
-            if (!items.isArray()) {
-                return new DividendHistoryFetchResult(false, Collections.emptyList());
-            }
-            List<InvestmentDividendPlanEntity> plans = new ArrayList<>();
-            for (JsonNode row : items) {
-                int dividendYear = row.path("dividendYear").asInt(0);
-                LocalDate recordDate = safeDate(row.path("recordDate").asText(null));
-                LocalDate exDividendDate = safeDate(row.path("exDividendDate").asText(null));
-                BigDecimal dividendPerUnit = safeDecimal(row.path("dividendPerUnit").asText(null));
-                LocalDate payDate = safeDate(row.path("payDate").asText(null));
-                if (dividendYear <= 0 || dividendPerUnit == null || payDate == null) {
-                    continue;
-                }
-                InvestmentDividendPlanEntity plan = new InvestmentDividendPlanEntity();
-                plan.setProductId(product.getId());
-                plan.setDividendYear(dividendYear);
-                plan.setRecordDate(recordDate);
-                plan.setExDividendDate(exDividendDate);
-                plan.setPayDate(payDate);
-                plan.setDividendPerUnit(dividendPerUnit.setScale(6, RoundingMode.HALF_UP));
-                plan.setTaxRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
-                plan.setCurrencyCode(blankToDefault(product.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
-                plan.setStatus(resolveDividendPlanStatus(payDate));
-                plan.setSource(FUND_DIVIDEND_PLAN_SOURCE);
-                plan.setRemark("基金分红计划由每日净值同步任务自动刷新");
-                plans.add(plan);
-            }
-            return new DividendHistoryFetchResult(true, plans);
-        } catch (Exception ex) {
-            log.warn("基金分红历史获取失败，productId={}, symbol={}, reason={}",
-                product.getId(), product.getSymbol(), ex.getMessage());
-            return new DividendHistoryFetchResult(false, Collections.emptyList());
-        }
-    }
 
 
 
 
 
-
-
-    private String resolveDividendPlanStatus(LocalDate payDate) {
-        if (payDate == null) {
-            return "confirmed";
-        }
-        return payDate.isBefore(LocalDate.now()) ? "paid" : "confirmed";
-    }
-
-    private boolean mergeFundDividendPlan(InvestmentDividendPlanEntity target, InvestmentDividendPlanEntity source) {
-        boolean changed = false;
-        if (!Objects.equals(target.getRecordDate(), source.getRecordDate())) {
-            target.setRecordDate(source.getRecordDate());
-            changed = true;
-        }
-        if (!Objects.equals(target.getExDividendDate(), source.getExDividendDate())) {
-            target.setExDividendDate(source.getExDividendDate());
-            changed = true;
-        }
-        if (!Objects.equals(target.getDividendPerUnit(), source.getDividendPerUnit())) {
-            target.setDividendPerUnit(source.getDividendPerUnit());
-            changed = true;
-        }
-        if (!Objects.equals(target.getTaxRate(), source.getTaxRate())) {
-            target.setTaxRate(source.getTaxRate());
-            changed = true;
-        }
-        if (!Objects.equals(target.getCurrencyCode(), source.getCurrencyCode())) {
-            target.setCurrencyCode(source.getCurrencyCode());
-            changed = true;
-        }
-        if (!Objects.equals(target.getStatus(), source.getStatus())) {
-            target.setStatus(source.getStatus());
-            changed = true;
-        }
-        if (!Objects.equals(target.getSource(), source.getSource())) {
-            target.setSource(source.getSource());
-            changed = true;
-        }
-        if (!Objects.equals(target.getRemark(), source.getRemark())) {
-            target.setRemark(source.getRemark());
-            changed = true;
-        }
-        return changed;
-    }
-
-    private JsonNode fetchTencentQuoteFields(String symbol) {
-        // 腾讯快照经 market-service /api/internal/quote/stock/snapshot 获取（ symbol 可能带 sh/sz 前缀，需剥离）
-        String bareCode = symbol.replaceFirst("^(?:sh|sz|bj)", "");
-        try {
-            JsonNode snapshot = marketQuoteClient.stockSnapshot(bareCode);
-            if (snapshot == null || !snapshot.path("matched").asBoolean(false)) {
-                return objectMapper.createObjectNode();
-            }
-            ObjectNode node = objectMapper.createObjectNode();
-            node.put("name", snapshot.path("name").asText(null));
-            node.put("code", snapshot.path("code").asText(null));
-            node.put("price", snapshot.path("price").asText(null));
-            node.put("prevClose", snapshot.path("prevClose").asText(null));
-            node.put("open", snapshot.path("open").asText(null));
-            node.put("volume", snapshot.path("volume").asText(null));
-            node.put("timeRaw", snapshot.path("timeRaw").asText(null));
-            node.put("change", snapshot.path("change").asText(null));
-            node.put("changePercent", snapshot.path("changePercent").asText(null));
-            node.put("high", snapshot.path("high").asText(null));
-            node.put("low", snapshot.path("low").asText(null));
-            node.put("turnoverRate", snapshot.path("turnoverRate").asText(null));
-            node.put("pe", snapshot.path("pe").asText(null));
-            return node;
-        } catch (Exception ex) {
-            return objectMapper.createObjectNode();
-        }
-    }
 
 
     private InvestmentDetailStatResponse stat(String label, String value, String tone) {
@@ -5908,117 +5370,8 @@ public class InvestmentService {
 
 
 
-    private String toTencentSymbol(String code, String exchangeCode) {
-        if ("SSE".equals(exchangeCode)) {
-            return "sh" + code;
-        }
-        if ("SZSE".equals(exchangeCode)) {
-            return "sz" + code;
-        }
-        return code.startsWith("6") ? "sh" + code : "sz" + code;
-    }
 
 
-
-    private BigDecimal decimalText(String first, String second) {
-        String value = StringUtils.hasText(first) && !"--".equals(first) ? first : second;
-        if (!StringUtils.hasText(value) || "--".equals(value)) {
-            return null;
-        }
-        return new BigDecimal(value);
-    }
-
-    private BigDecimal safeDecimal(String value) {
-        if (!StringUtils.hasText(value) || "--".equals(value) || "-".equals(value)) {
-            return null;
-        }
-        try {
-            return new BigDecimal(value.trim().replace(",", ""));
-        } catch (Exception ex) {
-            return null;
-        }
-    }
-
-    private LocalDate safeDate(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        try {
-            String normalized = value.trim();
-            if (normalized.length() >= 10) {
-                normalized = normalized.substring(0, 10);
-            }
-            return LocalDate.parse(normalized);
-        } catch (Exception ex) {
-            return null;
-        }
-    }
-
-    private String blankToDash(String value) {
-        return StringUtils.hasText(value) ? value : "-";
-    }
-
-    private String blankToDefault(String value, String defaultValue) {
-        return StringUtils.hasText(value) ? value : defaultValue;
-    }
-
-    private String moneyText(BigDecimal value, int scale) {
-        if (value == null) {
-            return "-";
-        }
-        return value.setScale(scale, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
-    }
-
-    private String currencyText(BigDecimal value, int scale) {
-        String text = moneyText(value == null ? null : value.abs(), scale);
-        if ("-".equals(text)) {
-            return "-";
-        }
-        return (value.compareTo(BigDecimal.ZERO) < 0 ? "-¥" : "¥") + text;
-    }
-
-    private String priceText(BigDecimal value, String productType) {
-        String text = moneyText(value, "stock".equals(productType) ? 2 : 4);
-        if ("-".equals(text)) {
-            return "-";
-        }
-        return "¥" + text;
-    }
-
-    private String percentText(BigDecimal value) {
-        if (value == null) {
-            return "-";
-        }
-        return value.setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString() + "%";
-    }
-
-    private String tone(BigDecimal value) {
-        if (value == null || value.compareTo(BigDecimal.ZERO) == 0) {
-            return "neutral";
-        }
-        return value.compareTo(BigDecimal.ZERO) > 0 ? "positive" : "negative";
-    }
-
-    private String productTypeName(String productType) {
-        if ("stock".equals(productType)) return "股票";
-        if ("fund".equals(productType)) return "基金";
-        if ("bond".equals(productType)) return "债券";
-        if ("gold".equals(productType)) return "黄金";
-        return "其他";
-    }
-
-
-    private LocalDate resolveStockQuoteDate(String raw) {
-        if (!StringUtils.hasText(raw) || raw.length() < 8) {
-            return null;
-        }
-        String normalized = raw.substring(0, 4) + "-" + raw.substring(4, 6) + "-" + raw.substring(6, 8);
-        return safeDate(normalized);
-    }
-
-    private BigDecimal scaleStockQuoteValue(BigDecimal value) {
-        return value == null ? null : value.setScale(6, RoundingMode.HALF_UP);
-    }
 
     private String formatPositionSyncTime(LocalDateTime value) {
         return value == null ? null : value.format(POSITION_SYNC_TIME_FORMAT);
@@ -6112,7 +5465,7 @@ public class InvestmentService {
                 LocalDate payDate = dividendPlanRecencyDate(plan);
                 return payDate != null && !payDate.isBefore(oneYearAgo) && !payDate.isAfter(today);
             })
-            .sorted(Comparator.comparing(this::dividendPlanRecencyDate).reversed())
+            .sorted(Comparator.comparing(InvestmentDividendService::dividendPlanRecencyDate).reversed())
             .map(plan -> toDividendRecordResponse(plan, product, position, transactions, actualAmountsByDate))
             .toList();
 
@@ -6307,326 +5660,16 @@ public class InvestmentService {
         return defaultZero(position == null ? null : position.getMarketValue());
     }
 
-    private boolean supportsDividendProfile(InvestmentProductEntity product) {
-        return product != null
-            && StringUtils.hasText(product.getSymbol())
-            && (FUND_PRODUCT_TYPE.equals(product.getProductType()) || "stock".equals(product.getProductType()));
-    }
-
-    private boolean evaluateDividendProfile(InvestmentProductEntity product) {
-        if (!supportsDividendProfile(product)) {
-            applyDividendProfile(product, null);
-            return true;
-        }
-        DividendHistoryFetchResult fetchResult = FUND_PRODUCT_TYPE.equals(product.getProductType())
-            ? fetchFundHistoricalDividendPlansResult(product)
-            : fetchStockHistoricalDividendPlansResult(product);
-        if (!fetchResult.success()) {
-            return false;
-        }
-        String source = FUND_PRODUCT_TYPE.equals(product.getProductType())
-            ? FUND_DIVIDEND_PLAN_SOURCE
-            : STOCK_DIVIDEND_HISTORY_SOURCE;
-        applyDividendProfile(product, buildDividendProfile(fetchResult.plans(), source));
-        return true;
-    }
-
-    private void applyDividendProfile(InvestmentProductEntity product, DividendProfile profile) {
-        if (product == null) {
-            return;
-        }
-        product.setStableDividend(profile != null && profile.stable());
-        product.setPredictedAnnualDividendPerUnit(profile == null
-            ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
-            : defaultZero(profile.annualDividendPerUnit()).setScale(6, RoundingMode.HALF_UP));
-        product.setDividendStableYears(profile == null ? 0 : Math.max(profile.stableYears(), 0));
-        product.setDividendLastPaidDate(profile == null ? null : profile.lastDividendDate());
-        product.setDividendDataSource(profile == null ? null : profile.source());
-        product.setDividendEvaluatedAt(LocalDateTime.now());
-    }
-
-    private List<InvestmentDividendPlanEntity> fetchFundHistoricalDividendPlans(InvestmentProductEntity product) {
-        return fetchFundHistoricalDividendPlansResult(product).plans();
-    }
-
-    private DividendHistoryFetchResult fetchFundHistoricalDividendPlansResult(InvestmentProductEntity product) {
-        DividendHistoryFetchResult result = fetchFundDividendPlansResult(product);
-        if (!result.success()) {
-            return result;
-        }
-        return new DividendHistoryFetchResult(true, result.plans().stream()
-            .filter(plan -> isHistoricalDividendPlan(plan, LocalDate.now()))
-            .toList());
-    }
-
-    private List<InvestmentDividendPlanEntity> fetchStockHistoricalDividendPlans(InvestmentProductEntity product) {
-        return fetchStockHistoricalDividendPlansResult(product).plans();
-    }
-
     /**
      * 股票分红历史：经行情中心 /api/internal/quote/stock/dividends（新浪分红送配页，每10股口径）。
      * 新浪无"所属年度"列，分红年度取除息日年份（原东财 REPORT_DATE 为空时同为该回退口径）。
      */
-    private DividendHistoryFetchResult fetchStockHistoricalDividendPlansResult(InvestmentProductEntity product) {
-        if (product == null || !StringUtils.hasText(product.getSymbol())) {
-            return new DividendHistoryFetchResult(false, Collections.emptyList());
-        }
-        try {
-            JsonNode payload = marketQuoteClient.stockDividends(product.getSymbol());
-            if (payload == null || !payload.path("matched").asBoolean(false)) {
-                log.warn("股票分红历史获取失败，productId={}, symbol={}, reason=页面不匹配",
-                    product.getId(), product.getSymbol());
-                return new DividendHistoryFetchResult(false, Collections.emptyList());
-            }
-            JsonNode rows = payload.path("items");
-            if (!rows.isArray()) {
-                log.warn("股票分红历史解析失败，productId={}, symbol={}, reason=响应中没有数据数组",
-                    product.getId(), product.getSymbol());
-                return new DividendHistoryFetchResult(false, Collections.emptyList());
-            }
-            List<InvestmentDividendPlanEntity> plans = new ArrayList<>();
-            for (JsonNode row : rows) {
-                BigDecimal pretaxBonus = safeDecimal(row.path("pretaxPer10").asText(null));
-                LocalDate exDividendDate = safeDate(row.path("exDividendDate").asText(null));
-                if (pretaxBonus == null || pretaxBonus.compareTo(BigDecimal.ZERO) <= 0 || exDividendDate == null) {
-                    continue;
-                }
-                LocalDate recordDate = safeDate(row.path("recordDate").asText(null));
-                String progress = row.path("progress").asText(null);
-                InvestmentDividendPlanEntity plan = new InvestmentDividendPlanEntity();
-                plan.setProductId(product.getId());
-                plan.setDividendYear(resolveStockDividendYear(exDividendDate));
-                plan.setRecordDate(recordDate);
-                plan.setExDividendDate(exDividendDate);
-                plan.setPayDate(exDividendDate);
-                plan.setDividendPerUnit(pretaxBonus.divide(BigDecimal.TEN, 6, RoundingMode.HALF_UP));
-                plan.setTaxRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
-                plan.setCurrencyCode(blankToDefault(product.getCurrencyCode(), DEFAULT_CURRENCY_CODE));
-                plan.setStatus(resolveDividendPlanStatus(exDividendDate));
-                plan.setSource(STOCK_DIVIDEND_HISTORY_SOURCE);
-                plan.setRemark(progress);
-                plans.add(plan);
-            }
-            return new DividendHistoryFetchResult(true, plans);
-        } catch (Exception ex) {
-            log.warn("股票分红历史获取失败，productId={}, symbol={}, reason={}",
-                product.getId(), product.getSymbol(), ex.getMessage());
-            return new DividendHistoryFetchResult(false, Collections.emptyList());
-        }
-    }
 
 
 
 
-    private Integer resolveStockDividendYear(LocalDate exDividendDate) {
-        return exDividendDate == null ? null : exDividendDate.getYear();
-    }
 
 
-
-
-    private DividendProfile buildDividendProfile(
-        List<InvestmentDividendPlanEntity> historicalPlans,
-        String source
-    ) {
-        if (historicalPlans == null || historicalPlans.isEmpty()) {
-            return null;
-        }
-
-        LocalDate today = LocalDate.now();
-        LocalDate recentWindowStart = today.minusYears(DIVIDEND_HISTORY_YEARS);
-        List<InvestmentDividendPlanEntity> recentPlans = historicalPlans.stream()
-            .filter(plan -> {
-                LocalDate recencyDate = dividendPlanRecencyDate(plan);
-                return recencyDate != null && !recencyDate.isBefore(recentWindowStart) && !recencyDate.isAfter(today);
-            })
-            .sorted(Comparator.comparing(this::dividendPlanRecencyDate).reversed())
-            .toList();
-        if (recentPlans.isEmpty()) {
-            return null;
-        }
-
-        Set<Integer> recentYears = recentPlans.stream()
-            .map(plan -> resolveDividendPlanYear(plan, today))
-            .filter(Objects::nonNull)
-            .collect(Collectors.toCollection(LinkedHashSet::new));
-        LocalDate latestPayDate = recentPlans.stream()
-            .map(this::dividendPlanRecencyDate)
-            .filter(Objects::nonNull)
-            .max(LocalDate::compareTo)
-            .orElse(null);
-
-        boolean stable = recentYears.size() >= MIN_STABLE_DIVIDEND_YEARS
-            && latestPayDate != null
-            && !latestPayDate.isBefore(today.minusYears(2));
-
-        long positivePlanCount = recentPlans.stream()
-            .map(this::resolveNetDividendPerUnit)
-            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
-            .count();
-        if (positivePlanCount < MIN_STABLE_DIVIDEND_YEARS) {
-            stable = false;
-        }
-
-        LocalDate trailingYearStart = today.minusYears(1);
-        long trailingYearDividendCount = recentPlans.stream()
-            .filter(plan -> {
-                LocalDate recencyDate = dividendPlanRecencyDate(plan);
-                return recencyDate != null && !recencyDate.isBefore(trailingYearStart) && !recencyDate.isAfter(today);
-            })
-            .map(this::resolveNetDividendPerUnit)
-            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
-            .count();
-
-        BigDecimal latestDividendPerUnit = recentPlans.stream()
-            .map(this::resolveNetDividendPerUnit)
-            .filter(value -> value != null && value.compareTo(BigDecimal.ZERO) > 0)
-            .findFirst()
-            .orElse(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
-        BigDecimal predictedAnnualDividendPerUnit = latestDividendPerUnit == null
-            ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP)
-            : defaultZero(latestDividendPerUnit)
-                .multiply(BigDecimal.valueOf(Math.max(trailingYearDividendCount, 1)))
-                .setScale(6, RoundingMode.HALF_UP);
-        return new DividendProfile(
-            stable,
-            predictedAnnualDividendPerUnit,
-            recentYears.size(),
-            latestPayDate,
-            StringUtils.hasText(source)
-                ? source
-                : historicalPlans.stream()
-                    .map(InvestmentDividendPlanEntity::getSource)
-                    .filter(StringUtils::hasText)
-                    .findFirst()
-                    .orElse(null)
-        );
-    }
-
-    private boolean isHistoricalDividendPlan(InvestmentDividendPlanEntity plan, LocalDate today) {
-        if (plan == null) {
-            return false;
-        }
-        LocalDate payDate = plan.getPayDate();
-        if (payDate == null) {
-            return "paid".equals(plan.getStatus());
-        }
-        return !payDate.isAfter(today);
-    }
-
-    private Integer resolveDividendPlanYear(InvestmentDividendPlanEntity plan, LocalDate today) {
-        if (plan == null) {
-            return null;
-        }
-        if (plan.getDividendYear() != null && plan.getDividendYear() > 0) {
-            return plan.getDividendYear();
-        }
-        if (plan.getPayDate() != null) {
-            return plan.getPayDate().getYear();
-        }
-        if (plan.getRecordDate() != null) {
-            return plan.getRecordDate().getYear();
-        }
-        if (plan.getExDividendDate() != null) {
-            return plan.getExDividendDate().getYear();
-        }
-        return today.getYear();
-    }
-
-
-    private BigDecimal resolveNetDividendPerUnit(InvestmentDividendPlanEntity plan) {
-        BigDecimal dividendPerUnit = defaultZero(plan.getDividendPerUnit());
-        BigDecimal taxRate = defaultZero(plan.getTaxRate());
-        BigDecimal netFactor = BigDecimal.ONE.subtract(taxRate.divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP));
-        return dividendPerUnit.multiply(netFactor).setScale(6, RoundingMode.HALF_UP);
-    }
-
-    private InvestmentDividendPlanEntity pickLaterDividendPlan(
-        InvestmentDividendPlanEntity current,
-        InvestmentDividendPlanEntity candidate
-    ) {
-        if (current == null) {
-            return candidate;
-        }
-        if (candidate == null) {
-            return current;
-        }
-        return compareDividendPlanRecency(candidate, current) >= 0 ? candidate : current;
-    }
-
-    private int compareDividendPlanRecency(InvestmentDividendPlanEntity left, InvestmentDividendPlanEntity right) {
-        LocalDate leftDate = dividendPlanRecencyDate(left);
-        LocalDate rightDate = dividendPlanRecencyDate(right);
-        if (leftDate != null && rightDate != null) {
-            int compare = leftDate.compareTo(rightDate);
-            if (compare != 0) {
-                return compare;
-            }
-        } else if (leftDate != null) {
-            return 1;
-        } else if (rightDate != null) {
-            return -1;
-        }
-
-        LocalDateTime leftUpdatedAt = left.getUpdatedAt();
-        LocalDateTime rightUpdatedAt = right.getUpdatedAt();
-        if (leftUpdatedAt != null && rightUpdatedAt != null) {
-            int compare = leftUpdatedAt.compareTo(rightUpdatedAt);
-            if (compare != 0) {
-                return compare;
-            }
-        } else if (leftUpdatedAt != null) {
-            return 1;
-        } else if (rightUpdatedAt != null) {
-            return -1;
-        }
-
-        return Long.compare(defaultLong(left.getId()), defaultLong(right.getId()));
-    }
-
-    private LocalDate dividendPlanRecencyDate(InvestmentDividendPlanEntity plan) {
-        if (plan == null) {
-            return null;
-        }
-        if (plan.getPayDate() != null) {
-            return plan.getPayDate();
-        }
-        if (plan.getRecordDate() != null) {
-            return plan.getRecordDate();
-        }
-        return plan.getExDividendDate();
-    }
-
-    private long defaultLong(Long value) {
-        return value == null ? 0L : value;
-    }
-
-    private BigDecimal defaultZero(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
-    }
-
-    private BigDecimal scaleMoney(BigDecimal value) {
-        return defaultZero(value).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal scaleRate(BigDecimal value) {
-        return defaultZero(value).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal scaleQuantity(BigDecimal value) {
-        return defaultZero(value).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal rate(BigDecimal profit, BigDecimal base) {
-        if (base == null || base.compareTo(BigDecimal.ZERO) == 0) {
-            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
-        }
-        return profit.multiply(BigDecimal.valueOf(100)).divide(base, 4, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal sum(List<InvestmentPositionEntity> positions, Function<InvestmentPositionEntity, BigDecimal> getter) {
-        return positions.stream().map(getter).filter(item -> item != null).reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
-    }
 
     private List<InvestmentPositionEntity> filterPositionsByAccountType(List<InvestmentPositionEntity> positions, String accountTypeCode) {
         if (positions.isEmpty() || !StringUtils.hasText(accountTypeCode)) {

@@ -11,7 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class AccountTypeService {
@@ -62,8 +65,14 @@ public class AccountTypeService {
 
     @Transactional
     public void updateSortOrders(AccountTypeSortOrderRequest request) {
+        // 一次批量取回全部类型，避免循环内逐条 select 的 N+1 查询
+        List<Long> ids = request.getItems().stream().map(AccountTypeSortOrderRequest.AccountTypeSortOrderItem::getId).toList();
+        Map<Long, AccountTypeEntity> entityMap = ids.isEmpty()
+            ? Map.of()
+            : accountTypeMapper.selectBatchIds(ids).stream()
+                .collect(Collectors.toMap(AccountTypeEntity::getId, Function.identity()));
         for (AccountTypeSortOrderRequest.AccountTypeSortOrderItem item : request.getItems()) {
-            AccountTypeEntity entity = accountTypeMapper.selectById(item.getId());
+            AccountTypeEntity entity = entityMap.get(item.getId());
             if (entity == null) {
                 throw new IllegalArgumentException("账户类型不存在");
             }

@@ -24,7 +24,12 @@ import java.time.YearMonth;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class LiabilityAccountService {
@@ -74,8 +79,18 @@ public class LiabilityAccountService {
             return List.of();
         }
 
+        // 一次批量取回涉及的账户，避免流式映射里逐条 select 的 N+1 查询
+        Set<Long> accountIds = records.stream()
+            .map(LiabilityRecordEntity::getAccountId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Map<Long, AccountEntity> accountMap = accountIds.isEmpty()
+            ? Map.of()
+            : accountMapper.selectBatchIds(accountIds).stream()
+                .collect(Collectors.toMap(AccountEntity::getId, Function.identity()));
+
         return records.stream()
-            .map(record -> toResponse(record, accountMapper.selectById(record.getAccountId())))
+            .map(record -> toResponse(record, accountMap.get(record.getAccountId())))
             .toList();
     }
 
