@@ -50,9 +50,8 @@ async function submitLogin() {
     const currentUser = await getCurrentUser()
     setStoredCurrentUser(currentUser)
     await initializeGoldPriceCache()
-    // 登录成功后回到被拦截前的页面（redirect 由路由守卫写入）
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-    await router.push(redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/')
+    // 登录成功后统一进入首页（首页按登录态重定向到 /finance）
+    await router.push('/')
   } catch (error) {
     clearStoredCurrentUser()
     errorMessage.value = error instanceof ApiError ? error.message : '登录失败，请稍后再试'

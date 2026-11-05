@@ -429,6 +429,7 @@ public class AssetTrendService {
         String normalizedRange = switch (range == null ? "" : range.trim().toLowerCase(Locale.ROOT)) {
             case "7d" -> "7d";
             case "30d" -> "30d";
+            case "60d" -> "60d";
             case "all" -> "all";
             default -> "ytd";
         };
@@ -457,6 +458,12 @@ public class AssetTrendService {
                 monthlyBuckets = false;
                 yearlyBuckets = false;
                 rangeLabel = "近30日";
+            }
+            case "60d" -> {
+                startDate = endDate.minusDays(59);
+                monthlyBuckets = false;
+                yearlyBuckets = false;
+                rangeLabel = "近60日";
             }
             case "all" -> {
                 startDate = earliestDate == null ? endDate : earliestDate;

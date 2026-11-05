@@ -37,20 +37,22 @@ import {
   getAllocationTrackStyle,
 } from './trendFormat'
 
-type TrendRangeLabel = '近7日' | '近30日' | '年内' | '全部'
+type TrendRangeLabel = '近7日' | '近30日' | '近60日' | '年内' | '全部'
 
 const route = useRoute()
 
-const rangeOptions: TrendRangeLabel[] = ['近7日', '近30日', '年内', '全部']
+const rangeOptions: TrendRangeLabel[] = ['近7日', '近30日', '近60日', '年内', '全部']
 const rangeMap: Record<TrendRangeLabel, AssetTrendRange> = {
   近7日: '7d',
   近30日: '30d',
+  近60日: '60d',
   年内: 'ytd',
   全部: 'all',
 }
 const reverseRangeMap: Record<AssetTrendRange, TrendRangeLabel> = {
   '7d': '近7日',
   '30d': '近30日',
+  '60d': '近60日',
   ytd: '年内',
   all: '全部',
 }
@@ -128,7 +130,7 @@ const totalAssets = computed(() => formatCurrency(trend.value?.totalAssets))
 const latestTrendPoints = computed(() => trend.value?.trendPoints ?? [])
 const previousPointLabel = computed(() => {
   const range = (trend.value?.range ?? rangeMap[activeRange.value]) as AssetTrendRange | string
-  if (range === '7d' || range === '30d') return '较上一天'
+  if (range === '7d' || range === '30d' || range === '60d') return '较上一天'
   if (range === 'ytd') return '较上月'
   if (range === 'all') return '较上年'
   return '较上期'
@@ -189,18 +191,19 @@ const yesterdaySnapshotChangeAmountText = computed(() => (
 ))
 const trendRangeKey = computed<AssetTrendRange>(() => {
   const range = trend.value?.range
-  return range === '7d' || range === '30d' || range === 'ytd' || range === 'all'
+  return range === '7d' || range === '30d' || range === '60d' || range === 'ytd' || range === 'all'
     ? range
     : rangeMap[activeRange.value]
 })
 const rangeDetailSummaryText = computed(() => {
   if (trendRangeKey.value === '7d') return '7天总资产'
   if (trendRangeKey.value === '30d') return '30天总资产'
+  if (trendRangeKey.value === '60d') return '60天总资产'
   if (trendRangeKey.value === 'ytd') return '12个月总资产'
   return '按年总资产'
 })
 const rangeDetailCompareText = computed(() => {
-  if (trendRangeKey.value === '7d' || trendRangeKey.value === '30d') return '较上一天'
+  if (trendRangeKey.value === '7d' || trendRangeKey.value === '30d' || trendRangeKey.value === '60d') return '较上一天'
   if (trendRangeKey.value === 'ytd') return '较上月'
   return '较上年'
 })

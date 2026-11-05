@@ -685,7 +685,7 @@ export interface InvestmentSummary {
 
 export type InvestmentTrendRange = '7d' | '30d' | 'ytd' | 'all'
 
-export type AssetTrendRange = '7d' | '30d' | 'ytd' | 'all'
+export type AssetTrendRange = '7d' | '30d' | '60d' | 'ytd' | 'all'
 
 export interface InvestmentTrendPoint {
   key: string
