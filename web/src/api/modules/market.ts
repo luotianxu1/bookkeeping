@@ -434,8 +434,8 @@ export interface QfqDailyKline {
 }
 
 /** A股前复权日K（symbol 形如 sh600000/sz000001/bj832000），datalen 10~640 */
-export const getQfqDailyKline = (symbol: string, datalen = 120) =>
-  requestGet<QfqDailyKline>(marketRequest, '/api/market/kline/qfq', { params: { symbol, datalen } })
+export const getQfqDailyKline = (symbol: string, datalen = 120, config?: AxiosRequestConfig) =>
+  requestGet<QfqDailyKline>(marketRequest, '/api/market/kline/qfq', { params: { symbol, datalen }, ...config })
 
 /* ---------- 投资详情页基金/股票行情（替代浏览器直连东财/腾讯） ---------- */
 

@@ -57,6 +57,15 @@ export const financeRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/finance/dividend-strategy',
+    name: 'finance-dividend-strategy',
+    component: () => import('@/pages/finance/DividendStrategyPage/index.vue'),
+    meta: {
+      section: 'finance',
+      title: '红利策略',
+    },
+  },
+  {
     path: '/finance/market-news',
     name: 'finance-market-news',
     component: () => import('@/pages/finance/MarketNewsPage/index.vue'),
