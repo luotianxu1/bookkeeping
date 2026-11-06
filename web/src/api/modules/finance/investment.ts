@@ -16,6 +16,7 @@ import type {
   FundProfitPage,
   InvestmentPosition,
   InvestmentAssetDetail,
+  InvestmentFundRedeemFeeOption,
   InvestmentQuoteSyncSummary,
   InvestmentFixedExpense,
   SaveInvestmentFixedExpenseParams,
@@ -78,8 +79,8 @@ export function getInvestmentPosition(id: number) {
   return requestGet<InvestmentPosition>(financeRequest, `/api/finance/investments/positions/${id}`)
 }
 
-export function getInvestmentPositionDetail(id: number) {
-  return requestGet<InvestmentAssetDetail>(financeRequest, `/api/finance/investments/positions/${id}/detail`)
+export function getInvestmentPositionDetail(id: number, config?: AxiosRequestConfig) {
+  return requestGet<InvestmentAssetDetail>(financeRequest, `/api/finance/investments/positions/${id}/detail`, config)
 }
 
 export function runInvestmentQuoteSyncTask(params?: { userId?: number; accountId?: number }) {
@@ -109,8 +110,8 @@ export function getInvestmentTransactions(params: { userId: number; accountId?: 
   return requestGet<InvestmentTransaction[]>(financeRequest, '/api/finance/investments/transactions', { params, ...config })
 }
 
-export function getInvestmentTransactionPage(params: { userId: number; accountId?: number; positionId?: number; page?: number; pageSize?: number }) {
-  return requestGet<InvestmentTransactionPage>(financeRequest, '/api/finance/investments/transactions/page', { params })
+export function getInvestmentTransactionPage(params: { userId: number; accountId?: number; positionId?: number; page?: number; pageSize?: number }, config?: AxiosRequestConfig) {
+  return requestGet<InvestmentTransactionPage>(financeRequest, '/api/finance/investments/transactions/page', { params, ...config })
 }
 
 export function createInvestmentTransaction(params: SaveInvestmentTransactionParams) {
@@ -267,5 +268,11 @@ export function getGoldAccountHoldings(userId: number) {
 export function getGoldLiquidations(userId: number) {
   return requestGet<GoldLiquidation>(financeRequest, '/api/finance/gold-accounts/liquidations', {
     params: { userId },
+  })
+}
+
+export function getInvestmentFundRedeemFees(code: string, config?: AxiosRequestConfig) {
+  return requestGet<InvestmentFundRedeemFeeOption[]>(financeRequest, '/api/finance/investments/fund-redeem-fees', {
+    params: { code }, timeout: 25000, ...config,
   })
 }

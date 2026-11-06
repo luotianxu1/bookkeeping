@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 投资详情页：负责数据加载与页面编排，行情/图表/弹窗/交易列表拆分至同目录子模块。
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -14,7 +14,7 @@ import {
   getAccounts,
   getInvestmentAutoInvestPlans,
   getInvestmentPositionDetail,
-  getInvestmentTransactionPage,
+  getInvestmentFundRedeemFees,
   getInvestmentTransactions,
   updateInvestmentAutoInvestPlan,
   deleteInvestmentAutoInvestPlan,
@@ -35,8 +35,8 @@ import { useFundMarket } from './useFundMarket'
 import { useTrendCharts } from './useTrendCharts'
 import { useTransactionPagination } from './useTransactionPagination'
 import { useFeedback } from '@/composables/useFeedback'
+import { useAsyncSection } from '@/composables/useAsyncSection'
 import {
-  TRANSACTION_PAGE_SIZE,
   formatCurrency,
   formatDateTimeLabel,
   formatDividendDate,
@@ -58,8 +58,6 @@ import { getErrorMessage } from '@/api/request'
 const route = useRoute()
 const router = useRouter()
 const { isDark } = useTheme()
-const isLoading = ref(true)
-const pageError = ref('')
 const detail = ref<InvestmentAssetDetail | null>(null)
 const transactions = ref<InvestmentTransaction[]>([])
 const autoInvestPlans = ref<InvestmentAutoInvestPlan[]>([])
@@ -99,7 +97,7 @@ const pendingAdditionalPurchaseAmount = computed(() => transactions.value
 )
 const summaryAmount = computed(() =>
   currentPosition.value?.subscriptionStatus === 'pending'
-    ? formatCurrency(Number(detail.value?.position?.costAmount ?? 0) + pendingAdditionalPurchaseAmount.value)
+    ? (historyReady.value ? formatCurrency(Number(detail.value?.position?.costAmount ?? 0) + pendingAdditionalPurchaseAmount.value) : '--')
     : formatCurrency(Number(detail.value?.position?.marketValue ?? 0)),
 )
 const todayProfitValue = computed(() => {
@@ -163,6 +161,8 @@ const currentTotalProfit = computed(() =>
 
 const {
   externalStatus,
+  marketError,
+  marketLoading,
   selectedFundTrendRange,
   selectedFundPeriodReturnTone,
   fundTrendPeriodReturnText,
@@ -181,6 +181,7 @@ const {
 })
 
 const currentFundChartProfit = computed(() => {
+  if (!historyReady.value) return currentTotalProfit.value
   const points = cumulativeProfitPoints.value
   const latestPoint = points[points.length - 1]
   const latestValue = Number(latestPoint?.value)
@@ -258,10 +259,12 @@ const {
   transactionPaginationSummary,
   canGoPrevTransactionPage,
   canGoNextTransactionPage,
-  applyTransactionPage,
+  resetTransactionPage,
+  loadTransactionPage,
+  transactionError,
   goToPrevTransactionPage,
   goToNextTransactionPage,
-} = useTransactionPagination({ positionId, showFeedback })
+} = useTransactionPagination({ positionId })
 
 function openPendingTransactionModal(entry: InvestmentTransaction) {
   tradeModalRef.value?.openPending(entry)
@@ -279,46 +282,58 @@ function mergeDetail(partial: Partial<InvestmentAssetDetail>) {
   }
 }
 
-async function loadDetail() {
-  if (!positionId.value) {
-    pageError.value = '投资资产不存在'
-    isLoading.value = false
-    return
-  }
+const detailSection = useAsyncSection(
+  (signal) => {
+    if (!positionId.value) throw new Error('投资资产不存在')
+    return getInvestmentPositionDetail(positionId.value, { signal })
+  },
+  (value) => {
+    detail.value = value
+    void loadExternalMarketData(value)
+    if (value.productType === 'fund') void feeSection.run()
+  },
+  '投资详情加载失败',
+)
+const { loading: isLoading, error: pageError } = detailSection
+const historySection = useAsyncSection(
+  (signal) => getInvestmentTransactions({ userId: getStoredCurrentUser()!.id, positionId: positionId.value! }, { signal }),
+  (value) => { transactions.value = value },
+  '完整交易历史加载失败',
+)
+const { loading: historyLoading, error: historyError, ready: historyReady } = historySection
+const planSection = useAsyncSection(
+  (signal) => getInvestmentAutoInvestPlans({ userId: getStoredCurrentUser()!.id, positionId: positionId.value! }, { signal }),
+  (value) => { autoInvestPlans.value = value },
+  '定投计划加载失败',
+)
+const { loading: plansLoading, error: plansError, ready: plansReady } = planSection
+const accountSection = useAsyncSection(
+  (signal) => getAccounts({ userId: getStoredCurrentUser()!.id, status: 'active' }, { signal }),
+  (value) => { fundingAccounts.value = value.filter((account) => account.accountTypeCode === 'cash') },
+  '资金账户加载失败',
+)
+const { loading: accountsLoading, error: accountsError, ready: accountsReady } = accountSection
+const feeSection = useAsyncSection(
+  (signal) => getInvestmentFundRedeemFees(detail.value?.symbol || currentPosition.value?.productSymbol || '', { signal }),
+  (value) => mergeDetail({ fundRedeemFeeOptions: value }),
+  '赎回费率加载失败',
+)
+const { loading: feesLoading, error: feesError } = feeSection
 
-  isLoading.value = true
-  pageError.value = ''
-  try {
-    resetFundMarketState()
-    const currentUser = getStoredCurrentUser()
-    const [detailData, transactionList, transactionPage, planList, accountList] = await Promise.all([
-      getInvestmentPositionDetail(positionId.value),
-      // 全量交易：走势图买卖点标记、基金累计成本基线/累计收益点位都依赖完整历史；
-      // 「待确认买入金额」汇总在 pendingAdditionalPurchaseAmount 内本地过滤 pending
-      currentUser
-        ? getInvestmentTransactions({ userId: currentUser.id, positionId: positionId.value })
-        : Promise.resolve([]),
-      currentUser
-        ? getInvestmentTransactionPage({ userId: currentUser.id, positionId: positionId.value, page: 1, pageSize: TRANSACTION_PAGE_SIZE })
-        : Promise.resolve({ items: [], total: 0, page: 1, pageSize: TRANSACTION_PAGE_SIZE, totalPages: 1 }),
-      currentUser
-        ? getInvestmentAutoInvestPlans({ userId: currentUser.id, positionId: positionId.value })
-        : Promise.resolve([]),
-      currentUser
-        ? getAccounts({ userId: currentUser.id, status: 'active' })
-        : Promise.resolve([]),
-    ])
-    detail.value = detailData
-    transactions.value = transactionList
-    applyTransactionPage(transactionPage)
-    autoInvestPlans.value = planList
-    fundingAccounts.value = accountList.filter((account) => account.accountTypeCode === 'cash')
-    loadExternalMarketData(detailData)
-  } catch (error) {
-    pageError.value = getErrorMessage(error, '投资详情加载失败')
-  } finally {
-    isLoading.value = false
+function loadDetail() {
+  resetFundMarketState()
+  for (const section of [detailSection, historySection, planSection, accountSection, feeSection]) section.reset()
+  detail.value = null
+  transactions.value = []
+  autoInvestPlans.value = []
+  fundingAccounts.value = []
+  resetTransactionPage()
+  const requests = [detailSection.run()]
+  if (getStoredCurrentUser() && positionId.value) {
+    requests.push(historySection.run(), loadTransactionPage(1), planSection.run(), accountSection.run())
   }
+  // 各区域独立落地；首屏 loading 只跟随 detailSection。
+  return Promise.all(requests)
 }
 
 // ---------- 定投计划操作 ----------
@@ -421,9 +436,7 @@ async function confirmDeletePosition() {
   }
 }
 
-onMounted(() => {
-  loadDetail()
-})
+watch(positionId, () => { void loadDetail() }, { immediate: true })
 </script>
 
 <template>
@@ -436,7 +449,9 @@ onMounted(() => {
 
     <PageHeader title="投资详情" :back-to="backTo" back-label="返回投资账户" />
 
-    <p v-if="pageError" class="investment-detail-message investment-detail-message-error">{{ pageError }}</p>
+    <p v-if="pageError" class="investment-detail-message investment-detail-message-error">
+      {{ pageError }} <button type="button" @click="detailSection.run()">重试</button>
+    </p>
     <CommonLoading v-else-if="isLoading" />
 
     <template v-else-if="detail">
@@ -484,18 +499,22 @@ onMounted(() => {
         </div>
       </section>
 
+      <p v-if="accountsLoading" class="investment-detail-description">资金账户加载中…</p>
+      <p v-if="accountsError" class="investment-detail-message investment-detail-message-error">{{ accountsError }} <button type="button" @click="accountSection.run()">重试</button></p>
+      <p v-if="feesLoading" class="investment-detail-description">赎回费率加载中…</p>
+      <p v-if="feesError" class="investment-detail-message investment-detail-message-error">{{ feesError }} <button type="button" @click="feeSection.run()">重试</button></p>
       <section class="investment-detail-actions" aria-label="持仓操作">
-        <button class="investment-detail-action-button buy" type="button" @click="tradeModalRef?.open('buy')">加仓</button>
-        <button class="investment-detail-action-button sell" type="button" :disabled="isPendingSubscription" @click="tradeModalRef?.open('sell')">减仓</button>
+        <button class="investment-detail-action-button buy" type="button" :disabled="!accountsReady" @click="tradeModalRef?.open('buy')">加仓</button>
+        <button class="investment-detail-action-button sell" type="button" :disabled="isPendingSubscription || !accountsReady" @click="tradeModalRef?.open('sell')">减仓</button>
         <button
           class="investment-detail-action-button auto-invest"
           type="button"
-          :disabled="!showAutoInvestSection"
+          :disabled="!showAutoInvestSection || !accountsReady || !plansReady"
           @click="autoInvestModalRef?.open()"
         >
           定投
         </button>
-        <button class="investment-detail-action-button edit" type="button" @click="editModalRef?.open()">修改</button>
+        <button class="investment-detail-action-button edit" type="button" :disabled="!accountsReady" @click="editModalRef?.open()">修改</button>
         <button class="investment-detail-action-button delete" type="button" :disabled="isDeletingPosition" @click="openDeleteModal">删除</button>
       </section>
 
@@ -525,7 +544,11 @@ onMounted(() => {
           label="基金走势区间切换"
           variant="surface"
         />
-        <template v-if="isFundProfitChartActive">
+        <p v-if="marketLoading" class="investment-detail-description">行情加载中…</p>
+        <p v-if="marketError" class="investment-detail-message investment-detail-message-error">{{ marketError }} <button type="button" @click="loadExternalMarketData(detail)">重试</button></p>
+        <p v-if="historyLoading" class="investment-detail-description">完整交易历史加载中…</p>
+        <p v-if="historyError" class="investment-detail-message investment-detail-message-error">{{ historyError }} <button type="button" @click="historySection.run()">重试</button></p>
+        <template v-if="historyReady && isFundProfitChartActive">
           <div
             v-if="cumulativeProfitPoints.length"
             ref="cumulativeProfitChartRef"
@@ -535,7 +558,7 @@ onMounted(() => {
           ></div>
           <p v-else class="investment-detail-empty">{{ externalStatus || '暂无累计收益走势数据' }}</p>
         </template>
-        <template v-else>
+        <template v-else-if="historyReady">
           <div v-if="detail.chartPoints.length" ref="chartRef" class="investment-detail-chart"></div>
           <p v-else class="investment-detail-empty">暂无走势数据</p>
         </template>
@@ -593,6 +616,8 @@ onMounted(() => {
         </div>
       </section>
 
+      <p v-if="plansLoading" class="investment-detail-description">定投计划加载中…</p>
+      <p v-if="plansError" class="investment-detail-message investment-detail-message-error">{{ plansError }} <button type="button" @click="planSection.run()">重试</button></p>
       <section v-if="showAutoInvestPlansSection" class="investment-detail-card" aria-label="定投计划">
         <header class="investment-detail-card-head">
           <h2>定投计划</h2>
@@ -632,7 +657,7 @@ onMounted(() => {
             </div>
 
             <div class="investment-auto-invest-actions">
-              <button type="button" :disabled="isSavingAutoInvest" @click="autoInvestModalRef?.open(plan)">修改</button>
+              <button type="button" :disabled="isSavingAutoInvest || !accountsReady" @click="autoInvestModalRef?.open(plan)">修改</button>
               <button
                 type="button"
                 :disabled="isSavingAutoInvest"
@@ -646,7 +671,9 @@ onMounted(() => {
         </div>
       </section>
 
+      <p v-if="transactionError" class="investment-detail-message investment-detail-message-error">{{ transactionError }} <button type="button" @click="loadTransactionPage()">重试</button></p>
       <TransactionList
+        v-if="!transactionError"
         :items="transactionPageItems"
         :unit-name="detail.unitName || detail.position.unitName || ''"
         :total="transactionTotal"

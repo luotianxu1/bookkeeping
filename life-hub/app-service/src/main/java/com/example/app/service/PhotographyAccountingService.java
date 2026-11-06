@@ -87,9 +87,15 @@ public class PhotographyAccountingService {
             .toList();
     }
 
+    /** 订单事务必须先取得账务锁，再读取订单或余额。 */
+    public void lockUserForWrite(Long userId) {
+        accountMapper.lockUserForWrite(userId);
+    }
+
     /** 创建摄影收入流水并原子加余额，返回流水 id */
     @Transactional
     public Long createPhotographyIncome(PhotographyIncomeRequest request) {
+        accountMapper.lockUserForWrite(request.userId());
         if (request.userId() == null || request.accountId() == null
             || request.amount() == null || request.amount().signum() <= 0) {
             throw new IllegalArgumentException("入账参数无效");
@@ -106,6 +112,7 @@ public class PhotographyAccountingService {
     /** 作废关联收入流水并原子扣回余额；已作废的流水幂等返回 refundedAmount=0 */
     @Transactional
     public VoidIncomeResult voidPhotographyIncome(Long transactionId, Long userId) {
+        accountMapper.lockUserForWrite(userId);
         TransactionEntity transaction = transactionMapper.selectById(transactionId);
         if (transaction == null) {
             throw new IllegalArgumentException("关联流水不存在");

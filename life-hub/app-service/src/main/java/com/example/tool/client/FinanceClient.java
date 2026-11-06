@@ -29,6 +29,11 @@ public class FinanceClient {
         this.photographyAccountingService = photographyAccountingService;
     }
 
+    /** 与记账/投资共用数据库事务锁，调用方需已开启事务。 */
+    public void lockUserForWrite(Long userId) {
+        photographyAccountingService.lockUserForWrite(userId);
+    }
+
     /** 校验现金账户（归属+现金类型+可用），失败抛 IllegalArgumentException */
     public CashAccountView requireCashAccount(Long userId, Long accountId) {
         AccountEntity account = photographyAccountingService.requireCashAccount(userId, accountId);

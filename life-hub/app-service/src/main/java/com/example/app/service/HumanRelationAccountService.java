@@ -106,6 +106,7 @@ public class HumanRelationAccountService {
 
     @Transactional
     public HumanRelationRecordResponse createRecord(HumanRelationRecordRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         String direction = requireDirection(request.getDirection());
         AccountEntity account = requireHumanRelationAccount(request.getUserId(), request.getAccountId());
         AccountEntity fundingAccount = findCashFundingAccount(request.getUserId(), request.getFundingAccountId());
@@ -130,6 +131,7 @@ public class HumanRelationAccountService {
 
     @Transactional
     public Optional<HumanRelationRecordResponse> updateRecord(Long id, HumanRelationRecordRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         HumanRelationRecordEntity entity = humanRelationRecordMapper.selectById(id);
         if (entity == null || !ACTIVE_STATUS.equals(entity.getStatus()) || !request.getUserId().equals(entity.getUserId())) {
             return Optional.empty();
@@ -158,6 +160,7 @@ public class HumanRelationAccountService {
 
     @Transactional
     public boolean deleteRecord(Long id, Long userId) {
+        accountMapper.lockUserForWrite(userId);
         HumanRelationRecordEntity entity = humanRelationRecordMapper.selectById(id);
         if (entity == null || !ACTIVE_STATUS.equals(entity.getStatus()) || !userId.equals(entity.getUserId())) {
             return false;
@@ -278,19 +281,15 @@ public class HumanRelationAccountService {
     }
 
     private void deductFundingAccount(AccountEntity account, BigDecimal amount) {
-        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
-        BigDecimal nextBalance = currentBalance.subtract(amount.setScale(2, RoundingMode.HALF_UP));
-        if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
+        if (accountMapper.subtractBalanceIfSufficient(account.getId(), amount.setScale(2, RoundingMode.HALF_UP)) == 0) {
             throw new IllegalArgumentException("现金账户余额不足");
         }
-        account.setCurrentBalance(nextBalance);
-        accountMapper.updateById(account);
     }
 
     private void creditFundingAccount(AccountEntity account, BigDecimal amount) {
-        BigDecimal currentBalance = account.getCurrentBalance() == null ? BigDecimal.ZERO : account.getCurrentBalance();
-        account.setCurrentBalance(currentBalance.add(amount.setScale(2, RoundingMode.HALF_UP)).setScale(2, RoundingMode.HALF_UP));
-        accountMapper.updateById(account);
+        if (accountMapper.addBalance(account.getId(), amount.setScale(2, RoundingMode.HALF_UP)) == 0) {
+            throw new IllegalArgumentException("现金账户不存在");
+        }
     }
 
     private HumanRelationRecordResponse toResponse(

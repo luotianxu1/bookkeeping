@@ -1,10 +1,14 @@
 package com.example.common.util;
 
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 /**
- * 统一 Keyed TTL 缓存：TTL + 按 key 串行 single-flight + 失败降级 + maxSize。
+ * 统一 Keyed TTL 缓存：TTL + 固定分段锁 single-flight + 失败降级 + LRU 容量限制。
+ * 同 key 的回源串行，哈希落在同一分段的不同 key 也会串行；锁数量不随历史 key 增长。
  * <p>
  * - 失败降级：loader 抛异常时，有旧值则在 failureTtl 窗口内回吐旧值；无旧值则记 null 负条目，
  *   窗口过后自动重试（避免故障期间高频回源打挂下游）。
@@ -16,38 +20,48 @@ public class KeyedTtlCache<K, V> {
     private final long ttlMillis;
     private final long failureTtlMillis;
     private final int maxSize;
-    private final ConcurrentHashMap<K, Entry<V>> map = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<K, Object> keyLocks = new ConcurrentHashMap<>();
+    // 固定数量的锁，不随访问过的 key 数增长。map 锁只保护内存操作，不包裹回源。
+    private final Object[] stripes = new Object[256];
+    private final Map<K, Entry<V>> map = new LinkedHashMap<>(16, 0.75f, true);
+    private final LongSupplier clock;
 
-    private record Entry<V>(V value, long validUntil, boolean stale) {
+    private record Entry<V>(V value, long validUntil) {
     }
 
     public KeyedTtlCache(long ttlMillis, long failureTtlMillis, int maxSize) {
+        this(ttlMillis, failureTtlMillis, maxSize, System::currentTimeMillis);
+    }
+
+    KeyedTtlCache(long ttlMillis, long failureTtlMillis, int maxSize, LongSupplier clock) {
         this.ttlMillis = ttlMillis;
         this.failureTtlMillis = failureTtlMillis;
         this.maxSize = maxSize;
+        this.clock = clock;
+        for (int i = 0; i < stripes.length; i++) stripes[i] = new Object();
     }
 
     public V get(K key, Function<K, V> loader) {
-        Entry<V> entry = map.get(key);
-        if (entry != null && System.currentTimeMillis() < entry.validUntil()) {
+        Objects.requireNonNull(key);
+        Entry<V> entry = entry(key);
+        if (entry != null && clock.getAsLong() < entry.validUntil()) {
             return entry.value();
         }
-        Object lock = keyLocks.computeIfAbsent(key, k -> new Object());
+        int hash = key.hashCode();
+        Object lock = stripes[(hash ^ (hash >>> 16)) & (stripes.length - 1)];
         synchronized (lock) {
             // double-check：等锁期间同 key 可能已被其他线程回源
-            entry = map.get(key);
-            long now = System.currentTimeMillis();
+            entry = entry(key);
+            long now = clock.getAsLong();
             if (entry != null && now < entry.validUntil()) {
                 return entry.value();
             }
             try {
-                V value = loader.apply(key);
-                put(key, new Entry<>(value, now + ttlMillis, false));
+                V value = Objects.requireNonNull(loader.apply(key), "cache loader returned null");
+                put(key, new Entry<>(value, clock.getAsLong() + ttlMillis));
                 return value;
             } catch (Exception ex) {
                 V stale = entry == null ? null : entry.value();
-                put(key, new Entry<>(stale, now + failureTtlMillis, true));
+                put(key, new Entry<>(stale, clock.getAsLong() + failureTtlMillis));
                 return stale;
             }
         }
@@ -55,18 +69,25 @@ public class KeyedTtlCache<K, V> {
 
     /** 当前未过期（含失败降级窗口内）的值，不回源；无则返回 null */
     public V peek(K key) {
-        Entry<V> entry = map.get(key);
-        return entry != null && System.currentTimeMillis() < entry.validUntil() ? entry.value() : null;
+        Entry<V> entry = entry(key);
+        return entry != null && clock.getAsLong() < entry.validUntil() ? entry.value() : null;
+    }
+
+    private Entry<V> entry(K key) {
+        synchronized (map) {
+            return map.get(key);
+        }
     }
 
     private void put(K key, Entry<V> entry) {
-        if (maxSize > 0 && !map.containsKey(key) && map.size() >= maxSize) {
-            long now = System.currentTimeMillis();
-            map.values().removeIf(e -> now >= e.validUntil());
-            if (map.size() >= maxSize) {
-                map.clear();
+        synchronized (map) {
+            map.put(key, entry);
+            // 只淘汰最久未访问的条目，避免整表清空引起集中回源。
+            while (maxSize > 0 && map.size() > maxSize) {
+                var iterator = map.keySet().iterator();
+                iterator.next();
+                iterator.remove();
             }
         }
-        map.put(key, entry);
     }
 }

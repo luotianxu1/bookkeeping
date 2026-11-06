@@ -154,12 +154,12 @@ public class TransactionService {
         // 排序、过滤、分页全部下推数据库：UNION ALL 三表后由 SQL 完成 ORDER BY + LIMIT，
         // 仅对当页数据批量补齐账户/分类信息，避免全量加载内存后排序分页
         if (!emptyResult) {
-            total = transactionMapper.countMerged(userIds, type, accountId, startTime, endTime, cashAccountIds);
+            var sums = transactionMapper.summarizeMerged(
+                userIds, type, accountId, startTime, endTime, cashAccountIds);
+            total = sums.getTotal();
             if (total > 0) {
-                Map<String, Object> sums = transactionMapper.sumMerged(
-                    userIds, type, accountId, startTime, endTime, cashAccountIds);
-                incomeTotal = toBigDecimal(sums.get("incomeTotal"));
-                expenseTotal = toBigDecimal(sums.get("expenseTotal"));
+                incomeTotal = sums.getIncomeTotal();
+                expenseTotal = sums.getExpenseTotal();
 
                 int totalPages = (int) Math.ceil((double) total / normalizedPageSize);
                 int resolvedPage = Math.min(normalizedPage, totalPages);
@@ -193,17 +193,18 @@ public class TransactionService {
         }
 
         String normalizedPeriod = normalizePeriod(period);
-        Set<Long> cashAccountIds = loadCashAccountIds(userId);
-        List<TransactionResponse> cashTransactions = list(userId, null, null).stream()
-            .filter(transaction -> transaction.getAccountId() != null && cashAccountIds.contains(transaction.getAccountId()))
-            .toList();
+        YearMonth selectedMonth = PERIOD_YEAR.equals(normalizedPeriod) ? null : parseMonth(month);
+        int selectedYear = PERIOD_YEAR.equals(normalizedPeriod)
+            ? (year == null ? LocalDate.now().getYear() : year) : selectedMonth.getYear();
+        LocalDate startDate = selectedMonth == null ? LocalDate.of(selectedYear, 1, 1) : selectedMonth.atDay(1);
+        LocalDate endDate = selectedMonth == null ? LocalDate.of(selectedYear, 12, 31) : selectedMonth.atEndOfMonth();
+        List<TransactionResponse> cashTransactions = listMergedCashTransactions(List.of(userId), startDate, endDate);
 
         TransactionAnalysisResponse response = new TransactionAnalysisResponse();
         response.setUserId(userId);
         response.setPeriod(normalizedPeriod);
 
         if (PERIOD_YEAR.equals(normalizedPeriod)) {
-            int selectedYear = year == null ? LocalDate.now().getYear() : year;
             response.setYear(selectedYear);
 
             List<TransactionResponse> selectedTransactions = filterTransactionsByYear(cashTransactions, selectedYear);
@@ -215,7 +216,6 @@ public class TransactionService {
             return response;
         }
 
-        YearMonth selectedMonth = parseMonth(month);
         response.setMonth(selectedMonth.toString());
         response.setYear(selectedMonth.getYear());
 
@@ -230,6 +230,7 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse create(TransactionRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         String type = normalizeTransactionType(request.getType());
         if (TYPE_TRANSFER.equals(type)) {
             return createTransfer(request);
@@ -260,6 +261,7 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse createTransfer(TransactionRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         AccountEntity fromAccount = requireTransferAccounts(request);
         AccountEntity toAccount = requireCashAccount(request.getUserId(), request.getToAccountId());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
@@ -285,6 +287,7 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse update(Long id, TransactionRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         TransactionEntity transaction = requireEditableTransaction(id, request.getUserId());
         String newType = normalizeTransactionType(request.getType());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
@@ -333,6 +336,7 @@ public class TransactionService {
 
     @Transactional
     public boolean delete(Long id, Long userId) {
+        accountMapper.lockUserForWrite(userId);
         TransactionEntity transaction = transactionMapper.selectById(id);
         if (transaction == null || !DEFAULT_STATUS.equals(transaction.getStatus()) || !userId.equals(transaction.getUserId())) {
             return false;
@@ -748,16 +752,6 @@ public class TransactionService {
             ? null
             : accounts.get(row.getToAccountId()) == null ? null : accounts.get(row.getToAccountId()).getName());
         return response;
-    }
-
-    private BigDecimal toBigDecimal(Object value) {
-        if (value instanceof BigDecimal decimal) {
-            return decimal;
-        }
-        if (value instanceof Number number) {
-            return BigDecimal.valueOf(number.doubleValue());
-        }
-        return BigDecimal.ZERO;
     }
 
     private List<DebtRecordEntity> loadDebtRecords(Long userId, String type, Long accountId) {

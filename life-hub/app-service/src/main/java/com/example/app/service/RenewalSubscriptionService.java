@@ -16,6 +16,8 @@ import com.example.app.mapper.RenewalSubscriptionMapper;
 import com.example.app.mapper.TransactionMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -62,19 +64,22 @@ public class RenewalSubscriptionService {
     private final AccountTypeMapper accountTypeMapper;
     private final CategoryMapper categoryMapper;
     private final TransactionMapper transactionMapper;
+    private final TransactionTemplate transactionTemplate;
 
     public RenewalSubscriptionService(
         RenewalSubscriptionMapper renewalSubscriptionMapper,
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         CategoryMapper categoryMapper,
-        TransactionMapper transactionMapper
+        TransactionMapper transactionMapper,
+        PlatformTransactionManager transactionManager
     ) {
         this.renewalSubscriptionMapper = renewalSubscriptionMapper;
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.categoryMapper = categoryMapper;
         this.transactionMapper = transactionMapper;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     public List<RenewalSubscriptionResponse> list(Long userId, String status) {
@@ -141,6 +146,7 @@ public class RenewalSubscriptionService {
 
     @Transactional
     public RenewalSubscriptionResponse create(RenewalSubscriptionRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         AccountEntity fundingAccount = requireCashAccount(request.getUserId(), request.getFundingAccountId());
         CategoryEntity category = requireExpenseLeafCategory(request.getUserId(), request.getCategoryId());
 
@@ -152,6 +158,7 @@ public class RenewalSubscriptionService {
 
     @Transactional
     public Optional<RenewalSubscriptionResponse> update(Long id, RenewalSubscriptionRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         RenewalSubscriptionEntity entity = renewalSubscriptionMapper.selectById(id);
         if (entity == null || STATUS_CANCELLED.equals(entity.getStatus()) || !request.getUserId().equals(entity.getUserId())) {
             return Optional.empty();
@@ -166,6 +173,7 @@ public class RenewalSubscriptionService {
 
     @Transactional
     public Optional<RenewalSubscriptionResponse> pause(Long id, Long userId) {
+        accountMapper.lockUserForWrite(userId);
         RenewalSubscriptionEntity entity = renewalSubscriptionMapper.selectById(id);
         if (entity == null || STATUS_CANCELLED.equals(entity.getStatus()) || !userId.equals(entity.getUserId())) {
             return Optional.empty();
@@ -177,6 +185,7 @@ public class RenewalSubscriptionService {
 
     @Transactional
     public Optional<RenewalSubscriptionResponse> resume(Long id, Long userId) {
+        accountMapper.lockUserForWrite(userId);
         RenewalSubscriptionEntity entity = renewalSubscriptionMapper.selectById(id);
         if (entity == null || STATUS_CANCELLED.equals(entity.getStatus()) || !userId.equals(entity.getUserId())) {
             return Optional.empty();
@@ -191,6 +200,7 @@ public class RenewalSubscriptionService {
 
     @Transactional
     public boolean delete(Long id, Long userId) {
+        accountMapper.lockUserForWrite(userId);
         RenewalSubscriptionEntity entity = renewalSubscriptionMapper.selectById(id);
         if (entity == null || !userId.equals(entity.getUserId())) {
             return false;
@@ -209,8 +219,17 @@ public class RenewalSubscriptionService {
             .toList();
     }
 
-    @Transactional
     public void processDueSubscription(Long subscriptionId) {
+        // 在事务外只读归属；锁内重读到期状态，避免重复扣费或覆盖暂停操作。
+        RenewalSubscriptionEntity original = renewalSubscriptionMapper.selectById(subscriptionId);
+        if (original == null) return;
+        transactionTemplate.executeWithoutResult(status -> {
+            accountMapper.lockUserForWrite(original.getUserId());
+            chargeDueSubscription(subscriptionId);
+        });
+    }
+
+    private void chargeDueSubscription(Long subscriptionId) {
         RenewalSubscriptionEntity entity = renewalSubscriptionMapper.selectById(subscriptionId);
         if (entity == null || !STATUS_ACTIVE.equals(entity.getStatus()) || entity.getNextBillingDate() == null) {
             return;
@@ -227,9 +246,9 @@ public class RenewalSubscriptionService {
             AccountEntity fundingAccount = requireCashAccount(entity.getUserId(), entity.getFundingAccountId());
             CategoryEntity category = requireChargeCategory(entity);
             BigDecimal amount = normalizeAmount(entity.getAmount());
-            BigDecimal nextBalance = resolveNextFundingAccountBalance(fundingAccount, amount);
+            resolveNextFundingAccountBalance(fundingAccount, amount);
 
-            // 写入阶段：此后不再抛出 IllegalArgumentException，避免流水与余额不一致
+            // 写入阶段：此后任何失败都由事务回滚，避免流水与余额不一致。
             TransactionEntity transaction = new TransactionEntity();
             transaction.setTransactionNo(generateTransactionNo());
             transaction.setUserId(entity.getUserId());
@@ -245,7 +264,9 @@ public class RenewalSubscriptionService {
             hasWritten = true;
             transactionMapper.insert(transaction);
 
-            applyFundingAccountBalance(fundingAccount, nextBalance);
+            if (accountMapper.subtractBalanceIfSufficient(fundingAccount.getId(), amount) == 0) {
+                throw new IllegalArgumentException("扣款账户余额不足");
+            }
 
             entity.setLastChargedAt(LocalDateTime.now(SHANGHAI_ZONE_ID));
             entity.setLastTransactionId(transaction.getId());
@@ -418,11 +439,6 @@ public class RenewalSubscriptionService {
             throw new IllegalArgumentException("扣款账户余额不足");
         }
         return nextBalance.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private void applyFundingAccountBalance(AccountEntity fundingAccount, BigDecimal nextBalance) {
-        fundingAccount.setCurrentBalance(nextBalance);
-        accountMapper.updateById(fundingAccount);
     }
 
     private String normalizeListStatus(String status) {

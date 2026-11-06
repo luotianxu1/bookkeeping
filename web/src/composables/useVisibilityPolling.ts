@@ -1,55 +1,59 @@
-import { onBeforeUnmount } from 'vue'
+import { onActivated, onBeforeUnmount, onDeactivated } from 'vue'
 
 type PollingOptions = {
-  /** 页面不可见时跳过回调（默认 true） */
   requireVisible?: boolean
-  /** 从不可见恢复可见时立即执行一次（默认 true，仅 requireVisible 时生效） */
   refreshOnVisible?: boolean
 }
 
-/**
- * 组件级可见性感知轮询：统一「setInterval + visibility 检查 + 恢复可见立即刷新 + 卸载清理」模板。
- *
- * - 页面隐藏时跳过回调（requireVisible）
- * - 恢复可见时立即执行一次，避免回到页面要等一个完整周期才刷新（refreshOnVisible）
- * - 组件卸载自动清理定时器与 visibilitychange 监听
- *
- * 须在 setup() 中同步调用；返回的 stop() 可提前停止（幂等）。
- */
+/** 标签页隐藏或 KeepAlive 页面停用时暂停；恢复时刷新，同一回调最多一个在途请求。 */
 export function useVisibilityPolling(
-  callback: () => void,
+  callback: () => void | Promise<void>,
   intervalMs: number,
   options: PollingOptions = {},
 ) {
   const requireVisible = options.requireVisible ?? true
   const refreshOnVisible = options.refreshOnVisible ?? true
   let timer: number | null = null
+  let active = false
+  let stopped = false
+  let running = false
 
-  const run = () => {
-    if (!requireVisible || document.visibilityState === 'visible') {
-      callback()
+  const run = async () => {
+    if (!active || stopped || running || (requireVisible && document.visibilityState !== 'visible')) return
+    running = true
+    try {
+      await callback()
+    } catch (error) {
+      // 页面通常自行显示错误；仍保护定时器免于未处理的 Promise rejection。
+      console.error('轮询刷新失败', error)
+    } finally {
+      running = false
     }
   }
-
   const handleVisibilityChange = () => {
-    if (refreshOnVisible && document.visibilityState === 'visible') {
-      callback()
-    }
+    if (refreshOnVisible && document.visibilityState === 'visible') void run()
   }
-
-  const stop = () => {
-    if (timer !== null) {
-      window.clearInterval(timer)
-      timer = null
-    }
+  const pause = () => {
+    active = false
+    if (timer !== null) window.clearInterval(timer)
+    timer = null
     document.removeEventListener('visibilitychange', handleVisibilityChange)
   }
-
-  timer = window.setInterval(run, intervalMs)
-  if (requireVisible && refreshOnVisible) {
-    document.addEventListener('visibilitychange', handleVisibilityChange)
+  const start = (refresh: boolean) => {
+    if (stopped || active) return
+    active = true
+    timer = window.setInterval(() => void run(), intervalMs)
+    if (requireVisible && refreshOnVisible) document.addEventListener('visibilitychange', handleVisibilityChange)
+    if (refresh) void run()
   }
-  onBeforeUnmount(stop)
+  const stop = () => {
+    stopped = true
+    pause()
+  }
 
+  start(false)
+  onActivated(() => start(true))
+  onDeactivated(pause)
+  onBeforeUnmount(stop)
   return { stop }
 }

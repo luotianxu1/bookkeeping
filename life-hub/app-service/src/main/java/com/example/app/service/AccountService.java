@@ -216,7 +216,9 @@ public class AccountService {
         return resolveOverviewBalance(account, accountType).setScale(2, RoundingMode.HALF_UP);
     }
 
+    @Transactional
     public AccountResponse create(AccountRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         AccountTypeEntity accountType = requireAccountType(request.getAccountTypeId());
         validateContactRequired(accountType, request.getContactId());
         validateDebtAccountContactUnique(accountType, request.getUserId(), request.getContactId(), null);
@@ -231,6 +233,7 @@ public class AccountService {
 
     @Transactional
     public Optional<AccountResponse> update(Long id, AccountRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         AccountEntity entity = accountMapper.selectById(id);
         if (entity == null) {
             return Optional.empty();
@@ -251,6 +254,7 @@ public class AccountService {
 
     @Transactional
     public void updateSortOrders(AccountSortOrderRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         // 一次批量取回全部账户，避免循环内逐条 select 的 N+1 查询
         List<Long> ids = request.getItems().stream().map(AccountSortOrderRequest.AccountSortOrderItem::getId).toList();
         Map<Long, AccountEntity> accountMap = ids.isEmpty()
@@ -262,13 +266,16 @@ public class AccountService {
             if (account == null || !request.getUserId().equals(account.getUserId())) {
                 throw new IllegalArgumentException("账户不存在");
             }
-            account.setSortOrder(item.getSortOrder());
-            accountMapper.updateById(account);
+            AccountEntity sortUpdate = new AccountEntity();
+            sortUpdate.setId(account.getId());
+            sortUpdate.setSortOrder(item.getSortOrder());
+            accountMapper.updateById(sortUpdate);
         }
     }
 
     @Transactional
     public boolean delete(Long id) {
+        accountMapper.lockUserForWrite(SecurityUtils.requireCurrentUserId());
         AccountEntity account = accountMapper.selectById(id);
         if (account == null) {
             return false;

@@ -179,23 +179,18 @@
         ) merged
         <choose>
             <when test="sortOrder != null and sortOrder == 'asc'">
-                ORDER BY occurredAt ASC, sourceId ASC
+                ORDER BY occurredAt ASC, sourceId ASC, sourceType ASC
             </when>
             <otherwise>
-                ORDER BY occurredAt DESC, sourceId DESC
+                ORDER BY occurredAt DESC, sourceId DESC, sourceType DESC
             </otherwise>
         </choose>
         LIMIT #{offset}, #{pageSize}
     </select>
 
-    <select id="countMerged" resultType="long">
-        SELECT COUNT(*) FROM (
-            <include refid="mergedBranches"/>
-        ) merged
-    </select>
-
-    <select id="sumMerged" resultType="java.util.HashMap">
+    <select id="summarizeMerged" resultType="com.example.app.dto.TransactionAggregate">
         SELECT
+            COUNT(*) AS total,
             COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS incomeTotal,
             COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS expenseTotal
         FROM (

@@ -1,4 +1,4 @@
-// 投资详情页的交易记录分页逻辑（状态 + 翻页加载）。
+// 首次加载和翻页共享取消、错误与序号保护，避免刷新后迟到的旧页覆盖新数据。
 import { computed, ref, watch, type ComputedRef } from 'vue'
 import {
   getInvestmentTransactionPage,
@@ -6,20 +6,18 @@ import {
   type InvestmentTransactionPage,
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
-import { getErrorMessage } from '@/api/request'
+import { useAsyncSection } from '@/composables/useAsyncSection'
 import { TRANSACTION_PAGE_SIZE } from './utils'
 
 export function useTransactionPagination(options: {
   positionId: ComputedRef<number | null>
-  showFeedback: (message: string, type: 'success' | 'error') => void
 }) {
-  const { positionId, showFeedback } = options
-
+  const { positionId } = options
   const currentTransactionPage = ref(1)
   const transactionPageItems = ref<InvestmentTransaction[]>([])
   const transactionTotal = ref(0)
   const transactionPageSize = ref(TRANSACTION_PAGE_SIZE)
-  const isLoadingTransactionPage = ref(false)
+  let requestedPage = 1
 
   const totalTransactionPages = computed(() => Math.max(1, Math.ceil(transactionTotal.value / transactionPageSize.value)))
   const transactionPaginationSummary = computed(() =>
@@ -28,12 +26,6 @@ export function useTransactionPagination(options: {
   const canGoPrevTransactionPage = computed(() => currentTransactionPage.value > 1)
   const canGoNextTransactionPage = computed(() => currentTransactionPage.value < totalTransactionPages.value)
 
-  watch(totalTransactionPages, (totalPages) => {
-    if (currentTransactionPage.value > totalPages) {
-      currentTransactionPage.value = totalPages
-    }
-  })
-
   function applyTransactionPage(pageData: InvestmentTransactionPage) {
     transactionPageItems.value = pageData.items ?? []
     transactionTotal.value = Number(pageData.total ?? 0)
@@ -41,57 +33,53 @@ export function useTransactionPagination(options: {
     currentTransactionPage.value = Math.max(1, Number(pageData.page || 1))
   }
 
-  async function loadTransactionPage(page: number) {
-    if (isLoadingTransactionPage.value || !positionId.value) {
-      return
-    }
-    const currentUser = getStoredCurrentUser()
-    if (!currentUser) {
-      applyTransactionPage({ items: [], total: 0, page: 1, pageSize: TRANSACTION_PAGE_SIZE, totalPages: 1 })
-      return
-    }
-
-    isLoadingTransactionPage.value = true
-    try {
-      const pageData = await getInvestmentTransactionPage({
+  const section = useAsyncSection(
+    (signal) => {
+      const currentUser = getStoredCurrentUser()
+      if (!currentUser || !positionId.value) throw new Error('请先登录并选择投资资产')
+      return getInvestmentTransactionPage({
         userId: currentUser.id,
         positionId: positionId.value,
-        page,
+        page: requestedPage,
         pageSize: TRANSACTION_PAGE_SIZE,
-      })
-      applyTransactionPage(pageData)
-    } catch (error) {
-      showFeedback(getErrorMessage(error, '交易记录加载失败'), 'error')
-    } finally {
-      isLoadingTransactionPage.value = false
-    }
+      }, { signal })
+    },
+    applyTransactionPage,
+    '交易记录加载失败',
+  )
+
+  function resetTransactionPage() {
+    section.reset()
+    requestedPage = 1
+    applyTransactionPage({ items: [], total: 0, page: 1, pageSize: TRANSACTION_PAGE_SIZE, totalPages: 1 })
+  }
+  watch(positionId, resetTransactionPage, { flush: 'sync' })
+
+  async function loadTransactionPage(page = requestedPage) {
+    if (section.loading.value) return
+    requestedPage = page
+    await section.run()
   }
 
   function goToPrevTransactionPage() {
-    if (!canGoPrevTransactionPage.value || isLoadingTransactionPage.value) {
-      return
-    }
-    void loadTransactionPage(currentTransactionPage.value - 1)
+    if (canGoPrevTransactionPage.value) void loadTransactionPage(currentTransactionPage.value - 1)
   }
 
   function goToNextTransactionPage() {
-    if (!canGoNextTransactionPage.value || isLoadingTransactionPage.value) {
-      return
-    }
-    void loadTransactionPage(currentTransactionPage.value + 1)
+    if (canGoNextTransactionPage.value) void loadTransactionPage(currentTransactionPage.value + 1)
   }
 
   return {
     currentTransactionPage,
     transactionPageItems,
     transactionTotal,
-    transactionPageSize,
-    isLoadingTransactionPage,
+    isLoadingTransactionPage: section.loading,
+    transactionError: section.error,
     totalTransactionPages,
     transactionPaginationSummary,
     canGoPrevTransactionPage,
     canGoNextTransactionPage,
-    applyTransactionPage,
+    resetTransactionPage,
     loadTransactionPage,
     goToPrevTransactionPage,
     goToNextTransactionPage,

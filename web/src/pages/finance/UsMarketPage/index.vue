@@ -371,7 +371,7 @@ function renderAllCards() {
 }
 
 // 可见性感知轮询：隐藏时跳过，恢复可见立即刷新
-useVisibilityPolling(() => void refresh(), REFRESH_INTERVAL_MS)
+useVisibilityPolling(() => refresh(), REFRESH_INTERVAL_MS)
 
 function onResize() {
   chartInstances.forEach((instance) => instance.resize())

@@ -131,6 +131,7 @@ public class PhotographyOrderService {
 
     @Transactional
     public PhotographyOrderResponse create(PhotographyOrderRequest request) {
+        financeClient.lockUserForWrite(request.getUserId());
         String orderType = normalizeOrderType(request.getOrderType());
         BigDecimal totalAmount = normalizeAmount(request.getTotalAmount(), "总金额");
         BigDecimal depositAmount = normalizeAmount(request.getDepositAmount(), "订金");
@@ -174,6 +175,7 @@ public class PhotographyOrderService {
 
     @Transactional
     public Optional<PhotographyOrderResponse> update(Long id, PhotographyOrderRequest request) {
+        financeClient.lockUserForWrite(request.getUserId());
         PhotographyOrderEntity entity = photographyOrderMapper.selectById(id);
         if (entity == null || !request.getUserId().equals(entity.getUserId())) {
             return Optional.empty();
@@ -239,6 +241,7 @@ public class PhotographyOrderService {
 
     @Transactional
     public PhotographyOrderResponse collectFinal(Long id, PhotographyOrderCollectFinalRequest request) {
+        financeClient.lockUserForWrite(request.getUserId());
         PhotographyOrderEntity entity = requireOrder(id, request.getUserId());
         if (STATUS_CANCELLED.equals(entity.getStatus())) {
             throw new IllegalArgumentException("该订单已取消拍摄");
@@ -280,6 +283,7 @@ public class PhotographyOrderService {
 
     @Transactional
     public PhotographyOrderResponse cancel(Long id, Long userId) {
+        financeClient.lockUserForWrite(userId);
         PhotographyOrderEntity entity = requireOrder(id, userId);
         if (STATUS_CANCELLED.equals(entity.getStatus())) {
             throw new IllegalArgumentException("该订单已取消拍摄");
@@ -297,6 +301,7 @@ public class PhotographyOrderService {
 
     @Transactional
     public boolean delete(Long id, Long userId) {
+        financeClient.lockUserForWrite(userId);
         PhotographyOrderEntity entity = photographyOrderMapper.selectById(id);
         if (entity == null || !userId.equals(entity.getUserId())) {
             return false;

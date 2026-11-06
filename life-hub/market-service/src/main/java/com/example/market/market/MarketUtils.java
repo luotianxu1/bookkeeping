@@ -64,7 +64,7 @@ public final class MarketUtils {
      *
      * @param ttlMillis        成功回源的有效期
      * @param failureTtlMillis 失败降级条目（stale/null）的有效期，窗口过后重试
-     * @param maxSize          容量上限；满时先清过期条目，仍满则整体清空（0 = 不限）
+     * @param maxSize          容量上限；满时按 LRU 淘汰最久未访问的条目（0 = 不限）
      */
     public static final class KeyedTtlCache<K, V> extends com.example.common.util.KeyedTtlCache<K, V> {
         public KeyedTtlCache(long ttlMillis, long failureTtlMillis, int maxSize) {

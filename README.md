@@ -1,6 +1,6 @@
 # Life Hub
 
-个人生活管理项目：记账、投资行情、实用工具（待办/摄影/旅行/健康）、餐饮管理。包含 Vue 3 移动端前端、Spring Boot 双服务后端（认证 + 业务）和 MySQL 初始化脚本。
+个人生活管理项目：记账、投资行情、实用工具（待办/摄影/旅行/健康）、餐饮管理。包含 Vue 3 移动端前端、Spring Boot 三服务后端（认证 + 业务 + 行情）和 MySQL 初始化脚本。
 
 ## 项目结构
 
@@ -81,7 +81,7 @@ http://localhost:8083/doc.html
 
 - JDK 17
 - Maven 3.8+
-- Node.js 18+
+- Node.js 22 LTS（CI 使用 22）
 - pnpm 9.12.1
 - MySQL 8.0+
 
@@ -112,9 +112,9 @@ mysql -u root -p < database/001_create_database_and_users.mysql.sql
 继续按数字顺序导入剩余脚本：
 
 ```bash
-for f in database/[0-9][0-9][0-9]_*.mysql.sql database/[0-9][0-9][0-9]_*.sql; do
-  [ -f "$f" ] && mysql -u root -p bookkeeping_app < "$f"
-done
+mysql -u root -p bookkeeping_app < database/002_create_account_types.mysql.sql
+mysql -u root -p bookkeeping_app < database/003_create_accounts.mysql.sql
+# 继续按编号执行尚未导入的脚本；001 已执行，无需重复。
 ```
 
 如果脚本已经执行过，再次执行可能会提示表或字段已存在；这种情况需要根据当前数据库状态选择尚未执行的脚本。
@@ -126,7 +126,8 @@ done
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
 | `JWT_SECRET` | **是（必填）** | JWT 签名密钥，至少 32 字节；**所有服务必须一致**。未设置时服务启动直接失败（配置中无默认值） |
-| `DB_PASSWORD` | 是 | MySQL `root` 用户密码 |
+| `DB_PASSWORD` | auth/app 必填 | MySQL `root` 用户密码；market-service 无数据库依赖 |
+| `MARKET_AUTH_BASE_URL` | 按需 | 行情中心访问认证服务的地址，默认 `http://localhost:8081` |
 | `INTERNAL_API_KEY` | 生产必填 | 服务间内部接口（`/api/internal/**`）鉴权密钥，**各服务必须同值**；本地开发有默认值 `dev-internal-key` |
 | `AMAP_WEB_SERVICE_KEY` | 按需 | 高德 Web 服务 key，app-service 用于路线/地点代理；前端不再直调高德 |
 | `AUTH_COOKIE_SECURE` | https 部署时设 `true` | 登录 Cookie 加 `Secure` 标记 |
@@ -190,7 +191,7 @@ AppServiceApplication
 MarketServiceApplication
 ```
 
-每个启动配置都需要带环境变量。`.idea/runConfigurations/` 中已提交预置好环境变量的运行配置（`JWT_SECRET`、`DB_PASSWORD`，app-service 另有 `AMAP_WEB_SERVICE_KEY`；market-service 无需 DB/JWT），直接使用即可；若自行新建配置，至少要设置：
+运行配置保存在本机被 Git 忽略的 `.idea/` 中，仓库不提供含密钥的预置配置。三个服务都需要 `JWT_SECRET`，auth/app 另外需要 `DB_PASSWORD`；app-service 使用地图功能时还需 `AMAP_WEB_SERVICE_KEY`。例如：
 
 ```text
 DB_PASSWORD=你的MySQL密码
@@ -300,8 +301,9 @@ JWT 通过 `access_token` httpOnly Cookie（`SameSite=Lax`）随请求携带，*
 行情中心为纯行情聚合（新浪/腾讯/东财/纳斯达克公开源），认证体系与 app-service 完全一致：
 
 - `/api/market/**` 需登录（同一 `JWT_SECRET` 签发的 httpOnly Cookie，前端 `withCredentials` 自动携带）；`/api/internal/**` 走 `X-Internal-Key`；
-- 用户状态校验（`UserStatusChecker`）连同一 MySQL（`bookkeeping_app`），但无业务表，仅 jdbc 只读；
-- 前端经 `/market-api` 代理访问；`JWT_SECRET`/`DB_PASSWORD` 与 app-service 同值，无其他环境变量。
+- 自 2026-11-04 起不再依赖 JDBC/MySQL；用户状态与家庭范围经 auth-service 的内部接口查询，并使用短期本地缓存；
+- 前端经 `/market-api` 代理访问；`JWT_SECRET`、`INTERNAL_API_KEY` 与 auth/app 同值；`market.auth-base-url`（环境变量 `MARKET_AUTH_BASE_URL`）配置认证服务地址；
+- 金价主源为金投网（黄金9999 / 伦敦金 / 品牌首饰与走势），新浪作为降级源。
 
 ### 第三方 API 代理
 
@@ -325,7 +327,7 @@ https://luotianxu.dpdns.org  →  http://localhost:4173（Vite preview）
 | 隧道 ID | `e4c7f515-1bc2-4427-b905-202919103e51` |
 | 公网域名 | `luotianxu.dpdns.org` |
 | 回源地址 | `http://localhost:4173` |
-| 协议 | `http2`（本机网络限制 UDP/QUIC） |
+| 协议 | `auto`（QUIC 优先，网络限制时回退 http2） |
 | 配置文件 | `~/.cloudflared/config.yml` |
 | 凭证文件 | `~/.cloudflared/e4c7f515-1bc2-4427-b905-202919103e51.json` |
 
@@ -340,7 +342,7 @@ cloudflared tunnel run bookkeeping   # 或直接用 cloudflared（隧道名仍�
 cloudflared tunnel list
 ```
 
-API 请求无需单独暴露：前端页面经 Vite 代理（`/auth-api` 等）转发到本地 8081-8082，隧道只暴露 4173 一个入口。
+API 请求无需单独暴露：前端页面经 Vite 代理（`/auth-api` 等）转发到本地 8081-8083，隧道只暴露 4173 一个入口。
 
 开机自启（可选）：
 
@@ -356,23 +358,38 @@ cloudflared tunnel --url http://localhost:4173 --protocol http2
 
 会随机分配一个 `xxx.trycloudflare.com` 地址，重启后失效。
 
-注意：`vite.config.ts` 的 `preview.allowedHosts` 中已加入 `luotianxu.dpdns.org` 和 `.trycloudflare.com`，否则 Vite 会以 403 拦截这些域名的请求。
+注意：`vite.config.ts` 的 `preview.allowedHosts` 目前只允许 `luotianxu.dpdns.org`；使用临时隧道时，需添加该次分配的主机名。预览服务对带 hash 的静态资源设置长期 immutable 缓存，HTML 不缓存。
 
-## 测试
+## 数据一致性与加载策略
 
-后端目前测试较少，可按模块运行：
+- 账务写入先在事务内锁定 `users` 对应行，再读取与修改账户、流水或持仓；普通记账、投资、借还款、人情往来、自动扣费与摄影入账共用此约定。不同用户可并发，同一用户的写入串行；现金增减使用原子 SQL。
+- 基金/股票报价和赎回费率在写事务外预取；同步任务在锁内重读持仓/交易状态，避免覆盖手动交易或重复确认、分红。定投和自动扣费也在锁内复核执行日期。
+- 投资详情先返回本地数据；费率通过 `/api/finance/investments/fund-redeem-fees?code=000001` 单独读取。前端详情、完整交易历史、分页列表、计划、账户、行情与费率分别维护加载与错误状态，支持局部重试。完整历史保留用于交易标记和累计收益计算。
+- 分析查询在 SQL 层限定所选月/年；分页总数与收支合计共享一次聚合查询。`InvestmentFundFeeService` 与 `InvestmentPositionAccounting` 分别承担费率/FIFO 和持仓数值计算。
+- `common.util.KeyedTtlCache` 使用 256 个固定分段锁及 LRU 容量淘汰，成功/失败 TTL 从回源结束开始计时；失败时保留旧值或负缓存。哈希落在同一分段的 key 会串行回源。
+- `useVisibilityPolling` 在隐藏标签页或 KeepAlive 页面停用时暂停刷新，恢复时刷新；异步回调需返回 Promise，以防同一轮询任务重叠。
+
+## 测试与 CI
+
+后端使用 JUnit 5、Mockito 与独立 H2 内存库，覆盖资金回滚/并发、持仓买卖/结算、重复分红/扣费、FIFO 费率、缓存和身份范围。测试使用生产 Mapper 与事务，不依赖开发库或真实行情接口。H2 的 MySQL 模式不能替代真实 MySQL 集成验证。
 
 ```bash
-cd "/Users/luotianxu/Documents/New project/life-hub"
-mvn test -pl app-service
+cd life-hub
+mvn -B -ntp clean verify
+# 只验证公共模块和业务模块：
+mvn test -pl common,app-service -am
 ```
 
-前端当前未配置专门的测试框架，可使用类型检查和构建验证：
+前端使用 Vitest + Vue Test Utils + jsdom，验证 KeepAlive/可见性轮询、独立区域失败重试、取消请求与分页旧响应隔离。
 
 ```bash
-cd "/Users/luotianxu/Documents/New project/web"
+cd web
+pnpm install --frozen-lockfile
+pnpm test
 pnpm build
 ```
+
+`.github/workflows/ci.yml` 在 push / pull request 时分别执行前后端验证：Java 17 + Maven 全模块 clean verify，以及 Node 22 + pnpm 9.12.1 的冻结依赖安装、测试和构建。无需数据库或行情密钥。
 
 ## 常见问题
 
@@ -388,13 +405,13 @@ Access denied for user 'root'@'localhost'
 
 ### 后端启动提示 Could not resolve placeholder 'JWT_SECRET'
 
-`JWT_SECRET` 现为必填项（配置中无默认值），为后端各服务的运行配置都设置该环境变量（market-service 除外）。
+`JWT_SECRET` 现为必填项（配置中无默认值），为三个后端服务的运行配置都设置该环境变量。
 
 ### 登录后接口 401
 
 确认：
 
-- `auth-service` 已启动，且两个后端服务使用同一个 `JWT_SECRET`；
+- `auth-service` 已启动，且三个后端服务使用同一个 `JWT_SECRET`；
 - 前后端同站访问（走 Vite 代理或同一域名），Cookie 才能随请求携带；
 - https 访问时已设置 `AUTH_COOKIE_SECURE=true`；
 - 旧版本登录留下的 localStorage token 已失效属预期——重新登录即可，系统会自动改用 Cookie。
@@ -409,7 +426,7 @@ IDEA 增量编译可能把损坏的 class 写进 `target/classes`（字节码内
 
 ### 生产部署检查清单
 
-- [ ] auth-service/app-service 设置 `JWT_SECRET`（同值，≥32 字节）与 `DB_PASSWORD`
+- [ ] 三个服务设置 `JWT_SECRET`（同值，≥32 字节）；auth-service/app-service 另设 `DB_PASSWORD`
 - [ ] 各服务设置 `INTERNAL_API_KEY`（同值，替换默认弱密钥）
 - [ ] https 环境设置 `AUTH_COOKIE_SECURE=true`
 - [ ] 设置 `KNIFE4J_PRODUCTION=true` 关闭接口文档

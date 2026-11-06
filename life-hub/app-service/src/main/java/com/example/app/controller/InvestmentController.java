@@ -24,6 +24,9 @@ import com.example.app.dto.FundProfitForecastResponse;
 import com.example.app.dto.FundProfitPageResponse;
 import com.example.app.service.InvestmentFundProfitService;
 import com.example.app.service.InvestmentService;
+import com.example.app.service.InvestmentFundFeeService;
+import com.example.app.dto.InvestmentFundRedeemFeeOptionResponse;
+import jakarta.validation.constraints.Pattern;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -51,10 +54,21 @@ public class InvestmentController {
 
     private final InvestmentService investmentService;
     private final InvestmentFundProfitService investmentFundProfitService;
+    private final InvestmentFundFeeService fundFeeService;
 
-    public InvestmentController(InvestmentService investmentService, InvestmentFundProfitService investmentFundProfitService) {
+    public InvestmentController(InvestmentService investmentService, InvestmentFundProfitService investmentFundProfitService,
+        InvestmentFundFeeService fundFeeService) {
         this.investmentService = investmentService;
         this.investmentFundProfitService = investmentFundProfitService;
+        this.fundFeeService = fundFeeService;
+    }
+
+    @GetMapping("/fund-redeem-fees")
+    @Operation(summary = "查询基金赎回费率（独立于持仓详情加载）")
+    public Result<List<InvestmentFundRedeemFeeOptionResponse>> fundRedeemFees(
+        @RequestParam("code") @Pattern(regexp = "\\d{6}") String code
+    ) {
+        return Result.ok(fundFeeService.buildFundRedeemFeeOptions(code));
     }
 
     @GetMapping("/products")

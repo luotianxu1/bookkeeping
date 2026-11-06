@@ -449,7 +449,7 @@ async function refreshCurrentGoldPrice() {
 }
 
 // 可见性感知轮询：隐藏时跳过，恢复可见立即刷新（不含走势图，减少开销）
-useVisibilityPolling(() => void loadGoldPriceWithOptions({ includeChart: false }), PRICE_REFRESH_INTERVAL_MS)
+useVisibilityPolling(() => loadGoldPriceWithOptions({ includeChart: false }), PRICE_REFRESH_INTERVAL_MS)
 
 function formatTime(value?: string) {
   if (!value) {

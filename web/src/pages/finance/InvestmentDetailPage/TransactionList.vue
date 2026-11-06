@@ -37,6 +37,7 @@ const emit = defineEmits<{
     </header>
 
     <section class="investment-detail-transactions-card">
+      <p v-if="isLoading" class="investment-detail-empty">交易记录加载中…</p>
       <article
         v-for="entry in items"
         :key="entry.id"
@@ -59,7 +60,7 @@ const emit = defineEmits<{
           />
         </div>
       </article>
-      <p v-if="total === 0" class="investment-detail-empty">暂无交易记录</p>
+      <p v-if="!isLoading && total === 0" class="investment-detail-empty">暂无交易记录</p>
 
       <div v-if="totalPages > 1" class="investment-detail-transactions-pagination" aria-label="交易记录分页">
         <button

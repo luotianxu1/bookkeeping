@@ -96,6 +96,7 @@ public class LiabilityAccountService {
 
     @Transactional
     public LiabilityRecordResponse createRecord(LiabilityRecordRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         AccountEntity account = requireLiabilityAccount(request.getUserId(), request.getAccountId());
         if (account.getLoanSettledAt() != null) {
             throw new IllegalArgumentException("该负债账户已结清，不能继续新增月账单");
@@ -128,6 +129,7 @@ public class LiabilityAccountService {
 
     @Transactional
     public Optional<LiabilityRecordResponse> updateRecord(Long id, LiabilityRecordRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         LiabilityRecordEntity entity = liabilityRecordMapper.selectById(id);
         if (entity == null || !ACTIVE_STATUS.equals(entity.getStatus()) || !request.getUserId().equals(entity.getUserId())) {
             return Optional.empty();
@@ -159,6 +161,7 @@ public class LiabilityAccountService {
 
     @Transactional
     public Optional<LiabilityRecordResponse> repayRecord(Long id, LiabilityRepaymentRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         LiabilityRecordEntity entity = liabilityRecordMapper.selectById(id);
         if (entity == null || !ACTIVE_STATUS.equals(entity.getStatus()) || !request.getUserId().equals(entity.getUserId())) {
             return Optional.empty();
@@ -176,6 +179,7 @@ public class LiabilityAccountService {
 
     @Transactional
     public void prepayAccount(Long accountId, LiabilityPrepaymentRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         AccountEntity account = requireLiabilityAccount(request.getUserId(), accountId);
         if (!hasLoanPlan(account)) {
             throw new IllegalArgumentException("当前负债账户尚未配置完整贷款合同");
@@ -225,6 +229,7 @@ public class LiabilityAccountService {
 
     @Transactional
     public boolean deleteRecord(Long id, Long userId) {
+        accountMapper.lockUserForWrite(userId);
         LiabilityRecordEntity entity = liabilityRecordMapper.selectById(id);
         if (entity == null || !ACTIVE_STATUS.equals(entity.getStatus()) || !userId.equals(entity.getUserId())) {
             return false;

@@ -2,12 +2,12 @@ package com.example.app.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.example.app.dto.MergedTransactionRow;
+import com.example.app.dto.TransactionAggregate;
 import com.example.app.entity.TransactionEntity;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public interface TransactionMapper extends BaseMapper<TransactionEntity> {
@@ -29,18 +29,8 @@ public interface TransactionMapper extends BaseMapper<TransactionEntity> {
         @Param("pageSize") int pageSize
     );
 
-    /** 与 selectMergedPage 完全相同的过滤条件下的总条数 */
-    long countMerged(
-        @Param("userIds") List<Long> userIds,
-        @Param("type") String type,
-        @Param("accountId") Long accountId,
-        @Param("startTime") LocalDateTime startTime,
-        @Param("endTime") LocalDateTime endTime,
-        @Param("cashAccountIds") Set<Long> cashAccountIds
-    );
-
     /** 与 selectMergedPage 完全相同过滤条件下的全量收入/支出合计（不分页口径，与旧内存版一致） */
-    Map<String, Object> sumMerged(
+    TransactionAggregate summarizeMerged(
         @Param("userIds") List<Long> userIds,
         @Param("type") String type,
         @Param("accountId") Long accountId,

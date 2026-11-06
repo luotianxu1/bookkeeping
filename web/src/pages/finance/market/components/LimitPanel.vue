@@ -83,7 +83,7 @@ async function load(silent = false): Promise<void> {
 
 // 可见性感知轮询：隐藏时跳过，恢复可见立即静默刷新（与后端 /activity 缓存 TTL 对齐）
 // 定时器与可见性监听由 useVisibilityPolling 自动清理
-useVisibilityPolling(() => void load(true), REFRESH_MS)
+useVisibilityPolling(() => load(true), REFRESH_MS)
 
 onMounted(() => {
   load()

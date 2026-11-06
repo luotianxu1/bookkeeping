@@ -1,5 +1,5 @@
 // 基金/股票外部行情加载与基金累计收益点位计算。
-import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, type ComputedRef, type Ref } from 'vue'
 import type {
   InvestmentAssetDetail,
   InvestmentChartPoint,
@@ -65,7 +65,11 @@ export type UseFundMarketOptions = {
 export function useFundMarket(options: UseFundMarketOptions) {
   const { detail, transactions, currentPosition, isFundPosition, currentTotalProfit, showFundCumulativeProfitChart, mergeDetail } = options
 
+  let requestSerial = 0
+  onBeforeUnmount(() => { requestSerial += 1 })
   const externalStatus = ref('')
+  const marketError = ref('')
+  const marketLoading = ref(false)
   const selectedFundTrendRange = ref<FundTrendRange>('3m')
   const fullFundChartPoints = ref<InvestmentChartPoint[]>([])
   const fundPeriodReturnMap = ref<Record<string, number | null>>({})
@@ -91,6 +95,10 @@ export function useFundMarket(options: UseFundMarketOptions) {
   })
 
   function resetFundMarketState() {
+    requestSerial += 1
+    externalStatus.value = ''
+    marketError.value = ''
+    marketLoading.value = false
     fullFundChartPoints.value = []
     fundPeriodReturnMap.value = {}
     fundTrendValueMap.value = {}
@@ -374,7 +382,7 @@ export function useFundMarket(options: UseFundMarketOptions) {
 
   const cumulativeProfitPoints = computed(() => buildFundCumulativeProfitPoints(fullFundChartPoints.value))
 
-  async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: string) {
+  async function loadFundMarketData(baseDetail: InvestmentAssetDetail, fundCode: string, request: number) {
     const cached = fundMarketCache.get(fundCode)
     let baseInfo: Record<string, string | null>
     let trend: FundTrendData
@@ -405,6 +413,7 @@ export function useFundMarket(options: UseFundMarketOptions) {
       })
     }
 
+    if (request !== requestSerial) return
     const officialPrice = Number(baseInfo.DWJZ)
     const cumulativePrice = Number(baseInfo.LJJZ)
     const latestPrice = officialPrice
@@ -449,13 +458,14 @@ export function useFundMarket(options: UseFundMarketOptions) {
     })
   }
 
-  async function loadStockMarketData(baseDetail: InvestmentAssetDetail, stockCode: string) {
+  async function loadStockMarketData(baseDetail: InvestmentAssetDetail, stockCode: string, request: number) {
     const symbol = toTencentSymbol(stockCode, baseDetail.position.market || baseDetail.market)
     const [quote, kline] = await Promise.all([
       fetchStockQuote(symbol),
       fetchStockKline(symbol).catch(() => []),
     ])
 
+    if (request !== requestSerial) return
     const latestPrice = Number(quote.price)
     const change = Number(quote.change)
     const changePercent = Number(quote.changePct)
@@ -487,21 +497,29 @@ export function useFundMarket(options: UseFundMarketOptions) {
   }
 
   async function loadExternalMarketData(baseDetail: InvestmentAssetDetail) {
+    const request = ++requestSerial
     const symbol = baseDetail.symbol || baseDetail.position.productSymbol
     if (!symbol) {
       return
     }
 
     externalStatus.value = '行情加载中...'
+    marketError.value = ''
+    marketLoading.value = true
     try {
       if (baseDetail.productType === 'stock') {
-        await loadStockMarketData(baseDetail, symbol)
+        await loadStockMarketData(baseDetail, symbol, request)
       } else if (baseDetail.productType === 'fund') {
-        await loadFundMarketData(baseDetail, symbol)
+        await loadFundMarketData(baseDetail, symbol, request)
       }
-      externalStatus.value = ''
+      if (request === requestSerial) externalStatus.value = ''
     } catch (error) {
-      externalStatus.value = getErrorMessage(error, '行情加载失败')
+      if (request === requestSerial) {
+        marketError.value = getErrorMessage(error, '行情加载失败')
+        externalStatus.value = marketError.value
+      }
+    } finally {
+      if (request === requestSerial) marketLoading.value = false
     }
   }
 
@@ -521,6 +539,8 @@ export function useFundMarket(options: UseFundMarketOptions) {
 
   return {
     externalStatus,
+    marketError,
+    marketLoading,
     selectedFundTrendRange,
     fullFundChartPoints,
     fundPeriodReturnMap,
