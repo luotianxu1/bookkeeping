@@ -68,7 +68,7 @@ class MySqlAccountingTest {
             factory.setMapperLocations(new org.springframework.core.io.ClassPathResource("mapper/TransactionMapper.xml"));
             var session = new SqlSessionTemplate(factory.getObject());
             var service = new TransactionService(session.getMapper(TransactionMapper.class), session.getMapper(AccountMapper.class),
-                session.getMapper(AccountTypeMapper.class), session.getMapper(CategoryMapper.class), null, null, null);
+                session.getMapper(AccountTypeMapper.class), session.getMapper(CategoryMapper.class), null, null, null, null);
             var start = java.time.LocalDate.of(2026, 11, 1);
             var end = start.withDayOfMonth(30);
             var unfiltered = service.page(List.of(1L), null, null, start, end, "desc", true, 1, 50);
@@ -169,6 +169,21 @@ class MySqlAccountingTest {
             assertEquals("Custom cash", jdbc.queryForObject("SELECT name FROM account_types WHERE id=?", String.class, cashType));
             assertEquals("custom", jdbc.queryForObject("SELECT icon FROM categories WHERE id=?", String.class, category));
             jdbc.update("INSERT INTO accounts(id,user_id,account_type_id,name,current_balance) VALUES(1,?,?,'Cash',900)", owner, cashType);
+            jdbc.update("INSERT INTO savings_goals(user_id,account_id,name,target_amount,currency_code) VALUES(?,1,'Emergency',1000,'CNY')", owner);
+            jdbc.update("INSERT INTO savings_goals(user_id,account_id,name,target_amount,currency_code) VALUES(?,1,'Travel',2000,'CNY')", owner);
+            assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM savings_goals WHERE account_id=1", Integer.class));
+            long emergency = jdbc.queryForObject("SELECT id FROM savings_goals WHERE name='Emergency'", Long.class);
+            long travel = jdbc.queryForObject("SELECT id FROM savings_goals WHERE name='Travel'", Long.class);
+            jdbc.update("INSERT INTO savings_goal_entries(goal_id,type,amount,occurred_on) VALUES(?,'deposit',300,'2026-11-07'),(?,'withdrawal',100,'2026-11-07'),(?,'deposit',50,'2026-11-07')", emergency, emergency, travel);
+            assertEquals(0, new BigDecimal("200").compareTo(jdbc.queryForObject("SELECT SUM(CASE WHEN type='deposit' THEN amount ELSE -amount END) FROM savings_goal_entries WHERE goal_id=?", BigDecimal.class, emergency)));
+            assertEquals(0, new BigDecimal("50").compareTo(jdbc.queryForObject("SELECT SUM(amount) FROM savings_goal_entries WHERE goal_id=?", BigDecimal.class, travel)));
+            assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () ->
+                jdbc.update("INSERT INTO savings_goal_entries(goal_id,type,amount,occurred_on) VALUES(999,'deposit',10,'2026-11-07')"));
+            initializeFile(jdbc, "048_create_savings_goals.mysql.sql", true);
+            assertEquals(3, jdbc.queryForObject("SELECT COUNT(*) FROM savings_goal_entries", Integer.class));
+            assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () ->
+                jdbc.update("INSERT INTO savings_goals(user_id,account_id,name,target_amount,currency_code) VALUES(?,999,'Missing',2000,'CNY')", owner));
+            assertEquals(0, new BigDecimal("900").compareTo(jdbc.queryForObject("SELECT current_balance FROM accounts WHERE id=1", BigDecimal.class)));
             jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at,reimbursement_amount) VALUES(1,'original',?,'expense',100,1,?,'Expense','2026-01-01',50)", owner, category);
             jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at,original_transaction_id,recovery_kind) VALUES(2,'refund',?,'expense',-20,1,?,'Refund','2026-02-01',1,'refund')", owner, category);
             jdbc.update("INSERT INTO expense_recovery_followups(transaction_id,user_id,recipient,expected_date) VALUES(1,?,'Finance','2026-11-07')", owner);
@@ -183,6 +198,51 @@ class MySqlAccountingTest {
             assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("INSERT INTO category_budgets(user_id,budget_month,category_id,amount) VALUES(?,'2026-02-01',?,-1)", owner, category));
             jdbc.update("INSERT INTO category_budgets(user_id,budget_month,category_id,amount) VALUES(?,'2026-01-01',?,200)", owner, category);
             assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE category_budgets SET amount=0"));
+        } finally { admin.execute("DROP DATABASE " + schema); }
+    }
+
+    @Test void savingsReservationsProtectCashAndAllowAtomicTransactionChanges() throws Exception {
+        String url = System.getenv("MYSQL_TEST_URL");
+        String user = System.getenv().getOrDefault("MYSQL_TEST_USER", "root");
+        String password = System.getenv().getOrDefault("MYSQL_TEST_PASSWORD", "");
+        var admin = new JdbcTemplate(new DriverManagerDataSource(url, user, password));
+        String schema = "life_hub_test_" + UUID.randomUUID().toString().replace("-", "");
+        admin.execute("CREATE DATABASE " + schema + " CHARACTER SET utf8mb4");
+        try {
+            var source = testDataSource(url, schema, user, password);
+            var jdbc = new JdbcTemplate(source);
+            for (String file : List.of("001_create_database_and_users", "002_create_account_types", "003_create_accounts",
+                "004_create_categories", "005_create_transactions", "043_create_accounting_requests", "048_create_savings_goals"))
+                initializeFile(jdbc, file + ".mysql.sql", false);
+            jdbc.update("INSERT INTO users(id,username,display_name,password_hash) VALUES(1,'savings','Savings','test')");
+            jdbc.update("INSERT INTO account_types(id,code,name) VALUES(1,'cash','Cash')");
+            jdbc.update("INSERT INTO accounts(id,user_id,account_type_id,name,current_balance) VALUES(1,1,1,'Cash',1000)");
+            jdbc.update("INSERT INTO categories(id,name,type,icon,status) VALUES(1,'Income','income','salary','active'),(2,'Expense','expense','food','active')");
+            jdbc.update("INSERT INTO savings_goals(id,user_id,account_id,name,target_amount,currency_code) VALUES(1,1,1,'Goal',2000,'CNY')");
+            var config = new MybatisConfiguration();
+            for (var type : List.of(AccountMapper.class, AccountTypeMapper.class, TransactionMapper.class,
+                CategoryMapper.class, AccountingRequestMapper.class, SavingsGoalMapper.class, SavingsGoalEntryMapper.class)) config.addMapper(type);
+            var factory = new MybatisSqlSessionFactoryBean(); factory.setDataSource(source); factory.setConfiguration(config);
+            var session = new SqlSessionTemplate(factory.getObject());
+            var accounts = session.getMapper(AccountMapper.class);
+            var service = new TransactionService(session.getMapper(TransactionMapper.class), accounts,
+                session.getMapper(AccountTypeMapper.class),session.getMapper(CategoryMapper.class),null,null,
+                new AccountingIdempotencyService(session.getMapper(AccountingRequestMapper.class),new ObjectMapper()),
+                new SavingsAllocationService(session.getMapper(SavingsGoalMapper.class),session.getMapper(SavingsGoalEntryMapper.class)));
+            var tx = new TransactionTemplate(new DataSourceTransactionManager(source));
+            var request = new TransactionRequest(); request.setUserId(1L); request.setType("income"); request.setAccountId(1L);
+            request.setCategoryId(1L); request.setAmount(new BigDecimal("100")); request.setOccurredAt(LocalDateTime.of(2026,11,7,12,0));
+            request.setSavingsAllocations(List.of(new com.example.app.dto.SavingsAllocation(1L,new BigDecimal("100"))));
+            var income=tx.execute(status -> service.create(request));
+            int deducted = tx.execute(status -> {accounts.lockUserForWrite(1L);return accounts.subtractBalanceIfSufficient(1L,new BigDecimal("1000"));});
+            assertEquals(1, deducted);
+            assertThrows(IllegalArgumentException.class, () -> tx.execute(status -> {accounts.lockUserForWrite(1L);return accounts.subtractBalanceIfSufficient(1L,BigDecimal.ONE);}));
+            request.setSavingsAllocations(null); request.setRemark("metadata only");
+            tx.execute(status -> service.update(income.getId(),request));
+            assertEquals(0,new BigDecimal("100").compareTo(accounts.selectById(1L).getCurrentBalance()));
+            tx.execute(status -> service.delete(income.getId(),1L));
+            assertEquals(0,accounts.selectById(1L).getCurrentBalance().signum());
+            assertEquals(0,accounts.savingsReserved(1L).signum());
         } finally { admin.execute("DROP DATABASE " + schema); }
     }
 
@@ -202,7 +262,7 @@ class MySqlAccountingTest {
             var source = new DriverManagerDataSource(server + "/" + schema + params, user, password);
             var jdbc = new JdbcTemplate(source);
             for (String file : List.of("001_create_database_and_users", "002_create_account_types", "003_create_accounts",
-                "004_create_categories", "005_create_transactions", "007_create_investments", "043_create_accounting_requests", "045_create_reminder_preferences")) {
+                "004_create_categories", "005_create_transactions", "007_create_investments", "043_create_accounting_requests", "045_create_reminder_preferences", "048_create_savings_goals")) {
                 initializeFile(jdbc, file + ".mysql.sql", false);
             }
             jdbc.update("INSERT INTO users(id,username,display_name,password_hash) VALUES(1,'test','Test','test')");
@@ -210,14 +270,15 @@ class MySqlAccountingTest {
             jdbc.update("INSERT INTO accounts(id,user_id,account_type_id,name,current_balance) VALUES(1,1,1,'A',1000),(2,1,1,'B',500)");
             var config = new MybatisConfiguration();
             for (var type : List.of(AccountMapper.class, AccountTypeMapper.class, TransactionMapper.class,
-                CategoryMapper.class, ExpenseRecoveryMapper.class, AccountingRequestMapper.class, InvestmentPositionMapper.class, InvestmentProductMapper.class,
+                CategoryMapper.class, SavingsGoalMapper.class, SavingsGoalEntryMapper.class, ExpenseRecoveryMapper.class, AccountingRequestMapper.class, InvestmentPositionMapper.class, InvestmentProductMapper.class,
                 InvestmentTransactionMapper.class, InvestmentDividendPlanMapper.class)) config.addMapper(type);
             var factory = new MybatisSqlSessionFactoryBean();
             factory.setDataSource(source); factory.setConfiguration(config);
             var session = new SqlSessionTemplate(factory.getObject());
             var service = new TransactionService(session.getMapper(TransactionMapper.class), session.getMapper(AccountMapper.class),
                 session.getMapper(AccountTypeMapper.class), session.getMapper(CategoryMapper.class), null, null,
-                new AccountingIdempotencyService(session.getMapper(AccountingRequestMapper.class), new ObjectMapper()));
+                new AccountingIdempotencyService(session.getMapper(AccountingRequestMapper.class), new ObjectMapper()),
+                new SavingsAllocationService(session.getMapper(SavingsGoalMapper.class), session.getMapper(SavingsGoalEntryMapper.class)));
             var tx = new TransactionTemplate(new DataSourceTransactionManager(source));
             tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
             var request = new TransactionRequest();

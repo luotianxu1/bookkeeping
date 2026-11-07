@@ -2,6 +2,9 @@
 import type { RouteRecordRaw } from 'vue-router'
 
 export const financeRoutes: RouteRecordRaw[] = [
+  { path: '/finance/savings-goals', name: 'finance-savings-goals',
+    component: () => import('@/pages/finance/SavingsGoalPage/index.vue'),
+    meta: { section: 'finance', title: '储蓄目标' } },
   { path: '/finance/expense-recoveries', name: 'finance-expense-recoveries',
     component: () => import('@/pages/finance/ExpenseRecoveryPage/index.vue'),
     meta: { section: 'finance', title: '退款与报销' } },

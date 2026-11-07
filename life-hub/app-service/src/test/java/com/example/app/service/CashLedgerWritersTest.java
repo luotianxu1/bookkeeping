@@ -73,7 +73,7 @@ class CashLedgerWritersTest {
             db.seedCashAccounts();
             db.jdbc.update("INSERT INTO transactions(id,user_id,type,account_id,amount,status,occurred_at) VALUES(1,1,'income',1,100,'normal',CURRENT_TIMESTAMP)");
             var photo = new PhotographyAccountingService(db.mapper(AccountMapper.class), db.mapper(AccountTypeMapper.class),
-                db.mapper(CategoryMapper.class), db.mapper(TransactionMapper.class));
+                db.mapper(CategoryMapper.class), db.mapper(TransactionMapper.class), db.savingsAllocations());
             var executor = Executors.newFixedThreadPool(2);
             var start = new CountDownLatch(1);
             try {

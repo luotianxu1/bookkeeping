@@ -23,6 +23,10 @@ export function updateTransaction(id: number, params: UpdateTransactionParams) {
   return requestPut<Transaction, UpdateTransactionParams>(financeRequest, `/api/finance/transactions/${id}`, params)
 }
 
+export function getTransactionSavingsAllocations(id: number) {
+  return requestGet<{ goalId: number; amount: number }[]>(financeRequest, `/api/finance/transactions/${id}/savings-allocations`)
+}
+
 export function getTransactions(params: TransactionQuery = {}) {
   return requestGet<Transaction[]>(financeRequest, '/api/finance/transactions', { params })
 }

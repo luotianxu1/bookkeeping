@@ -611,6 +611,7 @@ export interface SaveCategoryParams {
 }
 
 export interface CreateTransactionParams {
+  savingsAllocations?: { goalId: number; amount: number }[]
   requestId?: string
   userId: number
   type: TransactionType

@@ -76,6 +76,8 @@ public final class LiveTestServers {
         jdbc.execute("CREATE TABLE reminder_states(user_id BIGINT, reminder_key VARCHAR(120), read_at TIMESTAMP, snoozed_until TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id,reminder_key))");
         jdbc.execute("CREATE TABLE expense_recovery_followups(transaction_id BIGINT PRIMARY KEY,user_id BIGINT,recipient VARCHAR(100),expected_date DATE)");
         jdbc.execute("CREATE UNIQUE INDEX uk_category_budget_month ON category_budgets(user_id,budget_month,category_id)");
+        jdbc.execute("CREATE INDEX idx_savings_goal_account ON savings_goals(account_id)");
+        jdbc.execute("CREATE UNIQUE INDEX uk_savings_goal_transaction ON savings_goal_entries(transaction_id,goal_id)");
         jdbc.execute("ALTER TABLE investment_products ADD symbol_key VARCHAR(64) GENERATED ALWAYS AS (UPPER(TRIM(symbol)))");
         jdbc.execute("ALTER TABLE investment_products ADD market_key VARCHAR(32) GENERATED ALWAYS AS (UPPER(TRIM(COALESCE(market,''))))");
         jdbc.execute("CREATE UNIQUE INDEX uk_investment_products_identity ON investment_products(product_type,symbol_key,market_key)");

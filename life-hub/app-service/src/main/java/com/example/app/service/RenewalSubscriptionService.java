@@ -435,6 +435,7 @@ public class RenewalSubscriptionService {
     private BigDecimal resolveNextFundingAccountBalance(AccountEntity fundingAccount, BigDecimal amount) {
         BigDecimal currentBalance = fundingAccount.getCurrentBalance() == null ? BigDecimal.ZERO : fundingAccount.getCurrentBalance();
         BigDecimal nextBalance = currentBalance.subtract(amount);
+        accountMapper.requireSavingsCovered(fundingAccount.getId(), nextBalance);
         if (nextBalance.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("扣款账户余额不足");
         }

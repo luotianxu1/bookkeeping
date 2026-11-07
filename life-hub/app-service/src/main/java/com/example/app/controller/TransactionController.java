@@ -96,6 +96,11 @@ public class TransactionController {
         return Result.ok(transactionService.create(request));
     }
 
+    @GetMapping("/{id}/savings-allocations")
+    public Result<List<com.example.app.dto.SavingsAllocation>> savingsAllocations(@PathVariable("id") Long id) {
+        return Result.ok(transactionService.savingsAllocations(id, com.example.common.security.SecurityUtils.requireCurrentUserId()));
+    }
+
     @PutMapping("/{id}")
     @Operation(summary = "修改支出、收入或转账")
     public Result<TransactionResponse> update(

@@ -41,17 +41,20 @@ public class PhotographyAccountingService {
     private final AccountTypeMapper accountTypeMapper;
     private final CategoryMapper categoryMapper;
     private final TransactionMapper transactionMapper;
+    private final SavingsAllocationService savings;
 
     public PhotographyAccountingService(
         AccountMapper accountMapper,
         AccountTypeMapper accountTypeMapper,
         CategoryMapper categoryMapper,
-        TransactionMapper transactionMapper
+        TransactionMapper transactionMapper,
+        SavingsAllocationService savings
     ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
         this.categoryMapper = categoryMapper;
         this.transactionMapper = transactionMapper;
+        this.savings = savings;
     }
 
     public record CashAccountView(Long id, Long userId, String name) {
@@ -124,6 +127,7 @@ public class PhotographyAccountingService {
             return new VoidIncomeResult(transaction.getAccountId(), BigDecimal.ZERO);
         }
 
+        savings.replace(userId, transactionId, null, List.of());
         int updated = accountMapper.subtractBalanceIfSufficient(transaction.getAccountId(), transaction.getAmount());
         if (updated == 0) {
             throw new IllegalArgumentException("删除后账户余额不足");

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useIdempotentSubmit } from '@/composables/useIdempotentSubmit'
 // 记一笔-支出页：还原 Pencil「记一笔-支出」页面结构与交互。
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonDateTimePicker from '@/components/common/CommonDateTimePicker/index.vue'
@@ -9,6 +9,7 @@ import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import CategoryIcon from '@/components/common/CategoryIcon/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
+import SavingsAllocationFields, { type SavingsAllocationDraft } from './components/SavingsAllocationFields.vue'
 import ExpenseInlineSelect, {
   type ExpenseInlineSelectOption,
   type ExpenseInlineSelectValue,
@@ -19,6 +20,9 @@ import {
   getAccountTypes,
   getCategories,
   updateTransaction,
+  getSavingsGoals,
+  getTransactionSavingsAllocations,
+  type SavingsGoal,
   type Account,
   type Category,
   type TransactionType,
@@ -85,7 +89,15 @@ const entryTime = ref(formatDateTimeLocal(new Date()))
 const note = ref('')
 const amountInput = ref('0.00')
 const loading = ref(true)
+const formReady = ref(false)
 const saving = ref(false)
+const savingsGoals = ref<SavingsGoal[]>([])
+const outgoingAllocations = ref<SavingsAllocationDraft[]>([])
+const incomingAllocations = ref<SavingsAllocationDraft[]>([])
+const eligibleOutgoingGoals = computed(() => savingsGoals.value.filter(goal => goal.accountId === (entryType.value === '转账' ? transferOutAccount.value : accountId.value)))
+const eligibleIncomingGoals = computed(() => savingsGoals.value.filter(goal => goal.accountId === (entryType.value === '转账' ? transferInAccount.value : accountId.value)))
+const currentReserved = computed(() => savingsGoals.value.filter(goal => goal.accountId === accountId.value).reduce((sum, goal) => sum + Number(goal.currentAmount), 0))
+const currentAvailable = computed(() => Math.max(0, Number(selectedAccount.value?.currentBalance ?? 0) - currentReserved.value))
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
@@ -145,7 +157,7 @@ const transferInSelectValue = computed<ExpenseInlineSelectValue>({
   },
 })
 const canSave = computed(() => {
-  if (saving.value || Number(amountInput.value) <= 0) {
+  if (loading.value || !formReady.value || saving.value || Number(amountInput.value) <= 0) {
     return false
   }
   if (entryType.value === '转账') {
@@ -164,11 +176,15 @@ onMounted(() => {
 })
 
 watch(entryType, () => {
+  outgoingAllocations.value = []; incomingAllocations.value = []
   closeFeedback()
   if (entryType.value !== '转账') {
     loadCategories()
   }
 })
+watch(accountId, () => { outgoingAllocations.value = []; incomingAllocations.value = [] })
+watch(transferOutAccount, () => { outgoingAllocations.value = [] })
+watch(transferInAccount, () => { incomingAllocations.value = [] })
 
 function selectCategory(item: { id: number; manage: boolean }) {
   if (item.manage) {
@@ -214,16 +230,42 @@ async function onKeypadPress(key: string) {
 
 async function loadEntryOptions() {
   loading.value = true
+  formReady.value = false
   closeFeedback()
 
   try {
-    await Promise.all([loadCashAccounts(), loadCategories()])
+    await Promise.all([loadCashAccounts(), loadCategories(), loadSavingsGoals()])
     applyEditingFormValues()
+    await nextTick()
+    if (editingTransactionId.value) {
+      const allocations = await getTransactionSavingsAllocations(editingTransactionId.value)
+      const rows = allocations.map(item => ({ goalId: item.goalId, amount: String(item.amount) }))
+      incomingAllocations.value = rows.filter(row => entryType.value !== '支出' && eligibleIncomingGoals.value.some(goal => goal.id === row.goalId))
+      outgoingAllocations.value = rows.filter(row => entryType.value !== '收入' && eligibleOutgoingGoals.value.some(goal => goal.id === row.goalId))
+    }
+    formReady.value = true
   } catch (error) {
     showFeedback(errorMessage(error), 'error')
   } finally {
     loading.value = false
   }
+}
+
+async function loadSavingsGoals() { savingsGoals.value = await getSavingsGoals() }
+
+function allocationsForSave(amount: number) {
+  const outgoing = entryType.value === '收入' ? [] : outgoingAllocations.value
+  const incoming = entryType.value === '支出' ? [] : incomingAllocations.value
+  for (const rows of [outgoing, incoming]) {
+    let total = 0
+    for (const row of rows) {
+      if (!row.goalId || !/^\d{1,16}(\.\d{1,2})?$/.test(row.amount.trim()) || Number(row.amount) <= 0)
+        throw new Error('请填写有效的目标分配金额，最多两位小数')
+      total += Math.round(Number(row.amount) * 100)
+    }
+    if (total > Math.round(amount * 100)) throw new Error('目标计入或扣减总额不能超过本笔流水金额')
+  }
+  return [...outgoing, ...incoming].map(row => ({ goalId: row.goalId!, amount: Number(row.amount) }))
 }
 
 async function loadCashAccounts() {
@@ -264,6 +306,7 @@ async function loadCategories() {
 
 async function saveTransaction() {
   if (saving.value) return
+  if (!formReady.value || loading.value) { showFeedback('请等待账户和储蓄目标加载完成后再保存', 'error'); return }
   const amount = Number(amountInput.value)
   if (amount <= 0) {
     showFeedback('请输入大于0的金额', 'error')
@@ -280,7 +323,7 @@ async function saveTransaction() {
     return
   }
 
-  if (transactionType.value === 'expense' && selectedAccount.value && amount > Number(selectedAccount.value.currentBalance)) {
+  if (!isEditing.value && transactionType.value === 'expense' && selectedAccount.value && amount > Number(selectedAccount.value.currentBalance)) {
     showFeedback('账户余额不足', 'error')
     return
   }
@@ -293,12 +336,13 @@ async function saveTransaction() {
       userId: currentUserId.value,
       type: transactionType.value,
       amount,
-      currencyCode: 'CNY',
+      currencyCode: selectedAccount.value?.currencyCode ?? 'CNY',
       accountId: accountId.value,
       categoryId: activeCategoryId.value,
       title: note.value.trim() || selectedCategory.value?.name,
       remark: note.value.trim() || null,
       occurredAt: entryTime.value,
+      savingsAllocations: allocationsForSave(amount),
     }
 
     if (isEditing.value && editingTransactionId.value) {
@@ -309,8 +353,9 @@ async function saveTransaction() {
       submission.reset()
       amountInput.value = '0.00'
       note.value = ''
+      outgoingAllocations.value = []; incomingAllocations.value = []
       showFeedback('新增成功', 'success')
-      await loadCashAccounts()
+      await Promise.all([loadCashAccounts(), loadSavingsGoals()])
     }
   } catch (error) {
     showFeedback(errorMessage(error), 'error')
@@ -328,7 +373,7 @@ async function saveTransferTransaction(amount: number) {
     showFeedback('转出账户和转入账户不能相同', 'error')
     return
   }
-  if (transferOutSelectedAccount.value && amount > Number(transferOutSelectedAccount.value.currentBalance)) {
+  if (!isEditing.value && transferOutSelectedAccount.value && amount > Number(transferOutSelectedAccount.value.currentBalance)) {
     showFeedback('转出账户余额不足', 'error')
     return
   }
@@ -341,11 +386,12 @@ async function saveTransferTransaction(amount: number) {
       userId: currentUserId.value,
       type: 'transfer' as TransactionType,
       amount,
-      currencyCode: 'CNY',
+      currencyCode: transferOutSelectedAccount.value?.currencyCode ?? 'CNY',
       fromAccountId: transferOutAccount.value,
       toAccountId: transferInAccount.value,
       remark: note.value.trim() || null,
       occurredAt: entryTime.value,
+      savingsAllocations: allocationsForSave(amount),
     }
 
     if (isEditing.value && editingTransactionId.value) {
@@ -356,8 +402,9 @@ async function saveTransferTransaction(amount: number) {
       submission.reset()
       amountInput.value = '0.00'
       note.value = ''
+      outgoingAllocations.value = []; incomingAllocations.value = []
       showFeedback('转账成功', 'success')
-      await loadCashAccounts()
+      await Promise.all([loadCashAccounts(), loadSavingsGoals()])
     }
   } catch (error) {
     showFeedback(errorMessage(error), 'error')
@@ -412,6 +459,7 @@ function applyRouteEntryType() {
   if (type === 'expense') {
     entryType.value = '支出'
   }
+  if (type === 'transfer') entryType.value = '转账'
 }
 
 function applyEditingFormValues() {
@@ -428,6 +476,9 @@ function applyEditingFormValues() {
   if (routeAccountId !== null && accountOptions.value.some((account) => account.id === routeAccountId)) {
     accountId.value = routeAccountId
   }
+  const fromId = parseRouteNumber(route.query.fromAccountId), toId = parseRouteNumber(route.query.toAccountId)
+  if (fromId !== null) transferOutAccount.value = fromId
+  if (toId !== null) transferInAccount.value = toId
 
   const routeCategoryId = parseRouteNumber(route.query.categoryId)
   if (routeCategoryId !== null) {
@@ -561,6 +612,9 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
           :disabled="loading || accountSelectOptions.length === 0"
         />
       </div>
+      <p v-if="currentReserved > 0" class="expense-reservation-hint">当前可用 {{ formatAccountBalance(currentAvailable) }} · 目标预留 {{ formatAccountBalance(currentReserved) }}</p>
+      <SavingsAllocationFields v-if="entryType === '收入'" v-model="incomingAllocations" :goals="eligibleIncomingGoals" label="计入储蓄目标" :disabled="loading || saving" />
+      <SavingsAllocationFields v-else v-model="outgoingAllocations" :goals="eligibleOutgoingGoals" label="扣减储蓄目标" :disabled="loading || saving" />
       <div class="expense-divider"></div>
       <div class="expense-info-row">
         <span>时间</span>
@@ -607,6 +661,8 @@ function syncActiveLeafCategory(parentId: number, preferredCategoryId: number | 
           :disabled="loading || accountSelectOptions.length === 0"
         />
       </div>
+      <SavingsAllocationFields v-model="outgoingAllocations" :goals="eligibleOutgoingGoals" label="转出扣减目标" :disabled="loading || saving" />
+      <SavingsAllocationFields v-model="incomingAllocations" :goals="eligibleIncomingGoals" label="转入计入目标" :disabled="loading || saving" />
       <div class="expense-divider"></div>
       <div class="expense-info-row">
         <span>时间</span>

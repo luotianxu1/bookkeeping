@@ -54,6 +54,20 @@ class InvestmentServiceTest {
             } finally { executor.shutdownNow(); service.shutdownExecutor(); }
         }
     }
+    @Test void investmentBuyCannotSpendSavingsReservations() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            seed(db, "stock");
+            db.jdbc.update("INSERT INTO savings_goals(id,user_id,account_id,name,target_amount,currency_code) VALUES(1,1,1,'预留',1000,'CNY')");
+            db.jdbc.update("INSERT INTO savings_goal_entries(goal_id,type,amount,occurred_on) VALUES(1,'deposit',1000,CURRENT_DATE)");
+            var service = service(db, mock(InvestmentQuoteSyncService.class), mock(MarketQuoteClient.class));
+            try {
+                assertThrows(IllegalArgumentException.class, () -> service.createTransaction(buy()));
+                assertEquals(0, new BigDecimal("1000").compareTo(db.balance(1)));
+                assertEquals(0, new BigDecimal("100").compareTo(db.mapper(InvestmentPositionMapper.class).selectById(1L).getHoldingQuantity()));
+                assertEquals(0, db.jdbc.queryForObject("SELECT COUNT(*) FROM investment_transactions", Integer.class));
+            } finally { service.shutdownExecutor(); }
+        }
+    }
     @Test void detailDoesNotFetchExternalFundFees() throws Exception {
         try (var db = new AccountingDatabase()) {
             seed(db, "fund");

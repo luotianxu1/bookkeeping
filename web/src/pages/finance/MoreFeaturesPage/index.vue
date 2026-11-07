@@ -28,6 +28,7 @@ const featureGroups: FeatureGroup[] = [
       { icon: 'fund-profit', label: '基金收益', to: '/finance/fund-profit' },
       { icon: 'dividend-income', label: '攒股收息', to: '/finance/dividend-income' },
       { icon: 'budget', label: '预算管理', to: '/finance/budgets' },
+      { icon: 'accounts', label: '储蓄目标', to: '/finance/savings-goals' },
       { icon: 'renewals', label: '固定支出', to: '/finance/renewals' },
     ],
   },
@@ -62,6 +63,7 @@ const featureGroups: FeatureGroup[] = [
           :key="item.label"
           class="feature-item"
           :to="item.to"
+          :aria-label="item.label"
         >
           <FeatureIcon :icon="item.icon" :label="item.label" :size="32" />
           <strong>{{ item.label }}</strong>

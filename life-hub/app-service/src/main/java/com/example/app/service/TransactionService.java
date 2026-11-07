@@ -10,6 +10,7 @@ import com.example.app.dto.TransactionAnalysisTrendPointResponse;
 import com.example.app.dto.TransactionPageResponse;
 import com.example.app.dto.TransactionRequest;
 import com.example.app.dto.TransactionResponse;
+import com.example.app.dto.SavingsAllocation;
 import com.example.app.entity.AccountEntity;
 import com.example.app.entity.AccountTypeEntity;
 import com.example.app.entity.CategoryEntity;
@@ -77,6 +78,7 @@ public class TransactionService {
     private static final int MAX_PAGE_SIZE = 200;
 
     private final AccountingIdempotencyService idempotency;
+    private final SavingsAllocationService savings;
     private final TransactionMapper transactionMapper;
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
@@ -91,9 +93,11 @@ public class TransactionService {
         CategoryMapper categoryMapper,
         DebtRecordMapper debtRecordMapper,
         HumanRelationRecordMapper humanRelationRecordMapper,
-        AccountingIdempotencyService idempotency
+        AccountingIdempotencyService idempotency,
+        SavingsAllocationService savings
     ) {
         this.idempotency = idempotency;
+        this.savings = savings;
         this.transactionMapper = transactionMapper;
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
@@ -259,7 +263,7 @@ public class TransactionService {
         entity.setUserId(request.getUserId());
         entity.setType(type);
         entity.setAmount(amount);
-        entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+        entity.setCurrencyCode(account.getCurrencyCode());
         entity.setAccountId(account.getId());
         entity.setCategoryId(category.getId());
         entity.setTitle(buildTitle(request, category));
@@ -268,7 +272,7 @@ public class TransactionService {
         entity.setStatus(DEFAULT_STATUS);
         transactionMapper.insert(entity);
 
-        updateAccountBalance(account, type, amount);
+        applyFinancialChange(entity, Map.of(), request.getSavingsAllocations(), false);
 
         return toTransactionResponse(transactionMapper.selectById(entity.getId()), account, category, null, null);
     }
@@ -283,6 +287,7 @@ public class TransactionService {
     private TransactionResponse doCreateTransfer(TransactionRequest request) {
         AccountEntity fromAccount = requireTransferAccounts(request);
         AccountEntity toAccount = requireCashAccount(request.getUserId(), request.getToAccountId());
+        requireSameCurrency(fromAccount, toAccount);
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
 
         TransactionEntity entity = new TransactionEntity();
@@ -290,7 +295,7 @@ public class TransactionService {
         entity.setUserId(request.getUserId());
         entity.setType(TYPE_TRANSFER);
         entity.setAmount(amount);
-        entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+        entity.setCurrencyCode(fromAccount.getCurrencyCode());
         entity.setFromAccountId(fromAccount.getId());
         entity.setToAccountId(toAccount.getId());
         entity.setTitle(buildTransferTitle(request, fromAccount, toAccount));
@@ -299,7 +304,7 @@ public class TransactionService {
         entity.setStatus(DEFAULT_STATUS);
         transactionMapper.insert(entity);
 
-        transferAccountBalance(fromAccount, toAccount, amount);
+        applyFinancialChange(entity, Map.of(), request.getSavingsAllocations(), false);
 
         return toTransactionResponse(transactionMapper.selectById(entity.getId()), null, null, fromAccount, toAccount);
     }
@@ -312,16 +317,17 @@ public class TransactionService {
         String newType = normalizeTransactionType(request.getType());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
 
-        // 先回滚旧流水对账户余额的影响
-        rollbackTransactionBalances(transaction);
+        // 按新旧流水的净变化校验最终余额，避免中间回滚暂时侵占目标预留。
+        Map<Long, BigDecimal> previousEffects = cashEffects(transaction);
 
         if (TYPE_TRANSFER.equals(newType)) {
             AccountEntity fromAccount = requireTransferAccounts(request);
             AccountEntity toAccount = requireCashAccount(request.getUserId(), request.getToAccountId());
+            requireSameCurrency(fromAccount, toAccount);
 
             transaction.setType(TYPE_TRANSFER);
             transaction.setAmount(amount);
-            transaction.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+            transaction.setCurrencyCode(fromAccount.getCurrencyCode());
             transaction.setAccountId(null);
             transaction.setCategoryId(null);
             transaction.setFromAccountId(fromAccount.getId());
@@ -331,7 +337,7 @@ public class TransactionService {
             transaction.setOccurredAt(request.getOccurredAt());
             transactionMapper.updateById(transaction);
 
-            transferAccountBalance(fromAccount, toAccount, amount);
+            applyFinancialChange(transaction, previousEffects, request.getSavingsAllocations(), false);
             return toTransactionResponse(transactionMapper.selectById(transaction.getId()), null, null, fromAccount, toAccount);
         }
 
@@ -340,7 +346,7 @@ public class TransactionService {
 
         transaction.setType(newType);
         transaction.setAmount(amount);
-        transaction.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
+        transaction.setCurrencyCode(account.getCurrencyCode());
         transaction.setAccountId(account.getId());
         transaction.setCategoryId(category.getId());
         transaction.setFromAccountId(null);
@@ -350,7 +356,7 @@ public class TransactionService {
         transaction.setOccurredAt(request.getOccurredAt());
         transactionMapper.updateById(transaction);
 
-        updateAccountBalance(account, newType, amount);
+        applyFinancialChange(transaction, previousEffects, request.getSavingsAllocations(), false);
         return toTransactionResponse(transactionMapper.selectById(transaction.getId()), account, category, null, null);
     }
 
@@ -363,10 +369,52 @@ public class TransactionService {
         }
 
         if (transaction.getOriginalTransactionId() == null) requireUnlinkedExpense(transaction);
-        rollbackTransactionBalances(transaction);
+        applyFinancialChange(transaction, cashEffects(transaction), List.of(), true);
         transaction.setStatus(VOIDED_STATUS);
         transactionMapper.updateById(transaction);
         return true;
+    }
+
+    public List<SavingsAllocation> savingsAllocations(long id, long userId) {
+        requireEditableTransaction(id, userId);
+        return savings.allocations(id);
+    }
+
+    private void requireSameCurrency(AccountEntity from, AccountEntity to) {
+        if (!java.util.Objects.equals(from.getCurrencyCode(), to.getCurrencyCode()))
+            throw new IllegalArgumentException("转账账户币种必须一致");
+    }
+
+    private Map<Long, BigDecimal> cashEffects(TransactionEntity transaction) {
+        if (TYPE_TRANSFER.equals(transaction.getType())) {
+            return Map.of(transaction.getFromAccountId(), transaction.getAmount().negate(),
+                transaction.getToAccountId(), transaction.getAmount());
+        }
+        return Map.of(transaction.getAccountId(), TYPE_INCOME.equals(transaction.getType())
+            ? transaction.getAmount() : transaction.getAmount().negate());
+    }
+
+    private void applyFinancialChange(TransactionEntity transaction, Map<Long, BigDecimal> before,
+        List<SavingsAllocation> allocations, boolean voiding) {
+        var after = voiding ? Map.<Long, BigDecimal>of() : cashEffects(transaction);
+        Set<Long> accountIds = new java.util.HashSet<>(before.keySet());
+        accountIds.addAll(after.keySet());
+        accountIds.addAll(savings.replace(transaction.getUserId(), transaction.getId(), voiding ? null : transaction, allocations));
+        var deltas = new LinkedHashMap<Long, BigDecimal>();
+        for (Long accountId : accountIds) {
+            var account = requireOwnedAccount(transaction.getUserId(), accountId);
+            BigDecimal delta = after.getOrDefault(accountId, BigDecimal.ZERO).subtract(before.getOrDefault(accountId, BigDecimal.ZERO));
+            BigDecimal balanceAfter = currentBalanceOf(account).add(delta);
+            accountMapper.requireSavingsCovered(accountId, balanceAfter);
+            if (balanceAfter.signum() < 0 && delta.signum() < 0) throw new IllegalArgumentException("账户余额不足");
+            deltas.put(accountId, delta);
+        }
+        for (var change : deltas.entrySet()) {
+            int updated = change.getValue().signum() >= 0
+                ? accountMapper.addBalance(change.getKey(), change.getValue())
+                : accountMapper.subtractBalanceIfSufficient(change.getKey(), change.getValue().negate());
+            if (updated == 0) throw new IllegalArgumentException("账户余额不足");
+        }
     }
 
     private void requireUnlinkedExpense(TransactionEntity transaction) {
@@ -397,36 +445,6 @@ public class TransactionService {
             throw new IllegalArgumentException("转出账户和转入账户不能相同");
         }
         return requireCashAccount(request.getUserId(), request.getFromAccountId());
-    }
-
-    private void transferAccountBalance(AccountEntity fromAccount, AccountEntity toAccount, BigDecimal amount) {
-        updateAccountBalance(fromAccount, TYPE_EXPENSE, amount);
-        updateAccountBalance(toAccount, TYPE_INCOME, amount);
-    }
-
-    /**
-     * 回滚一条流水对账户余额的影响（支持支出/收入/转账），用于修改前撤销或删除时作废。
-     */
-    private void rollbackTransactionBalances(TransactionEntity transaction) {
-        BigDecimal amount = transaction.getAmount() == null ? BigDecimal.ZERO : transaction.getAmount();
-        if (TYPE_TRANSFER.equals(transaction.getType())) {
-            if (transaction.getFromAccountId() == null || transaction.getToAccountId() == null) {
-                throw new IllegalArgumentException("转账流水缺少转出或转入账户");
-            }
-            AccountEntity fromAccount = requireOwnedAccount(transaction.getUserId(), transaction.getFromAccountId());
-            AccountEntity toAccount = requireOwnedAccount(transaction.getUserId(), transaction.getToAccountId());
-            updateAccountBalance(fromAccount, TYPE_INCOME, amount);
-            updateAccountBalance(toAccount, TYPE_EXPENSE, amount);
-            return;
-        }
-
-        AccountEntity account = requireOwnedAccount(transaction.getUserId(), transaction.getAccountId());
-        if (transaction.getOriginalTransactionId() != null) {
-            // 负支出对应现金入账；撤销必须检查余额，不能用负数绕过足额扣款。
-            rollbackAccountBalance(account, TYPE_INCOME, amount.negate());
-        } else {
-            rollbackAccountBalance(account, transaction.getType(), amount);
-        }
     }
 
     private String buildTransferTitle(TransactionRequest request, AccountEntity fromAccount, AccountEntity toAccount) {
@@ -517,31 +535,6 @@ public class TransactionService {
             throw new IllegalArgumentException("收支记录不存在");
         }
         return transaction;
-    }
-
-    private void updateAccountBalance(AccountEntity account, String type, BigDecimal amount) {
-        // 原子更新：读-改-写竞态会导致丢失更新/超扣，判断与写入必须在数据库一次完成
-        int updated = TYPE_INCOME.equals(type)
-            ? accountMapper.addBalance(account.getId(), amount)
-            : accountMapper.subtractBalanceIfSufficient(account.getId(), amount);
-        if (updated == 0) {
-            throw new IllegalArgumentException("账户余额不足");
-        }
-        account.setCurrentBalance((TYPE_INCOME.equals(type)
-            ? currentBalanceOf(account).add(amount)
-            : currentBalanceOf(account).subtract(amount)));
-    }
-
-    private void rollbackAccountBalance(AccountEntity account, String type, BigDecimal amount) {
-        int updated = TYPE_INCOME.equals(type)
-            ? accountMapper.subtractBalanceIfSufficient(account.getId(), amount)
-            : accountMapper.addBalance(account.getId(), amount);
-        if (updated == 0) {
-            throw new IllegalArgumentException("删除后账户余额不足");
-        }
-        account.setCurrentBalance((TYPE_INCOME.equals(type)
-            ? currentBalanceOf(account).subtract(amount)
-            : currentBalanceOf(account).add(amount)));
     }
 
     private BigDecimal currentBalanceOf(AccountEntity account) {

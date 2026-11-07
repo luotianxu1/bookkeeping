@@ -29,6 +29,8 @@ import com.example.app.mapper.InvestmentTransactionMapper;
 import com.example.app.mapper.LiabilityRecordMapper;
 import com.example.app.mapper.RenewalSubscriptionMapper;
 import com.example.app.mapper.TransactionMapper;
+import com.example.app.mapper.SavingsGoalMapper;
+import com.example.app.entity.SavingsGoalEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -88,6 +90,7 @@ public class AccountService {
     private final JdbcTemplate jdbcTemplate;
     private final ToolServiceClient toolServiceClient;
     private final FamilyScopeChecker familyScopeChecker;
+    private final SavingsGoalMapper savingsGoalMapper;
 
     public AccountService(
         AccountMapper accountMapper,
@@ -104,7 +107,8 @@ public class AccountService {
         GoldPriceService goldPriceService,
         JdbcTemplate jdbcTemplate,
         ToolServiceClient toolServiceClient,
-        FamilyScopeChecker familyScopeChecker
+        FamilyScopeChecker familyScopeChecker,
+        SavingsGoalMapper savingsGoalMapper
     ) {
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
@@ -121,6 +125,7 @@ public class AccountService {
         this.jdbcTemplate = jdbcTemplate;
         this.toolServiceClient = toolServiceClient;
         this.familyScopeChecker = familyScopeChecker;
+        this.savingsGoalMapper = savingsGoalMapper;
     }
 
     public List<AccountResponse> list(Long userId, Long accountTypeId, String status) {
@@ -242,11 +247,18 @@ public class AccountService {
         familyScopeChecker.requireSelf(
             SecurityUtils.requireCurrentUserId(), entity.getUserId(), "账户不存在");
 
+        if (hasSavingsGoal(id) && (!java.util.Objects.equals(entity.getAccountTypeId(), request.getAccountTypeId())
+            || !java.util.Objects.equals(entity.getCurrencyCode(), StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE)
+            || (StringUtils.hasText(request.getStatus()) && !DEFAULT_STATUS.equals(request.getStatus())))) {
+            throw new IllegalArgumentException("该账户已关联储蓄目标，请先修改或删除目标，再修改账户类型、币种或停用账户");
+        }
+
         AccountTypeEntity accountType = requireAccountType(request.getAccountTypeId());
         validateContactRequired(accountType, request.getContactId());
         validateDebtAccountContactUnique(accountType, request.getUserId(), request.getContactId(), id);
         validateNameUnique(request.getUserId(), request.getAccountTypeId(), request.getName(), id);
         fillEntity(entity, request, accountType);
+        accountMapper.requireSavingsCovered(id, entity.getCurrentBalance());
         accountMapper.updateById(entity);
 
         return Optional.of(toResponse(accountMapper.selectById(id), accountType));
@@ -283,6 +295,9 @@ public class AccountService {
         // 归属校验：只有本人可以删除账户（会级联删除其全部财务数据）
         familyScopeChecker.requireSelf(
             SecurityUtils.requireCurrentUserId(), account.getUserId(), "账户不存在");
+        if (hasSavingsGoal(id)) throw new IllegalArgumentException("该账户已关联储蓄目标，请先修改或删除目标");
+        if (accountMapper.savingsLinkedTransactions(id) > 0)
+            throw new IllegalArgumentException("该账户的流水已关联储蓄目标，请先取消流水中的目标关联");
 
         AccountTypeEntity accountType = loadAccountType(account.getAccountTypeId());
         if (accountType != null && CASH_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
@@ -338,6 +353,11 @@ public class AccountService {
                 .eq(HumanRelationRecordEntity::getAccountId, id));
         }
         return accountMapper.deleteById(id) > 0;
+    }
+
+    private boolean hasSavingsGoal(Long accountId) {
+        return savingsGoalMapper.selectCount(new LambdaQueryWrapper<SavingsGoalEntity>()
+            .eq(SavingsGoalEntity::getAccountId, accountId)) > 0;
     }
 
     private boolean isHumanRelationRecordsTableAvailable() {

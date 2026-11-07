@@ -11,6 +11,11 @@ import java.time.LocalDateTime;
 
 @Data
 public class TransactionRequest {
+    /** null 在修改时保留既有分配；空列表表示取消关联。 */
+    @jakarta.validation.Valid
+    @Size(max = 100, message = "单笔最多关联100个储蓄目标")
+    private java.util.List<SavingsAllocation> savingsAllocations;
+
     @jakarta.validation.constraints.Pattern(regexp = "[A-Za-z0-9_-]{16,64}", message = "请求 ID 格式无效")
     private String requestId;
 

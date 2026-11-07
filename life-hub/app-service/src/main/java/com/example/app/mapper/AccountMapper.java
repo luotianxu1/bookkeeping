@@ -24,12 +24,44 @@ public interface AccountMapper extends BaseMapper<AccountEntity> {
         }
     }
 
-    /** 无条件加余额（收入/回滚支出），返回受影响行数 */
-    @Update("UPDATE accounts SET current_balance = current_balance + #{delta} WHERE id = #{id}")
-    int addBalance(@Param("id") Long id, @Param("delta") BigDecimal delta);
+    @Select("SELECT COALESCE(SUM(CASE WHEN e.type='deposit' THEN e.amount ELSE -e.amount END),0) "
+        + "FROM savings_goals g JOIN savings_goal_entries e ON e.goal_id=g.id WHERE g.account_id=#{id}")
+    BigDecimal savingsReserved(@Param("id") Long id);
 
-    /** 余额充足时扣减（支出/回滚收入），余额不足返回 0；数据库层原子完成判断与扣减 */
+    @Select("SELECT COUNT(*) FROM savings_goal_entries e JOIN transactions t ON t.id=e.transaction_id "
+        + "WHERE t.account_id=#{id} OR t.from_account_id=#{id} OR t.to_account_id=#{id}")
+    long savingsLinkedTransactions(@Param("id") Long id);
+
+    /** 调用方已持有用户账务锁；手动调账和目标分配也使用同一预留金额校验。 */
+    default void requireSavingsCovered(Long id, BigDecimal balanceAfter) {
+        BigDecimal reserved = savingsReserved(id);
+        if (reserved.signum() > 0 && balanceAfter.compareTo(reserved) < 0) {
+            throw new IllegalArgumentException("账户余额不能低于储蓄目标已存总额，还需从目标释放 "
+                + reserved.subtract(balanceAfter).setScale(2, java.math.RoundingMode.UP).toPlainString());
+        }
+    }
+
+    default int addBalance(Long id, BigDecimal delta) {
+        return delta.signum() < 0 ? subtractBalanceIfSufficient(id, delta.negate()) : increaseBalance(id, delta);
+    }
+
+    @Update("UPDATE accounts SET current_balance = current_balance + #{delta} WHERE id = #{id}")
+    int increaseBalance(@Param("id") Long id, @Param("delta") BigDecimal delta);
+
+    /** 所有扣款入口统一保护储蓄预留，判断和扣减在数据库原子完成。 */
     @Update("UPDATE accounts SET current_balance = current_balance - #{amount} "
-        + "WHERE id = #{id} AND current_balance >= #{amount}")
-    int subtractBalanceIfSufficient(@Param("id") Long id, @Param("amount") BigDecimal amount);
+        + "WHERE id = #{id} AND #{amount} >= 0 AND current_balance >= #{amount} "
+        + "AND current_balance - #{amount} >= (SELECT COALESCE(SUM(CASE WHEN e.type='deposit' THEN e.amount ELSE -e.amount END),0) "
+        + "FROM savings_goals g JOIN savings_goal_entries e ON e.goal_id=g.id WHERE g.account_id=accounts.id)")
+    int deductAvailableBalance(@Param("id") Long id, @Param("amount") BigDecimal amount);
+
+    default int subtractBalanceIfSufficient(Long id, BigDecimal amount) {
+        if (amount.signum() < 0) throw new IllegalArgumentException("扣款金额不能小于0");
+        int updated = deductAvailableBalance(id, amount);
+        if (updated == 0) {
+            var account = selectById(id);
+            if (account != null) requireSavingsCovered(id, account.getCurrentBalance().subtract(amount));
+        }
+        return updated;
+    }
 }
