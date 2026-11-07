@@ -23,4 +23,4 @@ CREATE TABLE IF NOT EXISTS investment_fixed_expenses (
     FOREIGN KEY (user_id) REFERENCES users (id),
   CONSTRAINT chk_investment_fixed_expenses_amount_positive
     CHECK (amount > 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='攒股收息固定支出表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='攒股收息固定支出表';

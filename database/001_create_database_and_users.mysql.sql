@@ -36,21 +36,14 @@ CREATE TABLE IF NOT EXISTS users (
     CHECK (username <> '' OR phone IS NOT NULL OR email IS NOT NULL),
   CONSTRAINT chk_users_password_for_password_login
     CHECK (default_login_provider <> 'password' OR password_hash IS NOT NULL)
-) ENGINE=InnoDB COMMENT='用户表：支撑移动端登录、个人中心与PC后台用户管理';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表：支撑移动端登录、个人中心与PC后台用户管理';
 
-INSERT INTO users (
-  username,
-  phone,
-  password_hash,
-  display_name,
-  role_name
-) VALUES (
-  'admin',
-  '13800000000',
-  '$2y$10$gmOiPZ68ELEqP7gu3ilHHezvfFsqlOohmzJYD0xejorkGR/pz/PRy',
-  '罗天旭',
-  'super_admin'
-) ON DUPLICATE KEY UPDATE
-  phone = VALUES(phone),
-  display_name = VALUES(display_name),
-  role_name = VALUES(role_name);
+-- 首次初始化：只插入缺失项，保留已有记录。
+INSERT INTO users (username, phone, password_hash, display_name, role_name)
+SELECT seed.username, seed.phone, seed.password_hash, seed.display_name, seed.role_name
+FROM (
+  SELECT 'admin' AS username, '13800000000' AS phone, '$2y$10$gmOiPZ68ELEqP7gu3ilHHezvfFsqlOohmzJYD0xejorkGR/pz/PRy' AS password_hash, '罗天旭' AS display_name, 'super_admin' AS role_name
+) seed
+WHERE NOT EXISTS (
+  SELECT 1 FROM users existing WHERE existing.username = seed.username OR existing.phone = seed.phone
+);

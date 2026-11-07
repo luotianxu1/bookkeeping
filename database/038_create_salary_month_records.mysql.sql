@@ -19,4 +19,4 @@ CREATE TABLE IF NOT EXISTS salary_month_records (
   KEY idx_salary_month_records_month (salary_month),
   CONSTRAINT fk_salary_month_records_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='月度工资记录表：记录实际每月税前工资';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='月度工资记录表：记录实际每月税前工资';

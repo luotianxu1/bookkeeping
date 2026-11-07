@@ -31,30 +31,24 @@ CREATE TABLE IF NOT EXISTS categories (
   KEY idx_categories_user_type_parent_name (user_id, type, parent_id, name),
   CONSTRAINT fk_categories_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='收支分类表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='收支分类表';
 
-INSERT INTO categories (
-  user_id,
-  name,
-  type,
-  icon,
-  color,
-  is_system,
-  sort_order,
-  remark
-) VALUES
-  (NULL, '餐饮', 'expense', 'food', '#1D4ED8', 1, 10, '餐饮支出'),
-  (NULL, '日用', 'expense', 'daily', '#334155', 1, 20, '日用品支出'),
-  (NULL, '交通', 'expense', 'transport', '#334155', 1, 30, '交通出行'),
-  (NULL, '娱乐', 'expense', 'entertainment', '#334155', 1, 40, '娱乐消费'),
-  (NULL, '购物', 'expense', 'shopping', '#334155', 1, 50, '购物消费'),
-  (NULL, '其他', 'expense', 'other', '#334155', 1, 90, '其他支出'),
-  (NULL, '工资', 'income', 'salary', '#334155', 1, 10, '工资收入'),
-  (NULL, '理财', 'income', 'investment-income', '#334155', 1, 20, '理财收入')
-ON DUPLICATE KEY UPDATE
-  icon = VALUES(icon),
-  color = VALUES(color),
-  is_system = VALUES(is_system),
-  sort_order = VALUES(sort_order),
-  status = 'active',
-  remark = VALUES(remark);
+-- 首次初始化：只插入缺失项，保留已有记录。
+INSERT INTO categories (user_id, name, type, icon, color, is_system, sort_order, remark)
+SELECT seed.user_id, seed.name, seed.type, seed.icon, seed.color, seed.is_system, seed.sort_order, seed.remark
+FROM (
+  SELECT NULL AS user_id, '餐饮' AS name, 'expense' AS type, 'food' AS icon, '#1D4ED8' AS color, 1 AS is_system, 10 AS sort_order, '餐饮支出' AS remark
+  UNION ALL SELECT NULL, '日用', 'expense', 'daily', '#334155', 1, 20, '日用品支出'
+  UNION ALL SELECT NULL, '交通', 'expense', 'transport', '#334155', 1, 30, '交通出行'
+  UNION ALL SELECT NULL, '娱乐', 'expense', 'entertainment', '#334155', 1, 40, '娱乐消费'
+  UNION ALL SELECT NULL, '购物', 'expense', 'shopping', '#334155', 1, 50, '购物消费'
+  UNION ALL SELECT NULL, '其他', 'expense', 'other', '#334155', 1, 90, '其他支出'
+  UNION ALL SELECT NULL, '工资', 'income', 'salary', '#334155', 1, 10, '工资收入'
+  UNION ALL SELECT NULL, '理财', 'income', 'investment-income', '#334155', 1, 20, '理财收入'
+  UNION ALL SELECT NULL, '摄影收入', 'income', 'camera', '#1D4ED8', 1, 30, '摄影订单产生的订金与尾款收入'
+  UNION ALL SELECT NULL, '会员续费', 'expense', 'renewal', '#0F766E', 1, 95, '自动续费与会员订阅支出'
+) seed
+WHERE NOT EXISTS (
+  SELECT 1 FROM categories existing WHERE existing.user_id IS NULL AND existing.parent_id IS NULL
+    AND existing.type = seed.type AND existing.name = seed.name
+);

@@ -30,4 +30,4 @@ CREATE TABLE IF NOT EXISTS human_relation_records (
     FOREIGN KEY (account_id) REFERENCES accounts (id),
   CONSTRAINT fk_human_relation_records_funding_account
     FOREIGN KEY (funding_account_id) REFERENCES accounts (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='人情记录表：记录联系人之间的红包、礼金、人情往来';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='人情记录表：记录联系人之间的红包、礼金、人情往来';

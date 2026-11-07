@@ -10,10 +10,12 @@ CREATE TABLE IF NOT EXISTS reminder_settings (
   renewal_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   liability_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   investment_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  budget_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  reimbursement_enabled TINYINT(1) NOT NULL DEFAULT 1,
   PRIMARY KEY (user_id),
   CONSTRAINT fk_reminder_settings_user FOREIGN KEY (user_id) REFERENCES users(id),
   CONSTRAINT chk_reminder_advance_days CHECK (advance_days BETWEEN 0 AND 30)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='个人站内提醒设置';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='个人站内提醒设置';
 
 CREATE TABLE IF NOT EXISTS reminder_states (
   user_id BIGINT UNSIGNED NOT NULL,
@@ -23,4 +25,4 @@ CREATE TABLE IF NOT EXISTS reminder_states (
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (user_id, reminder_key),
   CONSTRAINT fk_reminder_states_user FOREIGN KEY (user_id) REFERENCES users(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='按用户隔离的提醒处理状态';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='按用户隔离的提醒处理状态';

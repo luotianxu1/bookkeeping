@@ -25,7 +25,7 @@
 │   ├── app-service/             # 全部业务：财务（含投资/选股）、工具、餐饮，端口 8082
 │   ├── market-service/          # 行情中心（可独立部署）：A股/港股/美股/ETF/黄金/全球指数/要闻，端口 8083
 │   └── pom.xml
-└── database/                    # MySQL 建表与变更脚本，按数字顺序执行
+└── database/                    # MySQL 完整建表与基础初始化脚本，按数字顺序执行
 ```
 
 ## 统一提醒
@@ -41,7 +41,7 @@
 
 接口位于业务服务 `/api/tools/reminders`，前端走 `/tool-api` 代理。读取提醒不触发扣款、记账或外部行情请求。
 
-验证：`cd life-hub && mvn -B -ntp -pl app-service -am test -Dtest=ReminderServiceTest -Dsurefire.failIfNoSpecifiedTests=false`；前端 `cd web && pnpm test`，浏览器 `pnpm test:e2e reminders.spec.ts`（Node 22 + Chromium）。后端使用隔离 H2 执行提醒 SQL 和适配后的真实迁移，浏览器使用受控接口；不替代 MySQL 集成验证。
+验证：`cd life-hub && mvn -B -ntp -pl app-service -am test -Dtest=ReminderServiceTest -Dsurefire.failIfNoSpecifiedTests=false`；前端 `cd web && pnpm test`，浏览器 `pnpm test:e2e reminders.spec.ts`（Node 22 + Chromium）。后端使用隔离 H2 执行提醒 SQL 和适配后的建表语句，浏览器使用受控接口；不替代 MySQL 集成验证。
 
 ## 技术栈
 
@@ -118,7 +118,7 @@ mysql --version
 cd "/Users/luotianxu/Documents/New project"
 ```
 
-首次初始化：
+`database/` 保存当前版本的完整结构，只用于新建数据库。历史增量变更已合并进对应的 `CREATE TABLE`，不再保留独立迁移或数据同步脚本。首次初始化：
 
 ```bash
 mysql -u root -p < database/001_create_database_and_users.mysql.sql
@@ -132,7 +132,7 @@ mysql -u root -p bookkeeping_app < database/003_create_accounts.mysql.sql
 # 继续按编号执行尚未导入的脚本；001 已执行，无需重复。
 ```
 
-如果脚本已经执行过，再次执行可能会提示表或字段已存在；这种情况需要根据当前数据库状态选择尚未执行的脚本。
+初始化仅补充缺失的管理员、账户类型和系统收支分类；账户、流水、联系人、订单等业务表为空。基础数据已存在时保留其值，所有表统一使用 `utf8mb4_unicode_ci`。`CREATE TABLE IF NOT EXISTS` 不会升级已有表结构；005 / 006 同时创建金额校验触发器，整套脚本用于空库的一次性初始化。既有数据库升级需另行比较结构并准备升级方案。
 
 ## 后端启动
 
@@ -386,7 +386,7 @@ cloudflared tunnel --url http://localhost:4173 --protocol http2
 
 ## 测试与 CI
 
-后端使用 JUnit 5、Mockito 与独立 H2 内存库，覆盖资金回滚/并发、持仓买卖/结算、重复分红/扣费、FIFO 费率、缓存和身份范围。测试使用生产 Mapper 与事务，不依赖开发库或真实行情接口。另有真实 MySQL 8 集成测试，使用仓库 SQL 中的建表语句，验证并发转账/买入/建仓、跨用户并发创建同一产品、幂等重放、回滚、余额聚合、外键与 CHECK 约束，以及 044 迁移的历史冲突检查和重复执行。
+后端使用 JUnit 5、Mockito 与独立 H2 内存库，覆盖资金回滚/并发、持仓买卖/结算、重复分红/扣费、FIFO 费率、缓存和身份范围。测试使用生产 Mapper 与事务，不依赖开发库或真实行情接口。另有真实 MySQL 8 集成测试，使用仓库 SQL 中的建表语句，验证并发转账/买入/建仓、跨用户并发创建同一产品、幂等重放、回滚、余额聚合、外键与 CHECK 约束，以及空库完整初始化、投资产品归一化唯一性、默认数据不覆盖和退款报销约束。
 
 ```bash
 cd life-hub
@@ -398,9 +398,9 @@ MYSQL_TEST_URL='jdbc:mysql://127.0.0.1:13306/?allowPublicKeyRetrieval=true&useSS
 MYSQL_TEST_USER=root MYSQL_TEST_PASSWORD=your-test-password mvn -B -ntp clean verify
 ```
 
-未设置 `MYSQL_TEST_URL` 时跳过 MySQL 集成测试；启用后要求 MySQL 8，每次创建随机 `life_hub_test_*` 库，结束删除。初始化只提取建表语句，再在测试库执行 044 / 046 原始迁移，不执行脚本中的 `USE bookkeeping_app` 或业务种子数据。请指定独立测试实例。
+未设置 `MYSQL_TEST_URL` 时跳过 MySQL 集成测试；完整测试要求 MySQL 8，每次创建随机 `life_hub_test_*` 库，结束删除。测试直接使用当前建表脚本，并跳过其中的 `CREATE DATABASE` / `USE`，始终留在随机测试库。空库初始化用例同时执行基础数据插入，其余账务测试自行构造数据。请指定独立测试实例。
 
-044 的兼容性回归可以单独针对 MySQL 5.7 或 8.0+ 测试实例运行：在设置上述测试连接后执行 `mvn -pl common,app-service -am test '-Dtest=MySqlAccountingTest#productIdentityMigrationRejectsDuplicatesAndCanBeRetried' -Dsurefire.failIfNoSpecifiedTests=false`。此检查仅覆盖该迁移；项目完整账务测试仍要求 MySQL 8。
+空库初始化与产品唯一性检查也可单独针对隔离 MySQL 5.7 / 8 运行：`mvn -pl common,app-service -am test '-Dtest=MySqlAccountingTest#freshSchemaIncludesAllFeaturesAndPreservesInitialDefaults+productIdentityIsEnforcedByFreshTableDefinition' -Dsurefire.failIfNoSpecifiedTests=false`。这不扩大项目整体的 MySQL 8 支持范围。
 
 前端使用 Vitest + Vue Test Utils + jsdom，验证 KeepAlive/可见性轮询、独立区域失败重试、取消请求、分页旧响应隔离及提交 ID 生命周期；基金/股票/黄金建仓和黄金卖出失败重试还验证请求 ID 与自动交易时间保持一致。Playwright 在真实 Chromium 中运行生产构建，使用受控 API 响应覆盖登录、详情先显示、费率重试、交易断网重试、持仓切换、401/503 处理和图表拆包。浏览器测试不依赖在线行情或开发后端。
 
@@ -426,9 +426,7 @@ pnpm test:e2e:live
 
 ## 交易可靠性与图表加载
 
-- 部署本轮代码前按顺序执行 `mysql -u root -p bookkeeping_app < database/043_create_accounting_requests.mysql.sql` 和 `mysql -u root -p bookkeeping_app < database/044_unique_investment_product_identity.mysql.sql`。043 新表记录交易请求 ID、请求摘要及原始响应；044 增加归一化产品身份唯一索引。
-- 执行 044 时暂停产品/持仓写入。脚本将代码、市场的首尾空格与大小写统一，并将 NULL、空串和纯空格市场视为同一市场；发现历史重复产品时列出全部冲突 ID 并停止，不自动删除或合并。需先核对这些产品及关联持仓，处理冲突后重新执行；成功后可重复执行。
-- 044 使用兼容 MySQL 5.7 / 8.0+ 的分组关联查询检查重复产品。若旧版脚本在 `PARTITION BY` 附近报 1064，请重新执行修正后的完整脚本（包含开头的 `DROP PROCEDURE IF EXISTS`）；该语法错误发生在创建存储过程时，尚未执行表结构变更。项目整体数据库要求仍为 MySQL 8.0+。
+- 幂等请求表在 `database/043_create_accounting_requests.mysql.sql` 中定义；投资产品的 `symbol_key`、`market_key` 生成列和唯一索引直接包含在 `database/007_create_investments.mysql.sql` 中。产品代码、市场忽略首尾空格与大小写，NULL、空串和纯空格市场视为同一市场。
 - 普通记账/转账、投资买卖（含黄金卖出）及基金/股票/黄金建仓支持可选 `requestId`（16–64 位字母、数字、下划线或连字符）。请求键按用户和操作隔离，在用户锁及账务事务内写入；同键同参数返回原响应，同键不同参数拒绝，回滚不占用键。已提交投资请求的重放不依赖行情服务。旧客户端不传 ID 时保持兼容。
 - 前端表单在本次页面生命周期内为未变化的失败提交复用 ID，自动生成的 `tradeAt` 随 ID 保留，成功或修改参数后生成新 ID 和时间。刷新页面会重建表单状态；不提供跨刷新自动重试。幂等记录默认保留，删除记录会失去对应历史请求的重放保护。
 - 产品由数据库唯一约束处理并发创建，重复请求复用产品并保留原有名称、行情与分红数据。新产品与持仓、扣款、幂等响应在同一事务内提交或回滚；行情获取在事务外完成。
@@ -498,15 +496,7 @@ git push
 
 ## 分类预算与退款报销（2026-11）
 
-部署此版本前，在已执行 045 的数据库执行 `database/046_category_budgets_and_expense_recoveries.mysql.sql`，然后更新 app-service 和前端。046 新建分类预算表、扩展流水关联字段和金额约束、增加预算提醒开关；执行前备份并暂停账务写入。该迁移兼容 MySQL 5.7 / 8.0.16+，支持首次执行、部分失败后补齐和重复执行，保留原流水、余额、预算及提醒设置；这不改变项目整体要求 MySQL 8 的范围。MySQL 8 使用 CHECK，5.7 使用 INSERT/UPDATE 触发器执行相同的金额校验。脚本不内置 `USE`，以连接时选中的数据库为准。
-
-若升级后出现 `Unknown column 'original_transaction_id' in 'field list'`，说明业务库的 046 迁移未完整执行。旧脚本在 MySQL 5.7 会因 `DROP CHECK` 报语法错误；即使分类预算表已建好，也可以用修正后的完整脚本重跑，不要删除已有表或数据。在项目根目录执行：
-
-```bash
-mysql -u root -p bookkeeping_app < database/046_category_budgets_and_expense_recoveries.mysql.sql
-```
-
-输入数据库密码，确认脚本成功后再启动业务服务并刷新页面。若提示先执行 045，请先执行 `database/045_create_reminder_preferences.mysql.sql`，然后重跑 046。若提示历史金额不合法，核对相应数据后重跑；脚本不会自动修正财务记录。
+当前完整结构分别包含在 `005_create_transactions.mysql.sql`（退款报销字段、金额约束和跟进表）、`006_create_monthly_budgets.mysql.sql`（月预算和分类预算）及 `045_create_reminder_preferences.mysql.sql`（预算和报销提醒开关）中。MySQL 8 使用 CHECK；005 / 006 保留 MySQL 5.7 的 INSERT/UPDATE 金额校验触发器。
 
 - **预算管理** `/finance/budgets`：切换月份管理月总预算及具体支出分类预算。分类选择最末级分类（有子分类时选择二级），仅统计该分类、该月份、CNY 现金账户的净支出。分类预算独立于月总预算，不重复累加；同月同分类保存即更新。月总预算仍包含债务还款、人情送出等现金支出，并按预算币种统计。
 - **统一提醒**：当前月份的月总预算、分类预算达到 80% / 100% 时分别产生提醒，100% 阶段替换当前 80% 提醒。每个阶段的已读、稍后状态独立保存；刷新不重复提醒，退款后低于阈值自动消失，下月重新计算。提醒设置可关闭“预算预警与超支”。这是站内提醒，随页面刷新/轮询更新。
@@ -515,11 +505,11 @@ mysql -u root -p bookkeeping_app < database/046_category_budgets_and_expense_rec
 - **金额保护**：退款累计＋计划报销总额不得超过原支出；实际报销到账不得超过计划。若退款占用了待报销部分，先降低报销计划再登记退款。关联到账存在或计划未取消时，禁止修改/删除原支出。撤销到账会扣回现金并恢复支出统计和待报销金额；现金余额不足则整体回滚。已有分类预算的分类需先移除相关月份预算才能删除。
 - **重试与权限**：到账沿用用户账务行锁和 `requestId` 幂等事务；同请求重试只入账一次，参数变化不能沿用旧 ID。退款、报销和分类预算接口只处理登录本人数据，家庭查看权限不赋予操作权限。
 
-验证：`pnpm test`、`pnpm build`、`pnpm test:e2e finance-recoveries.spec.ts reminders.spec.ts transaction-search.spec.ts`、`pnpm test:e2e:live`，以及 `mvn -B -ntp -pl common,app-service -am test`。隔离 H2 测试覆盖并发限额、重试、撤销回滚、归属校验、跨月净支出、分类预算和提醒阶段；MySQL 集成测试会在提供 `MYSQL_TEST_URL` 时执行真实迁移与约束验证，H2 不能替代该检查。046 / 047 的兼容性回归可以单独针对隔离的 MySQL 5.7 / 8 实例运行：`mvn -pl common,app-service -am test '-Dtest=MySqlAccountingTest#recoveryMigrationSupportsFreshAndPartialSchemasWithoutLosingData' -Dsurefire.failIfNoSpecifiedTests=false`。该测试验证部分迁移补齐、重跑后记录、余额和跟进设置不变，以及 INSERT/UPDATE 金额约束；完整 MySQL 账务集成仍需 MySQL 8。
+验证：`pnpm test`、`pnpm build`、`pnpm test:e2e finance-recoveries.spec.ts reminders.spec.ts transaction-search.spec.ts`、`pnpm test:e2e:live`，以及 `mvn -B -ntp -pl common,app-service -am test`。隔离 H2 测试覆盖并发限额、重试、撤销回滚、归属校验、跨月净支出、分类预算和提醒阶段；MySQL 集成测试会在提供 `MYSQL_TEST_URL` 时执行完整初始化脚本，验证结构、默认数据与 INSERT/UPDATE 金额约束；H2 不能替代该检查。
 
 ## 流水检索与报销跟进
 
 - 收支列表支持名称/备注关键词搜索，分类（一级分类包含子分类）、金额范围与现有账户、日期、收入/支出筛选可组合。选择“全部时间”可搜索历史记录。金额范围按绝对值和原币数值匹配，退款仍按负支出汇总；筛选、合计和分页使用同一组数据库条件，变更条件回到第一页。
 - 报销计划可选填报销对象、预计到账日期。待报销汇总包含未到账与部分到账记录，按币种分别显示合计、笔数和逾期金额，不受列表分页或状态标签影响；从原支出进入时只汇总该笔支出。
 - 预计到账日期使用北京时间和统一提醒的提前天数，逾期未到账继续显示提醒。部分到账后提醒金额更新，全部到账或撤销待报销后提醒消失；改期形成新的提醒，支持独立的“报销待到账”开关。通知仅在站内展示。
-- 部署前先执行 046，再执行 `database/047_reimbursement_followups.mysql.sql`。047 可重复执行，新增跟进表和报销提醒开关，不修改原有财务金额。旧客户端仅提交计划金额时保留已有跟进信息；新表单可清空对象和预计日期。当前版本不包含附件。
+- 跟进表和报销提醒开关已分别合并进 005 与 045。旧客户端仅提交计划金额时保留已有跟进信息；新表单可清空对象和预计日期。当前版本不包含附件。

@@ -34,4 +34,4 @@ CREATE TABLE IF NOT EXISTS investment_auto_invest_plans (
     FOREIGN KEY (funding_account_id) REFERENCES accounts (id),
   CONSTRAINT chk_investment_auto_invest_plans_amount_positive
     CHECK (amount > 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='基金定投计划表：支持周期性自动申购';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='基金定投计划表：支持周期性自动申购';

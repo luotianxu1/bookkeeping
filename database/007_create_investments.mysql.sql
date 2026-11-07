@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS investment_products (
   market VARCHAR(32) NULL COMMENT '市场，例如 CN、HK、US、FUND',
   exchange_code VARCHAR(32) NULL COMMENT '交易所编码，例如 SSE、SZSE、HKEX、NASDAQ',
   symbol VARCHAR(64) NOT NULL COMMENT '产品代码，例如 600519、000001、AAPL',
+  symbol_key VARCHAR(64) GENERATED ALWAYS AS (UPPER(TRIM(symbol))) STORED,
+  market_key VARCHAR(32) GENERATED ALWAYS AS (UPPER(TRIM(COALESCE(market, '')))) STORED,
   name VARCHAR(120) NOT NULL COMMENT '产品名称',
   short_name VARCHAR(80) NULL COMMENT '简称',
   currency_code CHAR(3) NOT NULL DEFAULT 'CNY' COMMENT '计价币种',
@@ -28,10 +30,10 @@ CREATE TABLE IF NOT EXISTS investment_products (
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
   PRIMARY KEY (id),
-  UNIQUE KEY uk_investment_products_type_symbol_market (product_type, symbol, market),
+  UNIQUE KEY uk_investment_products_identity (product_type, symbol_key, market_key),
   KEY idx_investment_products_type_status (product_type, status),
   KEY idx_investment_products_name (name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='投资产品表：股票、基金、债券、黄金等投资标的主数据';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资产品表：股票、基金、债券、黄金等投资标的主数据';
 
 CREATE TABLE IF NOT EXISTS investment_positions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '投资持仓ID',
@@ -80,7 +82,7 @@ CREATE TABLE IF NOT EXISTS investment_positions (
     CHECK (holding_quantity >= 0 AND available_quantity >= 0 AND frozen_quantity >= 0),
   CONSTRAINT chk_investment_positions_amount_nonnegative
     CHECK (cost_amount >= 0 AND market_value >= 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='投资持仓表：支撑投资账户列表、投资详情、收益预测与总市值统计';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资持仓表：支撑投资账户列表、投资详情、收益预测与总市值统计';
 
 CREATE TABLE IF NOT EXISTS investment_transactions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '投资交易流水ID',
@@ -130,7 +132,7 @@ CREATE TABLE IF NOT EXISTS investment_transactions (
     CHECK (quantity >= 0),
   CONSTRAINT chk_investment_transactions_fee_nonnegative
     CHECK (fee_amount >= 0 AND tax_amount >= 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='投资交易流水表：记录建仓、加仓、减仓、分红再投等明细';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资交易流水表：记录建仓、加仓、减仓、分红再投等明细';
 
 CREATE TABLE IF NOT EXISTS investment_price_quotes (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '投资产品行情ID',
@@ -153,7 +155,7 @@ CREATE TABLE IF NOT EXISTS investment_price_quotes (
   KEY idx_investment_price_quotes_product_time (product_id, quote_time),
   CONSTRAINT fk_investment_price_quotes_product
     FOREIGN KEY (product_id) REFERENCES investment_products (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='投资行情快照表：支撑市值同步、今日盈亏和收益预测';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资行情快照表：支撑市值同步、今日盈亏和收益预测';
 
 CREATE TABLE IF NOT EXISTS investment_dividend_plans (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '分红计划ID',
@@ -177,7 +179,7 @@ CREATE TABLE IF NOT EXISTS investment_dividend_plans (
     FOREIGN KEY (product_id) REFERENCES investment_products (id),
   CONSTRAINT chk_investment_dividend_plans_amount_positive
     CHECK (dividend_per_unit > 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='投资分红计划表：支撑攒股收息页面的预估分红';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资分红计划表：支撑攒股收息页面的预估分红';
 
 CREATE TABLE IF NOT EXISTS investment_dividend_records (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '分红记录ID',
@@ -218,4 +220,4 @@ CREATE TABLE IF NOT EXISTS investment_dividend_records (
     CHECK (gross_amount >= 0 AND tax_amount >= 0 AND net_amount >= 0),
   CONSTRAINT chk_investment_dividend_records_quantity_nonnegative
     CHECK (holding_quantity >= 0 AND reinvest_quantity >= 0)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='投资分红记录表：记录现金分红和分红再投，支撑累计收息统计';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投资分红记录表：记录现金分红和分红再投，支撑累计收息统计';

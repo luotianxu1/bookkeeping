@@ -34,39 +34,4 @@ CREATE TABLE IF NOT EXISTS debt_records (
   CONSTRAINT fk_debt_records_parent
     FOREIGN KEY (parent_record_id) REFERENCES debt_records (id)
     ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='债务记录表：记录某个债务账户下的借入和借出明细';
-
-INSERT INTO debt_records (
-  user_id,
-  account_id,
-  direction,
-  amount,
-  currency_code,
-  remark,
-  occurred_at,
-  status
-)
-SELECT
-  a.user_id,
-  a.id,
-  CASE
-    WHEN LOWER(CONCAT_WS(' ', a.name, IFNULL(a.remark, ''))) LIKE '%借出%'
-      OR LOWER(CONCAT_WS(' ', a.name, IFNULL(a.remark, ''))) LIKE '%待收%'
-      OR LOWER(CONCAT_WS(' ', a.name, IFNULL(a.remark, ''))) LIKE '%收回%'
-      OR LOWER(CONCAT_WS(' ', a.name, IFNULL(a.remark, ''))) LIKE '%垫付%'
-      OR LOWER(CONCAT_WS(' ', a.name, IFNULL(a.remark, ''))) LIKE '%回款%'
-      OR LOWER(CONCAT_WS(' ', a.name, IFNULL(a.remark, ''))) LIKE '%催收%'
-      THEN 'receivable'
-    ELSE 'payable'
-  END,
-  a.current_balance,
-  COALESCE(a.currency_code, 'CNY'),
-  a.remark,
-  COALESCE(a.updated_at, a.created_at, CURRENT_TIMESTAMP(3)),
-  'active'
-FROM accounts a
-JOIN account_types t ON t.id = a.account_type_id
-LEFT JOIN debt_records dr ON dr.account_id = a.id
-WHERE t.code = 'debt'
-  AND a.current_balance > 0
-  AND dr.id IS NULL;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='债务记录表：记录某个债务账户下的借入和借出明细';

@@ -1,6 +1,6 @@
 -- MySQL 5.7+/8.0+
 -- Run this file with:
---   mysql -u root -p < database/031_create_weight_records.mysql.sql
+--   mysql -u root -p < database/041_create_weight_records.mysql.sql
 
 USE bookkeeping_app;
 
@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS weight_records (
   user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID',
   record_date DATE NOT NULL COMMENT '记录日期',
   weight DECIMAL(5,1) NOT NULL COMMENT '体重(kg)',
+  body_fat_rate DECIMAL(4,1) NULL COMMENT '体脂率(%)，按打卡时的身体数据计算',
   remark VARCHAR(500) NULL COMMENT '备注',
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '创建时间',
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '更新时间',
@@ -18,4 +19,4 @@ CREATE TABLE IF NOT EXISTS weight_records (
   UNIQUE KEY uk_weight_records_user_date (user_id, record_date),
   CONSTRAINT fk_weight_records_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='体重打卡表：每人每日一条体重记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='体重打卡表：每人每日一条体重记录';

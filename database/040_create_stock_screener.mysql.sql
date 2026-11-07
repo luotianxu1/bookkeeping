@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS stock_screen_runs (
   KEY idx_stock_screen_runs_status_date (status, trade_date),
   KEY idx_stock_screen_runs_reusable (status, trade_date, rule_version),
   KEY idx_stock_screen_runs_started (started_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='A股选股扫描任务';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='A股选股扫描任务';
 
 CREATE TABLE IF NOT EXISTS stock_screen_snapshots (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '指标快照ID',
@@ -74,4 +74,4 @@ CREATE TABLE IF NOT EXISTS stock_screen_snapshots (
   KEY idx_stock_screen_snapshot_yin_yang (run_id, yin_yang_double_bear_matched, yin_yang_score),
   KEY idx_stock_screen_snapshot_first_board (run_id, first_board_high_bear_matched, first_board_score),
   CONSTRAINT fk_stock_screen_snapshot_run FOREIGN KEY (run_id) REFERENCES stock_screen_runs (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='A股选股日线指标快照';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='A股选股日线指标快照';

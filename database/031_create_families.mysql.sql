@@ -20,4 +20,4 @@ CREATE TABLE IF NOT EXISTS families (
   KEY idx_families_status (status),
   CONSTRAINT fk_families_owner_user
     FOREIGN KEY (owner_user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='家庭表：支撑邀请码、成员绑定和解绑';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='家庭表：支撑邀请码、成员绑定和解绑';

@@ -45,16 +45,14 @@ class ReminderServiceTest {
         jdbc = new JdbcTemplate(source);
         jdbc.execute("CREATE TABLE users(id BIGINT PRIMARY KEY)");
         jdbc.update("INSERT INTO users VALUES(1),(2)");
-        // 执行真实迁移，仅去除 H2 不支持的 MySQL 字符集/存储引擎语法。
-        String migration = Files.readString(Path.of("../../database/045_create_reminder_preferences.mysql.sql"))
+        // 执行完整建表语句，仅去除 H2 不支持的 MySQL 字符集/存储引擎语法。
+        String schema = Files.readString(Path.of("../../database/045_create_reminder_preferences.mysql.sql"))
             .replace("USE bookkeeping_app;", "").replace("SET NAMES utf8mb4;", "")
             .replace("CHARACTER SET ascii COLLATE ascii_bin", "")
-            .replace("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
-        var populator = new ResourceDatabasePopulator(new ByteArrayResource(migration.getBytes(StandardCharsets.UTF_8)));
+            .replace("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", "");
+        var populator = new ResourceDatabasePopulator(new ByteArrayResource(schema.getBytes(StandardCharsets.UTF_8)));
         populator.execute(source);
         populator.execute(source); // 可重复执行，不重置已有状态。
-        jdbc.execute("ALTER TABLE reminder_settings ADD budget_enabled BOOLEAN DEFAULT TRUE");
-        jdbc.execute("ALTER TABLE reminder_settings ADD reimbursement_enabled BOOLEAN DEFAULT TRUE");
         jdbc.execute("CREATE TABLE transactions(id BIGINT PRIMARY KEY,user_id BIGINT,type VARCHAR(20),title VARCHAR(120),amount DECIMAL(18,2),currency_code VARCHAR(3),status VARCHAR(20),original_transaction_id BIGINT,recovery_kind VARCHAR(30),reimbursement_amount DECIMAL(18,2))");
         jdbc.execute("CREATE TABLE expense_recovery_followups(transaction_id BIGINT PRIMARY KEY,user_id BIGINT,recipient VARCHAR(100),expected_date DATE)");
         jdbc.execute("CREATE TABLE todo_items(id BIGINT PRIMARY KEY,user_id BIGINT,title VARCHAR(120),remark VARCHAR(500),due_at TIMESTAMP,status VARCHAR(20))");

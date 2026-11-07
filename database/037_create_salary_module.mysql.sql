@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS salary_profiles (
   KEY idx_salary_profiles_status (status),
   CONSTRAINT fk_salary_profiles_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工资配置表：记录工资测算基础参数';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工资配置表：记录工资测算基础参数';
 
 CREATE TABLE IF NOT EXISTS salary_special_deductions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '专项附加扣除ID',
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS salary_special_deductions (
   KEY idx_salary_deductions_year (tax_year),
   CONSTRAINT fk_salary_deductions_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工资专项附加扣除表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工资专项附加扣除表';
 
 CREATE TABLE IF NOT EXISTS salary_account_records (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '工资账户流水ID',
@@ -76,4 +76,4 @@ CREATE TABLE IF NOT EXISTS salary_account_records (
   KEY idx_salary_account_records_record_type (record_type),
   CONSTRAINT fk_salary_account_records_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工资相关账户流水表：自动累计、手动调账';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='工资相关账户流水表：自动累计、手动调账';

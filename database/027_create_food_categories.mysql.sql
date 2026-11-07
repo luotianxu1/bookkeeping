@@ -23,41 +23,4 @@ CREATE TABLE IF NOT EXISTS food_categories (
   KEY idx_food_categories_user_type_status (user_id, category_type, status, sort_order),
   CONSTRAINT fk_food_categories_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='餐饮分类表：统一管理菜品分类与食材分类';
-
-INSERT INTO food_categories (
-  user_id,
-  category_type,
-  name,
-  icon_text,
-  icon_tone,
-  description,
-  sort_order,
-  status
-)
-SELECT
-  u.id,
-  seed.category_type,
-  seed.name,
-  seed.icon_text,
-  seed.icon_tone,
-  seed.description,
-  seed.sort_order,
-  'active'
-FROM users u
-JOIN (
-  SELECT 'dish' AS category_type, '主食' AS name, 'food' AS icon_text, 'blue' AS icon_tone, '米饭、面食、盖饭' AS description, 10 AS sort_order
-  UNION ALL SELECT 'dish', '小炒', 'daily', 'purple', '快手、下饭、家常', 20
-  UNION ALL SELECT 'dish', '汤羹', 'food', 'orange', '炖汤、浓汤、暖胃', 30
-  UNION ALL SELECT 'dish', '甜品饮品', 'entertainment', 'sky', '布丁、饮品、下午茶', 40
-  UNION ALL SELECT 'ingredient', '肉类蛋白', 'food', 'orange', '牛肉、鸡蛋、虾仁等常备主料', 110
-  UNION ALL SELECT 'ingredient', '蔬菜水果', 'daily', 'green', '番茄、西兰花、洋葱等清爽配菜', 120
-  UNION ALL SELECT 'ingredient', '调味干货', 'other', 'purple', '盐、黑胡椒、香料与面包糠', 130
-) seed
-WHERE u.username = 'admin'
-ON DUPLICATE KEY UPDATE
-  icon_text = VALUES(icon_text),
-  icon_tone = VALUES(icon_tone),
-  description = VALUES(description),
-  sort_order = VALUES(sort_order),
-  status = VALUES(status);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='餐饮分类表：统一管理菜品分类与食材分类';

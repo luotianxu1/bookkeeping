@@ -17,4 +17,4 @@ CREATE TABLE IF NOT EXISTS scheduled_task_runs (
   PRIMARY KEY (id),
   KEY idx_scheduled_task_runs_task_started (task_name, started_at),
   KEY idx_scheduled_task_runs_status_started (status, started_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='定时任务运行审计表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='定时任务运行审计表';

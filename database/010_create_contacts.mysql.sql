@@ -22,32 +22,4 @@ CREATE TABLE IF NOT EXISTS contacts (
   KEY idx_contacts_user_name (user_id, name),
   CONSTRAINT fk_contacts_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='联系人表：支撑联系人管理与债务联系人选择';
-
-INSERT INTO contacts (
-  user_id,
-  name,
-  phone,
-  remark,
-  sort_order
-)
-SELECT
-  u.id,
-  seed.name,
-  seed.phone,
-  seed.remark,
-  seed.sort_order
-FROM users u
-JOIN (
-  SELECT '王琳' AS name, '13866772001' AS phone, '母亲 · 生日 6/18' AS remark, 10 AS sort_order
-  UNION ALL
-  SELECT '陈叙', '18677776620', '球友', 20
-  UNION ALL
-  SELECT '李阿姨', '17788889054', '装修尾款 · 预计 6/02 收回', 30
-) seed
-WHERE u.username = 'admin'
-ON DUPLICATE KEY UPDATE
-  name = VALUES(name),
-  remark = VALUES(remark),
-  sort_order = VALUES(sort_order),
-  status = 'active';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='联系人表：支撑联系人管理与债务联系人选择';

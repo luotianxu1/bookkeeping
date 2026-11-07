@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** 仅连接显式指定的测试实例。每次新建随机 schema，绝不执行脚本中的 USE/种子数据。 */
+/** 仅连接显式指定的测试实例。每次新建随机 schema，跳过脚本中指向业务库的 CREATE DATABASE / USE。 */
 @EnabledIfEnvironmentVariable(named = "MYSQL_TEST_URL", matches = "jdbc:mysql://.+")
 class MySqlAccountingTest {
     @Test void transactionSearchSupportsMixedTitleCollations() throws Exception {
@@ -44,12 +44,8 @@ class MySqlAccountingTest {
             for (String file : List.of("001_create_database_and_users", "002_create_account_types", "003_create_accounts",
                 "004_create_categories", "005_create_transactions", "014_create_debt_records", "016_create_human_relation_records",
                 "045_create_reminder_preferences")) {
-                var tables = Pattern.compile("(?ms)^CREATE TABLE.*?\\) ENGINE=.*?;")
-                    .matcher(Files.readString(Path.of("../../database", file + ".mysql.sql")));
-                assertTrue(tables.find(), "DDL missing in " + file);
-                do { jdbc.execute(tables.group()); } while (tables.find());
+                initializeFile(jdbc, file + ".mysql.sql", false);
             }
-            migrateSql(jdbc, "046_category_budgets_and_expense_recoveries.mysql.sql");
             // 复现既有库：账户名称用 unicode_ci，流水及往来记录用 general_ci。
             jdbc.execute("ALTER TABLE accounts MODIFY name VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL");
             for (String table : List.of("transactions", "debt_records", "human_relation_records"))
@@ -105,8 +101,7 @@ class MySqlAccountingTest {
         } finally { admin.execute("DROP DATABASE " + schema); }
     }
 
-    /** 单独运行本用例可检查 MySQL 5.7 的迁移语法，不代表整套账务支持 5.7。 */
-    @Test void productIdentityMigrationRejectsDuplicatesAndCanBeRetried() throws Exception {
+    @Test void productIdentityIsEnforcedByFreshTableDefinition() throws Exception {
         String url = System.getenv("MYSQL_TEST_URL");
         String user = System.getenv().getOrDefault("MYSQL_TEST_USER", "root");
         String password = System.getenv().getOrDefault("MYSQL_TEST_PASSWORD", "");
@@ -114,95 +109,81 @@ class MySqlAccountingTest {
         String schema = "life_hub_test_" + UUID.randomUUID().toString().replace("-", "");
         admin.execute("CREATE DATABASE " + schema + " CHARACTER SET utf8mb4");
         try {
-            String base = url.split("\\?", 2)[0];
-            String params = url.contains("?") ? url.substring(url.indexOf('?')) : "";
-            String server = base.substring(0, base.indexOf('/', "jdbc:mysql://".length()));
-            var jdbc = new JdbcTemplate(new DriverManagerDataSource(server + "/" + schema + params, user, password));
+            var jdbc = new JdbcTemplate(testDataSource(url, schema, user, password));
             String script = Files.readString(Path.of("../../database/007_create_investments.mysql.sql"));
             var table = Pattern.compile("(?ms)^CREATE TABLE IF NOT EXISTS investment_products \\(.*?\\) ENGINE=.*?;").matcher(script);
             assertTrue(table.find());
             jdbc.execute(table.group());
-            jdbc.update("INSERT INTO investment_products(id,product_type,symbol,name,market) VALUES(101,'gold','DUP','A',NULL),(102,'gold',' dup ','B',' ')");
-            var migrationFailure = assertThrows(org.springframework.dao.DataAccessException.class, () -> migrateProducts(jdbc));
-            assertEquals(1644, ((java.sql.SQLException) migrationFailure.getMostSpecificCause()).getErrorCode());
-            assertEquals(List.of(101L, 102L), jdbc.queryForList("SELECT id FROM investment_products ORDER BY id", Long.class));
-            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='investment_products' AND column_name='market_key'", Integer.class));
-            // 只清除本测试的冲突数据，验证失败后重跑以及成功后重跑。
-            jdbc.update("DELETE FROM investment_products WHERE id=102");
-            migrateProducts(jdbc);
-            migrateProducts(jdbc);
+            jdbc.update("INSERT INTO investment_products(id,product_type,symbol,name,market) VALUES(101,'gold','DUP','Original',NULL)");
+            for (String market : new String[]{null, "", " "}) {
+                var duplicate = assertThrows(org.springframework.dao.DataAccessException.class, () ->
+                    jdbc.update("INSERT INTO investment_products(product_type,symbol,name,market) VALUES('gold',' dup ','Duplicate',?)", market));
+                assertEquals(1062, ((java.sql.SQLException) duplicate.getMostSpecificCause()).getErrorCode());
+            }
+            assertEquals("Original", jdbc.queryForObject("SELECT name FROM investment_products WHERE id=101", String.class));
+            assertEquals("DUP", jdbc.queryForObject("SELECT symbol_key FROM investment_products WHERE id=101", String.class));
             assertEquals("", jdbc.queryForObject("SELECT market_key FROM investment_products WHERE id=101", String.class));
             assertNull(jdbc.queryForObject("SELECT market FROM investment_products WHERE id=101", String.class));
-            var duplicate = assertThrows(org.springframework.dao.DataAccessException.class, () ->
-                jdbc.update("INSERT INTO investment_products(product_type,symbol,name,market) VALUES('gold',' dup ','C',' ')"));
-            assertEquals(1062, ((java.sql.SQLException) duplicate.getMostSpecificCause()).getErrorCode());
-            jdbc.update("INSERT INTO investment_products(product_type,symbol,name,market) VALUES('gold','DUP','HK product','HK')");
-            assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM investment_products", Integer.class));
+            jdbc.update("INSERT INTO investment_products(product_type,symbol,name,market) VALUES('gold','DUP','HK product','HK'),('stock','DUP','Stock',NULL)");
+            assertEquals(3, jdbc.queryForObject("SELECT COUNT(*) FROM investment_products", Integer.class));
         } finally { admin.execute("DROP DATABASE " + schema); }
     }
 
-    /** 046 的结构修复及金额约束同时在 MySQL 5.7 / 8 验证；不连接开发库。 */
-    @Test void recoveryMigrationSupportsFreshAndPartialSchemasWithoutLosingData() throws Exception {
+    /** 从空库按顺序执行全部初始化文件，覆盖结构、基础数据和 MySQL 5.7 / 8 金额约束。 */
+    @Test void freshSchemaIncludesAllFeaturesAndPreservesInitialDefaults() throws Exception {
         String url = System.getenv("MYSQL_TEST_URL");
         String user = System.getenv().getOrDefault("MYSQL_TEST_USER", "root");
         String password = System.getenv().getOrDefault("MYSQL_TEST_PASSWORD", "");
         var admin = new JdbcTemplate(new DriverManagerDataSource(url, user, password));
-        for (boolean partial : List.of(false, true)) {
-            String schema = "life_hub_test_" + UUID.randomUUID().toString().replace("-", "");
-            admin.execute("CREATE DATABASE " + schema + " CHARACTER SET utf8mb4");
-            try {
-                String base = url.split("\\?", 2)[0];
-                String params = url.contains("?") ? url.substring(url.indexOf('?')) : "";
-                String server = base.substring(0, base.indexOf('/', "jdbc:mysql://".length()));
-                var jdbc = new JdbcTemplate(new DriverManagerDataSource(server + "/" + schema + params, user, password));
-                for (String file : List.of("001_create_database_and_users", "002_create_account_types", "003_create_accounts",
-                    "004_create_categories", "005_create_transactions", "045_create_reminder_preferences")) {
-                    var tables = Pattern.compile("(?ms)^CREATE TABLE.*?\\) ENGINE=.*?;")
-                        .matcher(Files.readString(Path.of("../../database", file + ".mysql.sql")));
-                    assertTrue(tables.find());
-                    do { jdbc.execute(tables.group()); } while (tables.find());
-                }
-                jdbc.update("INSERT INTO users(id,username,display_name,password_hash) VALUES(1,'migration','Migration','test')");
-                jdbc.update("INSERT INTO account_types(id,code,name) VALUES(1,'cash','Cash')");
-                jdbc.update("INSERT INTO accounts(id,user_id,account_type_id,name,current_balance) VALUES(1,1,1,'Cash',900)");
-                jdbc.update("INSERT INTO categories(id,name,type,icon) VALUES(1,'Expense','expense','other')");
-                jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at) VALUES(1,'original',1,'expense',100,1,1,'Keep this expense','2026-01-01')");
-                if (partial) {
-                    // 复现旧 046 已建分类预算表，后续 ALTER 失败，以及手工只补了一列的状态。
-                    String script = Files.readString(Path.of("../../database/046_category_budgets_and_expense_recoveries.mysql.sql"));
-                    var table = Pattern.compile("(?ms)  CREATE TABLE IF NOT EXISTS category_budgets.*?ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;").matcher(script);
-                    assertTrue(table.find()); jdbc.execute(table.group());
-                    jdbc.update("INSERT INTO category_budgets(user_id,budget_month,category_id,amount) VALUES(1,'2026-01-01',1,200)");
-                    jdbc.execute("ALTER TABLE transactions ADD original_transaction_id BIGINT UNSIGNED NULL");
-                }
-                migrateSql(jdbc, "046_category_budgets_and_expense_recoveries.mysql.sql");
-                migrateSql(jdbc, "047_reimbursement_followups.mysql.sql");
-                jdbc.update("INSERT INTO reminder_settings(user_id,reimbursement_enabled) VALUES(1,FALSE)");
-                jdbc.update("INSERT INTO expense_recovery_followups(transaction_id,user_id,recipient,expected_date) VALUES(1,1,'Finance','2026-11-07')");
-                migrateSql(jdbc, "047_reimbursement_followups.mysql.sql");
-                assertEquals("Finance",jdbc.queryForObject("SELECT recipient FROM expense_recovery_followups WHERE transaction_id=1",String.class));
-                assertEquals(0,jdbc.queryForObject("SELECT reimbursement_enabled FROM reminder_settings WHERE user_id=1",Integer.class));
-                assertEquals(3, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='transactions' AND column_name IN ('original_transaction_id','recovery_kind','reimbursement_amount')", Integer.class));
-                jdbc.update("UPDATE reminder_settings SET budget_enabled=FALSE WHERE user_id=1");
-                jdbc.update("UPDATE transactions SET reimbursement_amount=50 WHERE id=1");
-                jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at,original_transaction_id,recovery_kind) VALUES(2,'refund',1,'expense',-20,1,1,'Keep this refund','2026-02-01',1,'refund')");
-                migrateSql(jdbc, "046_category_budgets_and_expense_recoveries.mysql.sql");
-                assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM transactions", Integer.class));
-                assertEquals(0, new BigDecimal("80").compareTo(jdbc.queryForObject("SELECT SUM(amount) FROM transactions", BigDecimal.class)));
-                assertEquals(0, new BigDecimal("50").compareTo(jdbc.queryForObject("SELECT reimbursement_amount FROM transactions WHERE id=1", BigDecimal.class)));
-                assertEquals("Keep this expense", jdbc.queryForObject("SELECT title FROM transactions WHERE id=1", String.class));
-                assertEquals(0, new BigDecimal("900").compareTo(jdbc.queryForObject("SELECT current_balance FROM accounts WHERE id=1", BigDecimal.class)));
-                assertFalse(jdbc.queryForObject("SELECT budget_enabled FROM reminder_settings WHERE user_id=1", Boolean.class));
-                if (partial) assertEquals(0, new BigDecimal("200").compareTo(jdbc.queryForObject("SELECT amount FROM category_budgets", BigDecimal.class)));
-                assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE transactions SET amount=-1 WHERE id=1"));
-                assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE transactions SET recovery_kind=NULL WHERE id=2"));
-                assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE transactions SET reimbursement_amount=101 WHERE id=1"));
-                assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("INSERT INTO transactions(transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at) VALUES('invalid',1,'expense',-1,1,1,'Invalid','2026-01-01')"));
-                assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("INSERT INTO category_budgets(user_id,budget_month,category_id,amount) VALUES(1,'2026-02-01',1,-1)"));
-                if (!partial) jdbc.update("INSERT INTO category_budgets(user_id,budget_month,category_id,amount) VALUES(1,'2026-01-01',1,200)");
-                assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE category_budgets SET amount=0"));
-            } finally { admin.execute("DROP DATABASE " + schema); }
-        }
+        String schema = "life_hub_test_" + UUID.randomUUID().toString().replace("-", "");
+        admin.execute("CREATE DATABASE " + schema + " CHARACTER SET utf8mb4");
+        try {
+            var jdbc = new JdbcTemplate(testDataSource(url, schema, user, password));
+            try (var files = Files.list(Path.of("../../database"))) {
+                for (Path file : files.filter(p -> p.toString().endsWith(".mysql.sql")).sorted().toList())
+                    initializeFile(jdbc, file.getFileName().toString(), true);
+            }
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM accounts", Integer.class));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM transactions", Integer.class));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM debt_records", Integer.class));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM photography_orders", Integer.class));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM food_dishes", Integer.class));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM food_orders", Integer.class));
+            assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM account_types", Integer.class));
+            assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM categories", Integer.class));
+            assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='weight_records' AND column_name='body_fat_rate'", Integer.class));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_collation<>'utf8mb4_unicode_ci'", Integer.class));
+            long owner = jdbc.queryForObject("SELECT id FROM users WHERE username='admin'", Long.class);
+            long cashType = jdbc.queryForObject("SELECT id FROM account_types WHERE code='cash'", Long.class);
+            long category = jdbc.queryForObject("SELECT id FROM categories WHERE name='餐饮'", Long.class);
+            jdbc.update("UPDATE users SET display_name='Custom name', role_name='user' WHERE id=?", owner);
+            jdbc.update("UPDATE account_types SET name='Custom cash' WHERE id=?", cashType);
+            jdbc.update("UPDATE categories SET icon='custom' WHERE id=?", category);
+            for (String file : List.of("001_create_database_and_users", "002_create_account_types", "004_create_categories"))
+                initializeFile(jdbc, file + ".mysql.sql", true);
+            assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class));
+            assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM account_types", Integer.class));
+            assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM categories", Integer.class));
+            assertEquals("Custom name", jdbc.queryForObject("SELECT display_name FROM users WHERE id=?", String.class, owner));
+            assertEquals("user", jdbc.queryForObject("SELECT role_name FROM users WHERE id=?", String.class, owner));
+            assertEquals("Custom cash", jdbc.queryForObject("SELECT name FROM account_types WHERE id=?", String.class, cashType));
+            assertEquals("custom", jdbc.queryForObject("SELECT icon FROM categories WHERE id=?", String.class, category));
+            jdbc.update("INSERT INTO accounts(id,user_id,account_type_id,name,current_balance) VALUES(1,?,?,'Cash',900)", owner, cashType);
+            jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at,reimbursement_amount) VALUES(1,'original',?,'expense',100,1,?,'Expense','2026-01-01',50)", owner, category);
+            jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at,original_transaction_id,recovery_kind) VALUES(2,'refund',?,'expense',-20,1,?,'Refund','2026-02-01',1,'refund')", owner, category);
+            jdbc.update("INSERT INTO expense_recovery_followups(transaction_id,user_id,recipient,expected_date) VALUES(1,?,'Finance','2026-11-07')", owner);
+            jdbc.update("INSERT INTO reminder_settings(user_id) VALUES(?)", owner);
+            assertEquals("Finance", jdbc.queryForObject("SELECT recipient FROM expense_recovery_followups WHERE transaction_id=1", String.class));
+            assertTrue(jdbc.queryForObject("SELECT budget_enabled AND reimbursement_enabled FROM reminder_settings WHERE user_id=?", Boolean.class, owner));
+            assertEquals(0, new BigDecimal("80").compareTo(jdbc.queryForObject("SELECT SUM(amount) FROM transactions", BigDecimal.class)));
+            assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE transactions SET amount=-1 WHERE id=1"));
+            assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE transactions SET recovery_kind=NULL WHERE id=2"));
+            assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE transactions SET reimbursement_amount=101 WHERE id=1"));
+            assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("INSERT INTO transactions(transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at) VALUES('invalid',?,'expense',-1,1,?,'Invalid','2026-01-01')", owner, category));
+            assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("INSERT INTO category_budgets(user_id,budget_month,category_id,amount) VALUES(?,'2026-02-01',?,-1)", owner, category));
+            jdbc.update("INSERT INTO category_budgets(user_id,budget_month,category_id,amount) VALUES(?,'2026-01-01',?,200)", owner, category);
+            assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE category_budgets SET amount=0"));
+        } finally { admin.execute("DROP DATABASE " + schema); }
     }
 
     @Test void realMySqlConstraintsLockingIdempotencyAndRollback() throws Exception {
@@ -222,13 +203,8 @@ class MySqlAccountingTest {
             var jdbc = new JdbcTemplate(source);
             for (String file : List.of("001_create_database_and_users", "002_create_account_types", "003_create_accounts",
                 "004_create_categories", "005_create_transactions", "007_create_investments", "043_create_accounting_requests", "045_create_reminder_preferences")) {
-                String script = Files.readString(Path.of("../../database", file + ".mysql.sql"));
-                var tables = Pattern.compile("(?ms)^CREATE TABLE.*?\\) ENGINE=.*?;").matcher(script);
-                assertTrue(tables.find(), "DDL missing in " + file);
-                do { jdbc.execute(tables.group()); } while (tables.find());
+                initializeFile(jdbc, file + ".mysql.sql", false);
             }
-            migrateSql(jdbc, "046_category_budgets_and_expense_recoveries.mysql.sql");
-            migrateProducts(jdbc);
             jdbc.update("INSERT INTO users(id,username,display_name,password_hash) VALUES(1,'test','Test','test')");
             jdbc.update("INSERT INTO account_types(id,code,name) VALUES(1,'cash','Cash')");
             jdbc.update("INSERT INTO accounts(id,user_id,account_type_id,name,current_balance) VALUES(1,1,1,'A',1000),(2,1,1,'B',500)");
@@ -396,12 +372,15 @@ class MySqlAccountingTest {
         return request;
     }
 
-    /** 执行原始迁移（含 MySQL DELIMITER），不另造测试用的替代 DDL。 */
-    private static void migrateProducts(JdbcTemplate jdbc) throws Exception {
-        migrateSql(jdbc, "044_unique_investment_product_identity.mysql.sql");
+    private static DriverManagerDataSource testDataSource(String url, String schema, String user, String password) {
+        String base = url.split("\\?", 2)[0];
+        String params = url.contains("?") ? url.substring(url.indexOf('?')) : "";
+        String server = base.substring(0, base.indexOf('/', "jdbc:mysql://".length()));
+        return new DriverManagerDataSource(server + "/" + schema + params, user, password);
     }
 
-    private static void migrateSql(JdbcTemplate jdbc, String file) throws Exception {
+    /** 执行原始初始化语句（含 DELIMITER）；永不切换到业务库，只按需装入基础数据。 */
+    private static void initializeFile(JdbcTemplate jdbc, String file, boolean includeSeeds) throws Exception {
         String delimiter = ";";
         var statement = new StringBuilder();
         for (String line : Files.readAllLines(Path.of("../../database", file))) {
@@ -411,11 +390,13 @@ class MySqlAccountingTest {
             statement.append(line).append('\n');
             if (trimmed.endsWith(delimiter)) {
                 String sql = statement.toString().trim();
-                jdbc.execute(sql.substring(0, sql.length() - delimiter.length()));
+                if (!sql.startsWith("CREATE DATABASE") && !sql.startsWith("USE ")
+                    && (includeSeeds || !sql.startsWith("INSERT ")))
+                    jdbc.execute(sql.substring(0, sql.length() - delimiter.length()));
                 statement.setLength(0);
             }
         }
-        assertEquals(0, statement.length());
+        assertEquals(0, statement.length(), file);
     }
 
 }

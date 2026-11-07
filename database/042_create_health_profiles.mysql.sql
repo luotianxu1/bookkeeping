@@ -1,6 +1,6 @@
 -- MySQL 5.7+/8.0+
 -- Run this file with:
---   mysql -u root -p < database/032_create_health_profiles.mysql.sql
+--   mysql -u root -p < database/042_create_health_profiles.mysql.sql
 
 USE bookkeeping_app;
 
@@ -19,8 +19,4 @@ CREATE TABLE IF NOT EXISTS health_profiles (
   UNIQUE KEY uk_health_profiles_user (user_id),
   CONSTRAINT fk_health_profiles_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='健康档案表：计算体脂率所需的身体数据';
-
--- 体重打卡记录体脂率（按打卡当时的身体数据快照计算）
-ALTER TABLE weight_records
-  ADD COLUMN body_fat_rate DECIMAL(4,1) NULL COMMENT '体脂率(%)' AFTER weight;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='健康档案表：计算体脂率所需的身体数据';

@@ -6,7 +6,7 @@ Monorepo with two independent components:
 
 - `web/` — Vue 3 mobile-first frontend
 - `life-hub/` — Spring Boot Java backend (Maven multi-module: common + auth-service + app-service + market-service)
-- `database/` — MySQL schema files (numbered for sequential migration)
+- `database/` — MySQL schema files (numbered for fresh database initialization)
 
 ## Frontend (Vue 3 + TypeScript)
 
@@ -45,14 +45,14 @@ mvn clean install -pl common,auth-service   # single module
 - 2026-10-30: 金价（金投网 jijinhao 源：黄金9999/伦敦金/品牌首饰金价/走势，数据口径不变）自 app-service 整体迁入 market-service（包 `com.example.market.gold`，对外 `/api/market/gold-prices`，内部 `/api/internal/gold/**`）。app-service `GoldPriceService` 变为薄适配层（`MarketGoldClient`，X-Internal-Key），方法签名不变，金账户/资产趋势/投资估值等内部消费方与 `GoldPriceCacheTask` 零改动；app-service 旧 `GoldPriceController` 已删除。前端 `getGoldPrices`/`getRealtimeGoldPrice` 改走 `marketRequest` + `/api/market/gold-prices`，响应结构不变。
 - auth-service/app-service share MySQL `bookkeeping_app`; market-service has no JDBC/MySQL dependency and uses `market.auth-base-url` (default localhost:8081) for identity checks.
 - Database: MySQL 8.0+, charset utf8mb4
-- Schema migrations: run `database/` files in numeric order (001, 002, ...)
+- Fresh database initialization: run `database/` files in numeric order (001, 002, ...). Each CREATE TABLE includes the final schema; standalone migration/data-sync scripts have been consolidated and removed.
 - JWT secret must match across all services (`app.jwt.secret` in application.yml)
 - Knife4j enabled for API docs at `/doc.html` on each service
 - Uses Lombok for boilerplate reduction
 
 ## Database
 
-No migration framework — manual SQL execution. Files are numbered:
+No migration framework — SQL files define the complete current schema for a fresh database. CREATE TABLE IF NOT EXISTS does not upgrade existing tables. Only missing admin/account-type/system-category defaults are inserted; no demo business data or historical backfill. Files are numbered:
 
 ```bash
 mysql -u root -p bookkeeping_app < database/001_create_database_and_users.mysql.sql
@@ -69,15 +69,14 @@ mysql -u root -p bookkeeping_app < database/002_create_account_types.mysql.sql
 - Browser regression: `cd web && pnpm exec playwright install chromium && pnpm test:e2e`; controlled API responses, production build at 127.0.0.1:4175. Failure artifacts in playwright-report/ and test-results/.
 - Live browser integration: `cd web && pnpm test:e2e:live` builds the optional Maven `live-e2e` profile's live-tests fixture module. Auth/finance HTTP servers bind 127.0.0.1:18881/18882 with a fresh H2 database; frontend preview binds 4176. Use production controllers/services/mappers/security, never mock the auth/account/transaction APIs or connect a development database. No scheduled jobs or external quote requests; the local unavailable gold endpoint exercises the existing login fallback. Keep the fixture module out of deployments. Failure artifacts in playwright-live-report/ and test-results/.
 - Cash/investment POSTs, including fund/stock/gold position creation and gold sales, accept optional requestId. Keep replay lookup inside the user lock, persist response in the same transaction; investment may also check committed requests before remote quotes. Form retries retain the ID and automatically generated tradeAt only during the current page lifetime; generate fresh values after success or payload changes.
-- Investment product identity is product_type + normalized symbol/market (trim, uppercase; NULL/blank market is empty). Use insertIfAbsent plus a current read inside the position transaction; never create products before remote quotes or overwrite existing product metadata on a duplicate. Apply database/043 and 044 before deployment. Migration 044 reports historical duplicate IDs and stops without merging/deleting data; resolve conflicts with their holding references before retrying, and pause product writes during migration.
-- Migration 044 must use MySQL 5.7-compatible GROUP BY/JOIN instead of window functions for its duplicate report. Run MySqlAccountingTest#productIdentityMigrationRejectsDuplicatesAndCanBeRetried against an isolated 5.7 instance to check this migration; full accounting integration still requires MySQL 8. This does not extend the project's overall database support to 5.7.
+- Investment product identity is product_type + normalized symbol/market (trim, uppercase; NULL/blank market is empty). Use insertIfAbsent plus a current read inside the position transaction; never create products before remote quotes or overwrite existing product metadata on a duplicate. Final product identity columns and unique index are in database/007; request records are in database/043.
+- MySqlAccountingTest#freshSchemaIncludesAllFeaturesAndPreservesInitialDefaults executes all initialization scripts in a random isolated schema, skips CREATE DATABASE/USE, checks default seeds and recovery constraints. Product identity is checked by productIdentityIsEnforcedByFreshTableDefinition. These focused checks also run on MySQL 5.7; full accounting still requires MySQL 8.
 - UserStatusCache must never extend trusted status on failed refresh. Auth internal user-status uses isActiveFresh to avoid stacked caches; unavailable checks return 503, preserving the browser session.
 - RemoteFamilyScopeChecker trusts verified membership for at most 60 seconds. Store the successful verification deadline separately from failure-cache TTL; after expiry, failed refreshes must return only selfId. Failure backoff must never renew old membership, and successful refresh must replace it with the latest immutable set.
 - Dynamically import utils/echarts for line charts, echarts-statistics for bar/pie, echarts-investment for trade markers/zoom, echarts-kline for candlesticks. Do not force all ECharts modules into one manual chunk.
-- 046 修复回归：对隔离 MySQL 5.7 / 8 实例运行 `MySqlAccountingTest#recoveryMigrationSupportsFreshAndPartialSchemasWithoutLosingData`。脚本不内置 USE；显式选择目标库，先执行 045，暂停账务写入后执行完整脚本；保留既有表和财务记录，不能只手工补 original_transaction_id 一列。
-- 2026-11 分类预算与退款/报销需先执行 database/046（迁移兼容 MySQL 5.7 / 8.0.16+，可部分失败后重跑；8 使用 CHECK，5.7 使用触发器校验金额，整体数据库支持仍为 8）。关联到账在 transactions 中保留 type=expense、amount<0、original_transaction_id 和 recovery_kind，按到账日冲减原分类支出；不能作为普通收入或再次从原支出扣除。撤销须以正数原子扣回现金并校验余额；原支出有到账记录或报销计划时不能编辑/作废。报销计划本身不影响余额。分类预算按具体分类、月份和 CNY 现金净支出统计；提醒仅当前月，80%/100% 分阶段保存状态。
+- 分类预算、退款/报销完整结构分别在 database/005、006、045 中定义；005 / 006 包含 MySQL 5.7 金额校验触发器，MySQL 8 使用 CHECK。关联到账在 transactions 中保留 type=expense、amount<0、original_transaction_id 和 recovery_kind，按到账日冲减原分类支出；不能作为普通收入或再次从原支出扣除。撤销须以正数原子扣回现金并校验余额；原支出有到账记录或报销计划时不能编辑/作废。报销计划本身不影响余额。分类预算按具体分类、月份和 CNY 现金净支出统计；提醒仅当前月，80%/100% 分阶段保存状态。
 - Financial mutations must acquire `AccountMapper.lockUserForWrite(userId)` inside the transaction before reading mutable accounting state. Keep external quote/fee HTTP outside the transaction; re-read positions, pending trades and scheduled plans after locking. Cash balance changes use atomic mapper SQL.
-- 047 adds reimbursement follow-ups and the reimbursement reminder toggle; apply after 046 before updating app-service. Plan amount and optional followUp fields save under the same user lock/transaction; omitted followUp preserves existing metadata. Pending summaries group by original currency across pages/status tabs (or the specified original transaction). Reminder amounts use remaining reimbursement only and disappear when no amount remains. Transaction keyword/category/absolute-amount filters must share SQL between rows and totals, before pagination; preserve signed recovery amounts in totals.
+- Reimbursement follow-ups are created in database/005 and the reimbursement reminder toggle in database/045. Plan amount and optional followUp fields save under the same user lock/transaction; omitted followUp preserves existing metadata. Pending summaries group by original currency across pages/status tabs (or the specified original transaction). Reminder amounts use remaining reimbursement only and disappear when no amount remains. Transaction keyword/category/absolute-amount filters must share SQL between rows and totals, before pagination; preserve signed recovery amounts in totals.
 - Investment detail is local-first. Fetch redemption fees separately at `/api/finance/investments/fund-redeem-fees`; retain full transaction history for chart markers/profit calculations. `useAsyncSection` and pagination guard against stale responses.
 - `KeyedTtlCache` uses 256 fixed stripe locks + LRU eviction; TTL starts after loading completes. Polling callbacks must return their Promise for overlap protection and respect KeepAlive activation.
 

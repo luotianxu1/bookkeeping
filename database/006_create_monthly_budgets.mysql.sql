@@ -27,5 +27,42 @@ CREATE TABLE IF NOT EXISTS monthly_budgets (
     CHECK (amount > 0),
   CONSTRAINT chk_monthly_budgets_month_first_day
     CHECK (DAYOFMONTH(budget_month) = 1)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='月预算表：每个用户每个月只能有一个生效预算';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='月预算表：每个用户每个月只能有一个生效预算';
 
+CREATE TABLE IF NOT EXISTS category_budgets (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  budget_month DATE NOT NULL,
+  category_id BIGINT UNSIGNED NOT NULL,
+  amount DECIMAL(18,2) NOT NULL,
+  currency_code CHAR(3) NOT NULL DEFAULT 'CNY',
+  UNIQUE KEY uk_category_budget_month (user_id, budget_month, category_id),
+  CONSTRAINT fk_category_budget_user FOREIGN KEY (user_id) REFERENCES users(id),
+  CONSTRAINT fk_category_budget_category FOREIGN KEY (category_id) REFERENCES categories(id),
+  CONSTRAINT chk_category_budget_amount CHECK (amount > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='按月分类预算';
+
+-- MySQL 5.7 的分类预算金额校验。
+DELIMITER $$
+CREATE TRIGGER trg_category_budgets_insert BEFORE INSERT ON category_budgets
+FOR EACH ROW
+BEGIN
+  IF CAST(SUBSTRING_INDEX(VERSION(), '.', 1) AS UNSIGNED) < 8 AND NOT (
+    NEW.amount > 0
+  ) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid category_budgets amount or recovery fields';
+  END IF;
+END$$
+DELIMITER ;
+
+DELIMITER $$
+CREATE TRIGGER trg_category_budgets_update BEFORE UPDATE ON category_budgets
+FOR EACH ROW
+BEGIN
+  IF CAST(SUBSTRING_INDEX(VERSION(), '.', 1) AS UNSIGNED) < 8 AND NOT (
+    NEW.amount > 0
+  ) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid category_budgets amount or recovery fields';
+  END IF;
+END$$
+DELIMITER ;

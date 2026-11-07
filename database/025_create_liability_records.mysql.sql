@@ -6,38 +6,6 @@ USE bookkeeping_app;
 
 SET NAMES utf8mb4;
 
-INSERT INTO account_types (
-  code,
-  name,
-  category,
-  balance_direction,
-  include_in_net_worth_default,
-  allow_overdraft,
-  is_system,
-  sort_order,
-  remark
-) VALUES (
-  'liability',
-  '负债',
-  'liability',
-  'credit',
-  1,
-  0,
-  1,
-  60,
-  '房贷、车贷等长期待还负债账户'
-)
-ON DUPLICATE KEY UPDATE
-  name = VALUES(name),
-  category = VALUES(category),
-  balance_direction = VALUES(balance_direction),
-  include_in_net_worth_default = VALUES(include_in_net_worth_default),
-  allow_overdraft = VALUES(allow_overdraft),
-  is_system = VALUES(is_system),
-  sort_order = VALUES(sort_order),
-  status = 'active',
-  remark = VALUES(remark);
-
 CREATE TABLE IF NOT EXISTS liability_records (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '负债记录ID',
   user_id BIGINT UNSIGNED NOT NULL COMMENT '所属用户ID',
@@ -62,4 +30,4 @@ CREATE TABLE IF NOT EXISTS liability_records (
     FOREIGN KEY (user_id) REFERENCES users (id),
   CONSTRAINT fk_liability_records_account
     FOREIGN KEY (account_id) REFERENCES accounts (id)
-) ENGINE=InnoDB COMMENT='负债记录表：记录房贷、车贷等非联系人负债流水';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='负债记录表：记录房贷、车贷等非联系人负债流水';

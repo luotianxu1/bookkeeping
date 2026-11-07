@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS travel_plans (
   KEY idx_travel_plans_user_updated (user_id, updated_at),
   CONSTRAINT fk_travel_plans_user
     FOREIGN KEY (user_id) REFERENCES users (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行计划表：记录旅行基础信息';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='旅行计划表：记录旅行基础信息';
 
 CREATE TABLE IF NOT EXISTS travel_plan_companions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '同行人关联ID',
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS travel_plan_companions (
     FOREIGN KEY (travel_plan_id) REFERENCES travel_plans (id) ON DELETE CASCADE,
   CONSTRAINT fk_travel_plan_companions_contact
     FOREIGN KEY (contact_id) REFERENCES contacts (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行同行人表：关联工具联系人';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='旅行同行人表：关联工具联系人';
 
 CREATE TABLE IF NOT EXISTS travel_plan_days (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '旅行天ID',
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS travel_plan_days (
   KEY idx_travel_plan_days_plan_date (travel_plan_id, travel_date),
   CONSTRAINT fk_travel_plan_days_plan
     FOREIGN KEY (travel_plan_id) REFERENCES travel_plans (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行天表：按天管理路线和费用';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='旅行天表：按天管理路线和费用';
 
 CREATE TABLE IF NOT EXISTS travel_plan_itineraries (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '行程项ID',
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS travel_plan_itineraries (
   KEY idx_travel_plan_itineraries_day_type (travel_plan_day_id, type),
   CONSTRAINT fk_travel_plan_itineraries_day
     FOREIGN KEY (travel_plan_day_id) REFERENCES travel_plan_days (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行行程项表：交通、景区、餐饮、住宿等';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='旅行行程项表：交通、景区、餐饮、住宿等';
 
 CREATE TABLE IF NOT EXISTS travel_plan_expenses (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '费用记录ID',
@@ -104,4 +104,4 @@ CREATE TABLE IF NOT EXISTS travel_plan_expenses (
     FOREIGN KEY (travel_plan_day_id) REFERENCES travel_plan_days (id) ON DELETE CASCADE,
   CONSTRAINT fk_travel_plan_expenses_payer
     FOREIGN KEY (payer_contact_id) REFERENCES contacts (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='旅行费用表：按天记录交通、门票、餐饮、住宿等费用';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='旅行费用表：按天记录交通、门票、餐饮、住宿等费用';
