@@ -11,7 +11,7 @@ import CommonEmpty from '@/components/common/CommonEmpty/index.vue'
 import CommonDateTimePicker from '@/components/common/CommonDateTimePicker/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import { getExpenseRecoveries, getExpenseRecovery, saveReimbursementPlan, receiveExpenseRecovery,
-  deleteTransaction, getAccounts, getAccountTypes, type ExpenseRecovery, type ExpenseReceipt, type Account } from '@/api/modules/finance'
+  deleteTransaction, getAccounts, getAccountTypes, type ExpenseRecovery, type ExpenseReceipt, type ExpenseRecoveryPage, type Account } from '@/api/modules/finance'
 import { getErrorMessage } from '@/api/request'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { useIdempotentSubmit } from '@/composables/useIdempotentSubmit'
@@ -20,11 +20,13 @@ const route = useRoute(), router = useRouter()
 const submission = useIdempotentSubmit()
 const state = ref('all'), page = ref(1), pages = ref(1), total = ref(0)
 const items = ref<ExpenseRecovery[]>([]), accounts = ref<Account[]>([])
+const pendingSummary = ref<ExpenseRecoveryPage['pendingSummary']>([])
 const loading = ref(true), detailLoading = ref(false), busy = ref(false)
 const error = ref(''), detailError = ref(''), formError = ref(''), feedback = ref('')
 const detail = ref<ExpenseRecovery | null>(null), showDetail = ref(false)
 const mode = ref<'plan' | 'refund' | 'reimbursement' | null>(null)
 const amount = ref(''), accountId = ref(''), occurredAt = ref(''), remark = ref('')
+const recipient = ref(''), expectedDate = ref('')
 const undoTarget = ref<ExpenseReceipt | null>(null)
 const showCancelPlan = ref(false)
 const cancelPlanLabel = computed(() => (detail.value?.reimbursedAmount ?? 0) > 0 ? '撤销剩余报销' : '撤销报销')
@@ -38,7 +40,7 @@ const targetId = computed(() => {
 })
 let listSerial = 0, detailSerial = 0
 watch(state, () => { page.value = 1; void load() })
-watch(targetId, () => { page.value = 1; void load() })
+watch(targetId, async id => { page.value = 1; await load(); if (id && id === targetId.value) await openDetail(id) })
 onMounted(async () => {
   await load()
   if (targetId.value) await openDetail(targetId.value)
@@ -47,6 +49,10 @@ function money(value: number, currency = detail.value?.currencyCode || 'CNY') {
   return new Intl.NumberFormat('zh-CN', { style: 'currency', currency }).format(Number(value))
 }
 function date(value: string) { return value.replace('T', ' ').slice(0, 16) }
+function isOverdue(item: ExpenseRecovery) {
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date())
+  return item.pendingAmount > 0 && !!item.expectedReimbursementDate && item.expectedReimbursementDate < today
+}
 function now() {
   const d = new Date(), pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
@@ -58,6 +64,7 @@ async function load() {
     const result = await getExpenseRecoveries({ state: state.value, page: page.value, transactionId: targetId.value })
     if (ticket !== listSerial) return
     items.value = result.items; page.value = result.page; pages.value = result.totalPages; total.value = result.total
+    pendingSummary.value = result.pendingSummary ?? []
   } catch (cause) { if (ticket === listSerial) error.value = getErrorMessage(cause, '支出加载失败') }
   finally { if (ticket === listSerial) loading.value = false }
 }
@@ -82,6 +89,7 @@ function start(next: 'plan' | 'refund' | 'reimbursement') {
   amount.value = String(next === 'plan' ? detail.value.reimbursementAmount || (Number(detail.value.amount) - Number(detail.value.refundedAmount))
     : next === 'refund' ? detail.value.recoverableAmount : detail.value.pendingAmount)
   accountId.value = accountOptions.value[0]?.value || ''; occurredAt.value = now(); remark.value = ''
+  recipient.value = detail.value.reimbursementRecipient || ''; expectedDate.value = detail.value.expectedReimbursementDate || ''
 }
 async function save() {
   if (!detail.value || !mode.value || busy.value) return
@@ -92,7 +100,7 @@ async function save() {
   if (action !== 'plan' && (!accountId.value || !occurredAt.value)) { formError.value = '请选择到账账户和时间'; return }
   busy.value = true; formError.value = ''; feedback.value = ''
   try {
-    if (action === 'plan') await saveReimbursementPlan(id, value)
+    if (action === 'plan') await saveReimbursementPlan(id, value, { recipient: recipient.value.trim() || null, expectedDate: expectedDate.value || null })
     else await receiveExpenseRecovery(submission.withRequestId({ transactionId: id, accountId: Number(accountId.value),
       amount: value, kind: action, occurredAt: occurredAt.value, remark: remark.value.trim() || undefined }))
     // 提交成功后立即退出表单，刷新失败也不能让用户重复提交已到账的记录。
@@ -142,6 +150,13 @@ function changePage(delta: number) { page.value += delta; void load() }
     ]" />
     <div v-if="targetId" class="context-filter"><span>当前原支出</span><button @click="router.replace('/finance/expense-recoveries')">查看全部</button></div>
     <p class="hint">退款和报销到账按到账月份冲减原分类支出；报销计划不影响余额。</p>
+    <div v-if="pendingSummary.length && !loading && !error" class="pending-summary" aria-label="待报销汇总">
+      <div v-for="summary in pendingSummary" :key="summary.currencyCode">
+        <span>{{ targetId ? '当前支出' : '全部支出' }}待报销 · {{ summary.count }} 笔</span>
+        <strong>{{ money(summary.amount, summary.currencyCode) }}</strong>
+        <span v-if="summary.overdueAmount > 0" class="overdue">其中逾期 {{ money(summary.overdueAmount, summary.currencyCode) }}</span>
+      </div>
+    </div>
     <p v-if="feedback" class="feedback" role="status">{{ feedback }}</p>
     <p v-if="error" class="error" role="alert">{{ error }} <button @click="load">重试</button></p>
     <CommonLoading v-else-if="loading" />
@@ -150,6 +165,10 @@ function changePage(delta: number) { page.value += delta; void load() }
       <button v-for="item in items" :key="item.id" class="expense-card" @click="openDetail(item.id)">
         <span class="card-heading"><strong>{{ item.title }}</strong><strong>{{ money(item.amount, item.currencyCode) }}</strong></span>
         <span class="hint">{{ item.categoryName }} · {{ item.accountName }} · {{ date(item.occurredAt) }}</span>
+        <span v-if="item.reimbursementAmount > 0 && (item.reimbursementRecipient || item.expectedReimbursementDate)" class="hint" :class="{ overdue: isOverdue(item) }">
+          {{ item.reimbursementRecipient ? `报销对象：${item.reimbursementRecipient}` : '' }}
+          {{ item.expectedReimbursementDate ? ` · 预计 ${item.expectedReimbursementDate} 到账` : '' }}{{ isOverdue(item) ? ' · 已逾期' : '' }}
+        </span>
         <span class="card-heading"><span class="status" :class="item.reimbursementStatus">{{ statusLabels[item.reimbursementStatus] }}</span><span class="hint">查看详情 →</span></span>
         <span v-if="item.refundedAmount > 0 || item.reimbursementAmount > 0" class="hint">已退款 {{ money(item.refundedAmount, item.currencyCode) }} · 报销到账 {{ money(item.reimbursedAmount, item.currencyCode) }} · 待到账 {{ money(item.pendingAmount, item.currencyCode) }}</span>
       </button>
@@ -162,6 +181,8 @@ function changePage(delta: number) { page.value += delta; void load() }
       <div v-if="detail" class="detail-content">
         <div class="card-heading"><strong>{{ detail.title }}</strong><strong>{{ money(detail.amount) }}</strong></div>
         <p class="hint">{{ detail.categoryName }} · {{ detail.accountName }} · {{ date(detail.occurredAt) }}</p>
+        <p v-if="detail.reimbursementRecipient" class="hint">报销对象：{{ detail.reimbursementRecipient }}</p>
+        <p v-if="detail.expectedReimbursementDate" class="hint" :class="{ overdue: isOverdue(detail) }">预计到账：{{ detail.expectedReimbursementDate }}{{ isOverdue(detail) ? ' · 已逾期' : '' }}</p>
         <dl><div><dt>已退款</dt><dd>{{ money(detail.refundedAmount) }}</dd></div><div><dt>计划报销</dt><dd>{{ money(detail.reimbursementAmount) }}</dd></div>
           <div><dt>报销到账</dt><dd>{{ money(detail.reimbursedAmount) }}</dd></div><div><dt>待到账</dt><dd>{{ money(detail.pendingAmount) }}</dd></div></dl>
         <div class="detail-actions" :class="{ 'detail-actions-with-cancel': detail.pendingAmount > 0 }"><CommonButton variant="secondary" :disabled="busy" @click="start('plan')">报销计划</CommonButton>
@@ -180,7 +201,11 @@ function changePage(delta: number) { page.value += delta; void load() }
       <div class="recovery-form">
         <p class="hint">{{ detail?.title }}</p>
         <CommonInput v-model="amount" :label="mode === 'plan' ? '计划报销总额' : '本次到账金额'" input-type="number" input-mode="decimal" :disabled="busy" />
-        <p v-if="mode === 'plan'" class="hint">计划总额包含已到账金额，不能低于已到账金额。待到账部分可在详情中撤销。</p>
+        <template v-if="mode === 'plan'">
+          <CommonInput v-model="recipient" label="报销对象" placeholder="公司、部门或个人（选填）" :disabled="busy" />
+          <CommonInput v-model="expectedDate" label="预计到账日期" input-type="date" :disabled="busy" />
+          <p class="hint">设置日期后按统一提醒的提前天数提醒，逾期未到账会继续保留提醒。计划总额不能低于已到账金额。</p>
+        </template>
         <template v-else><CommonSelect v-model="accountId" label="到账账户" :options="accountOptions" :disabled="busy" />
           <CommonDateTimePicker v-model="occurredAt" label="到账时间" :disabled="busy" />
           <CommonInput v-model="remark" label="备注" placeholder="选填" :disabled="busy" />

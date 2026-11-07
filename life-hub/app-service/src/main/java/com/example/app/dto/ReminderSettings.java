@@ -10,9 +10,10 @@ public record ReminderSettings(
     boolean renewalEnabled,
     boolean liabilityEnabled,
     boolean investmentEnabled,
-    boolean budgetEnabled
+    boolean budgetEnabled,
+    boolean reimbursementEnabled
 ) {
     public static ReminderSettings defaults() {
-        return new ReminderSettings(3, true, true, true, true, true, true);
+        return new ReminderSettings(3, true, true, true, true, true, true, true);
     }
 }

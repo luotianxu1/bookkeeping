@@ -4,6 +4,7 @@ import { expect, test, type Page, type APIRequestContext } from '@playwright/tes
 const auth = '/auth-api/api/auth'
 const finance = '/finance-api/api/finance'
 
+
 async function login(page: Page) {
   await page.goto('/login')
   await page.getByPlaceholder('请输入用户名').fill('live-user-1')
@@ -163,4 +164,47 @@ test('真实支出 → 分类预算 → 报销分次到账和退款 → 撤销�
   expect(other.status()).toBe(200)
   expect((await page.request.get(`${finance}/expense-recoveries/${id}`)).status()).toBe(400)
   expect((await page.request.put(`${finance}/expense-recoveries/${id}/plan`, { data: { amount: 80 } })).status()).toBe(400)
+})
+
+test('真实流水搜索与报销跟进提醒、部分到账和撤销联动', async ({ page }, testInfo) => {
+  await login(page)
+  const created = await page.request.post(`${finance}/transactions`, { data: { userId: 1, type: 'expense', accountId: 1, categoryId: 1,
+    amount: 100, currencyCode: 'CNY', title: '报销跟进检索', remark: '采购出差', occurredAt: '2026-01-31T12:00:00', requestId: randomUUID() } })
+  expect(created.status()).toBe(200)
+  const id = (await created.json()).data.id
+  const search = await page.request.get(`${finance}/transactions/page?keyword=采购&categoryId=1&minAmount=50&maxAmount=100&cashOnly=true`)
+  const searched = (await search.json()).data
+  expect(searched.total).toBe(1); expect(searched.items[0].id).toBe(id); expect(searched.expenseTotal).toBe(100)
+  expect((await page.request.get(`${finance}/transactions/page?minAmount=100&maxAmount=50`)).status()).toBe(400)
+  const before = await balance(page.request, 1)
+  await page.goto(`/finance/expense-recoveries?transactionId=${id}`)
+  await page.getByRole('button', { name: '报销计划', exact: true }).click()
+  await page.getByLabel('计划报销总额').fill('80')
+  await page.getByLabel('报销对象').fill('公司财务')
+  await page.getByLabel('预计到账日期').fill('2026-02-01')
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '支出详情' })).toBeVisible()
+  await expect(page.locator('.detail-content')).toContainText('公司财务')
+  await expect(page.getByLabel('待报销汇总')).toContainText('80.00')
+  expect(await balance(page.request, 1)).toBe(before)
+  const reminders = async () => (await (await page.request.get('/tool-api/api/tools/reminders')).json()).data.items as {type: string; targetPath: string; description: string; urgency: string}[]
+  const reminder = (await reminders()).find(r => r.targetPath === `/finance/expense-recoveries?transactionId=${id}`)!
+  expect(reminder.type).toBe('reimbursement'); expect(reminder.urgency).toBe('overdue'); expect(reminder.description).toContain('公司财务')
+  await page.getByRole('button', { name: '报销到账', exact: true }).click()
+  await page.getByLabel('本次到账金额').fill('30')
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(page.getByLabel('待报销汇总')).toContainText('50.00')
+  expect((await reminders()).find(r => r.targetPath.endsWith(`transactionId=${id}`))?.description).toContain('CNY 50')
+  await page.screenshot({ path: testInfo.outputPath('reimbursement-followup.png'), animations: 'disabled' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  const receivedBalance = await balance(page.request, 1)
+  await page.getByRole('button', { name: '撤销剩余报销', exact: true }).click()
+  await page.getByRole('button', { name: '确认撤销', exact: true }).click()
+  await expect(page.getByLabel('待报销汇总')).toHaveCount(0)
+  await expect(page.locator('.receipt')).toHaveCount(1)
+  expect(await balance(page.request, 1)).toBe(receivedBalance)
+  expect((await reminders()).some(r => r.targetPath.endsWith(`transactionId=${id}`))).toBe(false)
+  await page.reload()
+  await expect(page.locator('.detail-content')).toContainText('公司财务')
+  await expect(page.locator('.detail-content')).toContainText('2026-02-01')
 })

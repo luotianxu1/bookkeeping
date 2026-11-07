@@ -23,7 +23,7 @@ beforeEach(() => {
   vi.mocked(getExpenseRecovery).mockImplementation(async () => structuredClone(expense))
   vi.mocked(getExpenseRecoveries).mockImplementation(async ({ state }) => {
     const items = state === 'all' || state === expense.reimbursementStatus ? [structuredClone(expense)] : []
-    return { items, page: 1, totalPages: 1, total: items.length }
+    return { items, page: 1, totalPages: 1, total: items.length, pendingSummary: [] }
   })
   vi.mocked(saveReimbursementPlan).mockImplementation(async (_id, amount) => {
     expense.reimbursementAmount = amount

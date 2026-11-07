@@ -56,6 +56,7 @@ final class AccountingDatabase implements AutoCloseable {
             jdbc.execute("CREATE TABLE " + table.getTableName() + " (" + table.getKeyColumn()
                 + " BIGINT AUTO_INCREMENT PRIMARY KEY, " + fields + ")");
         }
+        jdbc.execute("CREATE TABLE expense_recovery_followups(transaction_id BIGINT PRIMARY KEY,user_id BIGINT,recipient VARCHAR(100),expected_date DATE)");
         jdbc.execute("CREATE UNIQUE INDEX uk_category_budget_month ON category_budgets(user_id,budget_month,category_id)");
         jdbc.execute("ALTER TABLE investment_products ADD symbol_key VARCHAR(64) GENERATED ALWAYS AS (UPPER(TRIM(symbol)))");
         jdbc.execute("ALTER TABLE investment_products ADD market_key VARCHAR(32) GENERATED ALWAYS AS (UPPER(TRIM(COALESCE(market,''))))");

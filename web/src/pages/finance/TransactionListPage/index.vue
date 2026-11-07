@@ -8,6 +8,8 @@ import {
   getAccounts,
   getAccountTypes,
   getTransactionPage,
+  getCategories,
+  type Category,
   type Account,
   type Transaction,
   type TransactionType,
@@ -20,6 +22,9 @@ import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonSkeleton from '@/components/common/CommonSkeleton/index.vue'
 import CommonOptionSheet from '@/components/common/CommonOptionSheet/index.vue'
 import CommonSelect, { type CommonSelectOption } from '@/components/common/CommonSelect/index.vue'
+import CommonInput from '@/components/common/CommonInput/index.vue'
+import CommonButton from '@/components/common/CommonButton/index.vue'
+import CommonModal from '@/components/common/CommonModal/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -30,7 +35,7 @@ import { getErrorMessage } from '@/api/request'
 
 const filterOptions = ['全部', '收入', '支出']
 const TRANSACTION_PAGE_SIZE = 50
-type DateRangeKey = 'month' | 'lastMonth' | 'threeMonths' | 'custom'
+type DateRangeKey = 'month' | 'lastMonth' | 'threeMonths' | 'custom' | 'all'
 type SortOrder = 'desc' | 'asc'
 type SheetOption = {
   label: string
@@ -43,6 +48,7 @@ const dateRangeOptions: SheetOption[] = [
   { label: '上月', value: 'lastMonth', description: '查看上一个自然月收支' },
   { label: '近 3 个月', value: 'threeMonths', description: '从近三个月首日到今天' },
   { label: '自定义时间', value: 'custom', description: '手动选择开始和结束日期' },
+  { label: '全部时间', value: 'all', description: '搜索全部历史收支' },
 ]
 const transactionTypeOptions: SheetOption[] = filterOptions.map((option) => ({
   label: option,
@@ -79,6 +85,14 @@ const selectedAccountId = ref('all')
 const selectedSortOrder = ref<SortOrder>('desc')
 const customStartDate = ref(getMonthRange(0).startDate)
 const customEndDate = ref(getMonthRange(0).endDate)
+const searchInput = ref(''), keyword = ref('')
+const selectedCategoryId = ref('all'), minAmount = ref(''), maxAmount = ref('')
+const draftCategoryId = ref('all'), draftMinAmount = ref(''), draftMaxAmount = ref('')
+const showAdvancedFilters = ref(false), categoriesLoading = ref(false)
+const categories = ref<Category[]>([]), categoriesError = ref(''), filterError = ref('')
+let categorySerial = 0
+const advancedFilterCount = computed(() => Number(selectedCategoryId.value !== 'all') + Number(!!minAmount.value || !!maxAmount.value))
+const hasSearchFilters = computed(() => !!keyword.value || advancedFilterCount.value > 0)
 const {
   familyView,
   familyViewOptions,
@@ -117,6 +131,15 @@ const familyViewSelectOptions = computed<CommonSelectOption[]>(() =>
   })),
 )
 const hasPagination = computed(() => totalPages.value > 1)
+const categoryOptions = computed(() => [
+  { value: 'all', label: '全部分类' },
+  ...categories.value.map(category => {
+    const parent = categories.value.find(item => item.id === category.parentId)
+    const hasChildren = categories.value.some(item => item.parentId === category.id)
+    const owner = selectedFamilyView.value.kind === 'total' && category.userId ? viewerNameByUserId.value.get(category.userId) : ''
+    return { value: String(category.id), label: [owner, category.type === 'income' ? '收入' : '支出', parent?.name, category.name].filter(Boolean).join(' / ') + (hasChildren ? '（全部子分类）' : '') }
+  }),
+])
 const paginationSummary = computed(() => `第 ${currentPage.value} / ${totalPages.value} 页，共 ${totalItems.value} 条`)
 const canGoPrevPage = computed(() => currentPage.value > 1)
 const canGoNextPage = computed(() => currentPage.value < totalPages.value)
@@ -144,6 +167,7 @@ const selectedSortLabel = computed(() =>
   selectedSortOrder.value === 'desc' ? '倒序' : '正序',
 )
 const resolvedDateRange = computed(() => {
+  if (selectedDateRange.value === 'all') return { startDate: '', endDate: '' }
   if (selectedDateRange.value === 'lastMonth') {
     return getMonthRange(-1)
   }
@@ -155,13 +179,15 @@ const resolvedDateRange = computed(() => {
   }
   return getMonthRange(0)
 })
-const summaryTitle = computed(() => `${dateRangeOptions.find((option) => option.value === selectedDateRange.value)?.label ?? '本月'}统计`)
+const summaryTitle = computed(() => `${dateRangeOptions.find((option) => option.value === selectedDateRange.value)?.label ?? '本月'}${hasSearchFilters.value ? '筛选结果' : '统计'}`)
 
 onMounted(() => {
   void initializePage()
 })
 
 watch(familyView, async () => {
+  ++categorySerial
+  selectedCategoryId.value = 'all'; categories.value = []; showAdvancedFilters.value = false
   currentPage.value = 1
   selectedAccountId.value = 'all'
   if (showDeleteConfirmModal.value && !deletingId.value) {
@@ -171,7 +197,7 @@ watch(familyView, async () => {
   await loadCashTransactions()
 })
 
-watch([activeFilter, selectedDateRange, selectedAccountId, selectedSortOrder, customStartDate, customEndDate], () => {
+watch([activeFilter, selectedDateRange, selectedAccountId, selectedSortOrder, customStartDate, customEndDate, keyword, selectedCategoryId, minAmount, maxAmount], () => {
   currentPage.value = 1
   void loadCashTransactions()
 })
@@ -180,6 +206,35 @@ async function initializePage() {
   await loadFamilyMembers()
   await loadCashAccountOptions()
   await loadCashTransactions()
+}
+
+function search() { keyword.value = searchInput.value.trim() }
+function clearSearchFilters() {
+  searchInput.value = ''; keyword.value = ''; selectedCategoryId.value = 'all'; minAmount.value = ''; maxAmount.value = ''
+}
+async function openAdvancedFilters() {
+  draftCategoryId.value = selectedCategoryId.value; draftMinAmount.value = minAmount.value; draftMaxAmount.value = maxAmount.value
+  filterError.value = ''; showAdvancedFilters.value = true
+  await loadCategoryOptions()
+}
+async function loadCategoryOptions() {
+  const ticket = ++categorySerial
+  categoriesLoading.value = true; categoriesError.value = ''
+  try {
+    const groups = await Promise.all(selectedViewerUserIds.value.map(userId => getCategories({ userId })))
+    if (ticket !== categorySerial) return
+    categories.value = [...new Map(groups.flat().map(category => [category.id, category])).values()]
+  } catch (cause) { if (ticket === categorySerial) categoriesError.value = getErrorMessage(cause, '分类加载失败') }
+  finally { if (ticket === categorySerial) categoriesLoading.value = false }
+}
+function applyAdvancedFilters() {
+  const min = draftMinAmount.value.trim(), max = draftMaxAmount.value.trim()
+  if ([min, max].some(value => value && (!/^\d{1,16}(\.\d{1,2})?$/.test(value) || !Number.isFinite(Number(value))))) {
+    filterError.value = '金额范围须为非负数，最多两位小数'; return
+  }
+  if (min && max && Number(min) > Number(max)) { filterError.value = '最低金额不能大于最高金额'; return }
+  selectedCategoryId.value = draftCategoryId.value; minAmount.value = min; maxAmount.value = max
+  keyword.value = searchInput.value.trim(); showAdvancedFilters.value = false
 }
 
 async function loadCashAccountOptions() {
@@ -259,11 +314,15 @@ async function loadCashTransactions() {
   try {
     const pageData = await getTransactionPage({
       userIds: selectedViewerUserIds.value.join(','),
+      keyword: keyword.value || undefined,
+      categoryId: selectedCategoryId.value === 'all' ? undefined : Number(selectedCategoryId.value),
+      minAmount: minAmount.value ? Number(minAmount.value) : undefined,
+      maxAmount: maxAmount.value ? Number(maxAmount.value) : undefined,
       type: currentTransactionType.value,
       accountId: selectedAccountId.value === 'all' ? undefined : Number(selectedAccountId.value),
       cashOnly: true,
-      startDate: resolvedDateRange.value.startDate,
-      endDate: resolvedDateRange.value.endDate,
+      startDate: resolvedDateRange.value.startDate || undefined,
+      endDate: resolvedDateRange.value.endDate || undefined,
       sortOrder: selectedSortOrder.value,
       page: currentPage.value,
       pageSize: TRANSACTION_PAGE_SIZE,
@@ -509,6 +568,16 @@ function accountLabel(account: Account) {
       </div>
     </section>
 
+    <form class="transaction-search" role="search" @submit.prevent="search">
+      <input v-model="searchInput" type="search" maxlength="100" placeholder="搜索名称、备注" aria-label="搜索流水名称或备注" @search="search" />
+      <CommonButton type="submit" variant="secondary" size="sm">搜索</CommonButton>
+      <CommonButton variant="secondary" size="sm" @click="openAdvancedFilters">筛选{{ advancedFilterCount ? ` (${advancedFilterCount})` : '' }}</CommonButton>
+    </form>
+    <div v-if="hasSearchFilters" class="search-filter-summary">
+      <span>{{ keyword ? `“${keyword}” · ` : '' }}{{ selectedCategoryId !== 'all' ? `${categoryOptions.find(option => option.value === selectedCategoryId)?.label || '已选分类'} · ` : '' }}{{ minAmount || maxAmount ? `金额 ${minAmount || '0'}—${maxAmount || '不限'} · ` : '' }}{{ totalItems }} 笔</span>
+      <button type="button" @click="clearSearchFilters">清除搜索筛选</button>
+    </div>
+
     <div class="transaction-filter-bar" aria-label="收支筛选">
       <button type="button" @click="showTypeSheet = true">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -555,6 +624,20 @@ function accountLabel(account: Account) {
         <span>{{ selectedSortLabel }}</span>
       </button>
     </div>
+
+    <CommonModal v-model="showAdvancedFilters" title="高级筛选">
+      <div class="transaction-advanced-form">
+        <CommonSelect v-model="draftCategoryId" label="收支分类" :options="categoryOptions" :disabled="categoriesLoading" />
+        <p v-if="categoriesError" class="filter-error" role="alert">{{ categoriesError }} <button @click="loadCategoryOptions">重试</button></p>
+        <div class="transaction-amount-range">
+          <CommonInput v-model="draftMinAmount" label="最低金额" input-type="number" input-mode="decimal" placeholder="不限" />
+          <CommonInput v-model="draftMaxAmount" label="最高金额" input-type="number" input-mode="decimal" placeholder="不限" />
+        </div>
+        <p class="filter-hint">按金额大小筛选，退款与报销到账也参与筛选；收支合计按筛选结果计算。</p>
+        <p v-if="filterError" class="filter-error" role="alert">{{ filterError }}</p>
+      </div>
+      <template #footer><div class="transaction-filter-actions"><CommonButton variant="secondary" @click="draftCategoryId = 'all'; draftMinAmount = ''; draftMaxAmount = ''; filterError = ''">重置</CommonButton><CommonButton @click="applyAdvancedFilters">应用筛选</CommonButton></div></template>
+    </CommonModal>
 
     <section class="transaction-list-groups" aria-label="收支明细">
       <p v-if="transactionListError" class="transaction-list-message transaction-list-message-error">

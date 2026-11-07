@@ -26,7 +26,8 @@ public interface TransactionMapper extends BaseMapper<TransactionEntity> {
         @Param("cashAccountIds") Set<Long> cashAccountIds,
         @Param("sortOrder") String sortOrder,
         @Param("offset") int offset,
-        @Param("pageSize") int pageSize
+        @Param("pageSize") int pageSize,
+        @Param("search") com.example.app.dto.TransactionSearch search
     );
 
     /** 与 selectMergedPage 完全相同过滤条件下的全量收入/支出合计（不分页口径，与旧内存版一致） */
@@ -36,6 +37,7 @@ public interface TransactionMapper extends BaseMapper<TransactionEntity> {
         @Param("accountId") Long accountId,
         @Param("startTime") LocalDateTime startTime,
         @Param("endTime") LocalDateTime endTime,
-        @Param("cashAccountIds") Set<Long> cashAccountIds
+        @Param("cashAccountIds") Set<Long> cashAccountIds,
+        @Param("search") com.example.app.dto.TransactionSearch search
     );
 }

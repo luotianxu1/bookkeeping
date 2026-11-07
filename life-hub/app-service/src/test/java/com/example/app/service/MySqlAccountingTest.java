@@ -28,6 +28,83 @@ import static org.junit.jupiter.api.Assertions.*;
 /** 仅连接显式指定的测试实例。每次新建随机 schema，绝不执行脚本中的 USE/种子数据。 */
 @EnabledIfEnvironmentVariable(named = "MYSQL_TEST_URL", matches = "jdbc:mysql://.+")
 class MySqlAccountingTest {
+    @Test void transactionSearchSupportsMixedTitleCollations() throws Exception {
+        String url = System.getenv("MYSQL_TEST_URL");
+        String user = System.getenv().getOrDefault("MYSQL_TEST_USER", "root");
+        String password = System.getenv().getOrDefault("MYSQL_TEST_PASSWORD", "");
+        var admin = new JdbcTemplate(new DriverManagerDataSource(url, user, password));
+        String schema = "life_hub_test_" + UUID.randomUUID().toString().replace("-", "");
+        admin.execute("CREATE DATABASE " + schema + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+        try {
+            String base = url.split("\\?", 2)[0];
+            String params = url.contains("?") ? url.substring(url.indexOf('?')) : "";
+            String server = base.substring(0, base.indexOf('/', "jdbc:mysql://".length()));
+            var source = new DriverManagerDataSource(server + "/" + schema + params, user, password);
+            var jdbc = new JdbcTemplate(source);
+            for (String file : List.of("001_create_database_and_users", "002_create_account_types", "003_create_accounts",
+                "004_create_categories", "005_create_transactions", "014_create_debt_records", "016_create_human_relation_records",
+                "045_create_reminder_preferences")) {
+                var tables = Pattern.compile("(?ms)^CREATE TABLE.*?\\) ENGINE=.*?;")
+                    .matcher(Files.readString(Path.of("../../database", file + ".mysql.sql")));
+                assertTrue(tables.find(), "DDL missing in " + file);
+                do { jdbc.execute(tables.group()); } while (tables.find());
+            }
+            migrateSql(jdbc, "046_category_budgets_and_expense_recoveries.mysql.sql");
+            // 复现既有库：账户名称用 unicode_ci，流水及往来记录用 general_ci。
+            jdbc.execute("ALTER TABLE accounts MODIFY name VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL");
+            for (String table : List.of("transactions", "debt_records", "human_relation_records"))
+                jdbc.execute("ALTER TABLE " + table + " CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci");
+            jdbc.update("INSERT INTO users(id,username,display_name,password_hash) VALUES(1,'search','Search','test'),(2,'other','Other','test')");
+            jdbc.update("INSERT INTO account_types(id,code,name) VALUES(1,'cash','现金'),(2,'debt','债务'),(3,'human','人情')");
+            jdbc.update("INSERT INTO accounts(id,user_id,account_type_id,name) VALUES(1,1,1,'钱包'),(2,1,2,'朋友借款'),(3,1,3,'朋友礼金')");
+            jdbc.update("INSERT INTO categories(id,name,type,icon) VALUES(1,'运动','expense','other')");
+            for (int i = 1; i <= 11; i++) {
+                jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at) VALUES(?,?,1,'expense',20,1,1,?,'2026-11-07')",
+                    i, "search-" + i, i == 1 ? "Keep 会员" : "其他消费" + i);
+            }
+            jdbc.update("INSERT INTO transactions(transaction_no,user_id,type,amount,account_id,category_id,title,status,occurred_at) VALUES"
+                + "('other',2,'expense',999,1,1,'keep','normal','2026-11-07'),"
+                + "('voided',1,'expense',999,1,1,'keep','voided','2026-11-07')");
+            var config = new MybatisConfiguration();
+            for (var type : List.of(TransactionMapper.class, AccountMapper.class, AccountTypeMapper.class, CategoryMapper.class)) config.addMapper(type);
+            var factory = new MybatisSqlSessionFactoryBean();
+            factory.setDataSource(source); factory.setConfiguration(config);
+            factory.setMapperLocations(new org.springframework.core.io.ClassPathResource("mapper/TransactionMapper.xml"));
+            var session = new SqlSessionTemplate(factory.getObject());
+            var service = new TransactionService(session.getMapper(TransactionMapper.class), session.getMapper(AccountMapper.class),
+                session.getMapper(AccountTypeMapper.class), session.getMapper(CategoryMapper.class), null, null, null);
+            var start = java.time.LocalDate.of(2026, 11, 1);
+            var end = start.withDayOfMonth(30);
+            var unfiltered = service.page(List.of(1L), null, null, start, end, "desc", true, 1, 50);
+            assertEquals(11, unfiltered.getTotal());
+            for (String keyword : List.of("keep", "KEEP", " Keep ")) {
+                var result = service.page(List.of(1L), null, null, start, end, "desc", true, 2, 1,
+                    new com.example.app.dto.TransactionSearch(keyword, null, null, null));
+                assertEquals(1, result.getTotal()); assertEquals(1, result.getPage());
+                assertEquals("Keep 会员", result.getItems().get(0).getTitle());
+                assertEquals(0, new BigDecimal("20").compareTo(result.getExpenseTotal()));
+            }
+            jdbc.update("INSERT INTO debt_records(user_id,account_id,funding_account_id,direction,record_type,amount,remark,occurred_at) VALUES"
+                + "(1,2,1,'payable','borrow',100,'会议垫付','2026-11-07')");
+            jdbc.update("INSERT INTO human_relation_records(user_id,account_id,funding_account_id,direction,amount,remark,occurred_at) VALUES"
+                + "(1,3,1,'outgoing',50,'会议礼物100%_','2026-11-07')");
+            for (String title : List.of("朋友借款 · 借入", "朋友礼金 · 送出")) {
+                var result = service.page(List.of(1L), null, null, start, end, "desc", true, 1, 50,
+                    new com.example.app.dto.TransactionSearch(title, null, null, null));
+                assertEquals(1, result.getTotal()); assertEquals(title, result.getItems().get(0).getTitle());
+            }
+            var remarks = service.page(List.of(1L), null, null, start, end, "desc", true, 1, 1,
+                new com.example.app.dto.TransactionSearch("会议", null, null, null));
+            assertEquals(2, remarks.getTotal()); assertEquals(2, remarks.getTotalPages());
+            assertEquals(0, new BigDecimal("100").compareTo(remarks.getIncomeTotal()));
+            assertEquals(0, new BigDecimal("50").compareTo(remarks.getExpenseTotal()));
+            var literal = service.page(List.of(1L), null, null, start, end, "desc", true, 1, 50,
+                new com.example.app.dto.TransactionSearch("%_", null, null, null));
+            assertEquals(1, literal.getTotal());
+            assertEquals("human_relation_record", literal.getItems().get(0).getSourceType());
+        } finally { admin.execute("DROP DATABASE " + schema); }
+    }
+
     /** 单独运行本用例可检查 MySQL 5.7 的迁移语法，不代表整套账务支持 5.7。 */
     @Test void productIdentityMigrationRejectsDuplicatesAndCanBeRetried() throws Exception {
         String url = System.getenv("MYSQL_TEST_URL");
@@ -99,8 +176,14 @@ class MySqlAccountingTest {
                     jdbc.execute("ALTER TABLE transactions ADD original_transaction_id BIGINT UNSIGNED NULL");
                 }
                 migrateSql(jdbc, "046_category_budgets_and_expense_recoveries.mysql.sql");
+                migrateSql(jdbc, "047_reimbursement_followups.mysql.sql");
+                jdbc.update("INSERT INTO reminder_settings(user_id,reimbursement_enabled) VALUES(1,FALSE)");
+                jdbc.update("INSERT INTO expense_recovery_followups(transaction_id,user_id,recipient,expected_date) VALUES(1,1,'Finance','2026-11-07')");
+                migrateSql(jdbc, "047_reimbursement_followups.mysql.sql");
+                assertEquals("Finance",jdbc.queryForObject("SELECT recipient FROM expense_recovery_followups WHERE transaction_id=1",String.class));
+                assertEquals(0,jdbc.queryForObject("SELECT reimbursement_enabled FROM reminder_settings WHERE user_id=1",Integer.class));
                 assertEquals(3, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='transactions' AND column_name IN ('original_transaction_id','recovery_kind','reimbursement_amount')", Integer.class));
-                jdbc.update("INSERT INTO reminder_settings(user_id,budget_enabled) VALUES(1,FALSE)");
+                jdbc.update("UPDATE reminder_settings SET budget_enabled=FALSE WHERE user_id=1");
                 jdbc.update("UPDATE transactions SET reimbursement_amount=50 WHERE id=1");
                 jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at,original_transaction_id,recovery_kind) VALUES(2,'refund',1,'expense',-20,1,1,'Keep this refund','2026-02-01',1,'refund')");
                 migrateSql(jdbc, "046_category_budgets_and_expense_recoveries.mysql.sql");

@@ -140,6 +140,12 @@ public class TransactionService {
         Integer page,
         Integer pageSize
     ) {
+        return page(userIds, type, accountId, startDate, endDate, sortOrder, cashOnly, page, pageSize, null);
+    }
+
+    public TransactionPageResponse page(List<Long> userIds, String type, Long accountId, LocalDate startDate,
+        LocalDate endDate, String sortOrder, boolean cashOnly, Integer page, Integer pageSize,
+        com.example.app.dto.TransactionSearch search) {
         int normalizedPageSize = normalizePageSize(pageSize);
         int normalizedPage = page == null || page < 1 ? 1 : page;
         Set<Long> cashAccountIds = cashOnly ? loadCashAccountIds(userIds) : null;
@@ -158,7 +164,7 @@ public class TransactionService {
         // 仅对当页数据批量补齐账户/分类信息，避免全量加载内存后排序分页
         if (!emptyResult) {
             var sums = transactionMapper.summarizeMerged(
-                userIds, type, accountId, startTime, endTime, cashAccountIds);
+                userIds, type, accountId, startTime, endTime, cashAccountIds, search);
             total = sums.getTotal();
             if (total > 0) {
                 incomeTotal = sums.getIncomeTotal();
@@ -169,7 +175,7 @@ public class TransactionService {
                 int offset = Math.min((resolvedPage - 1) * normalizedPageSize, (int) total);
                 List<MergedTransactionRow> rows = transactionMapper.selectMergedPage(
                     userIds, type, accountId, startTime, endTime, cashAccountIds,
-                    sortOrder, offset, normalizedPageSize);
+                    sortOrder, offset, normalizedPageSize, search);
                 items = toMergedRowResponses(rows);
             }
         }

@@ -3,6 +3,17 @@
   gap: var(--space-6);
 }
 
+.transaction-search { display: flex; align-items: center; gap: 6px; }
+.transaction-search input { min-width: 0; flex: 1; height: 34px; padding: 0 10px; border: 1px solid var(--color-border-blue); border-radius: 8px; background: var(--color-bg-card); color: var(--color-text-primary); font-size: 13px; }
+.transaction-search :deep(button) { flex: 0 0 auto; min-height: 34px; padding: 0 10px; font-size: 12px; }
+.search-filter-summary { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-text-muted); }
+.search-filter-summary span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.search-filter-summary button, .filter-error button { flex: 0 0 auto; border: 0; background: transparent; color: var(--color-brand); padding: 4px 0; font-size: 12px; }
+.transaction-advanced-form { display: grid; gap: 8px; }
+.transaction-amount-range, .transaction-filter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; }
+.filter-hint, .filter-error { margin: 0; font-size: 12px; line-height: 1.5; color: var(--color-text-muted); }
+.filter-error { color: var(--color-danger); }
+
 .transaction-family-switch {
   position: relative;
   flex: 0 0 auto;

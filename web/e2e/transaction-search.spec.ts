@@ -1,0 +1,70 @@
+import { test, expect } from '@playwright/test'
+
+test('流水搜索与分类金额筛选重置分页并同步合计', async ({ page }, testInfo) => {
+  const user = { id: 1, username: 'search-test', displayName: '搜索测试' }
+  const records = Array.from({ length: 51 }, (_, i) => ({ id: i + 1, userId: 1, sourceType: 'transaction', type: 'expense',
+    title: i === 0 ? 'Keep 会员' : `差旅咖啡${i}`, remark: i === 0 ? '发票待提交' : '', accountId: 1, accountName: '钱包', categoryId: 2,
+    categoryName: '咖啡', amount: 20, currencyCode: 'CNY', occurredAt: '2026-11-07T12:00:00', status: 'normal' }))
+  let latest = new URLSearchParams()
+  await page.addInitScript(user => {
+    localStorage.setItem('bookkeeping_current_user', JSON.stringify(user))
+    Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } })
+  }, user)
+  await page.route('**/api/**', route => {
+    const url = new URL(route.request().url()), path = url.pathname
+    const ok = (data: unknown) => route.fulfill({ json: { code: 0, data, message: '成功', timestamp: Date.now() } })
+    if (path.endsWith('/auth/me')) return ok(user)
+    if (path.endsWith('/auth/family')) return ok({ hasFamily: false, members: [] })
+    if (path.endsWith('/reminders')) return ok({ items: [], unreadCount: 0, snoozedCount: 0 })
+    if (path.endsWith('/account-types')) return ok([{ id: 1, code: 'cash', name: '现金' }])
+    if (path.endsWith('/accounts')) return ok([{ id: 1, userId: 1, name: '钱包', accountTypeId: 1 }])
+    if (path.endsWith('/categories')) return ok([{ id: 1, name: '餐饮', type: 'expense' }, { id: 2, parentId: 1, name: '咖啡', type: 'expense' }])
+    if (path.endsWith('/transactions/page')) {
+      latest = url.searchParams
+      const keyword = (latest.get('keyword') || '').toLowerCase(), category = latest.get('categoryId')
+      const min = Number(latest.get('minAmount') || 0), max = Number(latest.get('maxAmount') || Infinity)
+      const selected = records.filter(r => (r.title.toLowerCase().includes(keyword) || r.remark.toLowerCase().includes(keyword)) && (!category || category === '1' || category === String(r.categoryId)) && r.amount >= min && r.amount <= max)
+      const current = Math.min(Number(latest.get('page') || 1), Math.max(1, Math.ceil(selected.length / 50)))
+      return ok({ items: selected.slice((current - 1) * 50, current * 50), page: current, pageSize: 50, totalPages: Math.max(1, Math.ceil(selected.length / 50)),
+        total: selected.length, incomeTotal: 0, expenseTotal: selected.length * 20, balanceTotal: -selected.length * 20 })
+    }
+    return ok([])
+  })
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.goto('/finance/transactions')
+  await page.getByRole('button', { name: '下一页', exact: true }).click()
+  await expect(page.locator('.transaction-pagination-summary')).toContainText('第 2 / 2 页')
+  await page.getByRole('searchbox', { name: '搜索流水名称或备注' }).fill('发票')
+  await page.getByRole('button', { name: '搜索', exact: true }).click()
+  await expect(page.locator('.transaction-row')).toHaveCount(1)
+  expect(latest.get('page')).toBe('1')
+  await expect(page.locator('.transaction-summary-metric-expense')).toContainText('20.00')
+  await page.getByRole('button', { name: '筛选', exact: true }).click()
+  await page.getByRole('button', { name: /收支分类/ }).click()
+  await page.getByRole('option', { name: '支出 / 餐饮 / 咖啡', exact: true }).click()
+  await page.getByLabel('最低金额').fill('30')
+  await page.getByLabel('最高金额').fill('10')
+  await page.getByRole('button', { name: '应用筛选' }).click()
+  await expect(page.getByRole('alert')).toContainText('最低金额不能大于最高金额')
+  await page.getByLabel('最低金额').fill('10')
+  await page.getByLabel('最高金额').fill('30')
+  await page.screenshot({ path: testInfo.outputPath('advanced-filter.png'), animations: 'disabled' })
+  await page.getByRole('button', { name: '应用筛选' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect.poll(() => latest.get('categoryId')).toBe('2')
+  expect(latest.get('keyword')).toBe('发票'); expect(latest.get('minAmount')).toBe('10'); expect(latest.get('maxAmount')).toBe('30')
+  await page.screenshot({ path: testInfo.outputPath('search-results.png'), animations: 'disabled' })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.getByRole('button', { name: '清除搜索筛选' }).click()
+  await expect(page.locator('.transaction-row')).toHaveCount(50)
+  expect(latest.has('keyword')).toBe(false); expect(latest.has('categoryId')).toBe(false)
+  await page.getByRole('searchbox').fill('keep')
+  await page.getByRole('searchbox').press('Enter')
+  await expect(page.locator('.transaction-row')).toHaveCount(1)
+  await expect(page.locator('.transaction-row')).toContainText('Keep 会员')
+  await expect(page.locator('.search-filter-summary')).toContainText('“keep” · 1 笔')
+  expect(latest.get('keyword')).toBe('keep')
+  await page.getByRole('searchbox').fill('没有的记录')
+  await page.getByRole('button', { name: '搜索', exact: true }).click()
+  await expect(page.getByText('暂无收支记录', { exact: true })).toBeVisible()
+})

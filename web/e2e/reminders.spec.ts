@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import type { Reminder, ReminderSettings } from '../src/api/modules/reminder'
 
 const user = { id: 1, username: 'reminder-test', displayName: '提醒测试' }
-const initialSettings: ReminderSettings = { advanceDays: 3, todoEnabled: true, anniversaryEnabled: true, renewalEnabled: true, liabilityEnabled: true, investmentEnabled: true, budgetEnabled: true }
+const initialSettings: ReminderSettings = { advanceDays: 3, todoEnabled: true, anniversaryEnabled: true, renewalEnabled: true, liabilityEnabled: true, investmentEnabled: true, budgetEnabled: true, reimbursementEnabled: true }
 const initialItems: Reminder[] = [
   { key: 'todo:1:2026-11-07T18:00', type: 'todo', title: '带上相机去取景', description: '待办截止', dueAt: '2026-11-07T18:00:00+08:00', allDay: false, urgency: 'today', targetPath: '/tools/todo-items?reminderId=1', read: false, snoozedUntil: null },
   { key: 'renewal:2:2026-11-08T00:00', type: 'renewal', title: '视频会员续费', description: '本期固定支出 · CNY 25.00', dueAt: '2026-11-08T00:00:00+08:00', allDay: true, urgency: 'upcoming', targetPath: '/finance/renewals?reminderId=2', read: false, snoozedUntil: null },

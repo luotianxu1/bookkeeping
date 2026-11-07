@@ -54,6 +54,9 @@ class ReminderServiceTest {
         populator.execute(source);
         populator.execute(source); // 可重复执行，不重置已有状态。
         jdbc.execute("ALTER TABLE reminder_settings ADD budget_enabled BOOLEAN DEFAULT TRUE");
+        jdbc.execute("ALTER TABLE reminder_settings ADD reimbursement_enabled BOOLEAN DEFAULT TRUE");
+        jdbc.execute("CREATE TABLE transactions(id BIGINT PRIMARY KEY,user_id BIGINT,type VARCHAR(20),title VARCHAR(120),amount DECIMAL(18,2),currency_code VARCHAR(3),status VARCHAR(20),original_transaction_id BIGINT,recovery_kind VARCHAR(30),reimbursement_amount DECIMAL(18,2))");
+        jdbc.execute("CREATE TABLE expense_recovery_followups(transaction_id BIGINT PRIMARY KEY,user_id BIGINT,recipient VARCHAR(100),expected_date DATE)");
         jdbc.execute("CREATE TABLE todo_items(id BIGINT PRIMARY KEY,user_id BIGINT,title VARCHAR(120),remark VARCHAR(500),due_at TIMESTAMP,status VARCHAR(20))");
         jdbc.execute("CREATE TABLE anniversaries(id BIGINT PRIMARY KEY,user_id BIGINT,title VARCHAR(120),remark VARCHAR(500),anniversary_date DATE)");
         jdbc.execute("CREATE TABLE renewal_subscriptions(id BIGINT PRIMARY KEY,user_id BIGINT,name VARCHAR(80),next_billing_date DATE,amount DECIMAL(18,2),currency_code VARCHAR(3),last_charge_status VARCHAR(20),last_charge_message VARCHAR(255),status VARCHAR(20))");
@@ -106,10 +109,30 @@ class ReminderServiceTest {
         var second = service.list().items().get(0); assertEquals("exceeded", second.urgency());
         assertNotEquals(first.key(),second.key()); assertEquals(1,service.list().unreadCount());
         action(second.key(), ReminderActionRequest.Action.read, null); assertEquals(0,service.list().unreadCount());
-        service.saveSettings(new ReminderSettings(3,true,true,true,true,true,false)); assertTrue(service.list().items().isEmpty());
+        service.saveSettings(new ReminderSettings(3,true,true,true,true,true,false, true)); assertTrue(service.list().items().isEmpty());
         service.saveSettings(ReminderSettings.defaults()); assertEquals(0,service.list().unreadCount());
         asUser(2L); assertTrue(service.list().items().isEmpty());
         asUser(1L); at("2026-12-01T10:00:00+08:00"); assertTrue(service.list().items().isEmpty());
+    }
+
+    @Test void reimbursementRemindersTrackOutstandingAmountAndDisappearOnCancellationOrReceipt() {
+        jdbc.update("INSERT INTO transactions(id,user_id,type,title,amount,currency_code,status,reimbursement_amount) VALUES"
+            + "(1,1,'expense','出差车费',200,'CNY','normal',100),(2,2,'expense','他人',300,'CNY','normal',300),"
+            + "(3,1,'expense','尚未到期',100,'CNY','normal',100),(4,1,'expense','未设日期',100,'CNY','normal',100)");
+        jdbc.update("INSERT INTO expense_recovery_followups VALUES(1,1,'公司财务','2026-11-06'),(2,2,'他人','2026-11-06'),(3,1,'公司','2026-11-11'),(4,1,NULL,NULL)");
+        jdbc.update("INSERT INTO transactions(id,user_id,type,amount,status,original_transaction_id,recovery_kind) VALUES(10,1,'expense',-40,'normal',1,'reimbursement'),(11,1,'expense',-5,'voided',1,'reimbursement'),(12,2,'expense',-10,'normal',1,'reimbursement')");
+        var first = service.list().items().get(0);
+        assertEquals(1, service.list().items().size()); assertEquals("reimbursement",first.type()); assertEquals("overdue",first.urgency());
+        assertTrue(first.description().contains("公司财务")); assertTrue(first.description().contains("60.00"));
+        assertEquals("/finance/expense-recoveries?transactionId=1",first.targetPath());
+        action(first.key(), ReminderActionRequest.Action.read, null); assertEquals(0,service.list().unreadCount());
+        jdbc.update("UPDATE expense_recovery_followups SET expected_date='2026-11-07' WHERE transaction_id=1");
+        assertEquals(1,service.list().unreadCount()); assertEquals("today",service.list().items().get(0).urgency());
+        service.saveSettings(new ReminderSettings(3,true,true,true,true,true,true,false)); assertTrue(service.list().items().isEmpty());
+        service.saveSettings(ReminderSettings.defaults());
+        jdbc.update("UPDATE transactions SET reimbursement_amount=40 WHERE id=1"); assertTrue(service.list().items().isEmpty());
+        jdbc.update("UPDATE transactions SET reimbursement_amount=100 WHERE id=1");
+        jdbc.update("UPDATE transactions SET amount=-100 WHERE id=10"); assertTrue(service.list().items().isEmpty());
     }
 
     @AfterEach void cleanup() {
@@ -172,13 +195,13 @@ class ReminderServiceTest {
         asUser(2);
         action(key, ReminderActionRequest.Action.read, null);
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM reminder_states", Integer.class));
-        service.saveSettings(new ReminderSettings(0, false, true, true, true, true, true));
+        service.saveSettings(new ReminderSettings(0, false, true, true, true, true, true, true));
         assertFalse(service.settings().todoEnabled());
         assertTrue(service.list().items().isEmpty());
         asUser(1);
         assertEquals(ReminderSettings.defaults(), service.settings());
         assertEquals(1, service.list().unreadCount());
-        service.saveSettings(new ReminderSettings(0, true, true, true, true, true, true));
+        service.saveSettings(new ReminderSettings(0, true, true, true, true, true, true, true));
         assertTrue(service.list().items().isEmpty());
     }
 

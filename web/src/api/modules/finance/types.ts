@@ -340,6 +340,10 @@ export interface TransactionQuery {
 }
 
 export interface TransactionPageQuery extends TransactionQuery {
+  keyword?: string
+  categoryId?: number
+  minAmount?: number
+  maxAmount?: number
   userIds?: string
   cashOnly?: boolean
   startDate?: string
@@ -1308,6 +1312,8 @@ export interface ExpenseRecovery {
   occurredAt: string
   amount: number
   reimbursementAmount: number
+  reimbursementRecipient?: string | null
+  expectedReimbursementDate?: string | null
   refundedAmount: number
   reimbursedAmount: number
   recoverableAmount: number
@@ -1320,4 +1326,5 @@ export interface ExpenseRecoveryPage {
   total: number
   page: number
   totalPages: number
+  pendingSummary: { currencyCode: string; amount: number; count: number; overdueAmount: number }[]
 }

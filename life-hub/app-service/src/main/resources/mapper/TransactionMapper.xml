@@ -60,6 +60,10 @@
             AND t.account_id IN
             <foreach collection="cashAccountIds" item="cid" open="(" separator="," close=")">#{cid}</foreach>
         </if>
+        <if test="search != null and search.keyword != ''">
+            AND (LOCATE(LOWER(#{search.keyword}), LOWER(COALESCE(t.title, ''))) &gt; 0
+                OR LOCATE(LOWER(#{search.keyword}), LOWER(COALESCE(t.remark, ''))) &gt; 0)
+        </if>
     </sql>
 
     <sql id="mergedDebtRecordBranch">
@@ -115,6 +119,12 @@
             <if test="type != null and type != '' and type == 'expense'">
                 AND d.record_type = 'repayment'
             </if>
+            <if test="search != null and search.keyword != ''">
+                AND (LOCATE(LOWER(#{search.keyword}), LOWER(CONCAT(
+                        COALESCE((SELECT a.name FROM accounts a WHERE a.id = d.account_id), '债务账户'),
+                        ' · ', CASE WHEN d.record_type = 'repayment' THEN '还款' ELSE '借入' END))) &gt; 0
+                    OR LOCATE(LOWER(#{search.keyword}), LOWER(COALESCE(d.remark, ''))) &gt; 0)
+            </if>
         </if>
     </sql>
 
@@ -169,19 +179,41 @@
             <if test="type != null and type != '' and type == 'expense'">
                 AND h.direction = 'outgoing'
             </if>
+            <if test="search != null and search.keyword != ''">
+                AND (LOCATE(LOWER(#{search.keyword}), LOWER(CONCAT(
+                        COALESCE((SELECT a.name FROM accounts a WHERE a.id = h.account_id), '人情账户'),
+                        ' · ', CASE WHEN h.direction = 'incoming' THEN '收到' ELSE '送出' END))) &gt; 0
+                    OR LOCATE(LOWER(#{search.keyword}), LOWER(COALESCE(h.remark, ''))) &gt; 0)
+            </if>
         </if>
     </sql>
 
     <sql id="mergedBranches">
+        <!-- 名称/备注在各分支内匹配：accounts.name 与 transactions.title 可能使用不同排序规则，
+             生成的往来标题不能参与 UNION（MySQL 1271）。显示标题仍由 Service 生成。
+             列表和汇总共用这些分支，所有筛选都在分页前完成。 -->
         <include refid="mergedTransactionBranch"/>
         <include refid="mergedDebtRecordBranch"/>
         <include refid="mergedHumanRelationBranch"/>
+    </sql>
+
+    <sql id="searchConditions">
+        <where>
+            <if test="search != null">
+                <if test="search.categoryId != null">
+                    AND merged.categoryId IN (SELECT c.id FROM categories c WHERE c.id = #{search.categoryId} OR c.parent_id = #{search.categoryId})
+                </if>
+                <if test="search.minAmount != null">AND ABS(merged.amount) &gt;= #{search.minAmount}</if>
+                <if test="search.maxAmount != null">AND ABS(merged.amount) &lt;= #{search.maxAmount}</if>
+            </if>
+        </where>
     </sql>
 
     <select id="selectMergedPage" resultType="com.example.app.dto.MergedTransactionRow">
         SELECT * FROM (
             <include refid="mergedBranches"/>
         ) merged
+        <include refid="searchConditions"/>
         <choose>
             <when test="sortOrder != null and sortOrder == 'asc'">
                 ORDER BY occurredAt ASC, sourceId ASC, sourceType ASC
@@ -201,6 +233,7 @@
         FROM (
             <include refid="mergedBranches"/>
         ) merged
+        <include refid="searchConditions"/>
     </select>
 
 </mapper>

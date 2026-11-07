@@ -11,6 +11,31 @@ import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ExpenseRecoveryServiceTest {
+    @Test void followUpPersistsWithPlanAndSummaryUsesAllPendingRowsPerCurrency() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            long id = seed(db); var service = service(db);
+            var due = LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).minusDays(1);
+            var plan = db.tx.execute(s -> service.plan(1L, id, new BigDecimal("200"), new ReimbursementFollowUp(" 公司财务 ", due)));
+            assertEquals("公司财务", plan.getReimbursementRecipient()); assertEquals(due, plan.getExpectedReimbursementDate());
+            db.tx.execute(s -> service.receive(1L, receipt(id, "reimbursement", "80")));
+            db.jdbc.update("INSERT INTO transactions(id,user_id,type,account_id,amount,reimbursement_amount,currency_code,status,occurred_at) VALUES(900,1,'expense',1,60,50,'USD','normal','2026-01-31'),(901,2,'expense',1,900,900,'CNY','normal','2026-01-31')");
+            var summaries = service.list(1L, "received", null, 1).pendingSummary();
+            assertEquals(2, summaries.size());
+            assertEquals("CNY", summaries.get(0).currencyCode()); equal("120", summaries.get(0).amount());
+            equal("120", summaries.get(0).overdueAmount()); assertEquals(1, summaries.get(0).count());
+            assertEquals("USD", summaries.get(1).currencyCode()); equal("50", summaries.get(1).amount()); equal("0", summaries.get(1).overdueAmount());
+            assertEquals(1, service.list(1L, "all", id, 1).pendingSummary().size());
+            assertThrows(IllegalArgumentException.class, () -> db.tx.execute(s -> service.plan(2L, id, new BigDecimal("200"), new ReimbursementFollowUp("他人", due))));
+            assertThrows(IllegalArgumentException.class, () -> db.tx.execute(s -> service.plan(1L, id, new BigDecimal("250"), new ReimbursementFollowUp("公司", LocalDate.of(2025,1,1)))));
+            equal("200", service.detail(1L,id).getReimbursementAmount());
+            db.tx.execute(s -> service.plan(1L, id, new BigDecimal("80")));
+            assertEquals(due, service.detail(1L,id).getExpectedReimbursementDate()); // 旧客户端和撤销不清空跟进信息。
+            assertTrue(service.list(1L, "all", id, 1).pendingSummary().isEmpty());
+            db.tx.execute(s -> service.plan(1L, id, new BigDecimal("80"), new ReimbursementFollowUp(null, null)));
+            assertNull(service.detail(1L,id).getExpectedReimbursementDate()); assertNull(service.detail(1L,id).getReimbursementRecipient());
+            equal("700",db.balance(1)); equal("580",db.balance(2));
+        }
+    }
     private ExpenseRecoveryService service(AccountingDatabase db) {
         return new ExpenseRecoveryService(db.mapper(TransactionMapper.class), db.mapper(ExpenseRecoveryMapper.class),
             db.mapper(AccountMapper.class), db.mapper(AccountTypeMapper.class), db.idempotency());

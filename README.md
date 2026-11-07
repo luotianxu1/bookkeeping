@@ -32,7 +32,7 @@
 
 入口为「我的 → 统一提醒」，底部「我的」显示未读数量。提醒只属于当前登录用户，家庭成员不可代读或修改。
 
-- 覆盖未完成待办、每年纪念日、启用的固定支出（含本期扣款失败）、已创建且未还的月账单、启用的定投计划。
+- 覆盖未完成待办、每年纪念日、启用的固定支出（含本期扣款失败）、已创建且未还的月账单、启用的定投计划、预算预警及有预计到账日期的待报销。
 - 默认提前 3 天，可设置 0–30 天并按类型开关。按北京时间计算；纪念日跨年自动滚动，2 月 29 日在非闰年按 2 月 28 日处理。
 - 支持类型/未读/稍后筛选、单条或当前列表全部已读、1 小时/24 小时后提醒、恢复提醒及跳转来源。已读不等于完成；完成、取消、暂停或删除的来源会自动移出。
 - 已读和稍后状态保存在服务端，按「用户 + 来源 + 记录 + 期次」隔离。改期、下一期及扣款失败会产生新的提醒，刷新不会重复生成同一期。稍后到期后恢复未读；原事项已结束则不再提醒。
@@ -515,4 +515,11 @@ mysql -u root -p bookkeeping_app < database/046_category_budgets_and_expense_rec
 - **金额保护**：退款累计＋计划报销总额不得超过原支出；实际报销到账不得超过计划。若退款占用了待报销部分，先降低报销计划再登记退款。关联到账存在或计划未取消时，禁止修改/删除原支出。撤销到账会扣回现金并恢复支出统计和待报销金额；现金余额不足则整体回滚。已有分类预算的分类需先移除相关月份预算才能删除。
 - **重试与权限**：到账沿用用户账务行锁和 `requestId` 幂等事务；同请求重试只入账一次，参数变化不能沿用旧 ID。退款、报销和分类预算接口只处理登录本人数据，家庭查看权限不赋予操作权限。
 
-验证：`pnpm test`、`pnpm build`、`pnpm test:e2e finance-recoveries.spec.ts reminders.spec.ts`、`pnpm test:e2e:live`，以及 `mvn -B -ntp -pl common,app-service -am test`。隔离 H2 测试覆盖并发限额、重试、撤销回滚、归属校验、跨月净支出、分类预算和提醒阶段；MySQL 集成测试会在提供 `MYSQL_TEST_URL` 时执行真实 046 迁移与约束验证，H2 不能替代该检查。046 的兼容性回归可以单独针对隔离的 MySQL 5.7 / 8 实例运行：`mvn -pl common,app-service -am test '-Dtest=MySqlAccountingTest#recoveryMigrationSupportsFreshAndPartialSchemasWithoutLosingData' -Dsurefire.failIfNoSpecifiedTests=false`。该测试验证部分迁移补齐、重跑后记录与余额不变，以及 INSERT/UPDATE 金额约束；完整 MySQL 账务集成仍需 MySQL 8。
+验证：`pnpm test`、`pnpm build`、`pnpm test:e2e finance-recoveries.spec.ts reminders.spec.ts transaction-search.spec.ts`、`pnpm test:e2e:live`，以及 `mvn -B -ntp -pl common,app-service -am test`。隔离 H2 测试覆盖并发限额、重试、撤销回滚、归属校验、跨月净支出、分类预算和提醒阶段；MySQL 集成测试会在提供 `MYSQL_TEST_URL` 时执行真实迁移与约束验证，H2 不能替代该检查。046 / 047 的兼容性回归可以单独针对隔离的 MySQL 5.7 / 8 实例运行：`mvn -pl common,app-service -am test '-Dtest=MySqlAccountingTest#recoveryMigrationSupportsFreshAndPartialSchemasWithoutLosingData' -Dsurefire.failIfNoSpecifiedTests=false`。该测试验证部分迁移补齐、重跑后记录、余额和跟进设置不变，以及 INSERT/UPDATE 金额约束；完整 MySQL 账务集成仍需 MySQL 8。
+
+## 流水检索与报销跟进
+
+- 收支列表支持名称/备注关键词搜索，分类（一级分类包含子分类）、金额范围与现有账户、日期、收入/支出筛选可组合。选择“全部时间”可搜索历史记录。金额范围按绝对值和原币数值匹配，退款仍按负支出汇总；筛选、合计和分页使用同一组数据库条件，变更条件回到第一页。
+- 报销计划可选填报销对象、预计到账日期。待报销汇总包含未到账与部分到账记录，按币种分别显示合计、笔数和逾期金额，不受列表分页或状态标签影响；从原支出进入时只汇总该笔支出。
+- 预计到账日期使用北京时间和统一提醒的提前天数，逾期未到账继续显示提醒。部分到账后提醒金额更新，全部到账或撤销待报销后提醒消失；改期形成新的提醒，支持独立的“报销待到账”开关。通知仅在站内展示。
+- 部署前先执行 046，再执行 `database/047_reimbursement_followups.mysql.sql`。047 可重复执行，新增跟进表和报销提醒开关，不修改原有财务金额。旧客户端仅提交计划金额时保留已有跟进信息；新表单可清空对象和预计日期。当前版本不包含附件。

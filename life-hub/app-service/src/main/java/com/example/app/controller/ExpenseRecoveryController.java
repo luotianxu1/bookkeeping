@@ -23,10 +23,11 @@ public class ExpenseRecoveryController {
     public Result<ExpenseRecoveryResponse> detail(@PathVariable long id) {
         return Result.ok(service.detail(SecurityUtils.requireCurrentUserId(), id));
     }
-    public record Plan(@NotNull @DecimalMin("0") @Digits(integer = 16, fraction = 2) BigDecimal amount) {}
+    public record Plan(@NotNull @DecimalMin("0") @Digits(integer = 16, fraction = 2) BigDecimal amount,
+        @Valid ReimbursementFollowUp followUp) {}
     @PutMapping("/{id}/plan")
     public Result<ExpenseRecoveryResponse> plan(@PathVariable long id, @Valid @RequestBody Plan request) {
-        return Result.ok(service.plan(SecurityUtils.requireCurrentUserId(), id, request.amount()));
+        return Result.ok(service.plan(SecurityUtils.requireCurrentUserId(), id, request.amount(), request.followUp()));
     }
     @PostMapping
     public Result<ExpenseRecoveryResponse.Receipt> receive(@Valid @RequestBody ExpenseRecoveryRequest request) {

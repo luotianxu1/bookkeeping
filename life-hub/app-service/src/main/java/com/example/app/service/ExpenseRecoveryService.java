@@ -3,6 +3,7 @@ package com.example.app.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.example.app.dto.ExpenseRecoveryRequest;
 import com.example.app.dto.ExpenseRecoveryResponse;
+import com.example.app.dto.ReimbursementFollowUp;
 import com.example.app.dto.ExpenseRecoveryResponse.Receipt;
 import com.example.app.entity.TransactionEntity;
 import com.example.app.mapper.*;
@@ -33,7 +34,8 @@ public class ExpenseRecoveryService {
         int current = Math.max(1, Math.min(page, pages));
         var items = recoveries.list(userId, state, transactionId, (current - 1) * 30, 30);
         items.forEach(this::complete);
-        return new ExpenseRecoveryResponse.Page(items, total, current, pages);
+        return new ExpenseRecoveryResponse.Page(items, total, current, pages,
+            recoveries.pendingSummary(userId, "all", transactionId, java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"))));
     }
 
     public ExpenseRecoveryResponse detail(long userId, long id) {
@@ -52,6 +54,11 @@ public class ExpenseRecoveryService {
 
     @Transactional
     public ExpenseRecoveryResponse plan(long userId, long id, BigDecimal amount) {
+        return plan(userId, id, amount, null);
+    }
+
+    @Transactional
+    public ExpenseRecoveryResponse plan(long userId, long id, BigDecimal amount, ReimbursementFollowUp followUp) {
         accounts.lockUserForWrite(userId);
         money(amount, true);
         var original = original(userId, id);
@@ -61,6 +68,13 @@ public class ExpenseRecoveryService {
             throw new IllegalArgumentException("计划报销金额不能小于已到账金额，或超过扣除退款后的支出");
         }
         original.setReimbursementAmount(amount);
+        if (followUp != null) {
+            String recipient = followUp.recipient() == null ? null : followUp.recipient().trim();
+            if (recipient != null && recipient.length() > 100) throw new IllegalArgumentException("报销对象最多100字");
+            if (followUp.expectedDate() != null && followUp.expectedDate().isBefore(original.getOccurredAt().toLocalDate()))
+                throw new IllegalArgumentException("预计到账日期不能早于原支出日期");
+            recoveries.saveFollowUp(userId, id, recipient == null || recipient.isEmpty() ? null : recipient, followUp.expectedDate());
+        }
         transactions.updateById(original);
         return detail(userId, id);
     }

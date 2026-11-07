@@ -9,6 +9,7 @@ public interface ExpenseRecoveryMapper {
         FROM transactions t
         LEFT JOIN categories c ON c.id = t.category_id
         LEFT JOIN accounts a ON a.id = t.account_id
+        LEFT JOIN expense_recovery_followups f ON f.transaction_id = t.id AND f.user_id = t.user_id
         LEFT JOIN (
           SELECT original_transaction_id, user_id,
             SUM(CASE WHEN recovery_kind = 'refund' THEN -amount ELSE 0 END) AS refunded,
@@ -28,8 +29,28 @@ public interface ExpenseRecoveryMapper {
     @Select("""
         <script>SELECT t.id, t.title, c.name AS category_name, a.name AS account_name, t.currency_code,
         t.occurred_at, t.amount, COALESCE(t.reimbursement_amount,0) AS reimbursement_amount,
+        f.recipient AS reimbursement_recipient, f.expected_date AS expected_reimbursement_date,
         COALESCE(r.refunded,0) AS refunded_amount, COALESCE(r.reimbursed,0) AS reimbursed_amount
         """ + BASE + " ORDER BY t.occurred_at DESC, t.id DESC LIMIT #{limit} OFFSET #{offset}</script>")
     List<ExpenseRecoveryResponse> list(@Param("userId") long userId, @Param("state") String state,
         @Param("transactionId") Long transactionId, @Param("offset") int offset, @Param("limit") int limit);
+
+    @Insert("""
+        INSERT INTO expense_recovery_followups(transaction_id, user_id, recipient, expected_date)
+        VALUES(#{id}, #{userId}, #{recipient}, #{date})
+        ON DUPLICATE KEY UPDATE recipient=VALUES(recipient), expected_date=VALUES(expected_date)
+        """)
+    void saveFollowUp(@Param("userId") long userId, @Param("id") long id,
+        @Param("recipient") String recipient, @Param("date") java.time.LocalDate date);
+
+    @Select("""
+        <script>SELECT t.currency_code, SUM(t.reimbursement_amount - COALESCE(r.reimbursed,0)) AS amount,
+          COUNT(*) AS count, SUM(CASE WHEN f.expected_date &lt; #{today}
+            THEN t.reimbursement_amount - COALESCE(r.reimbursed,0) ELSE 0 END) AS overdue_amount
+        """ + BASE + """
+          AND t.reimbursement_amount &gt; COALESCE(r.reimbursed,0)
+          GROUP BY t.currency_code ORDER BY t.currency_code</script>
+        """)
+    List<ExpenseRecoveryResponse.PendingSummary> pendingSummary(@Param("userId") long userId,
+        @Param("state") String state, @Param("transactionId") Long transactionId, @Param("today") java.time.LocalDate today);
 }

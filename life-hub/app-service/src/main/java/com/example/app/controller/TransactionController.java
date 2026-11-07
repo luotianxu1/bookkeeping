@@ -59,9 +59,14 @@ public class TransactionController {
         @RequestParam(name = "sortOrder", required = false, defaultValue = "desc") String sortOrder,
         @RequestParam(name = "cashOnly", required = false, defaultValue = "false") boolean cashOnly,
         @RequestParam(name = "page", required = false, defaultValue = "1") Integer page,
-        @RequestParam(name = "pageSize", required = false, defaultValue = "50") Integer pageSize
+        @RequestParam(name = "pageSize", required = false, defaultValue = "50") Integer pageSize,
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) Long categoryId,
+        @RequestParam(required = false) java.math.BigDecimal minAmount,
+        @RequestParam(required = false) java.math.BigDecimal maxAmount
     ) {
-        return Result.ok(transactionService.page(parseUserIds(userId, userIds), type, accountId, startDate, endDate, sortOrder, cashOnly, page, pageSize));
+        return Result.ok(transactionService.page(parseUserIds(userId, userIds), type, accountId, startDate, endDate, sortOrder, cashOnly, page, pageSize,
+            new com.example.app.dto.TransactionSearch(keyword, categoryId, minAmount, maxAmount)));
     }
 
     @GetMapping("/accounts/{accountId}")

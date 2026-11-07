@@ -117,6 +117,7 @@ public class ReminderService {
         if (settings.renewalEnabled()) mapper.renewals(userId, end).forEach(source -> add(items, "renewal", source, true, now));
         if (settings.liabilityEnabled()) mapper.liabilities(userId, end).forEach(source -> add(items, "liability", source, true, now));
         if (settings.investmentEnabled()) mapper.investments(userId, end).forEach(source -> add(items, "investment", source, true, now));
+        if (settings.reimbursementEnabled()) mapper.reimbursements(userId, end).forEach(source -> add(items, "reimbursement", source, true, now));
         if (settings.budgetEnabled()) {
             LocalDate month = today.withDayOfMonth(1);
             categoryBudgets.list(userId, month).forEach(b -> addBudget(items, "category:" + b.id(), b.categoryName(), month,
@@ -150,6 +151,8 @@ public class ReminderService {
             case "anniversary" -> "一年一度的重要日子";
             case "renewal" -> source.isFailed() ? "本期自动扣款失败，请检查扣款账户和分类" : "本期固定支出";
             case "liability" -> "本期待还账单";
+            case "reimbursement" -> (overdue ? "报销逾期未到账" : "报销待到账")
+                + (source.getDetail() == null || source.getDetail().isBlank() ? "" : " · " + source.getDetail());
             default -> overdue ? "计划日期已过，请查看定投执行情况" : "下一次定投计划";
         };
         if (source.getAmount() != null) {

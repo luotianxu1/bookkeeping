@@ -74,19 +74,36 @@ public interface ReminderMapper {
     List<Source> investments(@Param("userId") long userId, @Param("end") LocalDateTime end);
 
     @Select("""
-        SELECT advance_days, todo_enabled, anniversary_enabled, renewal_enabled, liability_enabled, investment_enabled, budget_enabled
+        SELECT t.id, t.title, f.recipient AS detail, f.expected_date AS due_at, t.currency_code,
+          t.reimbursement_amount - COALESCE(r.received,0) AS amount,
+          CONCAT('/finance/expense-recoveries?transactionId=', t.id) AS target_path
+        FROM transactions t
+        JOIN expense_recovery_followups f ON f.transaction_id=t.id AND f.user_id=t.user_id
+        LEFT JOIN (
+          SELECT original_transaction_id, user_id, SUM(-amount) AS received FROM transactions
+          WHERE user_id=#{userId} AND status='normal' AND recovery_kind='reimbursement' AND original_transaction_id IS NOT NULL
+          GROUP BY original_transaction_id, user_id
+        ) r ON r.original_transaction_id=t.id AND r.user_id=t.user_id
+        WHERE t.user_id=#{userId} AND t.type='expense' AND t.status='normal' AND t.original_transaction_id IS NULL
+          AND t.reimbursement_amount > COALESCE(r.received,0) AND f.expected_date < #{end}
+        """)
+    List<Source> reimbursements(@Param("userId") long userId, @Param("end") LocalDateTime end);
+
+    @Select("""
+        SELECT advance_days, todo_enabled, anniversary_enabled, renewal_enabled, liability_enabled, investment_enabled, budget_enabled, reimbursement_enabled
         FROM reminder_settings WHERE user_id = #{userId}
         """)
     ReminderSettings settings(long userId);
 
     @Insert("""
         INSERT INTO reminder_settings
-          (user_id, advance_days, todo_enabled, anniversary_enabled, renewal_enabled, liability_enabled, investment_enabled, budget_enabled)
+          (user_id, advance_days, todo_enabled, anniversary_enabled, renewal_enabled, liability_enabled, investment_enabled, budget_enabled, reimbursement_enabled)
         VALUES (#{userId}, #{settings.advanceDays}, #{settings.todoEnabled}, #{settings.anniversaryEnabled},
-          #{settings.renewalEnabled}, #{settings.liabilityEnabled}, #{settings.investmentEnabled}, #{settings.budgetEnabled})
+          #{settings.renewalEnabled}, #{settings.liabilityEnabled}, #{settings.investmentEnabled}, #{settings.budgetEnabled}, #{settings.reimbursementEnabled})
         ON DUPLICATE KEY UPDATE advance_days = VALUES(advance_days), todo_enabled = VALUES(todo_enabled),
           anniversary_enabled = VALUES(anniversary_enabled), renewal_enabled = VALUES(renewal_enabled),
-          liability_enabled = VALUES(liability_enabled), investment_enabled = VALUES(investment_enabled), budget_enabled = VALUES(budget_enabled)
+          liability_enabled = VALUES(liability_enabled), investment_enabled = VALUES(investment_enabled), budget_enabled = VALUES(budget_enabled),
+          reimbursement_enabled = VALUES(reimbursement_enabled)
         """)
     void saveSettings(@Param("userId") long userId, @Param("settings") ReminderSettings settings);
 

@@ -88,8 +88,8 @@ export function getExpenseRecoveries(params: { state: string; page: number; tran
 export function getExpenseRecovery(id: number) {
   return requestGet<import('./types').ExpenseRecovery>(financeRequest, `/api/finance/expense-recoveries/${id}`)
 }
-export function saveReimbursementPlan(id: number, amount: number) {
-  return requestPut<import('./types').ExpenseRecovery>(financeRequest, `/api/finance/expense-recoveries/${id}/plan`, { amount })
+export function saveReimbursementPlan(id: number, amount: number, followUp?: { recipient: string | null; expectedDate: string | null }) {
+  return requestPut<import('./types').ExpenseRecovery>(financeRequest, `/api/finance/expense-recoveries/${id}/plan`, { amount, followUp })
 }
 export function receiveExpenseRecovery(params: {
   transactionId: number; accountId: number; amount: number; kind: 'refund' | 'reimbursement'; occurredAt: string; remark?: string; requestId: string
