@@ -151,12 +151,13 @@ export function mergeBreakdownItems(
 
 export function finalizeBreakdownItems(
   source: Map<string, TransactionAnalysisCategoryBreakdownItem>,
-  totalAmount: number,
+  _totalAmount: number,
 ) {
+  const totalAmount = Array.from(source.values()).reduce((sum, item) => sum + Math.max(0, Number(item.amount)), 0)
   return Array.from(source.values())
     .map((item) => ({
       ...item,
-      percent: totalAmount > 0 ? (Number(item.amount ?? 0) / totalAmount) * 100 : 0,
+      percent: totalAmount > 0 ? (Math.max(0, Number(item.amount ?? 0)) / totalAmount) * 100 : 0,
     }))
     .sort((left, right) => Number(right.amount ?? 0) - Number(left.amount ?? 0))
 }

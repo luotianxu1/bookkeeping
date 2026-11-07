@@ -1,6 +1,6 @@
 import { toolRequest, requestGet, requestPost, requestPut } from '@/api/request'
 
-export type ReminderType = 'todo' | 'anniversary' | 'renewal' | 'liability' | 'investment'
+export type ReminderType = 'todo' | 'anniversary' | 'renewal' | 'liability' | 'investment' | 'budget'
 export interface Reminder {
   key: string
   type: ReminderType
@@ -8,7 +8,7 @@ export interface Reminder {
   description: string
   dueAt: string
   allDay: boolean
-  urgency: 'failed' | 'overdue' | 'today' | 'upcoming'
+  urgency: 'failed' | 'overdue' | 'today' | 'upcoming' | 'warning' | 'exceeded'
   targetPath: string
   read: boolean
   snoozedUntil: string | null
@@ -25,6 +25,7 @@ export interface ReminderSettings {
   renewalEnabled: boolean
   liabilityEnabled: boolean
   investmentEnabled: boolean
+  budgetEnabled: boolean
 }
 export type ReminderAction = 'read' | 'unread' | 'snooze' | 'resume'
 const path = '/api/tools/reminders'

@@ -6,8 +6,6 @@ import AmountText from '@/components/common/AmountText/index.vue'
 import CategoryIcon from '@/components/common/CategoryIcon/index.vue'
 import SwipeActionGroup from '@/components/common/SwipeActionGroup/index.vue'
 
-const ACTION_WIDTH = 40
-
 const props = withDefaults(defineProps<{
   group: DayGroup
   summaryMode?: 'inline' | 'stacked'
@@ -43,7 +41,7 @@ function negativeAmount(value: string) {
 }
 
 function transactionAmount(transaction: DayGroup['transactions'][number]) {
-  if (transaction.type !== 'expense') {
+  if (transaction.type !== 'expense' || (transaction.rawAmount ?? 0) < 0) {
     return transaction.amount
   }
 
@@ -51,7 +49,7 @@ function transactionAmount(transaction: DayGroup['transactions'][number]) {
 }
 
 function transactionTone(transaction: DayGroup['transactions'][number]) {
-  if (transaction.type === 'expense') return 'negative'
+  if (transaction.type === 'expense') return (transaction.rawAmount ?? 0) < 0 ? 'positive' : 'negative'
   if (transaction.type === 'transfer') return 'neutral'
   return 'positive'
 }
@@ -70,25 +68,21 @@ function summaryTone(value: string) {
 }
 
 function expenseSummaryAmount(value: string) {
-  return amountNumber(value) === 0 ? value : negativeAmount(value)
+  const amount = amountNumber(value)
+  return amount === 0 ? value : `${amount > 0 ? '-' : '+'}¥${Math.abs(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
 function transactionKey(transaction: DayGroup['transactions'][number]) {
   return String(transaction.id ?? `${props.group.date}-${transaction.name}-${transaction.time}`)
 }
 
-function rowOffset(transaction: DayGroup['transactions'][number]) {
+function rowStyle(transaction: DayGroup['transactions'][number]) {
   const key = transactionKey(transaction)
   if (draggingKey.value === key) {
-    return dragOffset.value
+    return { transform: `translateX(${dragOffset.value}px)` }
   }
-  return openedKey.value === key ? -rowActionWidth(transaction) : 0
-}
-
-function rowStyle(transaction: DayGroup['transactions'][number]) {
   return {
-    '--action-width': `${rowActionWidth(transaction)}px`,
-    transform: `translateX(${rowOffset(transaction)}px)`,
+    transform: openedKey.value === key ? 'translateX(calc(-1 * var(--action-width)))' : 'translateX(0)',
   }
 }
 
@@ -104,12 +98,19 @@ function canEditTransaction(transaction: DayGroup['transactions'][number]) {
   return canSwipeDelete(transaction)
     && transaction.sourceType === 'transaction'
     && Boolean(transaction.accountId)
+    && !transaction.originalTransactionId
     && Boolean(transaction.categoryId)
     && Boolean(transaction.occurredAt)
 }
 
-function rowActionWidth(transaction: DayGroup['transactions'][number]) {
-  return ACTION_WIDTH * (canEditTransaction(transaction) ? 2 : 1)
+function canRecoverTransaction(transaction: DayGroup['transactions'][number]) {
+  return canSwipeDelete(transaction)
+    && transaction.type === 'expense'
+    && !transaction.originalTransactionId
+}
+
+function rowActionCount(transaction: DayGroup['transactions'][number]) {
+  return 1 + Number(canEditTransaction(transaction)) + Number(canRecoverTransaction(transaction))
 }
 
 function handlePointerDown(event: PointerEvent, transaction: DayGroup['transactions'][number]) {
@@ -118,8 +119,10 @@ function handlePointerDown(event: PointerEvent, transaction: DayGroup['transacti
   }
 
   const key = transactionKey(transaction)
-  const actionWidth = rowActionWidth(transaction)
   const target = event.currentTarget as HTMLElement
+  // 操作按钮会随 rem 缩放；拖动距离必须使用实际渲染宽度。
+  const actionWidth = target.parentElement?.querySelector('.transaction-actions')?.getBoundingClientRect().width ?? 0
+  if (!actionWidth) return
   target.setPointerCapture(event.pointerId)
   draggingKey.value = key
   dragOffset.value = openedKey.value === key ? -actionWidth : 0
@@ -212,12 +215,25 @@ function handleDelete(transaction: DayGroup['transactions'][number]) {
         :key="transactionKey(transaction)"
         class="transaction-row"
         :class="{ 'transaction-row-swipeable': canSwipeDelete(transaction) }"
+        :style="{ '--action-count': rowActionCount(transaction) }"
       >
         <div
           v-if="canSwipeDelete(transaction)"
           class="transaction-actions"
-          :style="{ width: `${rowActionWidth(transaction)}px` }"
         >
+          <RouterLink
+            v-if="canRecoverTransaction(transaction)"
+            class="recovery-action"
+            :to="`/finance/expense-recoveries?transactionId=${transaction.id}`"
+            :aria-label="`退款或报销${transaction.name}`"
+            title="退款 / 报销"
+            @click="openedKey = ''"
+          >
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 10A9 9 0 1 1 5.6 18.4M3 4V10H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M9 9L12 12L15 9M9 13H15M12 12V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </RouterLink>
           <SwipeActionGroup
             :show-edit="canEditTransaction(transaction)"
             :deleting="deletingId === transaction.id"

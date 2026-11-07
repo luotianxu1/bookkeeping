@@ -518,6 +518,7 @@ function goToNextBreakdownDetailPage() {
           <strong>{{ breakdownSectionTitle }}</strong>
         </header>
         <div ref="pieRef" class="pie-chart"></div>
+        <p v-if="breakdownItems.some(item => item.amount < 0)" class="card-empty">图表占比仅含净支出为正的分类；支出冲减计入下方明细和收支合计。</p>
         <div class="breakdown-list">
           <article
             v-for="item in breakdownItems"
@@ -541,7 +542,7 @@ function goToNextBreakdownDetailPage() {
               </span>
               <span class="breakdown-right" :style="{ color: item.categoryColor || 'var(--color-text-tertiary)' }">
                 <span class="breakdown-summary">
-                  {{ item.percent.toFixed(2) }}%&nbsp;
+                  {{ item.amount < 0 ? '支出冲减' : `${item.percent.toFixed(2)}%` }}&nbsp;
                   <AmountText tag="span" :value="formatAmount(item.amount)" />
                   &nbsp;{{ item.transactionCount }}笔
                 </span>

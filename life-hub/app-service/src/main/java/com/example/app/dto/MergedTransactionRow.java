@@ -20,6 +20,9 @@ public class MergedTransactionRow {
     /** 已在 SQL 中映射为统一的 expense/income/transfer */
     private String type;
     private BigDecimal amount;
+    private Long originalTransactionId;
+    private String recoveryKind;
+    private BigDecimal reimbursementAmount;
     private String currencyCode;
     /** 展示账户：transaction = account_id；debt/human = COALESCE(funding_account_id, account_id) */
     private Long displayAccountId;

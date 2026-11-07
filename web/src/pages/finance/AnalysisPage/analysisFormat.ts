@@ -116,9 +116,7 @@ export function breakdownDetailMetaText(transaction: Transaction) {
 }
 
 export function detailAmountText(transaction: Transaction) {
-  return transaction.type === 'income'
-    ? `+${formatAmount(transaction.amount)}`
-    : `-${formatAmount(transaction.amount)}`
+  return formatSignedAmount(transaction.type === 'income' ? Number(transaction.amount) : -Number(transaction.amount))
 }
 
 export function formatTime(value: string) {
@@ -145,7 +143,7 @@ export function buildMetricTrend(summaryItem: TransactionAnalysisPeriodSummary, 
     return summaryItem.income > 0 ? 'income' : 'neutral'
   }
   if (summaryTab === '支出') {
-    return summaryItem.expense > 0 ? 'expense' : 'neutral'
+    return summaryItem.expense > 0 ? 'expense' : summaryItem.expense < 0 ? 'income' : 'neutral'
   }
   if (summaryItem.surplus > 0) return 'income'
   if (summaryItem.surplus < 0) return 'expense'
@@ -164,7 +162,7 @@ export function buildMetricAmount(
     return summaryItem.income > 0 ? `+${amountFormatter(summaryItem.income)}` : amountFormatter(0)
   }
   if (summaryTab === '支出') {
-    return summaryItem.expense > 0 ? `-${amountFormatter(summaryItem.expense)}` : amountFormatter(0)
+    return signedAmountFormatter(-summaryItem.expense)
   }
   return signedAmountFormatter(summaryItem.surplus)
 }

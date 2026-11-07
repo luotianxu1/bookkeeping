@@ -302,6 +302,7 @@ public class TransactionService {
     public TransactionResponse update(Long id, TransactionRequest request) {
         accountMapper.lockUserForWrite(request.getUserId());
         TransactionEntity transaction = requireEditableTransaction(id, request.getUserId());
+        requireUnlinkedExpense(transaction);
         String newType = normalizeTransactionType(request.getType());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);
 
@@ -355,10 +356,24 @@ public class TransactionService {
             return false;
         }
 
+        if (transaction.getOriginalTransactionId() == null) requireUnlinkedExpense(transaction);
         rollbackTransactionBalances(transaction);
         transaction.setStatus(VOIDED_STATUS);
         transactionMapper.updateById(transaction);
         return true;
+    }
+
+    private void requireUnlinkedExpense(TransactionEntity transaction) {
+        if (transaction.getOriginalTransactionId() != null) {
+            throw new IllegalArgumentException("到账记录不能直接修改，请撤销后重新登记");
+        }
+        if ((transaction.getReimbursementAmount() != null && transaction.getReimbursementAmount().signum() > 0)
+            || transactionMapper.selectCount(new LambdaQueryWrapper<TransactionEntity>()
+                .eq(TransactionEntity::getUserId, transaction.getUserId())
+                .eq(TransactionEntity::getOriginalTransactionId, transaction.getId())
+                .eq(TransactionEntity::getStatus, DEFAULT_STATUS)) > 0) {
+            throw new IllegalArgumentException("请先撤销关联到账并取消报销计划，再修改或删除原支出");
+        }
     }
 
     private String normalizeTransactionType(String type) {
@@ -400,7 +415,12 @@ public class TransactionService {
         }
 
         AccountEntity account = requireOwnedAccount(transaction.getUserId(), transaction.getAccountId());
-        rollbackAccountBalance(account, transaction.getType(), amount);
+        if (transaction.getOriginalTransactionId() != null) {
+            // 负支出对应现金入账；撤销必须检查余额，不能用负数绕过足额扣款。
+            rollbackAccountBalance(account, TYPE_INCOME, amount.negate());
+        } else {
+            rollbackAccountBalance(account, transaction.getType(), amount);
+        }
     }
 
     private String buildTransferTitle(TransactionRequest request, AccountEntity fromAccount, AccountEntity toAccount) {
@@ -703,6 +723,9 @@ public class TransactionService {
         response.setUserId(row.getUserId());
         response.setType(row.getType());
         response.setAmount(row.getAmount());
+        response.setOriginalTransactionId(row.getOriginalTransactionId());
+        response.setRecoveryKind(row.getRecoveryKind());
+        response.setReimbursementAmount(row.getReimbursementAmount());
         response.setCurrencyCode(row.getCurrencyCode());
         response.setOccurredAt(row.getOccurredAt());
         response.setStatus(row.getStatus());
@@ -894,6 +917,9 @@ public class TransactionService {
         response.setUserId(entity.getUserId());
         response.setType(entity.getType());
         response.setAmount(entity.getAmount());
+        response.setOriginalTransactionId(entity.getOriginalTransactionId());
+        response.setRecoveryKind(entity.getRecoveryKind());
+        response.setReimbursementAmount(entity.getReimbursementAmount());
         response.setCurrencyCode(entity.getCurrencyCode());
         response.setAccountId(entity.getAccountId());
         response.setAccountName(account == null ? null : account.getName());
@@ -1096,13 +1122,6 @@ public class TransactionService {
         List<TransactionResponse> filteredTransactions = transactions.stream()
             .filter(transaction -> type.equals(transaction.getType()))
             .toList();
-        BigDecimal totalAmount = filteredTransactions.stream()
-            .map(this::safeAmount)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (totalAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            return List.of();
-        }
-
         Map<String, BreakdownAccumulator> accumulatorMap = new LinkedHashMap<>();
         for (TransactionResponse transaction : filteredTransactions) {
             String key = transaction.getCategoryId() == null
@@ -1118,6 +1137,8 @@ public class TransactionService {
             accumulator.transactionCount += 1;
         }
 
+        BigDecimal positiveTotal = accumulatorMap.values().stream().map(item -> item.amount.max(BigDecimal.ZERO))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
         return accumulatorMap.values().stream()
             .sorted(Comparator.comparing((BreakdownAccumulator item) -> item.amount).reversed())
             .map(item -> {
@@ -1127,8 +1148,8 @@ public class TransactionService {
                 response.setCategoryIcon(item.categoryIcon);
                 response.setCategoryColor(item.categoryColor);
                 response.setAmount(item.amount.setScale(2, RoundingMode.HALF_UP));
-                response.setPercent(item.amount.multiply(BigDecimal.valueOf(100))
-                    .divide(totalAmount, 2, RoundingMode.HALF_UP));
+                response.setPercent(positiveTotal.signum() == 0 ? BigDecimal.ZERO : item.amount.max(BigDecimal.ZERO).multiply(BigDecimal.valueOf(100))
+                    .divide(positiveTotal, 2, RoundingMode.HALF_UP));
                 response.setTransactionCount(item.transactionCount);
                 return response;
             })

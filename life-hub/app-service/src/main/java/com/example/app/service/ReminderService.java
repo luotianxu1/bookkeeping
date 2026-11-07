@@ -21,13 +21,17 @@ public class ReminderService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     private final ReminderMapper mapper;
     private final Clock clock;
+    private final CategoryBudgetService categoryBudgets;
+    private final MonthlyBudgetService monthlyBudgets;
 
     @Autowired
-    public ReminderService(ReminderMapper mapper) {
-        this(mapper, Clock.system(ZONE));
+    public ReminderService(ReminderMapper mapper, CategoryBudgetService categoryBudgets, MonthlyBudgetService monthlyBudgets) {
+        this(mapper, Clock.system(ZONE), categoryBudgets, monthlyBudgets);
     }
 
-    ReminderService(ReminderMapper mapper, Clock clock) {
+    ReminderService(ReminderMapper mapper, Clock clock, CategoryBudgetService categoryBudgets, MonthlyBudgetService monthlyBudgets) {
+        this.categoryBudgets = categoryBudgets;
+        this.monthlyBudgets = monthlyBudgets;
         this.mapper = mapper;
         this.clock = clock.withZone(ZONE);
     }
@@ -64,7 +68,7 @@ public class ReminderService {
                 state == null || state.getSnoozedUntil() == null || !state.getSnoozedUntil().isAfter(now)
                     ? null : atZone(state.getSnoozedUntil()));
         }).sorted(Comparator.comparingInt((Item item) -> item.snoozedUntil() != null ? 2 : item.read() ? 1 : 0)
-            .thenComparingInt(item -> switch (item.urgency()) { case "failed" -> 0; case "overdue" -> 1; case "today" -> 2; default -> 3; })
+            .thenComparingInt(item -> switch (item.urgency()) { case "failed", "exceeded" -> 0; case "overdue", "warning" -> 1; case "today" -> 2; default -> 3; })
             .thenComparing(Item::dueAt).thenComparing(Item::key)).toList();
         return new ReminderResponse(result,
             result.stream().filter(item -> !item.read() && item.snoozedUntil() == null).count(),
@@ -113,7 +117,26 @@ public class ReminderService {
         if (settings.renewalEnabled()) mapper.renewals(userId, end).forEach(source -> add(items, "renewal", source, true, now));
         if (settings.liabilityEnabled()) mapper.liabilities(userId, end).forEach(source -> add(items, "liability", source, true, now));
         if (settings.investmentEnabled()) mapper.investments(userId, end).forEach(source -> add(items, "investment", source, true, now));
+        if (settings.budgetEnabled()) {
+            LocalDate month = today.withDayOfMonth(1);
+            categoryBudgets.list(userId, month).forEach(b -> addBudget(items, "category:" + b.id(), b.categoryName(), month,
+                b.amount(), b.usedAmount(), b.currencyCode()));
+            monthlyBudgets.getCurrent(userId, month).ifPresent(b -> addBudget(items, "monthly:" + b.getId(), "月总预算", month,
+                b.getAmount(), b.getUsedAmount(), b.getCurrencyCode()));
+        }
         return items;
+    }
+
+    private void addBudget(List<Item> items, String id, String name, LocalDate month,
+        java.math.BigDecimal amount, java.math.BigDecimal used, String currency) {
+        if (used.compareTo(amount.multiply(new java.math.BigDecimal("0.8"))) < 0) return;
+        boolean exceeded = used.compareTo(amount) >= 0;
+        int stage = exceeded ? 100 : 80;
+        // 每月每个预算每个阈值独立记忆已读；100% 替换当前的 80% 提醒。
+        items.add(new Item("budget:" + id + ":" + month + ":" + stage, "budget", name + (exceeded ? "预算已用完" : "预算即将用完"),
+            "已用 " + currency + " " + used.toPlainString() + " / " + amount.toPlainString() + " · "
+                + (exceeded ? "超出 " + used.subtract(amount).toPlainString() : "剩余 " + amount.subtract(used).toPlainString()),
+            atZone(month.atStartOfDay()), true, exceeded ? "exceeded" : "warning", "/finance/budgets", false, null));
     }
 
     private void add(List<Item> items, String type, Source source, boolean allDay, LocalDateTime now) {

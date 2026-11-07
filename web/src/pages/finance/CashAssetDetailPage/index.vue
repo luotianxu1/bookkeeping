@@ -410,7 +410,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
               :key="group.date"
               :group="group"
               summary-mode="stacked"
-              show-delete
+              :show-delete="account?.userId === getStoredCurrentUser()?.id"
               :deleting-id="deletingId"
               @edit="openEditTransaction"
               @delete="openDeleteConfirm"

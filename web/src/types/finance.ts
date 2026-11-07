@@ -2,6 +2,7 @@
 export type TransactionType = 'income' | 'expense' | 'transfer'
 
 export type Transaction = {
+  originalTransactionId?: number | null
   /** 流水 ID。 */
   id?: number
   /** 原始来源类型。 */

@@ -99,3 +99,68 @@ test('无 Cookie、伪造 Cookie 和真实登出均无法继续提交交易', as
   await expect(page).toHaveURL(/\/login\?redirect=/)
   expect(await page.evaluate(() => localStorage.getItem('bookkeeping_current_user'))).toBeNull()
 })
+
+test('真实支出 → 分类预算 → 报销分次到账和退款 → 撤销与越权校验', async ({ page }) => {
+  await login(page)
+  const month = new Date()
+  const currentMonth = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-01`
+  expect((await page.request.put(`${finance}/category-budgets`, { data: { budgetMonth: currentMonth, categoryId: 1, amount: 1 } })).status()).toBe(200)
+  const reminderResponse = await page.request.get('/tool-api/api/tools/reminders')
+  expect(reminderResponse.status()).toBe(200)
+  const reminders = (await reminderResponse.json()).data.items
+  expect(reminders.some((r: { type: string; urgency: string }) => r.type === 'budget' && r.urgency === 'exceeded')).toBe(true)
+  const before = await balance(page.request, 2)
+  const created = await page.request.post(`${finance}/transactions`, { data: {
+    userId: 1, type: 'expense', accountId: 1, categoryId: 1, amount: 100, currencyCode: 'CNY',
+    title: '报销联通测试', occurredAt: '2026-01-31T12:00:00', requestId: randomUUID(),
+  } })
+  expect(created.status()).toBe(200)
+  const id = (await created.json()).data.id
+  expect((await page.request.put(`${finance}/category-budgets`, { data: { budgetMonth: '2026-01-01', categoryId: 1, amount: 100 } })).status()).toBe(200)
+  const budgets = await (await page.request.get(`${finance}/category-budgets?month=2026-01-01`)).json()
+  expect(budgets.data[0]).toMatchObject({ usedAmount: 100, remainingAmount: 0, usagePercent: 100 })
+  expect((await page.request.put(`${finance}/expense-recoveries/${id}/plan`, { data: { amount: 80 } })).status()).toBe(200)
+  expect((await page.request.put(`${finance}/expense-recoveries/${id}/plan`, { data: { amount: 100.001 } })).status()).toBe(400)
+  await page.goto(`/finance/expense-recoveries?transactionId=${id}`)
+  await expect(page.getByRole('heading', { name: '支出详情', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '报销到账', exact: true }).click()
+  await page.getByLabel('本次到账金额').fill('30')
+  // Select the actual second cash account through the shared select.
+  await page.getByRole('button', { name: /到账账户/ }).click()
+  await page.getByRole('option', { name: '测试储蓄', exact: true }).click()
+  const submitted = page.waitForResponse(r => r.url().endsWith('/api/finance/expense-recoveries') && r.request().method() === 'POST')
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  const receiptResponse = await submitted
+  expect(receiptResponse.status()).toBe(200)
+  const receipt = (await receiptResponse.json()).data
+  await expect(page.locator('.expense-card')).toContainText('部分到账')
+  expect(await balance(page.request, 2)).toBe(before + 30)
+  const retry = await page.request.post(`${finance}/expense-recoveries`, { data: receiptResponse.request().postDataJSON() })
+  expect((await retry.json()).data.id).toBe(receipt.id)
+  expect(await balance(page.request, 2)).toBe(before + 30)
+  const receive = (amount: number, kind: string, accountId = 2) => page.request.post(`${finance}/expense-recoveries`, { data: {
+    transactionId: id, accountId, amount, kind, occurredAt: '2026-02-01T12:00:00', requestId: randomUUID(),
+  } })
+  expect((await receive(1, 'refund', 3)).status()).toBe(400)
+  expect((await receive(21, 'refund')).status()).toBe(400)
+  expect((await receive(51, 'reimbursement')).status()).toBe(400)
+  expect((await receive(50, 'reimbursement')).status()).toBe(200)
+  expect((await receive(20, 'refund')).status()).toBe(200)
+  expect(await balance(page.request, 2)).toBe(before + 100)
+  const final = await (await page.request.get(`${finance}/expense-recoveries/${id}`)).json()
+  expect(final.data).toMatchObject({ reimbursementStatus: 'received', refundedAmount: 20, reimbursedAmount: 80, pendingAmount: 0 })
+  expect((await page.request.delete(`${finance}/transactions/${id}?userId=1`)).status()).toBe(400)
+  expect((await page.request.delete(`${finance}/transactions/${receipt.id}?userId=1`)).status()).toBe(200)
+  expect(await balance(page.request, 2)).toBe(before + 70)
+  const partial = await (await page.request.get(`${finance}/expense-recoveries/${id}`)).json()
+  expect(partial.data).toMatchObject({ reimbursementStatus: 'partial', pendingAmount: 30 })
+  const january = await (await page.request.get(`${finance}/transactions/analysis?period=month&month=2026-01`)).json()
+  const february = await (await page.request.get(`${finance}/transactions/analysis?period=month&month=2026-02`)).json()
+  expect(january.data.summary.expense).toBe(100)
+  expect(february.data.summary).toMatchObject({ expense: -70, income: 0, surplus: 70 })
+  await page.request.post(`${auth}/logout`)
+  const other = await page.request.post(`${auth}/login`, { data: { username: 'live-user-2', password: 'live-test-password' } })
+  expect(other.status()).toBe(200)
+  expect((await page.request.get(`${finance}/expense-recoveries/${id}`)).status()).toBe(400)
+  expect((await page.request.put(`${finance}/expense-recoveries/${id}/plan`, { data: { amount: 80 } })).status()).toBe(400)
+})

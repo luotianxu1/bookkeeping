@@ -32,14 +32,20 @@ public class CategoryService {
     private static final int CHILD_LEVEL = 2;
 
     private final CategoryMapper categoryMapper;
+    private final com.example.app.mapper.CategoryBudgetMapper categoryBudgetMapper;
+    private final com.example.app.mapper.AccountMapper accountMapper;
     private final TransactionMapper transactionMapper;
     private final RenewalSubscriptionMapper renewalSubscriptionMapper;
 
     public CategoryService(
         CategoryMapper categoryMapper,
         TransactionMapper transactionMapper,
-        RenewalSubscriptionMapper renewalSubscriptionMapper
+        RenewalSubscriptionMapper renewalSubscriptionMapper,
+        com.example.app.mapper.CategoryBudgetMapper categoryBudgetMapper,
+        com.example.app.mapper.AccountMapper accountMapper
     ) {
+        this.categoryBudgetMapper = categoryBudgetMapper;
+        this.accountMapper = accountMapper;
         this.categoryMapper = categoryMapper;
         this.transactionMapper = transactionMapper;
         this.renewalSubscriptionMapper = renewalSubscriptionMapper;
@@ -129,6 +135,7 @@ public class CategoryService {
 
     @Transactional
     public boolean delete(Long id, Long userId) {
+        accountMapper.lockUserForWrite(userId);
         CategoryEntity entity = categoryMapper.selectById(id);
         if (entity == null) {
             return false;
@@ -143,6 +150,10 @@ public class CategoryService {
             throw new IllegalArgumentException("无权删除该分类");
         }
 
+        if (categoryBudgetMapper.selectCount(new LambdaQueryWrapper<com.example.app.entity.CategoryBudgetEntity>()
+            .eq(com.example.app.entity.CategoryBudgetEntity::getCategoryId, id)) > 0) {
+            throw new IllegalArgumentException("该分类仍有月预算，请先到预算管理删除相关月份的分类预算");
+        }
         CategoryEntity fallbackCategory = requireFallbackCategory();
         transactionMapper.update(null, new LambdaUpdateWrapper<TransactionEntity>()
             .eq(TransactionEntity::getUserId, userId)

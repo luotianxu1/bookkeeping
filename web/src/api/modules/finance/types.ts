@@ -304,6 +304,9 @@ export interface StockScreenStopSubmission {
 export type TransactionType = 'expense' | 'income' | 'transfer'
 
 export interface Transaction {
+  originalTransactionId?: number | null
+  recoveryKind?: 'refund' | 'reimbursement' | null
+  reimbursementAmount?: number
   id: number
   sourceId?: number | null
   sourceType?: 'transaction' | 'debt_record' | 'human_relation_record' | null
@@ -1274,4 +1277,47 @@ export interface SaveInvestmentPositionParams {
   includeInNetWorth?: boolean
   status?: string
   remark?: string | null
+}
+
+export interface CategoryBudget {
+  id: number
+  budgetMonth: string
+  categoryId: number
+  categoryName: string
+  amount: number
+  usedAmount: number
+  remainingAmount: number
+  usagePercent: number
+  currencyCode: string
+}
+export interface ExpenseReceipt {
+  id: number
+  kind: 'refund' | 'reimbursement'
+  amount: number
+  accountId: number
+  accountName: string
+  occurredAt: string
+  remark?: string | null
+}
+export interface ExpenseRecovery {
+  id: number
+  title: string
+  categoryName: string
+  accountName: string
+  currencyCode: string
+  occurredAt: string
+  amount: number
+  reimbursementAmount: number
+  refundedAmount: number
+  reimbursedAmount: number
+  recoverableAmount: number
+  pendingAmount: number
+  reimbursementStatus: 'none' | 'pending' | 'partial' | 'received'
+  receipts?: ExpenseReceipt[]
+}
+export interface ExpenseRecoveryPage {
+  items: ExpenseRecovery[]
+  total: number
+  page: number
+  totalPages: number
 }

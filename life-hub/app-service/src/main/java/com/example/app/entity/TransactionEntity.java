@@ -24,7 +24,11 @@ public class TransactionEntity {
     private Long userId;
 
     private String type;
+    // 普通流水为正；关联退款/报销到账为负支出，按 occurredAt 冲减支出并增加现金。
     private BigDecimal amount;
+    private Long originalTransactionId;
+    private String recoveryKind;
+    private BigDecimal reimbursementAmount;
 
     @TableField("currency_code")
     private String currencyCode;

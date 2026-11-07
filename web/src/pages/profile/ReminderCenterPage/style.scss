@@ -117,3 +117,6 @@ button:disabled { cursor: default; opacity: .5; }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-10);
 }
+
+.reminder-status.warning { color: #b45309; background: #fef3c7; }
+.reminder-status.exceeded { color: #dc2626; background: #fee2e2; }

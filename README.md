@@ -398,7 +398,7 @@ MYSQL_TEST_URL='jdbc:mysql://127.0.0.1:13306/?allowPublicKeyRetrieval=true&useSS
 MYSQL_TEST_USER=root MYSQL_TEST_PASSWORD=your-test-password mvn -B -ntp clean verify
 ```
 
-未设置 `MYSQL_TEST_URL` 时跳过 MySQL 集成测试；启用后要求 MySQL 8，每次创建随机 `life_hub_test_*` 库，结束删除。初始化只提取建表语句，再在测试库执行 044 原始迁移，不执行脚本中的 `USE bookkeeping_app` 或业务种子数据。请指定独立测试实例。
+未设置 `MYSQL_TEST_URL` 时跳过 MySQL 集成测试；启用后要求 MySQL 8，每次创建随机 `life_hub_test_*` 库，结束删除。初始化只提取建表语句，再在测试库执行 044 / 046 原始迁移，不执行脚本中的 `USE bookkeeping_app` 或业务种子数据。请指定独立测试实例。
 
 044 的兼容性回归可以单独针对 MySQL 5.7 或 8.0+ 测试实例运行：在设置上述测试连接后执行 `mvn -pl common,app-service -am test '-Dtest=MySqlAccountingTest#productIdentityMigrationRejectsDuplicatesAndCanBeRetried' -Dsurefire.failIfNoSpecifiedTests=false`。此检查仅覆盖该迁移；项目完整账务测试仍要求 MySQL 8。
 
@@ -495,3 +495,24 @@ git add .
 git commit -m "描述本次修改"
 git push
 ```
+
+## 分类预算与退款报销（2026-11）
+
+部署此版本前，在已执行 045 的数据库执行 `database/046_category_budgets_and_expense_recoveries.mysql.sql`，然后更新 app-service 和前端。046 新建分类预算表、扩展流水关联字段和金额约束、增加预算提醒开关；执行前备份并暂停账务写入。该迁移兼容 MySQL 5.7 / 8.0.16+，支持首次执行、部分失败后补齐和重复执行，保留原流水、余额、预算及提醒设置；这不改变项目整体要求 MySQL 8 的范围。MySQL 8 使用 CHECK，5.7 使用 INSERT/UPDATE 触发器执行相同的金额校验。脚本不内置 `USE`，以连接时选中的数据库为准。
+
+若升级后出现 `Unknown column 'original_transaction_id' in 'field list'`，说明业务库的 046 迁移未完整执行。旧脚本在 MySQL 5.7 会因 `DROP CHECK` 报语法错误；即使分类预算表已建好，也可以用修正后的完整脚本重跑，不要删除已有表或数据。在项目根目录执行：
+
+```bash
+mysql -u root -p bookkeeping_app < database/046_category_budgets_and_expense_recoveries.mysql.sql
+```
+
+输入数据库密码，确认脚本成功后再启动业务服务并刷新页面。若提示先执行 045，请先执行 `database/045_create_reminder_preferences.mysql.sql`，然后重跑 046。若提示历史金额不合法，核对相应数据后重跑；脚本不会自动修正财务记录。
+
+- **预算管理** `/finance/budgets`：切换月份管理月总预算及具体支出分类预算。分类选择最末级分类（有子分类时选择二级），仅统计该分类、该月份、CNY 现金账户的净支出。分类预算独立于月总预算，不重复累加；同月同分类保存即更新。月总预算仍包含债务还款、人情送出等现金支出，并按预算币种统计。
+- **统一提醒**：当前月份的月总预算、分类预算达到 80% / 100% 时分别产生提醒，100% 阶段替换当前 80% 提醒。每个阶段的已读、稍后状态独立保存；刷新不重复提醒，退款后低于阈值自动消失，下月重新计算。提醒设置可关闭“预算预警与超支”。这是站内提醒，随页面刷新/轮询更新。
+- **退款与报销** `/finance/expense-recoveries`：财务“更多功能”和本人原支出的“退款 / 报销”均可进入。分页查看全部支出、待报销、部分到账、全部到账；设置计划报销总额，分次登记退款/报销到账，查看原支出和每笔到账记录。计划设为 0 可取消尚未到账的报销；计划不能小于已报销到账金额。
+- **账务口径**：到账增加所选同币种现金账户余额，作为负支出按到账时间冲减原支出分类，不计普通收入、不追溯改写原月份。例如 1 月支出 300 元、2 月退款 100 元，则 1 月支出仍为 300 元，2 月净支出减少 100 元；仅有退款的月份可以出现负净支出。统计和预算使用相同口径，分析分类列表保留负值，饼图占比只计算净支出为正的分类。未到账的报销计划不影响余额、收支或预算。
+- **金额保护**：退款累计＋计划报销总额不得超过原支出；实际报销到账不得超过计划。若退款占用了待报销部分，先降低报销计划再登记退款。关联到账存在或计划未取消时，禁止修改/删除原支出。撤销到账会扣回现金并恢复支出统计和待报销金额；现金余额不足则整体回滚。已有分类预算的分类需先移除相关月份预算才能删除。
+- **重试与权限**：到账沿用用户账务行锁和 `requestId` 幂等事务；同请求重试只入账一次，参数变化不能沿用旧 ID。退款、报销和分类预算接口只处理登录本人数据，家庭查看权限不赋予操作权限。
+
+验证：`pnpm test`、`pnpm build`、`pnpm test:e2e finance-recoveries.spec.ts reminders.spec.ts`、`pnpm test:e2e:live`，以及 `mvn -B -ntp -pl common,app-service -am test`。隔离 H2 测试覆盖并发限额、重试、撤销回滚、归属校验、跨月净支出、分类预算和提醒阶段；MySQL 集成测试会在提供 `MYSQL_TEST_URL` 时执行真实 046 迁移与约束验证，H2 不能替代该检查。046 的兼容性回归可以单独针对隔离的 MySQL 5.7 / 8 实例运行：`mvn -pl common,app-service -am test '-Dtest=MySqlAccountingTest#recoveryMigrationSupportsFreshAndPartialSchemasWithoutLosingData' -Dsurefire.failIfNoSpecifiedTests=false`。该测试验证部分迁移补齐、重跑后记录与余额不变，以及 INSERT/UPDATE 金额约束；完整 MySQL 账务集成仍需 MySQL 8。

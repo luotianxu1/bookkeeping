@@ -27,8 +27,10 @@ public class MonthlyBudgetService {
 
     private final MonthlyBudgetMapper monthlyBudgetMapper;
     private final TransactionService transactionService;
+    private final com.example.app.mapper.AccountMapper accountMapper;
 
-    public MonthlyBudgetService(MonthlyBudgetMapper monthlyBudgetMapper, TransactionService transactionService) {
+    public MonthlyBudgetService(MonthlyBudgetMapper monthlyBudgetMapper, TransactionService transactionService, com.example.app.mapper.AccountMapper accountMapper) {
+        this.accountMapper = accountMapper;
         this.monthlyBudgetMapper = monthlyBudgetMapper;
         this.transactionService = transactionService;
     }
@@ -56,6 +58,7 @@ public class MonthlyBudgetService {
 
     @Transactional
     public MonthlyBudgetResponse create(MonthlyBudgetRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         LocalDate month = normalizeMonth(request.getBudgetMonth());
         if (findActiveBudget(request.getUserId(), month) != null) {
             throw new IllegalArgumentException("该月份预算已存在，请修改当前预算");
@@ -71,8 +74,9 @@ public class MonthlyBudgetService {
 
     @Transactional
     public Optional<MonthlyBudgetResponse> update(Long id, MonthlyBudgetRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
         MonthlyBudgetEntity entity = monthlyBudgetMapper.selectById(id);
-        if (entity == null || !ACTIVE_STATUS.equals(entity.getStatus())) {
+        if (entity == null || !ACTIVE_STATUS.equals(entity.getStatus()) || !request.getUserId().equals(entity.getUserId())) {
             return Optional.empty();
         }
 
@@ -90,6 +94,7 @@ public class MonthlyBudgetService {
 
     @Transactional
     public boolean delete(Long id, Long userId) {
+        accountMapper.lockUserForWrite(userId);
         MonthlyBudgetEntity entity = monthlyBudgetMapper.selectById(id);
         if (entity == null || !ACTIVE_STATUS.equals(entity.getStatus()) || !userId.equals(entity.getUserId())) {
             return false;
@@ -122,7 +127,7 @@ public class MonthlyBudgetService {
     }
 
     private MonthlyBudgetResponse toResponse(MonthlyBudgetEntity entity) {
-        BigDecimal usedAmount = calculateUsedAmount(entity.getUserId(), entity.getBudgetMonth());
+        BigDecimal usedAmount = calculateUsedAmount(entity.getUserId(), entity.getBudgetMonth(), entity.getCurrencyCode());
         BigDecimal amount = entity.getAmount() == null ? BigDecimal.ZERO : entity.getAmount();
         BigDecimal remainingAmount = amount.subtract(usedAmount).setScale(2, RoundingMode.HALF_UP);
         BigDecimal usagePercent = BigDecimal.ZERO;
@@ -151,12 +156,12 @@ public class MonthlyBudgetService {
      * 已用金额口径与流水页（/finance/transactions 本月统计）一致：
      * 仅统计现金账户，且合并债务还款、人情送出等记录来源。
      */
-    private BigDecimal calculateUsedAmount(Long userId, LocalDate month) {
+    private BigDecimal calculateUsedAmount(Long userId, LocalDate month, String currency) {
         LocalDate startDate = month;
         LocalDate endDate = month.plusMonths(1).minusDays(1);
         return transactionService.listMergedCashTransactions(List.of(userId), startDate, endDate)
             .stream()
-            .filter(transaction -> EXPENSE_TYPE.equals(transaction.getType()))
+            .filter(transaction -> EXPENSE_TYPE.equals(transaction.getType()) && java.util.Objects.equals(currency, transaction.getCurrencyCode()))
             .map(TransactionResponse::getAmount)
             .reduce(BigDecimal.ZERO, BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);

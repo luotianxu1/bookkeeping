@@ -14,7 +14,11 @@ public class TransactionResponse {
     private String transactionNo;
     private Long userId;
     private String type;
+    /** 支出中的负数表示退款/报销到账；现金流方向为 -amount。 */
     private BigDecimal amount;
+    private Long originalTransactionId;
+    private String recoveryKind;
+    private BigDecimal reimbursementAmount;
     private String currencyCode;
     private Long accountId;
     private String accountName;

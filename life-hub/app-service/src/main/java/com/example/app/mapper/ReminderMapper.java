@@ -74,19 +74,19 @@ public interface ReminderMapper {
     List<Source> investments(@Param("userId") long userId, @Param("end") LocalDateTime end);
 
     @Select("""
-        SELECT advance_days, todo_enabled, anniversary_enabled, renewal_enabled, liability_enabled, investment_enabled
+        SELECT advance_days, todo_enabled, anniversary_enabled, renewal_enabled, liability_enabled, investment_enabled, budget_enabled
         FROM reminder_settings WHERE user_id = #{userId}
         """)
     ReminderSettings settings(long userId);
 
     @Insert("""
         INSERT INTO reminder_settings
-          (user_id, advance_days, todo_enabled, anniversary_enabled, renewal_enabled, liability_enabled, investment_enabled)
+          (user_id, advance_days, todo_enabled, anniversary_enabled, renewal_enabled, liability_enabled, investment_enabled, budget_enabled)
         VALUES (#{userId}, #{settings.advanceDays}, #{settings.todoEnabled}, #{settings.anniversaryEnabled},
-          #{settings.renewalEnabled}, #{settings.liabilityEnabled}, #{settings.investmentEnabled})
+          #{settings.renewalEnabled}, #{settings.liabilityEnabled}, #{settings.investmentEnabled}, #{settings.budgetEnabled})
         ON DUPLICATE KEY UPDATE advance_days = VALUES(advance_days), todo_enabled = VALUES(todo_enabled),
           anniversary_enabled = VALUES(anniversary_enabled), renewal_enabled = VALUES(renewal_enabled),
-          liability_enabled = VALUES(liability_enabled), investment_enabled = VALUES(investment_enabled)
+          liability_enabled = VALUES(liability_enabled), investment_enabled = VALUES(investment_enabled), budget_enabled = VALUES(budget_enabled)
         """)
     void saveSettings(@Param("userId") long userId, @Param("settings") ReminderSettings settings);
 

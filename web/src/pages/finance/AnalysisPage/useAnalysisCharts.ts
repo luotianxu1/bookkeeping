@@ -89,7 +89,7 @@ export function useAnalysisCharts(options: {
     const tooltipBorder = rootStyle.getPropertyValue('--color-chart-tooltip-border').trim()
     const tooltipText = rootStyle.getPropertyValue('--color-chart-tooltip-text').trim()
 
-    if (breakdownItems.value.length === 0) {
+    if (!breakdownItems.value.some(item => item.amount > 0)) {
       return {
         animation: false,
         graphic: [
@@ -133,7 +133,7 @@ export function useAnalysisCharts(options: {
           radius: ['46%', '72%'],
           center: ['50%', '50%'],
           label: { show: false },
-          data: breakdownItems.value.map((item) => ({
+          data: breakdownItems.value.filter(item => item.amount > 0).map((item) => ({
             value: item.amount,
             name: item.categoryName,
             itemStyle: {

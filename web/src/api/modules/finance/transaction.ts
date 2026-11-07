@@ -72,3 +72,27 @@ export function deleteMonthlyBudget(id: number, userId: number) {
     params: { userId },
   })
 }
+
+export function getCategoryBudgets(month: string) {
+  return requestGet<import('./types').CategoryBudget[]>(financeRequest, '/api/finance/category-budgets', { params: { month } })
+}
+export function saveCategoryBudget(params: { budgetMonth: string; categoryId: number; amount: number }) {
+  return requestPut<void>(financeRequest, '/api/finance/category-budgets', params)
+}
+export function deleteCategoryBudget(id: number) {
+  return requestDelete<void>(financeRequest, `/api/finance/category-budgets/${id}`)
+}
+export function getExpenseRecoveries(params: { state: string; page: number; transactionId?: number }) {
+  return requestGet<import('./types').ExpenseRecoveryPage>(financeRequest, '/api/finance/expense-recoveries', { params })
+}
+export function getExpenseRecovery(id: number) {
+  return requestGet<import('./types').ExpenseRecovery>(financeRequest, `/api/finance/expense-recoveries/${id}`)
+}
+export function saveReimbursementPlan(id: number, amount: number) {
+  return requestPut<import('./types').ExpenseRecovery>(financeRequest, `/api/finance/expense-recoveries/${id}/plan`, { amount })
+}
+export function receiveExpenseRecovery(params: {
+  transactionId: number; accountId: number; amount: number; kind: 'refund' | 'reimbursement'; occurredAt: string; remark?: string; requestId: string
+}) {
+  return requestPost<import('./types').ExpenseReceipt>(financeRequest, '/api/finance/expense-recoveries', params)
+}

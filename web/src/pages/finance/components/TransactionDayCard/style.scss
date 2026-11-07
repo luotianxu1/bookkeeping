@@ -109,6 +109,7 @@
 }
 
 .transaction-row {
+  --action-width: calc(40px * var(--action-count));
   position: relative;
   overflow: hidden;
   min-height: 48px;
@@ -188,8 +189,28 @@
 .transaction-actions {
   position: absolute;
   inset: 0 0 0 auto;
+  width: var(--action-width);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   background: var(--color-finance-day-card-bg);
+}
+
+.recovery-action {
+  width: 40px;
+  height: 100%;
+  min-height: 48px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  color: var(--color-brand-strong);
+  text-decoration: none;
+}
+
+.recovery-action svg {
+  width: 28px;
+  height: 28px;
+  padding: 7px;
+  border-radius: var(--radius-12);
+  background: var(--color-bg-brand-soft);
 }

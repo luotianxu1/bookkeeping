@@ -72,6 +72,9 @@ public final class LiveTestServers {
             jdbc.execute("CREATE TABLE IF NOT EXISTS " + table.getTableName() + " (" + key + ", " + fields + ")");
         }
         jdbc.execute("CREATE TABLE accounting_requests(user_id BIGINT, operation VARCHAR(40), request_id VARCHAR(64), request_hash VARCHAR(64), response_json CLOB, PRIMARY KEY(user_id,operation,request_id))");
+        jdbc.execute("CREATE TABLE reminder_settings(user_id BIGINT PRIMARY KEY, advance_days INT DEFAULT 3, todo_enabled BOOLEAN DEFAULT TRUE, anniversary_enabled BOOLEAN DEFAULT TRUE, renewal_enabled BOOLEAN DEFAULT TRUE, liability_enabled BOOLEAN DEFAULT TRUE, investment_enabled BOOLEAN DEFAULT TRUE, budget_enabled BOOLEAN DEFAULT TRUE)");
+        jdbc.execute("CREATE TABLE reminder_states(user_id BIGINT, reminder_key VARCHAR(120), read_at TIMESTAMP, snoozed_until TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id,reminder_key))");
+        jdbc.execute("CREATE UNIQUE INDEX uk_category_budget_month ON category_budgets(user_id,budget_month,category_id)");
         jdbc.execute("ALTER TABLE investment_products ADD symbol_key VARCHAR(64) GENERATED ALWAYS AS (UPPER(TRIM(symbol)))");
         jdbc.execute("ALTER TABLE investment_products ADD market_key VARCHAR(32) GENERATED ALWAYS AS (UPPER(TRIM(COALESCE(market,''))))");
         jdbc.execute("CREATE UNIQUE INDEX uk_investment_products_identity ON investment_products(product_type,symbol_key,market_key)");

@@ -32,6 +32,7 @@ export function buildTransactionDayGroups(source: ApiTransaction[], sortOrder: T
       transactions: groupTransactions.map((transaction) => ({
         id: transaction.id,
         sourceType: transaction.sourceType,
+        originalTransactionId: transaction.originalTransactionId,
         name: transaction.title,
         time: transactionSubtitle(transaction),
         occurredAt: transaction.occurredAt,
@@ -141,8 +142,8 @@ function signedAmount(transaction: ApiTransaction) {
   if (transaction.type === 'transfer') {
     return `¥${formatAmount(Number(transaction.amount))}`
   }
-  const sign = transaction.type === 'income' ? '+' : '-'
-  return `${sign} ¥${formatAmount(Number(transaction.amount))}`
+  const signed = transaction.type === 'income' ? Number(transaction.amount) : -Number(transaction.amount)
+  return `${signed >= 0 ? '+' : '-'} ¥${formatAmount(Math.abs(signed))}`
 }
 
 function plainAmount(value: number) {

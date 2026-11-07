@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// 预算管理页：每个月只维护一个预算，下方展示历史预算。
-import { computed, onMounted, ref } from 'vue'
+// 按月管理总预算和分类预算。
+import { computed, onMounted, ref, watch } from 'vue'
+import CategoryBudgets from './CategoryBudgets.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
@@ -32,11 +33,13 @@ const showDeleteConfirmModal = ref(false)
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
+const selectedMonth = ref(getCurrentMonthInput())
 const formMonth = ref(getCurrentMonthInput())
+watch(selectedMonth, () => { void loadBudgets() })
 const formAmount = ref('')
 const formRemark = ref('')
 
-const currentMonthDate = computed(() => `${formMonth.value}-01`)
+const currentMonthDate = computed(() => `${selectedMonth.value}-01`)
 const historyBudgets = computed(() =>
   budgets.value.filter((item) => item.budgetMonth !== currentMonthDate.value),
 )
@@ -85,7 +88,7 @@ function getBudgetMeta(budget: MonthlyBudget) {
 
 function openBudgetModal() {
   formError.value = ''
-  formMonth.value = currentBudget.value?.budgetMonth.slice(0, 7) ?? getCurrentMonthInput()
+  formMonth.value = currentBudget.value?.budgetMonth.slice(0, 7) ?? selectedMonth.value
   formAmount.value = currentBudget.value ? String(currentBudget.value.amount) : ''
   formRemark.value = currentBudget.value?.remark || ''
   showBudgetModal.value = true
@@ -110,7 +113,14 @@ function closeDeleteConfirmModal() {
   deleteError.value = ''
 }
 
+let loadSerial = 0
 async function loadBudgets() {
+  const ticket = ++loadSerial
+  if (!/^\d{4}-\d{2}$/.test(selectedMonth.value)) {
+    pageError.value = '请选择有效月份'
+    isLoading.value = false
+    return
+  }
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看预算'
@@ -122,17 +132,18 @@ async function loadBudgets() {
   pageError.value = ''
 
   try {
-    const monthDate = `${getCurrentMonthInput()}-01`
+    const monthDate = `${selectedMonth.value}-01`
     const [current, list] = await Promise.all([
       getCurrentMonthlyBudget(currentUser.id, monthDate),
       getMonthlyBudgets({ userId: currentUser.id, limit: 24 }),
     ])
+    if (ticket !== loadSerial) return
     currentBudget.value = current
     budgets.value = list
   } catch (error) {
-    pageError.value = getErrorMessage(error, '预算加载失败')
+    if (ticket === loadSerial) pageError.value = getErrorMessage(error, '预算加载失败')
   } finally {
-    isLoading.value = false
+    if (ticket === loadSerial) isLoading.value = false
   }
 }
 
@@ -224,6 +235,8 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
     <PageHeader title="预算管理" back-to="/finance/more-features" back-label="返回更多功能" />
 
+    <CommonInput v-model="selectedMonth" label="查看月份" input-type="month" />
+
     <p v-if="pageError" class="budget-message budget-message-error">{{ pageError }}</p>
     <CommonLoading v-else-if="isLoading" />
 
@@ -231,7 +244,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
       <section class="budget-summary-card" aria-label="本月预算">
         <div class="budget-summary-top">
           <span>{{ currentBudget ? formatMonth(currentBudget.budgetMonth) : formatMonth(currentMonthDate) }}预算</span>
-          <strong>当前月份</strong>
+          <strong>月总预算</strong>
         </div>
 
         <strong class="budget-amount">
@@ -261,7 +274,9 @@ function showFeedback(message: string, type: 'success' | 'error') {
         </div>
       </section>
 
-      <p class="budget-rule-tip">每个月只能设置一个预算，可修改或删除当前月份预算。</p>
+      <p class="budget-rule-tip">总预算包含现金账户支出；退款和报销到账在到账月份冲减支出。分类预算单独统计，不会重复叠加到总预算。</p>
+
+      <CategoryBudgets :month="currentMonthDate" />
 
       <h2 class="budget-section-title">历史预算</h2>
 
@@ -285,6 +300,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
           label="预算月份"
           input-type="month"
           placeholder="请选择预算月份"
+          disabled
         />
         <CommonInput
           v-model="formAmount"

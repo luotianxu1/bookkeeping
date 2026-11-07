@@ -20,6 +20,7 @@ const featureGroups: FeatureGroup[] = [
     items: [
       { icon: 'category-management', label: '分类管理', to: '/finance/categories' },
       { icon: 'transactions', label: '收支记录', to: '/finance/transactions' },
+      { icon: 'transactions', label: '退款与报销', to: '/finance/expense-recoveries' },
       { icon: 'analysis', label: '收支分析', to: '/finance/analysis' },
       { icon: 'trend', label: '资产趋势', to: '/finance/trend' },
       { icon: 'accounts', label: '账户管理', to: '/finance/accounts' },

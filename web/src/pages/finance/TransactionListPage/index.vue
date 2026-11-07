@@ -438,7 +438,7 @@ function formatPositiveAmount(value: number) {
 }
 
 function formatNegativeAmount(value: number) {
-  return `-${formatAmount(Math.abs(value))}`
+  return `${value < 0 ? '+' : '-'}${formatAmount(Math.abs(value))}`
 }
 
 function formatSignedAmount(value: number) {
@@ -446,7 +446,7 @@ function formatSignedAmount(value: number) {
     return formatPositiveAmount(value)
   }
   if (value < 0) {
-    return formatNegativeAmount(value)
+    return `-${formatAmount(Math.abs(value))}`
   }
   return formatAmount(0)
 }

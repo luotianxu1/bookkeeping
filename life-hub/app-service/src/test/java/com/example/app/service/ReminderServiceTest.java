@@ -36,6 +36,8 @@ class ReminderServiceTest {
     private ReminderMapper mapper;
     private ReminderService service;
     private MockMvc mvc;
+    private final CategoryBudgetService categoryBudgets = org.mockito.Mockito.mock(CategoryBudgetService.class);
+    private final MonthlyBudgetService monthlyBudgets = org.mockito.Mockito.mock(MonthlyBudgetService.class);
 
     @BeforeEach void setup() throws Exception {
         var source = new JdbcDataSource();
@@ -51,6 +53,7 @@ class ReminderServiceTest {
         var populator = new ResourceDatabasePopulator(new ByteArrayResource(migration.getBytes(StandardCharsets.UTF_8)));
         populator.execute(source);
         populator.execute(source); // 可重复执行，不重置已有状态。
+        jdbc.execute("ALTER TABLE reminder_settings ADD budget_enabled BOOLEAN DEFAULT TRUE");
         jdbc.execute("CREATE TABLE todo_items(id BIGINT PRIMARY KEY,user_id BIGINT,title VARCHAR(120),remark VARCHAR(500),due_at TIMESTAMP,status VARCHAR(20))");
         jdbc.execute("CREATE TABLE anniversaries(id BIGINT PRIMARY KEY,user_id BIGINT,title VARCHAR(120),remark VARCHAR(500),anniversary_date DATE)");
         jdbc.execute("CREATE TABLE renewal_subscriptions(id BIGINT PRIMARY KEY,user_id BIGINT,name VARCHAR(80),next_billing_date DATE,amount DECIMAL(18,2),currency_code VARCHAR(3),last_charge_status VARCHAR(20),last_charge_message VARCHAR(255),status VARCHAR(20))");
@@ -70,7 +73,7 @@ class ReminderServiceTest {
     }
 
     private void at(String value) {
-        service = new ReminderService(mapper, Clock.fixed(OffsetDateTime.parse(value).toInstant(), ZoneOffset.UTC));
+        service = new ReminderService(mapper, Clock.fixed(OffsetDateTime.parse(value).toInstant(), ZoneOffset.UTC), categoryBudgets, monthlyBudgets);
         mvc = MockMvcBuilders.standaloneSetup(new ReminderController(service))
             .setControllerAdvice(new GlobalExceptionHandler()).build();
     }
@@ -87,6 +90,26 @@ class ReminderServiceTest {
 
     private void action(String key, ReminderActionRequest.Action action, Integer minutes) {
         service.act(new ReminderActionRequest(List.of(key), action, minutes));
+    }
+
+    @Test void budgetThresholdStagesKeepReadStateAndRespectToggleAndMonth() {
+        var month = LocalDate.of(2026,11,1);
+        java.util.function.Function<String, com.example.app.dto.CategoryBudgetResponse> budget = used ->
+            new com.example.app.dto.CategoryBudgetResponse(7L, month, 2L, "午餐", new java.math.BigDecimal("100"),
+                new java.math.BigDecimal(used), new java.math.BigDecimal("100").subtract(new java.math.BigDecimal(used)), new java.math.BigDecimal(used), "CNY");
+        org.mockito.Mockito.when(categoryBudgets.list(1L,month)).thenReturn(List.of(budget.apply("79.99")));
+        assertTrue(service.list().items().isEmpty());
+        org.mockito.Mockito.when(categoryBudgets.list(1L,month)).thenReturn(List.of(budget.apply("80")));
+        var first = service.list().items().get(0); assertEquals("warning", first.urgency());
+        action(first.key(), ReminderActionRequest.Action.read, null); assertEquals(0,service.list().unreadCount());
+        org.mockito.Mockito.when(categoryBudgets.list(1L,month)).thenReturn(List.of(budget.apply("100")));
+        var second = service.list().items().get(0); assertEquals("exceeded", second.urgency());
+        assertNotEquals(first.key(),second.key()); assertEquals(1,service.list().unreadCount());
+        action(second.key(), ReminderActionRequest.Action.read, null); assertEquals(0,service.list().unreadCount());
+        service.saveSettings(new ReminderSettings(3,true,true,true,true,true,false)); assertTrue(service.list().items().isEmpty());
+        service.saveSettings(ReminderSettings.defaults()); assertEquals(0,service.list().unreadCount());
+        asUser(2L); assertTrue(service.list().items().isEmpty());
+        asUser(1L); at("2026-12-01T10:00:00+08:00"); assertTrue(service.list().items().isEmpty());
     }
 
     @AfterEach void cleanup() {
@@ -149,13 +172,13 @@ class ReminderServiceTest {
         asUser(2);
         action(key, ReminderActionRequest.Action.read, null);
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM reminder_states", Integer.class));
-        service.saveSettings(new ReminderSettings(0, false, true, true, true, true));
+        service.saveSettings(new ReminderSettings(0, false, true, true, true, true, true));
         assertFalse(service.settings().todoEnabled());
         assertTrue(service.list().items().isEmpty());
         asUser(1);
         assertEquals(ReminderSettings.defaults(), service.settings());
         assertEquals(1, service.list().unreadCount());
-        service.saveSettings(new ReminderSettings(0, true, true, true, true, true));
+        service.saveSettings(new ReminderSettings(0, true, true, true, true, true, true));
         assertTrue(service.list().items().isEmpty());
     }
 
