@@ -28,6 +28,21 @@
 └── database/                    # MySQL 建表与变更脚本，按数字顺序执行
 ```
 
+## 统一提醒
+
+入口为「我的 → 统一提醒」，底部「我的」显示未读数量。提醒只属于当前登录用户，家庭成员不可代读或修改。
+
+- 覆盖未完成待办、每年纪念日、启用的固定支出（含本期扣款失败）、已创建且未还的月账单、启用的定投计划。
+- 默认提前 3 天，可设置 0–30 天并按类型开关。按北京时间计算；纪念日跨年自动滚动，2 月 29 日在非闰年按 2 月 28 日处理。
+- 支持类型/未读/稍后筛选、单条或当前列表全部已读、1 小时/24 小时后提醒、恢复提醒及跳转来源。已读不等于完成；完成、取消、暂停或删除的来源会自动移出。
+- 已读和稍后状态保存在服务端，按「用户 + 来源 + 记录 + 期次」隔离。改期、下一期及扣款失败会产生新的提醒，刷新不会重复生成同一期。稍后到期后恢复未读；原事项已结束则不再提醒。
+- 第一版为站内提醒，在页面可见时每分钟刷新，返回标签页也会刷新；关闭网页后不发送系统推送、短信或邮件。定投显示计划日期，不把未执行自动判定为失败；还款只覆盖已有月账单，不自动生成账单。
+- 发布前执行 `database/045_create_reminder_preferences.mysql.sql`，创建 `reminder_settings` 和 `reminder_states` 两张表。该脚本不改写已有业务记录，可重复执行。
+
+接口位于业务服务 `/api/tools/reminders`，前端走 `/tool-api` 代理。读取提醒不触发扣款、记账或外部行情请求。
+
+验证：`cd life-hub && mvn -B -ntp -pl app-service -am test -Dtest=ReminderServiceTest -Dsurefire.failIfNoSpecifiedTests=false`；前端 `cd web && pnpm test`，浏览器 `pnpm test:e2e reminders.spec.ts`（Node 22 + Chromium）。后端使用隔离 H2 执行提醒 SQL 和适配后的真实迁移，浏览器使用受控接口；不替代 MySQL 集成验证。
+
 ## 技术栈
 
 ### 前端
@@ -371,25 +386,56 @@ cloudflared tunnel --url http://localhost:4173 --protocol http2
 
 ## 测试与 CI
 
-后端使用 JUnit 5、Mockito 与独立 H2 内存库，覆盖资金回滚/并发、持仓买卖/结算、重复分红/扣费、FIFO 费率、缓存和身份范围。测试使用生产 Mapper 与事务，不依赖开发库或真实行情接口。H2 的 MySQL 模式不能替代真实 MySQL 集成验证。
+后端使用 JUnit 5、Mockito 与独立 H2 内存库，覆盖资金回滚/并发、持仓买卖/结算、重复分红/扣费、FIFO 费率、缓存和身份范围。测试使用生产 Mapper 与事务，不依赖开发库或真实行情接口。另有真实 MySQL 8 集成测试，使用仓库 SQL 中的建表语句，验证并发转账/买入/建仓、跨用户并发创建同一产品、幂等重放、回滚、余额聚合、外键与 CHECK 约束，以及 044 迁移的历史冲突检查和重复执行。
 
 ```bash
 cd life-hub
 mvn -B -ntp clean verify
 # 只验证公共模块和业务模块：
 mvn test -pl common,app-service -am
+# 指定独立的 MySQL 8 测试实例（账号需有创建/删除测试 schema 的权限）：
+MYSQL_TEST_URL='jdbc:mysql://127.0.0.1:13306/?allowPublicKeyRetrieval=true&useSSL=false' \
+MYSQL_TEST_USER=root MYSQL_TEST_PASSWORD=your-test-password mvn -B -ntp clean verify
 ```
 
-前端使用 Vitest + Vue Test Utils + jsdom，验证 KeepAlive/可见性轮询、独立区域失败重试、取消请求与分页旧响应隔离。
+未设置 `MYSQL_TEST_URL` 时跳过 MySQL 集成测试；启用后要求 MySQL 8，每次创建随机 `life_hub_test_*` 库，结束删除。初始化只提取建表语句，再在测试库执行 044 原始迁移，不执行脚本中的 `USE bookkeeping_app` 或业务种子数据。请指定独立测试实例。
+
+044 的兼容性回归可以单独针对 MySQL 5.7 或 8.0+ 测试实例运行：在设置上述测试连接后执行 `mvn -pl common,app-service -am test '-Dtest=MySqlAccountingTest#productIdentityMigrationRejectsDuplicatesAndCanBeRetried' -Dsurefire.failIfNoSpecifiedTests=false`。此检查仅覆盖该迁移；项目完整账务测试仍要求 MySQL 8。
+
+前端使用 Vitest + Vue Test Utils + jsdom，验证 KeepAlive/可见性轮询、独立区域失败重试、取消请求、分页旧响应隔离及提交 ID 生命周期；基金/股票/黄金建仓和黄金卖出失败重试还验证请求 ID 与自动交易时间保持一致。Playwright 在真实 Chromium 中运行生产构建，使用受控 API 响应覆盖登录、详情先显示、费率重试、交易断网重试、持仓切换、401/503 处理和图表拆包。浏览器测试不依赖在线行情或开发后端。
 
 ```bash
 cd web
 pnpm install --frozen-lockfile
 pnpm test
 pnpm build
+# Node 22，首次运行需安装浏览器：
+pnpm exec playwright install chromium
+pnpm test:e2e
+# 真实前后端 HTTP 联通测试，另需 Java 17 + Maven：
+pnpm test:e2e:live
 ```
 
-`.github/workflows/ci.yml` 在 push / pull request 时分别执行前后端验证：Java 17 + Maven 全模块 clean verify，以及 Node 22 + pnpm 9.12.1 的冻结依赖安装、测试和构建。无需数据库或行情密钥。
+`test:e2e` 自动构建并在 `127.0.0.1:4175` 启动临时 preview。失败时生成 `web/playwright-report/` 和 `web/test-results/`。
+
+`test:e2e:live` 使用真实 HTTP，不拦截或伪造认证、账户及交易 API 响应。覆盖浏览器登录写入 httpOnly/SameSite Cookie、生产记账页面提交、并发重放只扣款一次、同 ID 改参拒绝、家庭读取范围、写入身份归一化、参数校验、无效 Cookie 和登出后的 401。请求经过生产 Controller、Service、Mapper、Spring Security 与事务代理。
+
+该命令自动通过 Maven `live-e2e` profile 构建仅供测试的 `life-hub/live-tests` 模块，在 `127.0.0.1:18881/18882` 启动认证/业务服务上下文，在 `127.0.0.1:4176` 提供独立前端构建。每次生成全新 H2 内存库，使用固定测试身份与数据，退出时关闭服务和数据库；端口已占用时直接失败，不复用现有实例。测试入口不加载业务 application.yml、不启用定时任务，所有前端代理均指向临时实例；行情服务不启动，金价预热收到本地 404 后按现有逻辑降级。H2 表用于 HTTP 链路验证，MySQL 专有约束仍由上面的独立 MySQL 测试覆盖。失败报告位于 `web/playwright-live-report/`，trace 位于 `web/test-results/`。
+
+`.github/workflows/ci.yml` 在 push / pull request 时执行 Java 17 + MySQL 8.4 的全模块 clean verify，以及 Node 22 + pnpm 9.12.1 的冻结安装、单元测试、生产构建、受控 API 浏览器回归和真实 HTTP 联通测试。失败时上传浏览器截图和 trace；无需开发环境凭据或行情密钥。
+
+## 交易可靠性与图表加载
+
+- 部署本轮代码前按顺序执行 `mysql -u root -p bookkeeping_app < database/043_create_accounting_requests.mysql.sql` 和 `mysql -u root -p bookkeeping_app < database/044_unique_investment_product_identity.mysql.sql`。043 新表记录交易请求 ID、请求摘要及原始响应；044 增加归一化产品身份唯一索引。
+- 执行 044 时暂停产品/持仓写入。脚本将代码、市场的首尾空格与大小写统一，并将 NULL、空串和纯空格市场视为同一市场；发现历史重复产品时列出全部冲突 ID 并停止，不自动删除或合并。需先核对这些产品及关联持仓，处理冲突后重新执行；成功后可重复执行。
+- 044 使用兼容 MySQL 5.7 / 8.0+ 的分组关联查询检查重复产品。若旧版脚本在 `PARTITION BY` 附近报 1064，请重新执行修正后的完整脚本（包含开头的 `DROP PROCEDURE IF EXISTS`）；该语法错误发生在创建存储过程时，尚未执行表结构变更。项目整体数据库要求仍为 MySQL 8.0+。
+- 普通记账/转账、投资买卖（含黄金卖出）及基金/股票/黄金建仓支持可选 `requestId`（16–64 位字母、数字、下划线或连字符）。请求键按用户和操作隔离，在用户锁及账务事务内写入；同键同参数返回原响应，同键不同参数拒绝，回滚不占用键。已提交投资请求的重放不依赖行情服务。旧客户端不传 ID 时保持兼容。
+- 前端表单在本次页面生命周期内为未变化的失败提交复用 ID，自动生成的 `tradeAt` 随 ID 保留，成功或修改参数后生成新 ID 和时间。刷新页面会重建表单状态；不提供跨刷新自动重试。幂等记录默认保留，删除记录会失去对应历史请求的重放保护。
+- 产品由数据库唯一约束处理并发创建，重复请求复用产品并保留原有名称、行情与分红数据。新产品与持仓、扣款、幂等响应在同一事务内提交或回滚；行情获取在事务外完成。
+- 投资详情按持仓所属用户校验家庭可读范围；修改和删除只允许本人。金价在账务事务前读取，不可用时使用本地估值。基金/股票行情按账户锁内更新、一次 SQL 汇总，避免逐持仓重复聚合。
+- 用户状态最多信任 30 秒。无法重新验证时返回 `503` 与 `Retry-After: 5`，前端保留登录；明确无效的凭据仍返回 `401`。auth 内部状态接口直查，避免与 market 本地缓存叠加。
+- 行情服务的家庭范围最多信任 60 秒，以最后一次成功验证为准。过期且查询失败时仅本人可读，10 秒失败退避不能续期旧成员权限；查询恢复后使用最新范围。权限缓存测试覆盖过期边界、连续失败、恢复后的成员移除及不同用户隔离。
+- `utils/echarts.ts` 仅加载普通折线；统计页面使用 `echarts-statistics.ts`，投资标记/缩放使用 `echarts-investment.ts`，K 线使用 `echarts-kline.ts`。这些入口动态加载，Vite 不再把所有图表强制合并成一个包。
 
 ## 常见问题
 

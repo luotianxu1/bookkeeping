@@ -19,6 +19,7 @@ import {
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
+import { useReminderTarget } from '@/composables/useReminderTarget'
 
 type TodoTab = 'all' | 'today' | 'completed'
 
@@ -33,6 +34,8 @@ const weekLabels = ['日', '一', '二', '三', '四', '五', '六']
 const activeTab = ref<TodoTab>('today')
 const todoItems = ref<TodoItem[]>([])
 const isLoading = ref(true)
+const reminderTargetId = useReminderTarget(isLoading, 'todo')
+if (reminderTargetId) activeTab.value = 'all'
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const updatingTodoId = ref<number | null>(null)
@@ -43,7 +46,7 @@ const showDeleteModal = ref(false)
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
-const expandedTodoId = ref<number | null>(null)
+const expandedTodoId = ref<number | null>(reminderTargetId)
 const editingTodo = ref<TodoItem | null>(null)
 const deletingTodo = ref<TodoItem | null>(null)
 const formTitle = ref('')
@@ -455,6 +458,7 @@ function padNumber(value: number) {
         <article
           v-for="item in visibleItems"
           :key="item.id"
+          :id="`todo-${item.id}`"
           :class="[
             'todo-card',
             {

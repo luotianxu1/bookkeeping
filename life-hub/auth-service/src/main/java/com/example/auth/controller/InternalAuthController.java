@@ -36,7 +36,7 @@ public class InternalAuthController {
     public Result<Map<String, Object>> userStatus(@RequestParam("userId") long userId) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("userId", userId);
-        data.put("active", userStatusChecker.isActive(userId));
+        data.put("active", userStatusChecker.isActiveFresh(userId));
         return Result.ok(data);
     }
 

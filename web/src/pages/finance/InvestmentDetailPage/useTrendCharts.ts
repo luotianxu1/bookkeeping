@@ -232,7 +232,9 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
       return
     }
 
-    const echarts = await import('@/utils/echarts')
+    const echarts = detail.value.chartType === 'candlestick'
+      ? await import('@/utils/echarts-kline')
+      : await import('@/utils/echarts-investment')
     if (chartRef.value !== chartContainer) {
       return
     }

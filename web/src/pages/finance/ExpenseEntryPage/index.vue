@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useIdempotentSubmit } from '@/composables/useIdempotentSubmit'
 // 记一笔-支出页：还原 Pencil「记一笔-支出」页面结构与交互。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -34,6 +35,8 @@ type PrimaryCategoryOption = {
 }
 
 // 记账类型：顶部支出/收入/转账切换。
+const submission = useIdempotentSubmit()
+
 const entryTypeOptions = ['支出', '收入', '转账']
 const entryType = ref(entryTypeOptions[0])
 const route = useRoute()
@@ -260,6 +263,7 @@ async function loadCategories() {
 }
 
 async function saveTransaction() {
+  if (saving.value) return
   const amount = Number(amountInput.value)
   if (amount <= 0) {
     showFeedback('请输入大于0的金额', 'error')
@@ -301,7 +305,8 @@ async function saveTransaction() {
       await updateTransaction(editingTransactionId.value, payload)
       showFeedback('修改成功', 'success')
     } else {
-      await createTransaction(payload)
+      await createTransaction(submission.withRequestId(payload))
+      submission.reset()
       amountInput.value = '0.00'
       note.value = ''
       showFeedback('新增成功', 'success')
@@ -347,7 +352,8 @@ async function saveTransferTransaction(amount: number) {
       await updateTransaction(editingTransactionId.value, payload)
       showFeedback('修改成功', 'success')
     } else {
-      await createTransaction(payload)
+      await createTransaction(submission.withRequestId(payload))
+      submission.reset()
       amountInput.value = '0.00'
       note.value = ''
       showFeedback('转账成功', 'success')

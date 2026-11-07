@@ -15,6 +15,8 @@ cd web
 pnpm install          # pnpm 9.12.1 required
 pnpm dev              # Vite dev server on 0.0.0.0
 pnpm test             # Vitest + Vue Test Utils
+pnpm test:e2e         # Node 22; builds production assets + Playwright Chromium (install browser first)
+pnpm test:e2e:live    # Java 17 + Maven; real auth/finance HTTP servers + isolated H2 + Chromium
 pnpm build            # vue-tsc -b && vite build
 ```
 
@@ -63,6 +65,15 @@ mysql -u root -p bookkeeping_app < database/002_create_account_types.mysql.sql
 - Backend: JUnit 5 + Mockito + isolated H2 databases. `cd life-hub && mvn -B -ntp clean verify` runs tests and builds all modules; focused: `mvn test -pl common,app-service -am`. No development DB or upstream credentials needed. H2 does not replace MySQL integration testing.
 - Frontend: Vitest + Vue Test Utils + jsdom. `cd web && pnpm test`; production check: `pnpm build`.
 - CI: `.github/workflows/ci.yml`, Java 17 / Node 22 / pnpm 9.12.1, push and pull request checks.
+- MySQL integration: set `MYSQL_TEST_URL` (server URL with trailing slash), `MYSQL_TEST_USER`, `MYSQL_TEST_PASSWORD` to an isolated MySQL 8 instance. Tests create/drop only random `life_hub_test_*` schemas and use production table DDL. CI supplies MySQL 8.4; without the URL the integration test is skipped.
+- Browser regression: `cd web && pnpm exec playwright install chromium && pnpm test:e2e`; controlled API responses, production build at 127.0.0.1:4175. Failure artifacts in playwright-report/ and test-results/.
+- Live browser integration: `cd web && pnpm test:e2e:live` builds the optional Maven `live-e2e` profile's live-tests fixture module. Auth/finance HTTP servers bind 127.0.0.1:18881/18882 with a fresh H2 database; frontend preview binds 4176. Use production controllers/services/mappers/security, never mock the auth/account/transaction APIs or connect a development database. No scheduled jobs or external quote requests; the local unavailable gold endpoint exercises the existing login fallback. Keep the fixture module out of deployments. Failure artifacts in playwright-live-report/ and test-results/.
+- Cash/investment POSTs, including fund/stock/gold position creation and gold sales, accept optional requestId. Keep replay lookup inside the user lock, persist response in the same transaction; investment may also check committed requests before remote quotes. Form retries retain the ID and automatically generated tradeAt only during the current page lifetime; generate fresh values after success or payload changes.
+- Investment product identity is product_type + normalized symbol/market (trim, uppercase; NULL/blank market is empty). Use insertIfAbsent plus a current read inside the position transaction; never create products before remote quotes or overwrite existing product metadata on a duplicate. Apply database/043 and 044 before deployment. Migration 044 reports historical duplicate IDs and stops without merging/deleting data; resolve conflicts with their holding references before retrying, and pause product writes during migration.
+- Migration 044 must use MySQL 5.7-compatible GROUP BY/JOIN instead of window functions for its duplicate report. Run MySqlAccountingTest#productIdentityMigrationRejectsDuplicatesAndCanBeRetried against an isolated 5.7 instance to check this migration; full accounting integration still requires MySQL 8. This does not extend the project's overall database support to 5.7.
+- UserStatusCache must never extend trusted status on failed refresh. Auth internal user-status uses isActiveFresh to avoid stacked caches; unavailable checks return 503, preserving the browser session.
+- RemoteFamilyScopeChecker trusts verified membership for at most 60 seconds. Store the successful verification deadline separately from failure-cache TTL; after expiry, failed refreshes must return only selfId. Failure backoff must never renew old membership, and successful refresh must replace it with the latest immutable set.
+- Dynamically import utils/echarts for line charts, echarts-statistics for bar/pie, echarts-investment for trade markers/zoom, echarts-kline for candlesticks. Do not force all ECharts modules into one manual chunk.
 - Financial mutations must acquire `AccountMapper.lockUserForWrite(userId)` inside the transaction before reading mutable accounting state. Keep external quote/fee HTTP outside the transaction; re-read positions, pending trades and scheduled plans after locking. Cash balance changes use atomic mapper SQL.
 - Investment detail is local-first. Fetch redemption fees separately at `/api/finance/investments/fund-redeem-fees`; retain full transaction history for chart markers/profit calculations. `useAsyncSection` and pagination guard against stale responses.
 - `KeyedTtlCache` uses 256 fixed stripe locks + LRU eviction; TTL starts after loading completes. Polling callbacks must return their Promise for overlap protection and respect KeepAlive activation.

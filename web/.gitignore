@@ -5,3 +5,8 @@ dist-ssr
 .DS_Store
 .vscode/*
 !.vscode/extensions.json
+
+playwright-report/
+playwright-live-report/
+dist-live/
+test-results/

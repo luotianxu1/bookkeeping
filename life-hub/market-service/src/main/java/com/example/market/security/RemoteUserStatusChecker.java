@@ -3,7 +3,7 @@ package com.example.market.security;
 import com.example.common.result.Result;
 import com.example.common.security.InternalApiKeyFilter;
 import com.example.common.security.UserStatusChecker;
-import com.example.common.util.KeyedTtlCache;
+import com.example.common.security.UserStatusCache;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -18,20 +18,15 @@ import java.util.Map;
 
 /**
  * 用户状态的远程实现：经 auth-service 内部接口查询（X-Internal-Key 鉴权）。
- * 口径与 JdbcUserStatusChecker 一致：30 秒本地缓存（KeyedTtlCache），查询失败时放行（fail-open）。
+ * 口径与 JdbcUserStatusChecker 一致：状态可信期 30 秒，查询失败且无有效状态时返回可重试的 503。
  */
 @Component
 public class RemoteUserStatusChecker implements UserStatusChecker {
 
-    private static final long CACHE_TTL_MS = 30_000L;
-    private static final long FAILURE_TTL_MS = 5_000L;
-    private static final int MAX_SIZE = 10_000;
-
     private final RestTemplate restTemplate;
     private final String authBaseUrl;
     private final String internalApiKey;
-    private final KeyedTtlCache<Long, Boolean> cache =
-        new KeyedTtlCache<>(CACHE_TTL_MS, FAILURE_TTL_MS, MAX_SIZE);
+    private final UserStatusCache cache = new UserStatusCache();
 
     public RemoteUserStatusChecker(
         @Value("${market.auth-base-url:http://localhost:8081}") String authBaseUrl,
@@ -51,7 +46,7 @@ public class RemoteUserStatusChecker implements UserStatusChecker {
 
     @Override
     public boolean isActive(long userId) {
-        Boolean cached = cache.get(userId, id -> {
+        return cache.isActive(userId, id -> {
             try {
                 HttpHeaders headers = new HttpHeaders();
                 headers.set(InternalApiKeyFilter.HEADER_NAME, internalApiKey);
@@ -66,12 +61,13 @@ public class RemoteUserStatusChecker implements UserStatusChecker {
                 if (body == null || body.getCode() == null || body.getCode() != 0 || body.getData() == null) {
                     throw new IllegalStateException("user-status query failed");
                 }
-                return Boolean.TRUE.equals(body.getData().get("active"));
+                if (!(body.getData().get("active") instanceof Boolean active)) {
+                    throw new IllegalStateException("user-status response missing active");
+                }
+                return active;
             } catch (Exception ex) {
                 throw new IllegalStateException("user-status query failed", ex);
             }
         });
-        // fail-open：远端抖动且无缓存可用时放行
-        return cached == null || cached;
     }
 }

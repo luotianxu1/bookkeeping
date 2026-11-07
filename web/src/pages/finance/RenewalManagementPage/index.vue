@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useReminderTarget } from '@/composables/useReminderTarget'
 import CommonFeedback from '@/components/common/CommonFeedback/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import CommonModal from '@/components/common/CommonModal/index.vue'
@@ -62,6 +63,7 @@ const summary = ref<RenewalSubscriptionSummary>({
   dueThisMonthAmount: 0,
 })
 const isLoading = ref(true)
+useReminderTarget(isLoading, 'renewal')
 const isSaving = ref(false)
 const isUpdatingStatus = ref(false)
 const isDeleting = ref(false)
@@ -626,6 +628,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
           <article
             v-for="card in renewalCards"
             :key="card.id"
+            :id="`renewal-${card.id}`"
             class="renewal-card"
           >
             <div class="renewal-card-top">

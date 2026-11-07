@@ -32,7 +32,7 @@ final class AccountingDatabase implements AutoCloseable {
         // 与 MySQL 默认隔离级别一致，防止只在 READ_COMMITTED 下通过。
         tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
         var configuration = new MybatisConfiguration();
-        for (Class<?> mapper : List.of(AccountMapper.class, AccountTypeMapper.class, TransactionMapper.class,
+        for (Class<?> mapper : List.of(AccountMapper.class, AccountTypeMapper.class, TransactionMapper.class, AccountingRequestMapper.class,
             CategoryMapper.class, DebtRecordMapper.class, HumanRelationRecordMapper.class, RenewalSubscriptionMapper.class,
             InvestmentProductMapper.class, InvestmentPositionMapper.class, InvestmentTransactionMapper.class,
             InvestmentAutoInvestPlanMapper.class, InvestmentDividendPlanMapper.class, InvestmentDividendRecordMapper.class,
@@ -42,6 +42,7 @@ final class AccountingDatabase implements AutoCloseable {
         factory.setConfiguration(configuration);
         factory.setMapperLocations(new ClassPathResource("mapper/TransactionMapper.xml"));
         session = new SqlSessionTemplate(factory.getObject());
+        jdbc.execute("CREATE TABLE accounting_requests(user_id BIGINT, operation VARCHAR(40), request_id VARCHAR(64), request_hash VARCHAR(64), response_json CLOB, PRIMARY KEY(user_id,operation,request_id))");
         jdbc.execute("CREATE TABLE users(id BIGINT PRIMARY KEY, status VARCHAR(32))");
         jdbc.update("INSERT INTO users VALUES(1, 'active'), (2, 'active')");
         for (Class<?> entity : List.of(AccountEntity.class, AccountTypeEntity.class, TransactionEntity.class,
@@ -55,6 +56,9 @@ final class AccountingDatabase implements AutoCloseable {
             jdbc.execute("CREATE TABLE " + table.getTableName() + " (" + table.getKeyColumn()
                 + " BIGINT AUTO_INCREMENT PRIMARY KEY, " + fields + ")");
         }
+        jdbc.execute("ALTER TABLE investment_products ADD symbol_key VARCHAR(64) GENERATED ALWAYS AS (UPPER(TRIM(symbol)))");
+        jdbc.execute("ALTER TABLE investment_products ADD market_key VARCHAR(32) GENERATED ALWAYS AS (UPPER(TRIM(COALESCE(market,''))))");
+        jdbc.execute("CREATE UNIQUE INDEX uk_investment_products_identity ON investment_products(product_type,symbol_key,market_key)");
     }
     private static String sqlType(Class<?> type) {
         if (type == BigDecimal.class) return "DECIMAL(24,6)";
@@ -68,7 +72,10 @@ final class AccountingDatabase implements AutoCloseable {
     TransactionService transactions() {
         return new TransactionService(mapper(TransactionMapper.class), mapper(AccountMapper.class),
             mapper(AccountTypeMapper.class), mapper(CategoryMapper.class), mapper(DebtRecordMapper.class),
-            mapper(HumanRelationRecordMapper.class));
+            mapper(HumanRelationRecordMapper.class), idempotency());
+    }
+    AccountingIdempotencyService idempotency() {
+        return new AccountingIdempotencyService(mapper(AccountingRequestMapper.class), new com.fasterxml.jackson.databind.ObjectMapper());
     }
     void seedCashAccounts() {
         jdbc.update("INSERT INTO account_types(id, code) VALUES (1, 'cash'), (2, 'investment')");

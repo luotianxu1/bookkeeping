@@ -10,7 +10,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("categories")
+@TableName(value = "categories", autoResultMap = true)
 public class CategoryEntity {
 
     @TableId(type = IdType.AUTO)

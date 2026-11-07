@@ -15,6 +15,7 @@ import { getStoredCurrentUser } from '@/utils/current-user'
 import { formatAmount } from '@/utils/format'
 import { getErrorMessage } from '@/api/request'
 import type { FeedbackType } from '@/composables/useFeedback'
+import { useIdempotentSubmit } from '@/composables/useIdempotentSubmit'
 import { formatCompactWeight, toApiDateTime, toFixedNumber } from './goldPositionFormat'
 
 export type UseGoldPositionActionsOptions = {
@@ -30,6 +31,8 @@ export type UseGoldPositionActionsOptions = {
 }
 
 export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
+  const positionSubmission = useIdempotentSubmit()
+  const sellSubmission = useIdempotentSubmit()
   const {
     goldAccounts,
     isScopedToAccount,
@@ -359,11 +362,11 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
         })
         showFeedback('修改成功', 'success')
       } else {
-        await createInvestmentPosition({
+        await createInvestmentPosition(positionSubmission.withRequestId({
           ...payload,
           fundingAccountId: normalizedFundingAccountId,
           product: {
-            productType: 'gold',
+            productType: 'gold' as const,
             symbol: DEFAULT_GOLD_PRODUCT_SYMBOL,
             name: DEFAULT_GOLD_PRODUCT_NAME,
             currencyCode: 'CNY',
@@ -372,7 +375,8 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
             status: 'active',
             remark: null,
           },
-        })
+        }, () => ({ tradeAt: toApiDateTime(new Date()) })))
+        positionSubmission.reset()
         showFeedback('新增成功', 'success')
       }
 
@@ -526,12 +530,12 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
     sellError.value = ''
 
     try {
-      await createInvestmentTransaction({
+      await createInvestmentTransaction(sellSubmission.withRequestId({
         userId: currentUser.id,
         accountId: sellingPosition.value.accountId,
         positionId: sellingPosition.value.id,
         productId: sellingPosition.value.productId,
-        tradeType: 'sell',
+        tradeType: 'sell' as const,
         quantity: toFixedNumber(quantity, 6),
         price: toFixedNumber(price, 6),
         amount: toFixedNumber(amount, 2),
@@ -539,9 +543,9 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
         taxAmount: 0,
         currencyCode: sellingPosition.value.currencyCode || 'CNY',
         fundingAccountId: normalizedFundingAccountId,
-        tradeAt: toApiDateTime(new Date()),
         remark: sellRemark.value.trim() || null,
-      })
+      }, () => ({ tradeAt: toApiDateTime(new Date()) })))
+      sellSubmission.reset()
       closeSellModal(true)
       showFeedback('卖出成功', 'success')
       await loadGoldPosition()

@@ -19,7 +19,7 @@ export function useOverviewCharts(options: {
   const lineChartRef = ref<HTMLDivElement | null>(null)
   const pieChartRef = ref<HTMLDivElement | null>(null)
   const revenuePieChartRef = ref<HTMLDivElement | null>(null)
-  let echartsLib: (typeof import('@/utils/echarts')) | null = null
+  let echartsLib: (typeof import('@/utils/echarts-statistics')) | null = null
   let lineChart: ECharts | null = null
   let pieChart: ECharts | null = null
   let revenuePieChart: ECharts | null = null
@@ -30,7 +30,7 @@ export function useOverviewCharts(options: {
 
   async function ensureCharts() {
     if (!echartsLib) {
-      echartsLib = await import('@/utils/echarts')
+      echartsLib = await import('@/utils/echarts-statistics')
     }
     if (lineChart && lineChartRef.value && lineChart.getDom() !== lineChartRef.value) {
       lineChart.dispose()

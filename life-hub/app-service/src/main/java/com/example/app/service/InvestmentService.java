@@ -1,5 +1,7 @@
 package com.example.app.service;
 
+import com.example.common.security.FamilyScopeChecker;
+import com.example.common.security.SecurityUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.app.client.MarketQuoteClient;
@@ -185,6 +187,8 @@ public class InvestmentService {
     /** 基金收益域服务：收益预测与收益页 */
     private final InvestmentFundProfitService fundProfitService;
     private final InvestmentFundFeeService fundFeeService;
+    private final FamilyScopeChecker familyScopeChecker;
+    private final AccountingIdempotencyService idempotency;
     /** 夜间同步的行情抓取线程池：净值/分红同步按产品并发化，缩短任务窗口 */
     private final ExecutorService fundSyncExecutor;
 
@@ -209,7 +213,9 @@ public class InvestmentService {
         InvestmentQuoteSyncService quoteSyncService,
         InvestmentPriceHistoryService priceHistoryService,
         InvestmentFundProfitService fundProfitService,
-        InvestmentFundFeeService fundFeeService
+        InvestmentFundFeeService fundFeeService,
+        FamilyScopeChecker familyScopeChecker,
+        AccountingIdempotencyService idempotency
     ) {
         this.productMapper = productMapper;
         this.positionMapper = positionMapper;
@@ -231,6 +237,8 @@ public class InvestmentService {
         this.priceHistoryService = priceHistoryService;
         this.fundProfitService = fundProfitService;
         this.fundFeeService = fundFeeService;
+        this.familyScopeChecker = familyScopeChecker;
+        this.idempotency = idempotency;
         this.fundSyncExecutor = Executors.newFixedThreadPool(
             syncConcurrency == null || syncConcurrency <= 0 ? 8 : syncConcurrency,
             daemonThreadFactory("invest-sync-"));
@@ -258,9 +266,7 @@ public class InvestmentService {
     }
 
     public InvestmentProductResponse createProduct(InvestmentProductRequest request) {
-        InvestmentProductEntity entity = fillProduct(new InvestmentProductEntity(), request);
-        productMapper.insert(entity);
-        return toProductResponse(productMapper.selectById(entity.getId()));
+        return transactionTemplate.execute(status -> toProductResponse(createOrLoadProduct(request)));
     }
 
     public InvestmentDividendForecastResponse dividendForecast(InvestmentDividendForecastRequest request) {
@@ -448,7 +454,7 @@ public class InvestmentService {
 
     public Optional<InvestmentPositionResponse> getPosition(Long id) {
         InvestmentPositionEntity position = positionMapper.selectById(id);
-        if (position == null) {
+        if (position == null || !familyScopeChecker.canRead(SecurityUtils.requireCurrentUserId(), position.getUserId())) {
             return Optional.empty();
         }
         return Optional.of(toPositionResponse(
@@ -460,7 +466,7 @@ public class InvestmentService {
 
     public Optional<InvestmentAssetDetailResponse> getPositionDetail(Long id) {
         InvestmentPositionEntity position = positionMapper.selectById(id);
-        if (position == null) {
+        if (position == null || !familyScopeChecker.canRead(SecurityUtils.requireCurrentUserId(), position.getUserId())) {
             return Optional.empty();
         }
 
@@ -502,35 +508,36 @@ public class InvestmentService {
     }
 
     public InvestmentPositionResponse createPosition(InvestmentPositionRequest request) {
+        var replay = idempotency.replay(request.getUserId(), "investment-position", request.getRequestId(), request,
+            InvestmentPositionResponse.class);
+        if (replay.isPresent()) return replay.get();
         AccountEntity account = requireInvestmentAccount(request.getUserId(), request.getAccountId());
-        AccountEntity fundingAccount = resolveFundingAccountForCreate(request, account);
-        InvestmentProductEntity product = request.getProductId() != null
+        resolveFundingAccountForCreate(request, account);
+        // 事务外仅准备产品信息和行情，产品写入与持仓/扣款/幂等响应一同提交。
+        InvestmentProductEntity preparedProduct = request.getProductId() != null
             ? requireProduct(request.getProductId())
-            : createOrLoadProduct(request.getProduct());
-
-        // 行情 HTTP 调用放在事务外，避免最长 20s 的远端调用占用 DB 连接与行锁
-        final JsonNode baseInfo;
-        if (isFundSubscriptionProduct(product)) {
-            baseInfo = fetchFundBaseInfo(product.getSymbol()).path("Datas");
-        } else {
-            baseInfo = null;
-        }
-        return transactionTemplate.execute(status ->
-            doCreatePosition(request, account, fundingAccount, product, baseInfo));
+            : fillProduct(new InvestmentProductEntity(), request.getProduct());
+        JsonNode baseInfo = isFundSubscriptionProduct(preparedProduct)
+            ? fetchFundBaseInfo(preparedProduct.getSymbol()).path("Datas") : null;
+        BigDecimal goldSnapshot = fetchGoldSnapshot(request.getUserId(), request.getAccountId());
+        return transactionTemplate.execute(status -> {
+            accountMapper.lockUserForWrite(request.getUserId());
+            return idempotency.execute(request.getUserId(), "investment-position", request.getRequestId(), request,
+                InvestmentPositionResponse.class, () -> doCreatePosition(request, baseInfo, goldSnapshot));
+        });
     }
 
     private InvestmentPositionResponse doCreatePosition(
         InvestmentPositionRequest request,
-        AccountEntity account,
-        AccountEntity fundingAccount,
-        InvestmentProductEntity product,
-        JsonNode baseInfo
+        JsonNode baseInfo,
+        BigDecimal goldSnapshot
     ) {
-        accountMapper.lockUserForWrite(request.getUserId());
-        account = requireInvestmentAccount(request.getUserId(), request.getAccountId());
-        fundingAccount = resolveFundingAccountForCreate(request, account);
+        AccountEntity account = requireInvestmentAccount(request.getUserId(), request.getAccountId());
+        AccountEntity fundingAccount = resolveFundingAccountForCreate(request, account);
+        InvestmentProductEntity product = request.getProductId() != null
+            ? requireProduct(request.getProductId()) : createOrLoadProduct(request.getProduct());
         if (isFundSubscriptionProduct(product)) {
-            return createFundSubscriptionPosition(request, account, fundingAccount, product, baseInfo);
+            return createFundSubscriptionPosition(request, account, fundingAccount, product, baseInfo, goldSnapshot);
         }
 
         validateDirectPositionRequest(request);
@@ -548,15 +555,21 @@ public class InvestmentService {
             entity.getCostAmount(),
             "新增资产买入"
         );
-        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
+        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId(), goldSnapshot);
         return toPositionResponse(positionMapper.selectById(entity.getId()), product, account);
     }
 
-    @Transactional
     public Optional<InvestmentPositionResponse> updatePosition(Long id, InvestmentPositionRequest request) {
+        InvestmentPositionEntity original = positionMapper.selectById(id);
+        if (original == null || !request.getUserId().equals(original.getUserId())) return Optional.empty();
+        BigDecimal goldSnapshot = fetchGoldSnapshot(request.getUserId(), original.getAccountId(), request.getAccountId());
+        return transactionTemplate.execute(status -> doUpdatePosition(id, request, goldSnapshot));
+    }
+
+    private Optional<InvestmentPositionResponse> doUpdatePosition(Long id, InvestmentPositionRequest request, BigDecimal goldSnapshot) {
         accountMapper.lockUserForWrite(request.getUserId());
         InvestmentPositionEntity entity = positionMapper.selectById(id);
-        if (entity == null) {
+        if (entity == null || !request.getUserId().equals(entity.getUserId())) {
             return Optional.empty();
         }
         Long oldAccountId = entity.getAccountId();
@@ -577,15 +590,21 @@ public class InvestmentService {
         validateDirectPositionRequest(request);
         fillPosition(entity, request, product.getId());
         positionMapper.updateById(entity);
-        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
+        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId(), goldSnapshot);
         if (!request.getAccountId().equals(oldAccountId)) {
-            syncInvestmentAccountBalance(request.getUserId(), oldAccountId);
+            syncInvestmentAccountBalance(request.getUserId(), oldAccountId, goldSnapshot);
         }
         return Optional.of(toPositionResponse(positionMapper.selectById(id), product, account));
     }
 
-    @Transactional
     public boolean deletePosition(Long id, Long userId) {
+        InvestmentPositionEntity original = positionMapper.selectById(id);
+        if (original == null || !userId.equals(original.getUserId())) return false;
+        BigDecimal goldSnapshot = fetchGoldSnapshot(userId, original.getAccountId());
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> doDeletePosition(id, userId, goldSnapshot)));
+    }
+
+    private boolean doDeletePosition(Long id, Long userId, BigDecimal goldSnapshot) {
         accountMapper.lockUserForWrite(userId);
         InvestmentPositionEntity entity = positionMapper.selectById(id);
         if (entity == null || !userId.equals(entity.getUserId())) {
@@ -602,7 +621,7 @@ public class InvestmentService {
             .eq(InvestmentDividendRecordEntity::getPositionId, id));
         boolean deleted = positionMapper.deleteById(id) > 0;
         if (deleted) {
-            syncInvestmentAccountBalance(userId, entity.getAccountId());
+            syncInvestmentAccountBalance(userId, entity.getAccountId(), goldSnapshot);
         }
         return deleted;
     }
@@ -978,34 +997,54 @@ public class InvestmentService {
             return 0;
         }
 
-        // 按产品并发同步：每个产品的行情抓取+持仓更新互不依赖，DB 写入经 Hikari 池化
-        Map<Long, Long> accountUsers = new ConcurrentHashMap<>();
-        AtomicInteger syncedProducts = new AtomicInteger();
-        AtomicInteger syncedPositions = new AtomicInteger();
-        List<CompletableFuture<Void>> futures = groupPositionsByProduct(positions, products).entrySet().stream()
-            .map(entry -> CompletableFuture.runAsync(() -> {
-                InvestmentProductEntity product = products.get(entry.getKey());
-                if (product == null) {
-                    return;
-                }
+        Map<Long, FundQuoteSnapshot> snapshots = new ConcurrentHashMap<>();
+        List<CompletableFuture<Void>> futures = products.values().stream().map(product ->
+            CompletableFuture.runAsync(() -> {
                 try {
-                    int updatedCount = syncFundProfitForProduct(product, entry.getValue(), accountUsers, sharedFundQuotes);
-                    if (updatedCount > 0) {
-                        syncedProducts.incrementAndGet();
-                        syncedPositions.addAndGet(updatedCount);
-                    }
-                } catch (Exception ex) {
-                    log.warn("基金收益同步失败，productId={}, symbol={}, reason={}",
-                        product.getId(), product.getSymbol(), ex.getMessage());
-                }
-            }, fundSyncExecutor))
-            .toList();
+                    try { syncFundDividendPlansForProduct(product); }
+                    catch (RuntimeException ex) { log.warn("基金分红计划刷新失败：productId={}", product.getId()); }
+                    FundQuoteSnapshot quote = fetchAndSaveLatestFundQuote(product, sharedFundQuotes);
+                    if (quote != null) snapshots.put(product.getId(), quote);
+                } catch (RuntimeException ex) { log.warn("基金报价失败：productId={}", product.getId()); }
+            }, fundSyncExecutor)).toList();
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        return updateQuotesByAccount(positions, position -> {
+            FundQuoteSnapshot quote = snapshots.get(position.getProductId());
+            if (quote == null) return false;
+            processFundDividendForPosition(position, products.get(position.getProductId()), quote);
+            if (isPendingFundSubscription(position)) updatePendingFundPositionSnapshot(position, quote.latestPrice(), quote.syncedAt());
+            else applyFundQuoteToPosition(position, quote.latestPrice(), quote.preClosePrice(), quote.syncedAt());
+            return true;
+        });
+    }
 
-        accountUsers.forEach((targetAccountId, targetUserId) -> syncInvestmentAccountBalance(targetUserId, targetAccountId));
-        log.info("基金收益同步完成：{} 个基金产品，{} 条持仓已更新，userId={}, accountId={}",
-            syncedProducts.get(), syncedPositions.get(), userId, accountId);
-        return syncedPositions.get();
+    /** 所有 HTTP 已完成，按账户一次事务更新并汇总，期间重读当前持仓。 */
+    private int updateQuotesByAccount(List<InvestmentPositionEntity> originals,
+        java.util.function.Predicate<InvestmentPositionEntity> applyQuote) {
+        int count = 0;
+        for (var accountPositions : originals.stream().collect(Collectors.groupingBy(InvestmentPositionEntity::getAccountId)).values()) {
+            InvestmentPositionEntity first = accountPositions.get(0);
+            try {
+                Integer updated = transactionTemplate.execute(status -> {
+                    accountMapper.lockUserForWrite(first.getUserId());
+                    int changed = 0;
+                    for (InvestmentPositionEntity original : accountPositions) {
+                        InvestmentPositionEntity current = positionMapper.selectById(original.getId());
+                        if (current == null || !Objects.equals(current.getUserId(), first.getUserId())
+                            || !Objects.equals(current.getAccountId(), first.getAccountId())
+                            || !Objects.equals(current.getProductId(), original.getProductId())
+                            || !Objects.equals(current.getStatus(), original.getStatus())) continue;
+                        if (applyQuote.test(current)) { positionMapper.updateById(current); changed++; }
+                    }
+                    if (changed > 0) syncInvestmentAccountBalance(first.getUserId(), first.getAccountId());
+                    return changed;
+                });
+                count += updated == null ? 0 : updated;
+            } catch (RuntimeException ex) {
+                log.warn("账户行情更新失败，事务已回滚：accountId={}", first.getAccountId(), ex);
+            }
+        }
+        return count;
     }
 
     public int syncFundDividendPlans() {
@@ -1172,30 +1211,19 @@ public class InvestmentService {
             return 0;
         }
 
-        Map<Long, Long> accountUsers = new HashMap<>();
-        int syncedProducts = 0;
-        int syncedPositions = 0;
-        for (Map.Entry<Long, List<InvestmentPositionEntity>> entry : groupPositionsByProduct(positions, products).entrySet()) {
-            InvestmentProductEntity product = products.get(entry.getKey());
-            if (product == null) {
-                continue;
-            }
+        Map<Long, StockQuoteSnapshot> snapshots = new HashMap<>();
+        for (InvestmentProductEntity product : products.values()) {
             try {
-                int updatedCount = syncStockQuoteForProduct(product, entry.getValue(), accountUsers);
-                if (updatedCount > 0) {
-                    syncedProducts++;
-                    syncedPositions += updatedCount;
-                }
-            } catch (Exception ex) {
-                log.warn("股票行情同步失败，productId={}, symbol={}, reason={}",
-                    product.getId(), product.getSymbol(), ex.getMessage());
-            }
+                StockQuoteSnapshot quote = fetchAndSaveLatestStockQuote(product);
+                if (quote != null) snapshots.put(product.getId(), quote);
+            } catch (RuntimeException ex) { log.warn("股票报价失败：productId={}", product.getId()); }
         }
-
-        accountUsers.forEach((targetAccountId, targetUserId) -> syncInvestmentAccountBalance(targetUserId, targetAccountId));
-        log.info("股票行情同步完成：{} 个股票产品，{} 条持仓已更新，userId={}, accountId={}",
-            syncedProducts, syncedPositions, userId, accountId);
-        return syncedPositions;
+        return updateQuotesByAccount(positions, position -> {
+            StockQuoteSnapshot quote = snapshots.get(position.getProductId());
+            if (quote == null) return false;
+            applyStockQuoteToPosition(position, quote.latestPrice(), quote.preClosePrice(), quote.syncedAt());
+            return true;
+        });
     }
 
     public int settlePendingFundTradesAt(LocalDateTime settlementDateTime) {
@@ -1223,7 +1251,6 @@ public class InvestmentService {
             return 0;
         }
 
-        Map<Long, Long> accountUsers = new HashMap<>();
         int settledProducts = 0;
         int settledPositions = 0;
         for (Map.Entry<Long, List<InvestmentPositionEntity>> entry : groupPositionsByProduct(positions, products).entrySet()) {
@@ -1232,7 +1259,7 @@ public class InvestmentService {
                 continue;
             }
             try {
-                int updatedCount = settlePendingFundTradesForProduct(product, entry.getValue(), accountUsers, settlementDateTime, sharedFundQuotes);
+                int updatedCount = settlePendingFundTradesForProduct(product, entry.getValue(), settlementDateTime, sharedFundQuotes);
                 if (updatedCount > 0) {
                     settledProducts++;
                     settledPositions += updatedCount;
@@ -1243,7 +1270,6 @@ public class InvestmentService {
             }
         }
 
-        accountUsers.forEach((accountId, userId) -> syncInvestmentAccountBalance(userId, accountId));
         log.info("基金申购结算完成：{} 个基金产品，{} 条持仓已处理", settledProducts, settledPositions);
         return settledPositions;
     }
@@ -1272,7 +1298,6 @@ public class InvestmentService {
         Map<Long, List<InvestmentTransactionEntity>> transactionsByProduct = transactions.stream()
             .filter(transaction -> products.containsKey(transaction.getProductId()))
             .collect(Collectors.groupingBy(InvestmentTransactionEntity::getProductId));
-        Map<Long, Long> accountUsers = new HashMap<>();
         int settledProducts = 0;
         int settledTransactions = 0;
         for (Map.Entry<Long, List<InvestmentTransactionEntity>> entry : transactionsByProduct.entrySet()) {
@@ -1281,7 +1306,7 @@ public class InvestmentService {
                 continue;
             }
             try {
-                int updatedCount = settlePendingFundTransactionsForProduct(product, entry.getValue(), accountUsers, settlementDateTime, sharedFundQuotes);
+                int updatedCount = settlePendingFundTransactionsForProduct(product, entry.getValue(), settlementDateTime, sharedFundQuotes);
                 if (updatedCount > 0) {
                     settledProducts++;
                     settledTransactions += updatedCount;
@@ -1292,7 +1317,6 @@ public class InvestmentService {
             }
         }
 
-        accountUsers.forEach((accountId, userId) -> syncInvestmentAccountBalance(userId, accountId));
         log.info("基金交易结算完成：{} 个基金产品，{} 条交易已处理", settledProducts, settledTransactions);
         return settledTransactions;
     }
@@ -1412,6 +1436,9 @@ public class InvestmentService {
     }
 
     public InvestmentTransactionResponse createTransaction(InvestmentTransactionRequest request) {
+        var replay = idempotency.replay(request.getUserId(), "investment-transaction", request.getRequestId(), request,
+            InvestmentTransactionResponse.class);
+        if (replay.isPresent()) return replay.get();
         AccountEntity investmentAccount = requireInvestmentAccount(request.getUserId(), request.getAccountId());
         InvestmentProductEntity product = requireProduct(request.getProductId());
         requirePosition(request);
@@ -1425,8 +1452,12 @@ public class InvestmentService {
         List<FundRedeemFeeRule> feeRules = isFundSubscriptionProduct(product)
             && "sell".equals(request.getTradeType()) && request.getFeeAmount() == null
             ? fundFeeService.fetchFundRedeemFeeRules(product.getSymbol()) : List.of();
-        return transactionTemplate.execute(status ->
-            doCreateTransaction(request, investmentAccount, product, baseInfo, feeRules));
+        BigDecimal goldSnapshot = fetchGoldSnapshot(request.getUserId(), request.getAccountId());
+        return transactionTemplate.execute(status -> {
+            accountMapper.lockUserForWrite(request.getUserId());
+            return idempotency.execute(request.getUserId(), "investment-transaction", request.getRequestId(), request,
+                InvestmentTransactionResponse.class, () -> doCreateTransaction(request, investmentAccount, product, baseInfo, feeRules, goldSnapshot));
+        });
     }
 
     private InvestmentTransactionResponse doCreateTransaction(
@@ -1434,7 +1465,8 @@ public class InvestmentService {
         AccountEntity investmentAccount,
         InvestmentProductEntity product,
         JsonNode baseInfo,
-        List<FundRedeemFeeRule> feeRules
+        List<FundRedeemFeeRule> feeRules,
+        BigDecimal goldSnapshot
     ) {
         accountMapper.lockUserForWrite(request.getUserId());
         InvestmentPositionEntity position = requirePosition(request);
@@ -1494,7 +1526,7 @@ public class InvestmentService {
         entity.setRemark(request.getRemark());
         transactionMapper.insert(entity);
         positionMapper.updateById(position);
-        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
+        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId(), goldSnapshot);
         return toTransactionResponse(entity, product, accountMapper.selectById(entity.getAccountId()));
     }
 
@@ -1891,27 +1923,32 @@ public class InvestmentService {
     }
 
     private InvestmentProductEntity createOrLoadProduct(InvestmentProductRequest request) {
-        if (request == null) {
-            throw new IllegalArgumentException("投资产品不能为空");
-        }
-        InvestmentProductEntity exists = productMapper.selectOne(new LambdaQueryWrapper<InvestmentProductEntity>()
-            .eq(InvestmentProductEntity::getProductType, request.getProductType())
-            .eq(InvestmentProductEntity::getSymbol, request.getSymbol())
-            .eq(StringUtils.hasText(request.getMarket()), InvestmentProductEntity::getMarket, request.getMarket())
-            .last("LIMIT 1"));
-        if (exists != null) {
-            return exists;
-        }
-        InvestmentProductEntity entity = fillProduct(new InvestmentProductEntity(), request);
-        productMapper.insert(entity);
-        return productMapper.selectById(entity.getId());
+        InvestmentProductEntity candidate = fillProduct(new InvestmentProductEntity(), request);
+        productMapper.insertIfAbsent(candidate);
+        // 当前读：并发请求提交的产品必须可见，即使本事务已建立 REPEATABLE READ 快照。
+        InvestmentProductEntity product = productMapper.selectOne(
+            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<InvestmentProductEntity>()
+                .eq("product_type", candidate.getProductType())
+                .eq("symbol_key", candidate.getSymbol())
+                .eq("market_key", candidate.getMarket())
+                .last("FOR UPDATE"));
+        if (product == null) throw new IllegalStateException("投资产品创建失败，请重试");
+        return product;
     }
 
     private InvestmentProductEntity fillProduct(InvestmentProductEntity entity, InvestmentProductRequest request) {
-        entity.setProductType(request.getProductType());
-        entity.setMarket(request.getMarket());
+        if (request == null || !StringUtils.hasText(request.getProductType())
+            || !StringUtils.hasText(request.getSymbol()) || !StringUtils.hasText(request.getName())) {
+            throw new IllegalArgumentException("投资产品类型、代码和名称不能为空");
+        }
+        String productType = request.getProductType().trim().toLowerCase(java.util.Locale.ROOT);
+        if (!Set.of("stock", "fund", "bond", "gold", "other").contains(productType)) {
+            throw new IllegalArgumentException("投资产品类型无效");
+        }
+        entity.setProductType(productType);
+        entity.setMarket(request.getMarket() == null ? "" : request.getMarket().trim().toUpperCase(java.util.Locale.ROOT));
         entity.setExchangeCode(request.getExchangeCode());
-        entity.setSymbol(request.getSymbol());
+        entity.setSymbol(request.getSymbol().trim().toUpperCase(java.util.Locale.ROOT));
         entity.setName(request.getName());
         entity.setShortName(request.getShortName());
         entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
@@ -2342,7 +2379,8 @@ public class InvestmentService {
         AccountEntity account,
         AccountEntity fundingAccount,
         InvestmentProductEntity product,
-        JsonNode baseInfo
+        JsonNode baseInfo,
+        BigDecimal goldSnapshot
     ) {
         requireFundSubscribable(product, baseInfo);
         BigDecimal officialPrice = safeDecimal(baseInfo.path("DWJZ").asText(null));
@@ -2411,7 +2449,7 @@ public class InvestmentService {
             confirmPendingFundSubscription(entity, immediateQuote, confirmedAt);
             positionMapper.updateById(entity);
         }
-        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId());
+        syncInvestmentAccountBalance(request.getUserId(), request.getAccountId(), goldSnapshot);
         return toPositionResponse(positionMapper.selectById(entity.getId()), product, account);
     }
 
@@ -2772,62 +2810,44 @@ public class InvestmentService {
         return position;
     }
 
-    private void syncInvestmentAccountBalance(Long userId, Long accountId) {
-        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-            transactionTemplate.executeWithoutResult(status -> {
-                accountMapper.lockUserForWrite(userId);
-                syncInvestmentAccountBalance(userId, accountId);
-            });
-            return;
+    /** 金价必须在开启事务前获取；行情不可用时保留本地估值，账务仍可写入。 */
+    private BigDecimal fetchGoldSnapshot(Long userId, Long... accountIds) {
+        for (Long accountId : accountIds) {
+            AccountEntity account = accountId == null ? null : accountMapper.selectById(accountId);
+            if (account == null || !userId.equals(account.getUserId())) continue;
+            AccountTypeEntity type = accountTypeMapper.selectById(account.getAccountTypeId());
+            if (type != null && "gold".equals(type.getCode())) {
+                if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+                    throw new IllegalStateException("金价快照必须在事务外读取");
+                }
+                try {
+                    BigDecimal price = goldPriceService.getCachedSpotPrice();
+                    return price != null && price.signum() > 0 ? price : null;
+                } catch (RuntimeException ex) {
+                    log.warn("金价不可用，账户暂用本地持仓估值：userId={}", userId);
+                    return null;
+                }
+            }
         }
-        if (accountId == null) {
-            return;
-        }
-        AccountEntity account = accountMapper.selectById(accountId);
-        if (account == null || !userId.equals(account.getUserId())) {
-            return;
-        }
-        AccountTypeEntity accountType = accountTypeMapper.selectById(account.getAccountTypeId());
-        if (accountType == null || !POSITION_ACCOUNT_TYPE_CODES.contains(accountType.getCode())) {
-            return;
-        }
-        List<InvestmentPositionEntity> positions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
-            .eq(InvestmentPositionEntity::getUserId, userId)
-            .eq(InvestmentPositionEntity::getAccountId, accountId)
-            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS));
-        BigDecimal marketValue = "gold".equals(accountType.getCode())
-            ? resolveRealtimeGoldAccountBalance(positions)
-            : positions.stream()
-                .map(this::resolvePositionBalanceForAccount)
-                .filter(value -> value != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        // 待确认的买入申购已从现金账户扣款，但份额尚未进入持仓市值，
-        // 需在确认前将这笔在途资金计入投资账户余额，否则总资产会短暂少算。
-        BigDecimal pendingBuyAmount = sumPendingBuyTransactionAmount(userId, accountId);
-        BigDecimal balance = marketValue.add(pendingBuyAmount).setScale(2, RoundingMode.HALF_UP);
-        account.setCurrentBalance(balance);
-        accountMapper.updateById(account);
+        return null;
     }
 
-    private BigDecimal resolveRealtimeGoldAccountBalance(List<InvestmentPositionEntity> positions) {
-        if (positions == null || positions.isEmpty()) {
-            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        }
+    private void syncInvestmentAccountBalance(Long userId, Long accountId) {
+        syncInvestmentAccountBalance(userId, accountId, null);
+    }
 
-        BigDecimal realtimePrice = goldPriceService.getCachedSpotPrice();
-        if (realtimePrice != null && realtimePrice.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal totalWeight = positions.stream()
-                .map(InvestmentPositionEntity::getHoldingQuantity)
-                .filter(value -> value != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-            return totalWeight.multiply(realtimePrice).setScale(2, RoundingMode.HALF_UP);
-        }
-
-        return positions.stream()
-            .map(this::resolvePositionBalanceForAccount)
-            .filter(value -> value != null)
-            .reduce(BigDecimal.ZERO, BigDecimal::add)
-            .setScale(2, RoundingMode.HALF_UP);
+    private void syncInvestmentAccountBalance(Long userId, Long accountId, BigDecimal goldSnapshot) {
+        if (accountId == null) return;
+        AccountEntity account = accountMapper.selectById(accountId);
+        if (account == null || !userId.equals(account.getUserId())) return;
+        AccountTypeEntity type = accountTypeMapper.selectById(account.getAccountTypeId());
+        if (type == null || !POSITION_ACCOUNT_TYPE_CODES.contains(type.getCode())) return;
+        BigDecimal marketValue = positionMapper.sumAccountValue(userId, accountId,
+            "gold".equals(type.getCode()) ? goldSnapshot : null);
+        BigDecimal pending = transactionMapper.sumPendingBuyAmount(userId, accountId, INITIAL_FUND_SUBSCRIPTION_REMARK);
+        accountMapper.update(null, new LambdaUpdateWrapper<AccountEntity>()
+            .eq(AccountEntity::getId, accountId).eq(AccountEntity::getUserId, userId)
+            .set(AccountEntity::getCurrentBalance, marketValue.add(pending).setScale(2, RoundingMode.HALF_UP)));
     }
 
     private BigDecimal sumPendingBuyTransactionAmount(Long userId, Long accountId) {
@@ -3231,43 +3251,6 @@ public class InvestmentService {
         });
     }
 
-    private int syncFundProfitForProduct(
-        InvestmentProductEntity product,
-        List<InvestmentPositionEntity> positions,
-        Map<Long, Long> accountUsers,
-        Map<Long, FundQuoteSnapshot> sharedFundQuotes
-    ) {
-        // 先刷新计划，确保当天派息计划已经可用于结算；计划源失败不应阻断净值同步。
-        try {
-            syncFundDividendPlansForProduct(product);
-        } catch (Exception ex) {
-            log.warn("基金分红计划刷新失败，继续同步净值：productId={}, symbol={}, reason={}",
-                product.getId(), product.getSymbol(), ex.getMessage());
-        }
-        FundQuoteSnapshot snapshot = fetchAndSaveLatestFundQuote(product, sharedFundQuotes);
-        if (snapshot == null) {
-            return 0;
-        }
-
-        int updatedCount = 0;
-        for (InvestmentPositionEntity original : positions) {
-            Integer updated = withLockedPosition(original, position -> {
-                processFundDividendForPosition(position, product, snapshot);
-                if (isPendingFundSubscription(position)) {
-                    updatePendingFundPositionSnapshot(position, snapshot.latestPrice(), snapshot.syncedAt());
-                } else {
-                    applyFundQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
-                }
-                positionMapper.updateById(position);
-                syncInvestmentAccountBalance(position.getUserId(), position.getAccountId());
-                accountUsers.put(position.getAccountId(), position.getUserId());
-                return 1;
-            });
-            updatedCount += updated == null ? 0 : updated;
-        }
-        return updatedCount;
-    }
-
     private void processFundDividendForPosition(
         InvestmentPositionEntity position,
         InvestmentProductEntity product,
@@ -3386,34 +3369,9 @@ public class InvestmentService {
         transactionMapper.insert(transaction);
     }
 
-    private int syncStockQuoteForProduct(
-        InvestmentProductEntity product,
-        List<InvestmentPositionEntity> positions,
-        Map<Long, Long> accountUsers
-    ) {
-        StockQuoteSnapshot snapshot = fetchAndSaveLatestStockQuote(product);
-        if (snapshot == null) {
-            return 0;
-        }
-
-        int updatedCount = 0;
-        for (InvestmentPositionEntity original : positions) {
-            Integer updated = withLockedPosition(original, position -> {
-                applyStockQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
-                positionMapper.updateById(position);
-                syncInvestmentAccountBalance(position.getUserId(), position.getAccountId());
-                accountUsers.put(position.getAccountId(), position.getUserId());
-                return 1;
-            });
-            updatedCount += updated == null ? 0 : updated;
-        }
-        return updatedCount;
-    }
-
     private int settlePendingFundTradesForProduct(
         InvestmentProductEntity product,
         List<InvestmentPositionEntity> positions,
-        Map<Long, Long> accountUsers,
         LocalDateTime settlementDateTime,
         Map<Long, FundQuoteSnapshot> sharedFundQuotes
     ) {
@@ -3441,7 +3399,6 @@ public class InvestmentService {
                     confirmPendingFundSubscription(position, appliedQuote, snapshot.syncedAt());
                     applyFundQuoteToPosition(position, snapshot.latestPrice(), snapshot.preClosePrice(), snapshot.syncedAt());
                     positionMapper.updateById(position);
-                    accountUsers.put(position.getAccountId(), position.getUserId());
                     syncInvestmentAccountBalance(position.getUserId(), position.getAccountId());
                     return 1;
                 }
@@ -3455,7 +3412,6 @@ public class InvestmentService {
     private int settlePendingFundTransactionsForProduct(
         InvestmentProductEntity product,
         List<InvestmentTransactionEntity> transactions,
-        Map<Long, Long> accountUsers,
         LocalDateTime settlementDateTime,
         Map<Long, FundQuoteSnapshot> sharedFundQuotes
     ) {
@@ -3536,7 +3492,6 @@ public class InvestmentService {
                 positionMapper.updateById(position);
                 transactionMapper.updateById(transaction);
                 syncInvestmentAccountBalance(position.getUserId(), position.getAccountId());
-                accountUsers.put(position.getAccountId(), position.getUserId());
                 return 1;
             });
             updatedCount += updated == null ? 0 : updated;

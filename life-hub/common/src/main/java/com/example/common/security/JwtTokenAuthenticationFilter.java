@@ -24,10 +24,12 @@ public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenService jwtTokenService;
     private final UserStatusChecker userStatusChecker;
+    private final SecurityErrorWriter errorWriter;
 
-    public JwtTokenAuthenticationFilter(JwtTokenService jwtTokenService, UserStatusChecker userStatusChecker) {
+    public JwtTokenAuthenticationFilter(JwtTokenService jwtTokenService, UserStatusChecker userStatusChecker, SecurityErrorWriter errorWriter) {
         this.jwtTokenService = jwtTokenService;
         this.userStatusChecker = userStatusChecker;
+        this.errorWriter = errorWriter;
     }
 
     @Override
@@ -61,6 +63,11 @@ public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
                     request.setAttribute(SecurityUtils.USER_ID_ATTRIBUTE, userId);
                 }
             }
+        } catch (UserStatusUnavailableException unavailable) {
+            SecurityContextHolder.clearContext();
+            response.setHeader("Retry-After", "5");
+            errorWriter.write(response, HttpServletResponse.SC_SERVICE_UNAVAILABLE, unavailable.getMessage());
+            return;
         } catch (JwtException ignored) {
             SecurityContextHolder.clearContext();
         }

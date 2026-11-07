@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useIdempotentSubmit } from '@/composables/useIdempotentSubmit'
 // 加仓/减仓/修改待确认交易弹窗：表单状态与提交逻辑内聚在本组件。
 import { computed, ref } from 'vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
@@ -30,6 +31,8 @@ import {
   type TradeFundFeeMode,
 } from './utils'
 import { getErrorMessage } from '@/api/request'
+
+const submission = useIdempotentSubmit()
 
 const props = defineProps<{
   detail: InvestmentAssetDetail
@@ -406,7 +409,8 @@ async function submitTrade() {
       }
       const transaction = editingTransaction.value
         ? await updateInvestmentTransaction(editingTransaction.value.id, payload)
-        : await createInvestmentTransaction(payload)
+        : await createInvestmentTransaction(submission.withRequestId(payload))
+      submission.reset()
       close(true)
       emit('feedback', editingTransaction.value ? '待确认交易已更新' : getFundTransactionSubmitMessage(transaction), 'success')
       emit('saved')
@@ -442,7 +446,7 @@ async function submitTrade() {
   tradeError.value = ''
 
   try {
-    await createInvestmentTransaction({
+    await createInvestmentTransaction(submission.withRequestId({
       userId: currentUser.id,
       accountId: currentPosition.value.accountId,
       positionId: currentPosition.value.id,
@@ -457,7 +461,8 @@ async function submitTrade() {
       tradeAt: resolvedTradeAt,
       fundingAccountId,
       remark: tradeRemark.value.trim() || null,
-    })
+    }))
+    submission.reset()
     close(true)
     emit('feedback', currentTradeAction.value === 'buy' ? '加仓成功' : '减仓成功', 'success')
     emit('saved')

@@ -604,6 +604,7 @@ export interface SaveCategoryParams {
 }
 
 export interface CreateTransactionParams {
+  requestId?: string
   userId: number
   type: TransactionType
   amount: number
@@ -1229,6 +1230,7 @@ export interface SaveInvestmentAutoInvestPlanParams {
 }
 
 export interface SaveInvestmentTransactionParams {
+  requestId?: string
   userId: number
   accountId: number
   positionId: number
@@ -1255,6 +1257,7 @@ export interface InvestmentPositionQuery {
 }
 
 export interface SaveInvestmentPositionParams {
+  requestId?: string
   userId: number
   accountId: number
   fundingAccountId?: number

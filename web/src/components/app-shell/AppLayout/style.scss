@@ -29,6 +29,10 @@
   overflow: hidden;
 }
 
+.page-content--reminders {
+  overflow: hidden;
+}
+
 .page-content--subpage,
 .page-content--auth {
   --app-page-bottom-padding: calc(var(--space-16) + env(safe-area-inset-bottom, 0px));

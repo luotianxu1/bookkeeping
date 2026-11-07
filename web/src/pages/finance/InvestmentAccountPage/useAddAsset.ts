@@ -12,6 +12,7 @@ import {
 } from '@/api/modules/finance'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
+import { useIdempotentSubmit } from '@/composables/useIdempotentSubmit'
 import { formatAmount } from '@/utils/format'
 import { getFundPositionSubmitMessage, toApiDateTime } from './holdingDisplay'
 
@@ -24,6 +25,7 @@ interface UseAddAssetOptions {
 }
 
 export function useAddAsset(options: UseAddAssetOptions) {
+  const submission = useIdempotentSubmit()
   const showAddModal = ref(false)
   const isSaving = ref(false)
   const formError = ref('')
@@ -153,7 +155,7 @@ export function useAddAsset(options: UseAddAssetOptions) {
     formError.value = ''
 
     try {
-      const savedPosition: InvestmentPosition = await createInvestmentPosition({
+      const savedPosition: InvestmentPosition = await createInvestmentPosition(submission.withRequestId({
         userId: currentUser.id,
         accountId,
         fundingAccountId: normalizedFundingAccountId,
@@ -172,13 +174,13 @@ export function useAddAsset(options: UseAddAssetOptions) {
         frozenQuantity: 0,
         costAmount: Number(costAmount.toFixed(2)),
         currentPrice: isFundProduct ? undefined : currentPrice,
-        tradeAt: toApiDateTime(new Date()),
         subscriptionTimeSlot: isFundProduct ? addAssetSubscriptionTimeSlot.value : undefined,
         dividendType: isFundProduct ? addAssetDividendType.value : undefined,
         includeInNetWorth: true,
         status: 'active',
         remark: null,
-      })
+      }, () => ({ tradeAt: toApiDateTime(new Date()) })))
+      submission.reset()
       closeAddModal()
       options.showFeedback(
         isFundProduct ? getFundPositionSubmitMessage(savedPosition) : '新增成功',

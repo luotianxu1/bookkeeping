@@ -14,14 +14,18 @@ import static org.mockito.Mockito.*;
 
 class InvestmentServiceTest {
     private InvestmentService service(AccountingDatabase db, InvestmentQuoteSyncService quotes, MarketQuoteClient market) {
-        return new InvestmentService(db.mapper(InvestmentProductMapper.class), db.mapper(InvestmentPositionMapper.class),
+        return service(db, quotes, market, mock(GoldPriceService.class), db.mapper(InvestmentPositionMapper.class));
+    }
+    private InvestmentService service(AccountingDatabase db, InvestmentQuoteSyncService quotes, MarketQuoteClient market,
+        GoldPriceService gold, InvestmentPositionMapper positions) {
+        return new InvestmentService(db.mapper(InvestmentProductMapper.class), positions,
             db.mapper(InvestmentTransactionMapper.class), db.mapper(InvestmentAutoInvestPlanMapper.class),
             db.mapper(InvestmentDividendPlanMapper.class), db.mapper(InvestmentDividendRecordMapper.class),
             db.mapper(InvestmentFixedExpenseMapper.class), db.mapper(AccountMapper.class), db.mapper(AccountTypeMapper.class),
-            db.mapper(InvestmentPriceQuoteMapper.class), mock(GoldPriceService.class), new ObjectMapper(), db.manager,
+            db.mapper(InvestmentPriceQuoteMapper.class), gold, new ObjectMapper(), db.manager,
             mock(MarketCalendarService.class), 2, market, mock(InvestmentDividendService.class), quotes,
             mock(InvestmentPriceHistoryService.class), mock(InvestmentFundProfitService.class),
-            new InvestmentFundFeeService(market, db.mapper(InvestmentTransactionMapper.class)));
+            new InvestmentFundFeeService(market, db.mapper(InvestmentTransactionMapper.class)), self -> self == 1L || self == 2L ? java.util.Set.of(1L, 2L) : java.util.Set.of(self), db.idempotency());
     }
     private void seed(AccountingDatabase db, String type) {
         db.seedCashAccounts();
@@ -56,10 +60,13 @@ class InvestmentServiceTest {
             var market = mock(MarketQuoteClient.class);
             var service = service(db, mock(InvestmentQuoteSyncService.class), market);
             try {
+                var request = new org.springframework.mock.web.MockHttpServletRequest();
+                request.setAttribute(com.example.common.security.SecurityUtils.USER_ID_ATTRIBUTE, 1L);
+                org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(new org.springframework.web.context.request.ServletRequestAttributes(request));
                 var detail = service.getPositionDetail(1L).orElseThrow();
                 assertTrue(detail.getFundRedeemFeeOptions().isEmpty());
                 verifyNoInteractions(market);
-            } finally { service.shutdownExecutor(); }
+            } finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); service.shutdownExecutor(); }
         }
     }
     @Test void repeatedDividendSyncCreditsCashOnlyOnce() throws Exception {
@@ -76,7 +83,7 @@ class InvestmentServiceTest {
                 assertEquals(1, service.syncDailyFundProfits(1L, 3L));
                 assertEquals(0, new BigDecimal("1010").compareTo(db.balance(1)));
                 assertEquals(1, db.jdbc.queryForObject("SELECT COUNT(*) FROM investment_dividend_records", Integer.class));
-            } finally { service.shutdownExecutor(); }
+            } finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); service.shutdownExecutor(); }
         }
     }
     @Test void editingPendingSellReleasesOldFrozenSharesBeforeApplyingNewQuantity() throws Exception {
@@ -95,7 +102,7 @@ class InvestmentServiceTest {
                 assertEquals(0, new BigDecimal("70").compareTo(position.getAvailableQuantity()));
                 assertEquals(0, new BigDecimal("30").compareTo(position.getFrozenQuantity()));
                 assertEquals(0, new BigDecimal("1000").compareTo(db.balance(1)));
-            } finally { service.shutdownExecutor(); }
+            } finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); service.shutdownExecutor(); }
         }
     }
 
@@ -150,7 +157,198 @@ class InvestmentServiceTest {
                 assertEquals(0, new BigDecimal("800").compareTo(db.balance(1)));
                 assertEquals(0, service.executeDueAutoInvestPlans());
                 assertEquals(1, db.jdbc.queryForObject("SELECT COUNT(*) FROM investment_transactions", Integer.class));
+            } finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); service.shutdownExecutor(); }
+        }
+    }
+
+    private void asUser(long id) {
+        var request = new org.springframework.mock.web.MockHttpServletRequest();
+        request.setAttribute(com.example.common.security.SecurityUtils.USER_ID_ATTRIBUTE, id);
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(new org.springframework.web.context.request.ServletRequestAttributes(request));
+    }
+
+    @Test void familyCanReadButCannotEditAndOutsiderCannotReadPosition() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            seed(db, "stock");
+            var service = service(db, mock(InvestmentQuoteSyncService.class), mock(MarketQuoteClient.class));
+            try {
+                asUser(2L);
+                assertTrue(service.getPosition(1L).isPresent());
+                assertTrue(service.getPositionDetail(1L).isPresent());
+                var edit = new com.example.app.dto.InvestmentPositionRequest();
+                edit.setUserId(2L); edit.setAccountId(3L);
+                assertTrue(service.updatePosition(1L, edit).isEmpty());
+                assertFalse(service.deletePosition(1L, 2L));
+                asUser(3L);
+                assertTrue(service.getPosition(1L).isEmpty());
+                assertTrue(service.getPositionDetail(1L).isEmpty());
+                assertEquals(1L, db.mapper(InvestmentPositionMapper.class).selectById(1L).getUserId());
+            } finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); service.shutdownExecutor(); }
+        }
+    }
+
+    @Test void goldQuoteRunsOutsideTransactionAndFailureUsesLocalValue() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            seed(db, "gold");
+            db.jdbc.update("UPDATE account_types SET code='gold' WHERE id=2");
+            var gold = mock(GoldPriceService.class);
+            when(gold.getCachedSpotPrice()).thenAnswer(call -> {
+                assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+                return new BigDecimal("2");
+            });
+            var service = service(db, mock(InvestmentQuoteSyncService.class), mock(MarketQuoteClient.class), gold, db.mapper(InvestmentPositionMapper.class));
+            try {
+                var edit = new com.example.app.dto.InvestmentPositionRequest();
+                edit.setUserId(1L); edit.setAccountId(3L); edit.setProductId(1L);
+                edit.setHoldingQuantity(new BigDecimal("100")); edit.setAvailableQuantity(new BigDecimal("100"));
+                edit.setCostAmount(new BigDecimal("100")); edit.setCurrentPrice(BigDecimal.ONE);
+                assertTrue(service.updatePosition(1L, edit).isPresent());
+                assertEquals(0, new BigDecimal("200").compareTo(db.balance(3)));
+                when(gold.getCachedSpotPrice()).thenThrow(new IllegalStateException("offline"));
+                assertTrue(service.updatePosition(1L, edit).isPresent());
+                assertEquals(0, new BigDecimal("100").compareTo(db.balance(3)));
+                assertTrue(service.deletePosition(1L, 1L));
+                assertEquals(0, BigDecimal.ZERO.compareTo(db.balance(3)));
             } finally { service.shutdownExecutor(); }
         }
     }
+
+    @Test void quoteSyncAggregatesOnceForTwoPositionsInSameAccount() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            seed(db, "stock");
+            db.jdbc.update("INSERT INTO investment_positions(id,user_id,account_id,product_id,holding_quantity,available_quantity,cost_amount,current_price,market_value,status,subscription_status) VALUES(2,1,3,1,50,50,50,1,50,'active','confirmed')");
+            db.jdbc.update("UPDATE accounts SET remark='保留备注' WHERE id=3");
+            var positions = mock(InvestmentPositionMapper.class, org.mockito.AdditionalAnswers.delegatesTo(db.mapper(InvestmentPositionMapper.class)));
+            var quotes = mock(InvestmentQuoteSyncService.class);
+            doCallRealMethod().when(quotes).applyStockQuoteToPosition(any(), any(), any(), any());
+            when(quotes.fetchAndSaveLatestStockQuote(any())).thenAnswer(call -> {
+                assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+                return new InvestmentQuoteSyncService.StockQuoteSnapshot(LocalDate.now(), new BigDecimal("2"), BigDecimal.ONE, LocalDateTime.now());
+            });
+            var service = service(db, quotes, mock(MarketQuoteClient.class), mock(GoldPriceService.class), positions);
+            try {
+                assertEquals(2, service.syncDailyStockQuotes(1L, 3L));
+                verify(positions, times(1)).sumAccountValue(1L, 3L, null);
+                assertEquals(0, new BigDecimal("300").compareTo(db.balance(3)));
+                assertEquals("保留备注", db.jdbc.queryForObject("SELECT remark FROM accounts WHERE id=3", String.class));
+            } finally { service.shutdownExecutor(); }
+        }
+    }
+
+    @Test void duplicateInvestmentRetryReplaysWithoutFetchingQuotes() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            seed(db, "stock");
+            var quotes = mock(InvestmentQuoteSyncService.class);
+            var service = service(db, quotes, mock(MarketQuoteClient.class));
+            try {
+                var request = buy(); request.setRequestId(java.util.UUID.randomUUID().toString());
+                var first = service.createTransaction(request);
+                assertEquals(first.getId(), service.createTransaction(request).getId());
+                assertEquals(1, db.jdbc.queryForObject("SELECT COUNT(*) FROM investment_transactions", Integer.class));
+                assertEquals(0, new BigDecimal("990").compareTo(db.balance(1)));
+                verifyNoInteractions(quotes);
+            } finally { service.shutdownExecutor(); }
+        }
+    }
+    @Test void concurrentGoldSaleRetryCreditsCashAndReducesHoldingsOnce() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            seed(db, "gold");
+            db.jdbc.update("UPDATE account_types SET code='gold' WHERE id=2");
+            var gold = mock(GoldPriceService.class);
+            when(gold.getCachedSpotPrice()).thenAnswer(call -> {
+                assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+                return BigDecimal.ONE;
+            });
+            var service = service(db, mock(InvestmentQuoteSyncService.class), mock(MarketQuoteClient.class), gold,
+                db.mapper(InvestmentPositionMapper.class));
+            var executor = Executors.newFixedThreadPool(2);
+            try {
+                var sale = buy(); sale.setTradeType("sell"); sale.setRequestId(java.util.UUID.randomUUID().toString());
+                var start = new CountDownLatch(1);
+                Callable<com.example.app.dto.InvestmentTransactionResponse> submit = () -> {
+                    assertTrue(start.await(5, TimeUnit.SECONDS)); return service.createTransaction(sale);
+                };
+                var first = executor.submit(submit); var second = executor.submit(submit); start.countDown();
+                var response = first.get(10, TimeUnit.SECONDS);
+                assertEquals(response.getId(), second.get(10, TimeUnit.SECONDS).getId());
+                clearInvocations(gold);
+                assertEquals(response.getId(), service.createTransaction(sale).getId());
+                verifyNoInteractions(gold);
+                assertEquals(1, db.jdbc.queryForObject("SELECT COUNT(*) FROM investment_transactions", Integer.class));
+                assertEquals(1, db.jdbc.queryForObject("SELECT COUNT(*) FROM accounting_requests", Integer.class));
+                var position = db.mapper(InvestmentPositionMapper.class).selectById(1L);
+                assertEquals(0, new BigDecimal("90").compareTo(position.getHoldingQuantity()));
+                assertEquals(0, new BigDecimal("90").compareTo(position.getAvailableQuantity()));
+                assertEquals(0, new BigDecimal("1010").compareTo(db.balance(1)));
+                assertEquals(0, new BigDecimal("90").compareTo(db.balance(3)));
+            } finally { executor.shutdownNow(); service.shutdownExecutor(); }
+        }
+    }
+
+    private com.example.app.dto.InvestmentPositionRequest newPosition(String type) {
+        var request = new com.example.app.dto.InvestmentPositionRequest();
+        request.setUserId(1L); request.setAccountId(3L); request.setFundingAccountId(1L);
+        request.setRequestId(java.util.UUID.randomUUID().toString());
+        request.setHoldingQuantity(BigDecimal.TEN); request.setAvailableQuantity(BigDecimal.TEN);
+        request.setCostAmount(new BigDecimal("100")); request.setCurrentPrice(BigDecimal.TEN);
+        request.setTradeAt(LocalDateTime.of(2026,11,6,10,0));
+        var product = new com.example.app.dto.InvestmentProductRequest();
+        product.setProductType(type); product.setSymbol(" new-product "); product.setName("新产品"); product.setMarket(" cn ");
+        request.setProduct(product);
+        return request;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"stock", "fund", "gold"})
+    void positionRetryCreatesOnePositionAndDebitsOnce(String type) throws Exception {
+        try (var db = new AccountingDatabase()) {
+            db.seedCashAccounts();
+            if (type.equals("gold")) db.jdbc.update("UPDATE account_types SET code='gold' WHERE id=2");
+            var quotes = mock(InvestmentQuoteSyncService.class);
+            when(quotes.fetchFundBaseInfo(any())).thenAnswer(call -> {
+                assertFalse(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+                return new ObjectMapper().readTree("{\"Datas\":{\"SGZT\":\"开放申购\",\"DWJZ\":\"10\"}}");
+            });
+            var service = service(db, quotes, mock(MarketQuoteClient.class));
+            var executor = Executors.newFixedThreadPool(2);
+            try {
+                var request = newPosition(type);
+                var start = new CountDownLatch(1);
+                Callable<com.example.app.dto.InvestmentPositionResponse> submit = () -> {
+                    assertTrue(start.await(5, TimeUnit.SECONDS)); return service.createPosition(request);
+                };
+                var first = executor.submit(submit); var second = executor.submit(submit); start.countDown();
+                var response = first.get(10, TimeUnit.SECONDS);
+                assertEquals(response.getId(), second.get(10, TimeUnit.SECONDS).getId());
+                when(quotes.fetchFundBaseInfo(any())).thenThrow(new IllegalStateException("upstream unavailable"));
+                assertEquals(response.getId(), service.createPosition(request).getId());
+                assertEquals(0, new BigDecimal("900").compareTo(db.balance(1)));
+                for (String table : java.util.List.of("investment_positions", "investment_products", "investment_transactions", "accounting_requests")) {
+                    assertEquals(1, db.jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class));
+                }
+                assertEquals("CN", db.jdbc.queryForObject("SELECT market FROM investment_products", String.class));
+                assertEquals("NEW-PRODUCT", db.jdbc.queryForObject("SELECT symbol FROM investment_products", String.class));
+                request.setCostAmount(new BigDecimal("101"));
+                assertThrows(IllegalArgumentException.class, () -> service.createPosition(request));
+            } finally { executor.shutdownNow(); service.shutdownExecutor(); }
+        }
+    }
+
+    @Test void failedPositionCreationRollsBackProductAndRequestKey() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            db.seedCashAccounts();
+            var service = service(db, mock(InvestmentQuoteSyncService.class), mock(MarketQuoteClient.class));
+            try {
+                var request = newPosition("stock"); request.setCostAmount(new BigDecimal("1001"));
+                assertThrows(IllegalArgumentException.class, () -> service.createPosition(request));
+                for (String table : java.util.List.of("investment_positions", "investment_products", "investment_transactions", "accounting_requests")) {
+                    assertEquals(0, db.jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class));
+                }
+                db.jdbc.update("UPDATE accounts SET current_balance=2000 WHERE id=1");
+                assertNotNull(service.createPosition(request));
+                assertEquals(0, new BigDecimal("999").compareTo(db.balance(1)));
+            } finally { service.shutdownExecutor(); }
+        }
+    }
+
 }

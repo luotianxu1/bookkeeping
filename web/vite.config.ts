@@ -75,11 +75,11 @@ export default defineConfig({
     build: {
         rollupOptions: {
             output: {
-                // vendor 依赖与业务代码分离；echarts 体积大单独拆，便于浏览器缓存
+                // ECharts 由动态入口自动拆分；不要把 K 线重新合并进公共包。
                 manualChunks(id: string) {
                     if (id.includes('node_modules')) {
                         if (id.includes('echarts') || id.includes('zrender')) {
-                            return 'echarts'
+                            return undefined
                         }
                         return 'vendor'
                     }

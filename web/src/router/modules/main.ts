@@ -3,6 +3,12 @@ import type { RouteRecordRaw } from 'vue-router'
 
 export const mainRoutes: RouteRecordRaw[] = [
   {
+    path: '/profile/reminders',
+    name: 'profile-reminders',
+    component: () => import('@/pages/profile/ReminderCenterPage/index.vue'),
+    meta: { section: 'profile', title: '统一提醒' },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/pages/login/LoginPage/index.vue'),

@@ -21,7 +21,7 @@ export function useAnalysisCharts(options: {
 
   const pieRef = ref<HTMLDivElement | null>(null)
   const lineRef = ref<HTMLDivElement | null>(null)
-  let echartsLib: (typeof import('@/utils/echarts')) | null = null
+  let echartsLib: (typeof import('@/utils/echarts-statistics')) | null = null
   let pieChart: ECharts | null = null
   let lineChart: ECharts | null = null
 
@@ -44,7 +44,7 @@ export function useAnalysisCharts(options: {
 
   async function ensureEcharts() {
     if (!echartsLib) {
-      echartsLib = await import('@/utils/echarts')
+      echartsLib = await import('@/utils/echarts-statistics')
     }
     return echartsLib
   }

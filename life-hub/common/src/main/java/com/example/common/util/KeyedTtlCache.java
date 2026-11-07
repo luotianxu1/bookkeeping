@@ -32,7 +32,7 @@ public class KeyedTtlCache<K, V> {
         this(ttlMillis, failureTtlMillis, maxSize, System::currentTimeMillis);
     }
 
-    KeyedTtlCache(long ttlMillis, long failureTtlMillis, int maxSize, LongSupplier clock) {
+    public KeyedTtlCache(long ttlMillis, long failureTtlMillis, int maxSize, LongSupplier clock) {
         this.ttlMillis = ttlMillis;
         this.failureTtlMillis = failureTtlMillis;
         this.maxSize = maxSize;

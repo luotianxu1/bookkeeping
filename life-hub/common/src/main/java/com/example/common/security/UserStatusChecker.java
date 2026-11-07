@@ -16,4 +16,7 @@ public interface UserStatusChecker {
 
     /** 用户是否存在且状态为 active */
     boolean isActive(long userId);
+
+    /** 内部调用方自行缓存时使用，避免两级缓存叠加延长可信期。 */
+    default boolean isActiveFresh(long userId) { return isActive(userId); }
 }

@@ -16,6 +16,20 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: integration-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pintegration-only"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      MYSQL_TEST_URL: jdbc:mysql://127.0.0.1:3306/?allowPublicKeyRetrieval=true&useSSL=false
+      MYSQL_TEST_USER: root
+      MYSQL_TEST_PASSWORD: integration-only
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -44,6 +58,24 @@ jobs:
           node-version: '22'
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
-      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      # test:e2e 的 webServer 先执行 TypeScript 检查和生产构建。
+      - run: pnpm test:e2e
+      - name: Browser tests against real auth and finance HTTP servers
+        run: pnpm test:e2e:live
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-regression-report
+          path: |
+            web/playwright-report/
+            web/playwright-live-report/
+            web/test-results/
+          retention-days: 7

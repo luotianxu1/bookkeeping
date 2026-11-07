@@ -1,5 +1,5 @@
 /**
- * echarts 按需引入：全项目统一从这里动态加载，避免打入 1MB+ 的全量包。
+ * echarts 按需引入：普通图表从这里动态加载，K 线通过 echarts-kline 额外注册，避免打入 1MB+ 的全量包。
  *
  * 用法（页面内）：
  *   echartsLib = await import('@/utils/echarts')
@@ -8,20 +8,15 @@
  * 类型仍从 'echarts' 导入（import type 不会打入产物）：
  *   import type { ECharts, EChartsCoreOption } from 'echarts'
  *
- * 新增图表类型/组件时在此注册，并同步更新注释清单。
+ * 统计图表使用 echarts-statistics，投资图表使用 echarts-investment，K 线使用 echarts-kline。
  */
 import * as echarts from 'echarts/core';
 import type { ECharts } from 'echarts';
 import {
-  BarChart,
-  CandlestickChart,
   LineChart,
-  PieChart,
-  ScatterChart,
 } from 'echarts/charts';
 import {
   AxisPointerComponent,
-  DataZoomComponent,
   GridComponent,
   LegendComponent,
   MarkLineComponent,
@@ -30,18 +25,13 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
-// 已注册：折线/柱状/饼图/散点/K线 + 网格/提示框/图例/坐标轴指示器/区域缩放/标线/标点
+// 已注册：折线 + 网格/提示框/图例/坐标轴指示器/标线/标点
 echarts.use([
   LineChart,
-  BarChart,
-  PieChart,
-  ScatterChart,
-  CandlestickChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
   AxisPointerComponent,
-  DataZoomComponent,
   MarkLineComponent,
   MarkPointComponent,
   CanvasRenderer,

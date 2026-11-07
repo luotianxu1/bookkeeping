@@ -11,6 +11,9 @@ import java.time.LocalDateTime;
 
 @Data
 public class InvestmentTransactionRequest {
+    @jakarta.validation.constraints.Pattern(regexp = "[A-Za-z0-9_-]{16,64}", message = "请求 ID 格式无效")
+    private String requestId;
+
     @NotNull(message = "用户ID不能为空")
     private Long userId;
     @NotNull(message = "投资账户ID不能为空")

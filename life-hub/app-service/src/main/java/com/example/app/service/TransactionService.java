@@ -76,6 +76,7 @@ public class TransactionService {
     private static final int DEFAULT_PAGE_SIZE = 50;
     private static final int MAX_PAGE_SIZE = 200;
 
+    private final AccountingIdempotencyService idempotency;
     private final TransactionMapper transactionMapper;
     private final AccountMapper accountMapper;
     private final AccountTypeMapper accountTypeMapper;
@@ -89,8 +90,10 @@ public class TransactionService {
         AccountTypeMapper accountTypeMapper,
         CategoryMapper categoryMapper,
         DebtRecordMapper debtRecordMapper,
-        HumanRelationRecordMapper humanRelationRecordMapper
+        HumanRelationRecordMapper humanRelationRecordMapper,
+        AccountingIdempotencyService idempotency
     ) {
+        this.idempotency = idempotency;
         this.transactionMapper = transactionMapper;
         this.accountMapper = accountMapper;
         this.accountTypeMapper = accountTypeMapper;
@@ -231,9 +234,14 @@ public class TransactionService {
     @Transactional
     public TransactionResponse create(TransactionRequest request) {
         accountMapper.lockUserForWrite(request.getUserId());
+        return idempotency.execute(request.getUserId(), "cash-transaction", request.getRequestId(), request,
+            TransactionResponse.class, () -> doCreate(request));
+    }
+
+    private TransactionResponse doCreate(TransactionRequest request) {
         String type = normalizeTransactionType(request.getType());
         if (TYPE_TRANSFER.equals(type)) {
-            return createTransfer(request);
+            return doCreateTransfer(request);
         }
 
         AccountEntity account = requireCashAccount(request.getUserId(), request.getAccountId());
@@ -262,6 +270,11 @@ public class TransactionService {
     @Transactional
     public TransactionResponse createTransfer(TransactionRequest request) {
         accountMapper.lockUserForWrite(request.getUserId());
+        return idempotency.execute(request.getUserId(), "cash-transaction", request.getRequestId(), request,
+            TransactionResponse.class, () -> doCreateTransfer(request));
+    }
+
+    private TransactionResponse doCreateTransfer(TransactionRequest request) {
         AccountEntity fromAccount = requireTransferAccounts(request);
         AccountEntity toAccount = requireCashAccount(request.getUserId(), request.getToAccountId());
         BigDecimal amount = request.getAmount().setScale(2, RoundingMode.HALF_UP);

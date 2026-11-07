@@ -11,6 +11,7 @@ import profileIcon from '@/assets/navigation-icons/profile.png'
 import toolsIconActive from '@/assets/navigation-icons/tools-active.png'
 import toolsIcon from '@/assets/navigation-icons/tools.png'
 import type { AppSection, NavItem } from '@/types/navigation'
+import ReminderBadge from './ReminderBadge.vue'
 
 type NavigationIconSources = {
   active: string
@@ -57,6 +58,7 @@ const activeIndex = computed<number>(() => {
         aria-hidden="true"
       />
       <strong>{{ item.label }}</strong>
+      <ReminderBadge v-if="item.section === 'profile'" />
     </RouterLink>
   </nav>
 </template>

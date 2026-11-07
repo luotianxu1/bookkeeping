@@ -17,6 +17,7 @@ import {
 } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
 import { getErrorMessage } from '@/api/request'
+import { useReminderTarget } from '@/composables/useReminderTarget'
 
 type AnniversaryTab = 'month' | 'all'
 
@@ -36,6 +37,8 @@ const tabOptions = [
 const activeTab = ref<AnniversaryTab>('month')
 const anniversaries = ref<Anniversary[]>([])
 const isLoading = ref(true)
+const reminderTargetId = useReminderTarget(isLoading, 'anniversary')
+if (reminderTargetId) activeTab.value = 'all'
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const pageError = ref('')
@@ -45,7 +48,7 @@ const showDeleteModal = ref(false)
 const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
-const expandedAnniversaryId = ref<number | null>(null)
+const expandedAnniversaryId = ref<number | null>(reminderTargetId)
 const editingAnniversary = ref<Anniversary | null>(null)
 const deletingAnniversary = ref<Anniversary | null>(null)
 const formTitle = ref('')
@@ -398,6 +401,7 @@ function pad(value: number) {
       <article
         v-for="item in visibleItems"
         :key="item.id"
+        :id="`anniversary-${item.id}`"
         :class="['anniversary-card', `tone-${item.badgeTone}`, { expanded: expandedAnniversaryId === item.id }]"
       >
         <button class="anniversary-card-main" type="button" @click="toggleExpandedAnniversary(item.id)">

@@ -102,7 +102,7 @@ export function useExpandedKline(options: {
     if (!container || expandedKey.value !== key) {
       return
     }
-    const echarts = await import('@/utils/echarts')
+    const echarts = await import('@/utils/echarts-kline')
     let chart = klineCharts.get(key)
     if (!chart) {
       chart = echarts.init(container)
