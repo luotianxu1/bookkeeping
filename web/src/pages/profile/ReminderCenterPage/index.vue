@@ -18,7 +18,7 @@ const router = useRouter()
 const { items, unreadCount, loading, busy, refreshing, error, refresh, reload, act } = useReminderCenter()
 const tab = ref('unread')
 const category = ref<ReminderType | 'all'>('all')
-const labels: Record<ReminderType, string> = { todo: '待办', anniversary: '纪念日', renewal: '固定支出', liability: '还款', investment: '定投', budget: '预算', reimbursement: '报销' }
+const labels: Record<ReminderType, string> = { todo: '待办', anniversary: '纪念日', renewal: '固定支出', liability: '还款', investment: '定投', budget: '预算', reimbursement: '报销', term_deposit: '定期存款' }
 const urgencyLabels = { failed: '扣款失败', overdue: '已到期', today: '今天', upcoming: '即将到期', warning: '已用 80%', exceeded: '已用 100%' }
 const snoozedCount = computed(() => items.value.filter(item => item.snoozedUntil).length)
 const visibleItems = computed(() => items.value.filter(item => {
@@ -40,6 +40,7 @@ const settingOptions = [
   { key: 'investmentEnabled', label: '定投计划' },
   { key: 'budgetEnabled', label: '预算预警与超支' },
   { key: 'reimbursementEnabled', label: '报销待到账' },
+  { key: 'termDepositEnabled', label: '定期存款到期' },
 ] as const
 
 function formatDate(value: string, allDay = false) {

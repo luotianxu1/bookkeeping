@@ -33,7 +33,7 @@ final class AccountingDatabase implements AutoCloseable {
         tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
         var configuration = new MybatisConfiguration();
         for (Class<?> mapper : List.of(AccountMapper.class, AccountTypeMapper.class, TransactionMapper.class, AccountingRequestMapper.class,
-            SavingsGoalMapper.class, SavingsGoalEntryMapper.class, CategoryMapper.class, CategoryBudgetMapper.class, MonthlyBudgetMapper.class, ExpenseRecoveryMapper.class, DebtRecordMapper.class, HumanRelationRecordMapper.class, RenewalSubscriptionMapper.class,
+            TermDepositMapper.class, TermDepositOperationMapper.class, SavingsGoalMapper.class, SavingsGoalEntryMapper.class, CategoryMapper.class, CategoryBudgetMapper.class, MonthlyBudgetMapper.class, ExpenseRecoveryMapper.class, DebtRecordMapper.class, HumanRelationRecordMapper.class, RenewalSubscriptionMapper.class,
             InvestmentProductMapper.class, InvestmentPositionMapper.class, InvestmentTransactionMapper.class,
             InvestmentAutoInvestPlanMapper.class, InvestmentDividendPlanMapper.class, InvestmentDividendRecordMapper.class,
             InvestmentFixedExpenseMapper.class, InvestmentPriceQuoteMapper.class)) configuration.addMapper(mapper);
@@ -46,7 +46,7 @@ final class AccountingDatabase implements AutoCloseable {
         jdbc.execute("CREATE TABLE users(id BIGINT PRIMARY KEY, status VARCHAR(32))");
         jdbc.update("INSERT INTO users VALUES(1, 'active'), (2, 'active')");
         for (Class<?> entity : List.of(AccountEntity.class, AccountTypeEntity.class, TransactionEntity.class,
-            SavingsGoalEntity.class, SavingsGoalEntryEntity.class, CategoryEntity.class, CategoryBudgetEntity.class, MonthlyBudgetEntity.class, DebtRecordEntity.class, HumanRelationRecordEntity.class, RenewalSubscriptionEntity.class,
+            TermDepositEntity.class, TermDepositOperationEntity.class, SavingsGoalEntity.class, SavingsGoalEntryEntity.class, CategoryEntity.class, CategoryBudgetEntity.class, MonthlyBudgetEntity.class, DebtRecordEntity.class, HumanRelationRecordEntity.class, RenewalSubscriptionEntity.class,
             InvestmentProductEntity.class, InvestmentPositionEntity.class, InvestmentTransactionEntity.class,
             InvestmentAutoInvestPlanEntity.class, InvestmentDividendPlanEntity.class, InvestmentDividendRecordEntity.class,
             InvestmentFixedExpenseEntity.class, InvestmentPriceQuoteEntity.class)) {

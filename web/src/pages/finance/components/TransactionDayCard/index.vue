@@ -90,6 +90,7 @@ function rowStyle(transaction: DayGroup['transactions'][number]) {
 // 后端已不再为其下发合成 id，误删会打到 DELETE /finance/transactions/{id}
 function canSwipeDelete(transaction: DayGroup['transactions'][number]) {
   return props.showDelete
+    && !transaction.transactionNo?.startsWith('TD-')
     && transaction.sourceType === 'transaction'
     && Boolean(transaction.id)
 }
@@ -260,7 +261,8 @@ function handleDelete(transaction: DayGroup['transactions'][number]) {
               :size="36"
             />
             <span class="transaction-copy-main">
-              <strong>{{ transaction.name }}</strong>
+              <RouterLink v-if="transaction.transactionNo?.startsWith('TD-')" to="/finance/term-deposits">{{ transaction.name }}</RouterLink>
+              <strong v-else>{{ transaction.name }}</strong>
               <span>{{ transaction.time }}</span>
             </span>
           </span>

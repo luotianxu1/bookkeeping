@@ -2,6 +2,9 @@
 import type { RouteRecordRaw } from 'vue-router'
 
 export const financeRoutes: RouteRecordRaw[] = [
+  { path: '/finance/term-deposits', name: 'finance-term-deposits',
+    component: () => import('@/pages/finance/TermDepositPage/index.vue'),
+    meta: { section: 'finance', title: '定期存款' } },
   { path: '/finance/savings-goals', name: 'finance-savings-goals',
     component: () => import('@/pages/finance/SavingsGoalPage/index.vue'),
     meta: { section: 'finance', title: '储蓄目标' } },

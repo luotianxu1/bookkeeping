@@ -30,6 +30,7 @@ SELECT seed.code, seed.name, seed.category, seed.balance_direction, seed.include
 FROM (
   SELECT 'cash' AS code, '现金' AS name, 'asset' AS category, 'debit' AS balance_direction, 1 AS include_in_net_worth_default, 0 AS allow_overdraft, 1 AS is_system, 10 AS sort_order, '钱包、现金、储蓄卡、第三方钱包等流动资产' AS remark
   UNION ALL SELECT 'investment', '投资', 'asset', 'debit', 1, 0, 1, 20, '基金、股票等投资账户'
+  UNION ALL SELECT 'term_deposit', '定期', 'asset', 'debit', 1, 0, 1, 15, '定期存单本金，余额由存续存单汇总'
   UNION ALL SELECT 'gold', '黄金', 'asset', 'debit', 1, 0, 1, 30, '实物黄金、积存金、纸黄金等黄金账户'
   UNION ALL SELECT 'credit_card', '信用卡', 'liability', 'credit', 1, 1, 1, 40, '信用卡、花呗等可透支账户'
   UNION ALL SELECT 'debt', '债务', 'liability', 'credit', 1, 0, 1, 50, '联系人之间的借入借出往来账户'

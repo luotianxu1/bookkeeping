@@ -11,6 +11,15 @@ import java.math.BigDecimal;
 
 public interface AccountMapper extends BaseMapper<AccountEntity> {
 
+    @Select("SELECT COALESCE(SUM(principal),0) FROM term_deposits WHERE account_id=#{id} AND status='active'")
+    BigDecimal termDepositPrincipal(Long id);
+
+    @Select("SELECT COUNT(*) FROM term_deposits WHERE account_id=#{id} OR funding_account_id=#{id} OR payout_account_id=#{id}")
+    long termDepositReferences(Long id);
+
+    @Select("SELECT COUNT(*) FROM term_deposit_operations WHERE cash_account_id=#{id}")
+    long termOperationReferences(Long id);
+
     @Select("SELECT id FROM users WHERE id = #{userId} FOR UPDATE")
     Long lockUser(@Param("userId") Long userId);
 

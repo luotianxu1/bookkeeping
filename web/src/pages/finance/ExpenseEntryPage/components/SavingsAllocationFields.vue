@@ -31,8 +31,8 @@ function options(index: number) {
 </template>
 
 <style scoped lang="scss">
-.savings-allocation-fields { display: grid; gap: 6px; border-top: 1px solid var(--color-bg-soft-2); padding: 6px 0; font-size: 12px; }
-.allocation-heading, .allocation-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.savings-allocation-fields { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; border-top: 1px solid var(--color-bg-soft-2); padding: 6px 0; font-size: 12px; }
+.allocation-heading, .allocation-row { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .allocation-heading button { color: var(--color-brand); background: transparent; padding: 4px; font: inherit; }
 .allocation-row :deep(.expense-inline-select) { min-width: 0; flex: 1; }
 .allocation-row input { width: 84px; min-width: 0; padding: 6px 8px; border: 1px solid var(--color-border-soft); border-radius: 8px; background: var(--color-bg-card); color: var(--color-text-primary); font: inherit; text-align: right; }

@@ -229,6 +229,8 @@ public class AccountService {
         validateDebtAccountContactUnique(accountType, request.getUserId(), request.getContactId(), null);
         validateNameUnique(request.getUserId(), request.getAccountTypeId(), request.getName(), null);
 
+        if ("term_deposit".equals(accountType.getCode()) && request.getCurrentBalance() != null && request.getCurrentBalance().signum() != 0)
+            throw new IllegalArgumentException("定期账户余额由存单汇总，请通过定期存款登记本金");
         AccountEntity entity = new AccountEntity();
         fillEntity(entity, request, accountType);
         accountMapper.insert(entity);
@@ -252,6 +254,16 @@ public class AccountService {
             || (StringUtils.hasText(request.getStatus()) && !DEFAULT_STATUS.equals(request.getStatus())))) {
             throw new IllegalArgumentException("该账户已关联储蓄目标，请先修改或删除目标，再修改账户类型、币种或停用账户");
         }
+
+        AccountTypeEntity previousType = loadAccountType(entity.getAccountTypeId());
+        AccountTypeEntity nextType = requireAccountType(request.getAccountTypeId());
+        if (("term_deposit".equals(previousType == null ? null : previousType.getCode()) || "term_deposit".equals(nextType.getCode()))
+            && !java.util.Objects.equals(entity.getAccountTypeId(), request.getAccountTypeId()))
+            throw new IllegalArgumentException("定期账户不能与其他账户类型互相转换");
+        if (hasTermDepositReferences(id) && (!java.util.Objects.equals(entity.getAccountTypeId(), request.getAccountTypeId())
+            || !java.util.Objects.equals(entity.getCurrencyCode(), StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE)
+            || (StringUtils.hasText(request.getStatus()) && !DEFAULT_STATUS.equals(request.getStatus()))))
+            throw new IllegalArgumentException("账户已关联定期存单，不能修改类型、币种或停用");
 
         AccountTypeEntity accountType = requireAccountType(request.getAccountTypeId());
         validateContactRequired(accountType, request.getContactId());
@@ -295,6 +307,7 @@ public class AccountService {
         // 归属校验：只有本人可以删除账户（会级联删除其全部财务数据）
         familyScopeChecker.requireSelf(
             SecurityUtils.requireCurrentUserId(), account.getUserId(), "账户不存在");
+        if (hasTermDepositReferences(id)) throw new IllegalArgumentException("账户已关联定期存单或历史记录，不能删除");
         if (hasSavingsGoal(id)) throw new IllegalArgumentException("该账户已关联储蓄目标，请先修改或删除目标");
         if (accountMapper.savingsLinkedTransactions(id) > 0)
             throw new IllegalArgumentException("该账户的流水已关联储蓄目标，请先取消流水中的目标关联");
@@ -434,6 +447,10 @@ public class AccountService {
         }
     }
 
+    private boolean hasTermDepositReferences(Long id) {
+        return accountMapper.termDepositReferences(id) > 0 || accountMapper.termOperationReferences(id) > 0;
+    }
+
     private void fillEntity(AccountEntity entity, AccountRequest request, AccountTypeEntity accountType) {
         LiabilityPlan liabilityPlan = normalizeLiabilityPlan(accountType, request);
         entity.setUserId(request.getUserId());
@@ -443,7 +460,7 @@ public class AccountService {
         entity.setIcon(request.getIcon());
         entity.setColor(request.getColor());
         entity.setCurrencyCode(StringUtils.hasText(request.getCurrencyCode()) ? request.getCurrencyCode() : DEFAULT_CURRENCY_CODE);
-        entity.setCurrentBalance(accountType != null && CONTACT_LINKED_ACCOUNT_TYPE_CODES.contains(accountType.getCode())
+        entity.setCurrentBalance(accountType != null && (CONTACT_LINKED_ACCOUNT_TYPE_CODES.contains(accountType.getCode()) || "term_deposit".equals(accountType.getCode()))
             ? BigDecimal.ZERO
             : request.getCurrentBalance() != null ? request.getCurrentBalance() : BigDecimal.ZERO);
         entity.setLoanTotalAmount(liabilityPlan.totalAmount());
@@ -514,6 +531,9 @@ public class AccountService {
     private BigDecimal resolveCurrentBalance(AccountEntity entity, AccountTypeEntity accountType, BalanceContext balanceContext) {
         if (entity == null) {
             return BigDecimal.ZERO;
+        }
+        if (accountType != null && "term_deposit".equals(accountType.getCode())) {
+            return accountMapper.termDepositPrincipal(entity.getId());
         }
         if (balanceContext != null) {
             BigDecimal cachedBalance = balanceContext.accountBalances().get(entity.getId());

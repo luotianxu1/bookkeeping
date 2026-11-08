@@ -33,6 +33,24 @@
   width: min(100%, 312px);
 }
 
+.common-modal-panel-scroll-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.common-modal-panel-scroll-body > .common-modal-body {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.common-modal-panel-scroll-body > .common-modal-header,
+.common-modal-panel-scroll-body > .common-modal-footer {
+  flex-shrink: 0;
+}
+
 .common-modal-header {
   min-height: 26px;
   display: flex;

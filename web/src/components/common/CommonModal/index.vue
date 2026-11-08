@@ -8,6 +8,7 @@ const props = withDefaults(defineProps<{
   closeOnOverlay?: boolean
   showClose?: boolean
   size?: 'default' | 'compact'
+  scrollBody?: boolean
 }>(), {
   closeOnOverlay: true,
   showClose: true,
@@ -71,7 +72,7 @@ onBeforeUnmount(() => {
         ></button>
 
         <Transition name="modal-pop">
-          <section v-if="isOpen" :class="['common-modal-panel', `common-modal-panel-${size}`]">
+          <section v-if="isOpen" :class="['common-modal-panel', `common-modal-panel-${size}`, { 'common-modal-panel-scroll-body': scrollBody }]">
             <header class="common-modal-header">
               <h2>{{ title }}</h2>
               <button

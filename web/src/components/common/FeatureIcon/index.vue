@@ -6,20 +6,30 @@ import budgetIcon from '@/assets/system-icons/budget.png'
 import categoryManagementIcon from '@/assets/system-icons/category-management.png'
 import dividendForecastIcon from '@/assets/system-icons/dividend-forecast.png'
 import dividendIncomeIcon from '@/assets/system-icons/dividend-income.png'
+import dividendStrategyIcon from '@/assets/system-icons/dividend-strategy.png'
 import exchangeRateIcon from '@/assets/system-icons/exchange-rate.png'
+import expenseRecoveriesIcon from '@/assets/system-icons/expense-recoveries.png'
 import freeEstimateIcon from '@/assets/system-icons/free-estimate.png'
 import fundProfitIcon from '@/assets/system-icons/fund-profit.png'
+import globalMarketIcon from '@/assets/system-icons/global-market.png'
 import goldPriceIcon from '@/assets/system-icons/gold-price.png'
 import marketNewsIcon from '@/assets/system-icons/market-news.png'
 import profitForecastIcon from '@/assets/system-icons/profit-forecast.png'
 import renewalsIcon from '@/assets/system-icons/renewals.png'
 import salaryIcon from '@/assets/system-icons/salary.png'
+import savingsGoalsIcon from '@/assets/system-icons/savings-goals.png'
 import stockScreenerIcon from '@/assets/system-icons/stock-screener.png'
+import termDepositsIcon from '@/assets/system-icons/term-deposits.png'
 import transactionsIcon from '@/assets/system-icons/transactions.png'
 import trendIcon from '@/assets/system-icons/trend.png'
 import usMarketIcon from '@/assets/system-icons/us-market.png'
 
 export type FeatureIconKey =
+  | 'expense-recoveries'
+  | 'term-deposits'
+  | 'savings-goals'
+  | 'global-market'
+  | 'dividend-strategy'
   | 'category-management'
   | 'transactions'
   | 'analysis'
@@ -50,6 +60,11 @@ const props = withDefaults(defineProps<{
 })
 
 const iconSources: Record<FeatureIconKey, string> = {
+  'dividend-strategy': dividendStrategyIcon,
+  'global-market': globalMarketIcon,
+  'savings-goals': savingsGoalsIcon,
+  'term-deposits': termDepositsIcon,
+  'expense-recoveries': expenseRecoveriesIcon,
   'category-management': categoryManagementIcon,
   transactions: transactionsIcon,
   analysis: analysisIcon,

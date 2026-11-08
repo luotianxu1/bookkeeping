@@ -368,6 +368,7 @@ public class TransactionService {
             return false;
         }
 
+        requireUnmanagedTransaction(transaction);
         if (transaction.getOriginalTransactionId() == null) requireUnlinkedExpense(transaction);
         applyFinancialChange(transaction, cashEffects(transaction), List.of(), true);
         transaction.setStatus(VOIDED_STATUS);
@@ -534,7 +535,13 @@ public class TransactionService {
         if (transaction == null || !DEFAULT_STATUS.equals(transaction.getStatus()) || !userId.equals(transaction.getUserId())) {
             throw new IllegalArgumentException("收支记录不存在");
         }
+        requireUnmanagedTransaction(transaction);
         return transaction;
+    }
+
+    private void requireUnmanagedTransaction(TransactionEntity transaction) {
+        if (transaction.getTransactionNo() != null && transaction.getTransactionNo().startsWith("TD-"))
+            throw new IllegalArgumentException("定期存款关联流水请在定期存款中修改或撤销");
     }
 
     private BigDecimal currentBalanceOf(AccountEntity account) {

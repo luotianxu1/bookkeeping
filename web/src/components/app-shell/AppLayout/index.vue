@@ -160,7 +160,7 @@ function normalizePath(path: string) {
         'page-content',
         `page-content--${contentMode}`,
         { 'page-content--finance-home': route.path === '/finance' },
-        { 'page-content--reminders': route.path === '/profile/reminders' },
+        { 'page-content--reminders': ['/profile/reminders', '/finance/term-deposits'].includes(route.path) },
         { 'page-content--without-nav': !showBottomNav },
       ]"
     >

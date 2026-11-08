@@ -152,7 +152,8 @@
   gap: 1px;
 }
 
-.transaction-copy-main strong {
+.transaction-copy-main strong,
+.transaction-copy-main > a {
   overflow: hidden;
   color: var(--color-finance-transaction-title-strong);
   font-size: var(--font-size-14);
@@ -162,7 +163,8 @@
   white-space: nowrap;
 }
 
-.day-card-inline .transaction-copy-main strong {
+.day-card-inline .transaction-copy-main strong,
+.day-card-inline .transaction-copy-main > a {
   color: var(--color-finance-transaction-title-strong);
   font-size: var(--font-size-13);
   font-weight: 600;
@@ -214,3 +216,6 @@
   border-radius: var(--radius-12);
   background: var(--color-bg-brand-soft);
 }
+
+.transaction-copy-main > a { text-decoration: none; }
+.transaction-copy-main > a:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }

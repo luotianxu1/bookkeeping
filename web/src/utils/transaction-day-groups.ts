@@ -32,6 +32,7 @@ export function buildTransactionDayGroups(source: ApiTransaction[], sortOrder: T
       transactions: groupTransactions.map((transaction) => ({
         id: transaction.id,
         sourceType: transaction.sourceType,
+        transactionNo: transaction.transactionNo,
         originalTransactionId: transaction.originalTransactionId,
         name: transaction.title,
         time: transactionSubtitle(transaction),

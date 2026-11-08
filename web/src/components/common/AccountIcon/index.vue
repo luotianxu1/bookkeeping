@@ -172,6 +172,7 @@ const iconSources: Record<AccountIconKey, string> = {
 
 const iconAliases: Record<string, AccountIconKey> = {
   cash: 'wallet',
+  term_deposit: 'bank-card',
   investment: 'fund',
   icbc: 'bank-icbc',
   ccb: 'bank-ccb',

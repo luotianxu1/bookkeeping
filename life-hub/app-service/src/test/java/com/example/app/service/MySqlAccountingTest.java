@@ -149,7 +149,7 @@ class MySqlAccountingTest {
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM photography_orders", Integer.class));
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM food_dishes", Integer.class));
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM food_orders", Integer.class));
-            assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM account_types", Integer.class));
+            assertEquals(11, jdbc.queryForObject("SELECT COUNT(*) FROM account_types", Integer.class));
             assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM categories", Integer.class));
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='weight_records' AND column_name='body_fat_rate'", Integer.class));
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_collation<>'utf8mb4_unicode_ci'", Integer.class));
@@ -162,7 +162,7 @@ class MySqlAccountingTest {
             for (String file : List.of("001_create_database_and_users", "002_create_account_types", "004_create_categories"))
                 initializeFile(jdbc, file + ".mysql.sql", true);
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class));
-            assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM account_types", Integer.class));
+            assertEquals(11, jdbc.queryForObject("SELECT COUNT(*) FROM account_types", Integer.class));
             assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM categories", Integer.class));
             assertEquals("Custom name", jdbc.queryForObject("SELECT display_name FROM users WHERE id=?", String.class, owner));
             assertEquals("user", jdbc.queryForObject("SELECT role_name FROM users WHERE id=?", String.class, owner));
@@ -187,10 +187,40 @@ class MySqlAccountingTest {
             jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at,reimbursement_amount) VALUES(1,'original',?,'expense',100,1,?,'Expense','2026-01-01',50)", owner, category);
             jdbc.update("INSERT INTO transactions(id,transaction_no,user_id,type,amount,account_id,category_id,title,occurred_at,original_transaction_id,recovery_kind) VALUES(2,'refund',?,'expense',-20,1,?,'Refund','2026-02-01',1,'refund')", owner, category);
             jdbc.update("INSERT INTO expense_recovery_followups(transaction_id,user_id,recipient,expected_date) VALUES(1,?,'Finance','2026-11-07')", owner);
+            long termType = jdbc.queryForObject("SELECT id FROM account_types WHERE code='term_deposit'", Long.class);
+            jdbc.update("INSERT INTO accounts(id,user_id,account_type_id,name,current_balance) VALUES(2,?,?,'Term',0)", owner,termType);
+            var termSource=testDataSource(url,schema,user,password);
+            var config=new MybatisConfiguration();
+            for(Class<?> mapper:List.of(TermDepositMapper.class,TermDepositOperationMapper.class,AccountMapper.class,AccountTypeMapper.class,
+                TransactionMapper.class,CategoryMapper.class,SavingsGoalMapper.class,SavingsGoalEntryMapper.class,AccountingRequestMapper.class))config.addMapper(mapper);
+            var termFactory=new MybatisSqlSessionFactoryBean();termFactory.setDataSource(termSource);termFactory.setConfiguration(config);
+            var session=new SqlSessionTemplate(termFactory.getObject());
+            var tx=new TransactionTemplate(new DataSourceTransactionManager(termSource));
+            var term=new TermDepositService(session.getMapper(TermDepositMapper.class),session.getMapper(TermDepositOperationMapper.class),
+                session.getMapper(AccountMapper.class),session.getMapper(AccountTypeMapper.class),session.getMapper(TransactionMapper.class),session.getMapper(CategoryMapper.class),
+                new SavingsAllocationService(session.getMapper(SavingsGoalMapper.class),session.getMapper(SavingsGoalEntryMapper.class)),
+                new AccountingIdempotencyService(session.getMapper(AccountingRequestMapper.class),new ObjectMapper()));
+            var date=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"));
+            var command=new com.example.app.dto.TermDepositDtos.Create(2L,1L,1L,"MySQL term",new BigDecimal("300"),new BigDecimal("2"),date.minusYears(1),date,12,"withdraw","new",null,List.of(),UUID.randomUUID().toString());
+            var deposit=tx.execute(t->term.create(owner,command));
+            assertEquals(deposit.id(),tx.execute(t->term.create(owner,command)).id());
+            assertEquals(0,new BigDecimal("600").compareTo(jdbc.queryForObject("SELECT current_balance FROM accounts WHERE id=1",BigDecimal.class)));
+            assertEquals(0,new BigDecimal("300").compareTo(session.getMapper(AccountMapper.class).termDepositPrincipal(2L)));
+            long incomeCategory=jdbc.queryForObject("SELECT id FROM categories WHERE type='income' LIMIT 1",Long.class);
+            tx.execute(t->term.settle(owner,deposit.id(),new com.example.app.dto.TermDepositDtos.Settle("renew_all",1L,incomeCategory,new BigDecimal("6"),date,new BigDecimal("1.8"),date.plusYears(1),12,null,UUID.randomUUID().toString())));
+            assertEquals(0,new BigDecimal("306").compareTo(session.getMapper(AccountMapper.class).termDepositPrincipal(2L)));
+            var op=term.detail(owner,deposit.id()).operations().get(0);
+            tx.execute(t->term.reverse(owner,deposit.id(),new com.example.app.dto.TermDepositDtos.Reverse(op.id(),UUID.randomUUID().toString())));
+            tx.execute(t->term.cancel(owner,deposit.id(),new com.example.app.dto.TermDepositDtos.Cancel(UUID.randomUUID().toString())));
+            assertEquals(0,new BigDecimal("900").compareTo(jdbc.queryForObject("SELECT current_balance FROM accounts WHERE id=1",BigDecimal.class)));
+            assertEquals(0,session.getMapper(AccountMapper.class).termDepositPrincipal(2L).signum());
+            initializeFile(jdbc,"049_create_term_deposits.mysql.sql",true);
+            assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM term_deposits",Integer.class));
+            assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM term_deposit_operations",Integer.class)>0);
             jdbc.update("INSERT INTO reminder_settings(user_id) VALUES(?)", owner);
             assertEquals("Finance", jdbc.queryForObject("SELECT recipient FROM expense_recovery_followups WHERE transaction_id=1", String.class));
-            assertTrue(jdbc.queryForObject("SELECT budget_enabled AND reimbursement_enabled FROM reminder_settings WHERE user_id=?", Boolean.class, owner));
-            assertEquals(0, new BigDecimal("80").compareTo(jdbc.queryForObject("SELECT SUM(amount) FROM transactions", BigDecimal.class)));
+            assertTrue(jdbc.queryForObject("SELECT budget_enabled AND reimbursement_enabled AND term_deposit_enabled FROM reminder_settings WHERE user_id=?", Boolean.class, owner));
+            assertEquals(0, new BigDecimal("80").compareTo(jdbc.queryForObject("SELECT SUM(amount) FROM transactions WHERE status='normal'", BigDecimal.class)));
             assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE transactions SET amount=-1 WHERE id=1"));
             assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE transactions SET recovery_kind=NULL WHERE id=2"));
             assertThrows(org.springframework.dao.DataAccessException.class, () -> jdbc.update("UPDATE transactions SET reimbursement_amount=101 WHERE id=1"));

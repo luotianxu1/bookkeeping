@@ -91,3 +91,10 @@ In `web/.env` or shell:
 ## Cloudflare Tunnel (External Access)
 
 Named tunnel `bookkeeping` is configured: <https://luotianxu.dpdns.org> → <http://localhost:4173> (Vite preview). Config at `~/.cloudflared/config.yml` (protocol auto: QUIC 优先，实测 2026-10-30 UDP 已通、边缘注册到 lax；UDP 被限制时自动回退 http2). Start with `cloudflared tunnel run bookkeeping`. See README "外网访问（Cloudflare Tunnel）" for details. `vite.config.ts` `preview.allowedHosts` must include `luotianxu.dpdns.org`; preview 静态资源由 `previewCacheHeaders` 插件下发长缓存头（immutable），HTML 不缓存。
+
+## 定期存款账务约束
+
+- `term_deposit` 账户余额由 `term_deposits.status='active'` 的本金汇总；`accounts.current_balance` 保持 0，不把预计利息计入资产。到期仍保持 active，视图显示 due，用户确认结算后才关闭。
+- 存入/本金取回/续存使用内部 transfer，只有确认的实际利息使用 income。`TD-` 前缀流水由 `TermDepositService` 独占管理，普通流水更新/删除必须拒绝。补录不生成现金流水。
+- 用户账务锁、目标预留、原子余额修改和幂等响应适用于全部定期写入；撤销续存须确保后继存单尚未结清，并原子恢复本金、现金及关联流水状态。
+- 002/045 的新建定义包含账户类型/提醒开关；049 创建存单与操作表。已有库须补齐 `term_deposit_enabled` 后运行新版提醒查询。新增数据库变更合并入对应 CREATE 定义，不提交独立 ALTER/同步文件。

@@ -63,6 +63,7 @@ class ReminderServiceTest {
         jdbc.execute("CREATE TABLE investment_positions(id BIGINT PRIMARY KEY,user_id BIGINT,status VARCHAR(20))");
         jdbc.execute("CREATE TABLE investment_products(id BIGINT PRIMARY KEY,name VARCHAR(80))");
         jdbc.execute("CREATE TABLE investment_auto_invest_plans(id BIGINT PRIMARY KEY,user_id BIGINT,account_id BIGINT,position_id BIGINT,product_id BIGINT,next_execute_date DATE,amount DECIMAL(18,2),currency_code VARCHAR(3),status VARCHAR(20))");
+        jdbc.execute("CREATE TABLE term_deposits(id BIGINT PRIMARY KEY,user_id BIGINT,name VARCHAR(80),maturity_date DATE,principal DECIMAL(18,2),currency_code VARCHAR(3),status VARCHAR(16))");
         var configuration = new MybatisConfiguration();
         configuration.addMapper(ReminderMapper.class);
         var factory = new MybatisSqlSessionFactoryBean();
@@ -93,6 +94,15 @@ class ReminderServiceTest {
         service.act(new ReminderActionRequest(List.of(key), action, minutes));
     }
 
+    @Test void termDepositsRespectWindowOwnershipToggleAndSettlement() {
+        jdbc.update("INSERT INTO term_deposits VALUES(1,1,'已到期','2026-11-06',1000,'CNY','active'),(2,1,'将到期','2026-11-10',1000,'CNY','active'),(3,1,'远期','2026-11-11',1000,'CNY','active'),(4,2,'他人','2026-11-06',1000,'CNY','active'),(5,1,'已结清','2026-11-06',1000,'CNY','closed')");
+        assertEquals(2,service.list().items().size());
+        var item=service.list().items().get(0);assertEquals("term_deposit",item.type());assertEquals("/finance/term-deposits?reminderId=1",item.targetPath());
+        service.saveSettings(new ReminderSettings(3,true,true,true,true,true,true,true,false));assertTrue(service.list().items().isEmpty());
+        service.saveSettings(ReminderSettings.defaults());jdbc.update("UPDATE term_deposits SET status='closed' WHERE id=1");
+        assertEquals(1,service.list().items().size());
+    }
+
     @Test void budgetThresholdStagesKeepReadStateAndRespectToggleAndMonth() {
         var month = LocalDate.of(2026,11,1);
         java.util.function.Function<String, com.example.app.dto.CategoryBudgetResponse> budget = used ->
@@ -107,7 +117,7 @@ class ReminderServiceTest {
         var second = service.list().items().get(0); assertEquals("exceeded", second.urgency());
         assertNotEquals(first.key(),second.key()); assertEquals(1,service.list().unreadCount());
         action(second.key(), ReminderActionRequest.Action.read, null); assertEquals(0,service.list().unreadCount());
-        service.saveSettings(new ReminderSettings(3,true,true,true,true,true,false, true)); assertTrue(service.list().items().isEmpty());
+        service.saveSettings(new ReminderSettings(3,true,true,true,true,true,false, true, true)); assertTrue(service.list().items().isEmpty());
         service.saveSettings(ReminderSettings.defaults()); assertEquals(0,service.list().unreadCount());
         asUser(2L); assertTrue(service.list().items().isEmpty());
         asUser(1L); at("2026-12-01T10:00:00+08:00"); assertTrue(service.list().items().isEmpty());
@@ -126,7 +136,7 @@ class ReminderServiceTest {
         action(first.key(), ReminderActionRequest.Action.read, null); assertEquals(0,service.list().unreadCount());
         jdbc.update("UPDATE expense_recovery_followups SET expected_date='2026-11-07' WHERE transaction_id=1");
         assertEquals(1,service.list().unreadCount()); assertEquals("today",service.list().items().get(0).urgency());
-        service.saveSettings(new ReminderSettings(3,true,true,true,true,true,true,false)); assertTrue(service.list().items().isEmpty());
+        service.saveSettings(new ReminderSettings(3,true,true,true,true,true,true,false, true)); assertTrue(service.list().items().isEmpty());
         service.saveSettings(ReminderSettings.defaults());
         jdbc.update("UPDATE transactions SET reimbursement_amount=40 WHERE id=1"); assertTrue(service.list().items().isEmpty());
         jdbc.update("UPDATE transactions SET reimbursement_amount=100 WHERE id=1");
@@ -193,13 +203,13 @@ class ReminderServiceTest {
         asUser(2);
         action(key, ReminderActionRequest.Action.read, null);
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM reminder_states", Integer.class));
-        service.saveSettings(new ReminderSettings(0, false, true, true, true, true, true, true));
+        service.saveSettings(new ReminderSettings(0, false, true, true, true, true, true, true, true));
         assertFalse(service.settings().todoEnabled());
         assertTrue(service.list().items().isEmpty());
         asUser(1);
         assertEquals(ReminderSettings.defaults(), service.settings());
         assertEquals(1, service.list().unreadCount());
-        service.saveSettings(new ReminderSettings(0, true, true, true, true, true, true, true));
+        service.saveSettings(new ReminderSettings(0, true, true, true, true, true, true, true, true));
         assertTrue(service.list().items().isEmpty());
     }
 

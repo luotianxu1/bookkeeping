@@ -72,7 +72,7 @@ public final class LiveTestServers {
             jdbc.execute("CREATE TABLE IF NOT EXISTS " + table.getTableName() + " (" + key + ", " + fields + ")");
         }
         jdbc.execute("CREATE TABLE accounting_requests(user_id BIGINT, operation VARCHAR(40), request_id VARCHAR(64), request_hash VARCHAR(64), response_json CLOB, PRIMARY KEY(user_id,operation,request_id))");
-        jdbc.execute("CREATE TABLE reminder_settings(user_id BIGINT PRIMARY KEY, advance_days INT DEFAULT 3, todo_enabled BOOLEAN DEFAULT TRUE, anniversary_enabled BOOLEAN DEFAULT TRUE, renewal_enabled BOOLEAN DEFAULT TRUE, liability_enabled BOOLEAN DEFAULT TRUE, investment_enabled BOOLEAN DEFAULT TRUE, budget_enabled BOOLEAN DEFAULT TRUE, reimbursement_enabled BOOLEAN DEFAULT TRUE)");
+        jdbc.execute("CREATE TABLE reminder_settings(user_id BIGINT PRIMARY KEY, advance_days INT DEFAULT 3, todo_enabled BOOLEAN DEFAULT TRUE, anniversary_enabled BOOLEAN DEFAULT TRUE, renewal_enabled BOOLEAN DEFAULT TRUE, liability_enabled BOOLEAN DEFAULT TRUE, investment_enabled BOOLEAN DEFAULT TRUE, budget_enabled BOOLEAN DEFAULT TRUE, reimbursement_enabled BOOLEAN DEFAULT TRUE, term_deposit_enabled BOOLEAN DEFAULT TRUE)");
         jdbc.execute("CREATE TABLE reminder_states(user_id BIGINT, reminder_key VARCHAR(120), read_at TIMESTAMP, snoozed_until TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id,reminder_key))");
         jdbc.execute("CREATE TABLE expense_recovery_followups(transaction_id BIGINT PRIMARY KEY,user_id BIGINT,recipient VARCHAR(100),expected_date DATE)");
         jdbc.execute("CREATE UNIQUE INDEX uk_category_budget_month ON category_budgets(user_id,budget_month,category_id)");
@@ -87,7 +87,7 @@ public final class LiveTestServers {
                 id, "live-user-" + id, password, "联通测试用户" + id, id <= 2 ? 1L : null);
         }
         jdbc.update("INSERT INTO families(id,owner_user_id,invite_code,family_name,status) VALUES(1,1,'FAMILY-LIVETEST','测试家庭','active')");
-        jdbc.update("INSERT INTO account_types(id,code,name,category,balance_direction,include_in_net_worth_default,allow_overdraft,is_system,sort_order,status) VALUES(1,'cash','现金','asset','positive',TRUE,FALSE,TRUE,0,'active')");
+        jdbc.update("INSERT INTO account_types(id,code,name,category,balance_direction,include_in_net_worth_default,allow_overdraft,is_system,sort_order,status) VALUES(1,'cash','现金','asset','positive',TRUE,FALSE,TRUE,0,'active'),(2,'term_deposit','定期','asset','debit',TRUE,FALSE,TRUE,15,'active')");
         jdbc.update("INSERT INTO accounts(id,user_id,account_type_id,name,current_balance,currency_code,status,include_in_net_worth,sort_order) VALUES(1,1,1,'测试现金',1000,'CNY','active',TRUE,0),(2,1,1,'测试储蓄',500,'CNY','active',TRUE,1),(3,2,1,'家庭成员账户',200,'CNY','active',TRUE,0)");
         jdbc.update("INSERT INTO categories(id,name,type,icon,level,is_system,sort_order,status) VALUES(1,'测试餐饮','expense','餐饮',1,TRUE,0,'active'),(2,'测试工资','income','工资',1,TRUE,0,'active')");
     }

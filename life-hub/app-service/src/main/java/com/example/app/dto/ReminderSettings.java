@@ -11,9 +11,13 @@ public record ReminderSettings(
     boolean liabilityEnabled,
     boolean investmentEnabled,
     boolean budgetEnabled,
-    boolean reimbursementEnabled
+    boolean reimbursementEnabled,
+    Boolean termDepositEnabled
 ) {
+    public ReminderSettings {
+        if (termDepositEnabled == null) termDepositEnabled = true;
+    }
     public static ReminderSettings defaults() {
-        return new ReminderSettings(3, true, true, true, true, true, true, true);
+        return new ReminderSettings(3, true, true, true, true, true, true, true, true);
     }
 }

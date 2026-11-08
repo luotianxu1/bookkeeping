@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS reminder_settings (
   investment_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   budget_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   reimbursement_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  term_deposit_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   PRIMARY KEY (user_id),
   CONSTRAINT fk_reminder_settings_user FOREIGN KEY (user_id) REFERENCES users(id),
   CONSTRAINT chk_reminder_advance_days CHECK (advance_days BETWEEN 0 AND 30)

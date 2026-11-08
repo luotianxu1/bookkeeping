@@ -84,6 +84,8 @@ export function buildAccountGroups(
           ? '/finance/accounts/human-relation'
         : options.isSelfView && groupCode === 'gold'
           ? '/finance/accounts/gold'
+        : options.isSelfView && groupCode === 'term_deposit'
+          ? '/finance/term-deposits'
         : options.isSelfView && groupCode === 'investment'
           ? '/finance/accounts/investment'
         : undefined,
@@ -108,6 +110,8 @@ export function buildAccountGroups(
                 ? `/finance/accounts/human-relation/${account.id}`
               : options.isSelfView && account.accountTypeCode === 'gold'
                 ? `/finance/accounts/gold/position?accountId=${account.id}`
+            : options.isSelfView && account.accountTypeCode === 'term_deposit'
+              ? `/finance/term-deposits?accountId=${account.id}`
             : options.isSelfView && account.accountTypeCode === 'investment'
               ? `/finance/accounts/investment/${account.id}`
               : undefined,
