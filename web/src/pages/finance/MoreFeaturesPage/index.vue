@@ -45,7 +45,7 @@ const featureGroups: FeatureGroup[] = [
       { icon: 'profit-forecast', label: '收益预测', to: '/finance/profit-forecast' },
       { icon: 'break-even', label: '回本预测', to: '/finance/break-even-forecast' },
       { icon: 'dividend-forecast', label: '收息预测', to: '/finance/dividend-forecast' },
-      { icon: 'free-estimate', label: 'Free测算', to: '/finance/free-estimate' },
+      { icon: 'free-estimate', label: '财务自由测算', to: '/finance/free-estimate' },
     ],
   },
 ]

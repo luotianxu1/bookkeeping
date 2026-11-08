@@ -216,7 +216,7 @@ export const financeRoutes: RouteRecordRaw[] = [
     component: () => import('@/pages/finance/FreeEstimatePage/index.vue'),
     meta: {
       section: 'finance',
-      title: 'Free测算',
+      title: '财务自由测算',
     },
   },
   {
