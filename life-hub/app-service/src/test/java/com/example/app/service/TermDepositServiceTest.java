@@ -26,7 +26,13 @@ class TermDepositServiceTest {
     }
     private String requestId() { return UUID.randomUUID().toString(); }
     private Create create(String mode, LocalDate start, LocalDate end, SavingsAllocation... parts) {
-        return new Create(4L,1L,2L,"一年定期",new BigDecimal("800"),new BigDecimal("2"),start,end,12,"withdraw",mode,null,List.of(parts),requestId());
+        return new Create(4L,1L,2L,null,"一年定期",new BigDecimal("800"),new BigDecimal("2"),start,end,12,"withdraw",mode,null,List.of(parts),requestId());
+    }
+    private Create withCategory(Create c, Long category) {
+        return new Create(c.accountId(),c.fundingAccountId(),c.payoutAccountId(),category,c.name(),c.principal(),c.annualRate(),c.startDate(),c.maturityDate(),c.termMonths(),c.maturityAction(),c.openingMode(),c.remark(),c.savingsAllocations(),c.requestId());
+    }
+    private Edit editCategory(View d, Long category) {
+        return new Edit(d.name(),d.payoutAccountId(),category,d.annualRate(),d.startDate(),d.maturityDate(),d.termMonths(),d.maturityAction(),d.remark(),requestId());
     }
     private Create due(String mode, SavingsAllocation... parts) { return create(mode,TODAY.minusYears(1),TODAY,parts); }
     private Settle settle(String action) { return new Settle(action,2L,1L,new BigDecimal("16"),TODAY,new BigDecimal("1.8"),TODAY.plusYears(1),12,null,requestId()); }
@@ -66,7 +72,7 @@ class TermDepositServiceTest {
             money("1000",db.balance(1));money("800",term(db));assertEquals(0,db.jdbc.queryForObject("SELECT COUNT(*) FROM transactions",Integer.class));
             var e=new TermDepositEntity();e.setPrincipal(new BigDecimal("10000"));e.setAnnualRate(new BigDecimal("3"));e.setStartDate(LocalDate.of(2024,1,31));e.setMaturityDate(LocalDate.of(2024,2,29));e.setTermMonths(1);
             money("25",TermDepositService.expectedInterest(e));e.setTermMonths(null);money("23.84",TermDepositService.expectedInterest(e));
-            var edit=new Edit("更正",2L,new BigDecimal("2.5"),d.startDate(),d.maturityDate().plusDays(1),null,"renew_all","备注",requestId());
+            var edit=new Edit("更正",2L,null,new BigDecimal("2.5"),d.startDate(),d.maturityDate().plusDays(1),null,"renew_all","备注",requestId());
             db.tx.execute(t->s.edit(1,d.id(),edit));assertNull(s.detail(1,d.id()).deposit().termMonths());
             db.tx.execute(t->s.cancel(1,d.id(),new Cancel(requestId())));money("1000",db.balance(1));money("0",term(db));
         }
@@ -131,6 +137,58 @@ class TermDepositServiceTest {
                 var a=pool.submit(settle);var b=pool.submit(settle);start.countDown();assertNotEquals(a.get(10,TimeUnit.SECONDS),b.get(10,TimeUnit.SECONDS));
                 money("1316",db.balance(2));money("0",term(db));
             } finally { pool.shutdownNow(); }
+        }
+    }
+    @Test void defaultCategoryCanBeSavedChangedAndClearedWithoutCreatingIncome() throws Exception {
+        try(var db=new AccountingDatabase()) {
+            seed(db);var s=service(db);
+            db.jdbc.update("INSERT INTO categories(id,name,type,status) VALUES(4,'理财','income','active')");
+            var request=withCategory(due("existing"),1L);
+            var d=db.tx.execute(t->s.create(1,request));
+            assertEquals(1L,d.interestCategoryId());assertEquals("利息",d.interestCategoryName());
+            assertEquals(1L,db.tx.execute(t->s.create(1,request)).interestCategoryId());
+            db.tx.execute(t->s.edit(1,d.id(),editCategory(d,4L)));
+            assertEquals(4L,s.list(1,null).get(0).interestCategoryId());
+            db.tx.execute(t->s.edit(1,d.id(),editCategory(d,null)));
+            assertNull(s.detail(1,d.id()).deposit().interestCategoryId());
+            assertEquals(0,db.jdbc.queryForObject("SELECT COUNT(*) FROM transactions",Integer.class));
+            money("1000",db.balance(1));
+        }
+    }
+    @Test void selectedCategoryControlsIncomeAndRenewalWithoutChangingHistoricalIncomeOnEdit() throws Exception {
+        for(String action:List.of("withdraw","renew_principal","renew_all"))try(var db=new AccountingDatabase()) {
+            seed(db);var s=service(db);
+            db.jdbc.update("INSERT INTO categories(id,parent_id,name,type,status) VALUES(4,5,'存款利息','income','active'),(5,NULL,'理财','income','active')");
+            // Another user's private child must not exclude a public category from this user's options.
+            db.jdbc.update("INSERT INTO categories(id,parent_id,user_id,name,type,status) VALUES(6,4,2,'他人子分类','income','active')");
+            var d=db.tx.execute(t->s.create(1,withCategory(due("new"),1L)));
+            var request=new Settle(action,2L,4L,new BigDecimal("16"),TODAY,new BigDecimal("1.8"),TODAY.plusYears(1),12,null,requestId());
+            db.tx.execute(t->s.settle(1,d.id(),request));db.tx.execute(t->s.settle(1,d.id(),request));
+            assertEquals(4L,db.jdbc.queryForObject("SELECT category_id FROM transactions WHERE type='income' AND status='normal'",Long.class));
+            var op=s.detail(1,d.id()).operations().get(0);
+            assertEquals(4L,op.interestCategoryId());assertEquals("理财 / 存款利息",op.interestCategoryName());
+            if(op.childDepositId()!=null)assertEquals(4L,s.detail(1,op.childDepositId()).deposit().interestCategoryId());
+            db.tx.execute(t->s.edit(1,d.id(),editCategory(d,1L)));
+            assertEquals(4L,s.detail(1,d.id()).operations().stream().filter(o->o.id().equals(op.id())).findFirst().orElseThrow().interestCategoryId());
+            db.tx.execute(t->s.reverse(1,d.id(),new Reverse(op.id(),requestId())));
+            assertEquals(0,db.jdbc.queryForObject("SELECT COUNT(*) FROM transactions WHERE type='income' AND status='normal'",Integer.class));
+        }
+    }
+    @Test void invalidCategoriesAreRejectedBeforeCashOrCertificateChanges() throws Exception {
+        try(var db=new AccountingDatabase()) {
+            seed(db);var s=service(db);
+            db.jdbc.update("INSERT INTO categories(id,name,type,status) VALUES(4,'父分类','income','active'),(5,'停用','income','disabled')");
+            db.jdbc.update("INSERT INTO categories(id,parent_id,user_id,name,type,status) VALUES(6,4,1,'子分类','income','active')");
+            for(Long category:List.of(2L,3L,4L,5L,999L))assertThrows(IllegalArgumentException.class,()->db.tx.execute(t->s.create(1,withCategory(due("new"),category))));
+            assertTrue(s.list(1,null).isEmpty());money("1000",db.balance(1));
+            var d=db.tx.execute(t->s.create(1,withCategory(due("new"),1L)));
+            for(Long category:Arrays.asList(null,2L,3L,4L,5L,999L)) {
+                if(category!=null)assertThrows(IllegalArgumentException.class,()->db.tx.execute(t->s.edit(1,d.id(),editCategory(d,category))));
+                assertThrows(IllegalArgumentException.class,()->db.tx.execute(t->s.settle(1,d.id(),new Settle("withdraw",2L,category,BigDecimal.ONE,TODAY,null,null,null,null,requestId()))));
+            }
+            assertEquals(1L,s.detail(1,d.id()).deposit().interestCategoryId());
+            assertEquals("due",s.detail(1,d.id()).deposit().status());money("500",db.balance(2));money("800",term(db));
+            assertEquals(0,db.jdbc.queryForObject("SELECT COUNT(*) FROM transactions WHERE type='income'",Integer.class));
         }
     }
 }

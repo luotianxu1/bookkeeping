@@ -24,6 +24,10 @@ import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
 const route = useRoute()
 const deposits = ref<TermDeposit[]>([]), accounts = ref<Account[]>([]), types = ref<AccountType[]>([])
 const categories = ref<Category[]>([]), goals = ref<SavingsGoal[]>([])
+const incomeCategoryOptions = computed(() => categories.value.filter(c => !categories.value.some(child => child.parentId === c.id))
+  .map(c => ({ value: String(c.id), label: [categories.value.find(parent => parent.id === c.parentId)?.name, c.name].filter(Boolean).join(' / ') })))
+const defaultCategoryOptions = computed(() => [{ value: '', label: '结算时选择' }, ...incomeCategoryOptions.value])
+const hasIncomeCategory = (id: string) => incomeCategoryOptions.value.some(c => c.value === id)
 const filter = ref('all'), accountFilter = ref(String(route.query.accountId ?? ''))
 const filters = [{ value: 'all', label: '全部' }, { value: 'active', label: '存续中' }, { value: 'due', label: '待处理' }, { value: 'closed', label: '已结清' }]
 const actionOptions = [{ value: 'withdraw', label: '取回本息' }, { value: 'renew_principal', label: '本金续存' }, { value: 'renew_all', label: '本息续存' }]
@@ -58,7 +62,7 @@ function money(value: number, currency = 'CNY') {
 }
 function statusText(d: TermDeposit) { return { active: '存续中', due: '待处理', closed: '已结清', voided: '已撤销' }[d.status] }
 function isOpen(d: TermDeposit) { return d.status === 'active' || d.status === 'due' }
-const form = reactive({ name: '', accountId: '', fundingAccountId: '', payoutAccountId: '', principal: '', annualRate: '',
+const form = reactive({ name: '', accountId: '', fundingAccountId: '', payoutAccountId: '', interestCategoryId: '', principal: '', annualRate: '',
   startDate: today(), maturityDate: '', months: '12', maturityAction: 'withdraw' as TermAction, openingMode: 'new' as 'new' | 'existing', remark: '' })
 const allocations = ref<SavingsAllocationDraft[]>([])
 const newAccount = ref(false), accountName = ref(''), accountCurrency = ref('CNY')
@@ -83,11 +87,14 @@ async function openForm(d: TermDeposit | null = null) {
   editing.value = d
   Object.assign(form, { name: d?.name ?? '', accountId: d ? String(d.accountId) : accountFilter.value || String(termAccounts.value[0]?.id ?? ''),
     fundingAccountId: d?.fundingAccountId ? String(d.fundingAccountId) : '', payoutAccountId: d ? String(d.payoutAccountId) : '',
+    interestCategoryId: d?.interestCategoryId ? String(d.interestCategoryId) : '',
     principal: d ? String(d.principal) : '', annualRate: d ? String(d.annualRate) : '', startDate: d?.startDate ?? today(),
     maturityDate: d?.maturityDate ?? plusMonths(today(), '12'), months: d?.termMonths ? String(d.termMonths) : d ? '' : '12',
     maturityAction: d?.maturityAction ?? 'withdraw', openingMode: d?.openingMode === 'existing' ? 'existing' : 'new', remark: d?.remark ?? '' })
   allocations.value = []; newAccount.value = false; begin('form')
   await options.run()
+  if (modal.value !== 'form' || editing.value?.id !== d?.id) return
+  if (!hasIncomeCategory(form.interestCategoryId)) form.interestCategoryId = ''
   if (!d && !form.accountId) form.accountId = String(termAccounts.value[0]?.id ?? '')
 }
 async function addAccount() {
@@ -109,10 +116,12 @@ async function save() {
   error.value = ''
   if (!form.name.trim() || form.name.trim().length > 80) { error.value = '请输入不超过80字的存单名称'; return }
   if (!form.accountId || !form.payoutAccountId || (!editing.value && form.openingMode === 'new' && !form.fundingAccountId)) { error.value = '请选择定期账户和现金账户'; return }
+  if (form.interestCategoryId && !hasIncomeCategory(form.interestCategoryId)) { error.value = '请重新选择有效的利息收入分类'; return }
   if (!validMoney(form.principal) || !validRate(form.annualRate)) { error.value = '本金须大于0且最多两位小数，年利率须在0至100之间且最多四位小数'; return }
   if (!form.startDate || form.startDate > today() || form.maturityDate <= form.startDate) { error.value = '起息日不能晚于今天，到期日须晚于起息日'; return }
   if (form.openingMode === 'new' && allocations.value.some(a => !a.goalId || !validMoney(a.amount))) { error.value = '请输入有效的目标扣减金额'; return }
   const terms = { name: form.name.trim(), payoutAccountId: Number(form.payoutAccountId), annualRate: Number(form.annualRate), startDate: form.startDate,
+    interestCategoryId: form.interestCategoryId ? Number(form.interestCategoryId) : null,
     maturityDate: form.maturityDate, termMonths: form.months && plusMonths(form.startDate, form.months) === form.maturityDate ? Number(form.months) : null,
     maturityAction: form.maturityAction, remark: form.remark.trim() || null }
   busy.value = true
@@ -132,22 +141,23 @@ const early = computed(() => !!selected.value && settlement.occurredOn < selecte
 async function openSettle(d: TermDeposit) {
   selected.value = d
   Object.assign(settlement, { action: d.status === 'due' ? d.maturityAction : 'withdraw', payoutAccountId: String(d.payoutAccountId),
-    interestCategoryId: '', actualInterest: d.status === 'due' ? String(d.expectedInterest) : '0', occurredOn: today(), annualRate: String(d.annualRate),
+    interestCategoryId: d.interestCategoryId ? String(d.interestCategoryId) : '', actualInterest: d.status === 'due' ? String(d.expectedInterest) : '0', occurredOn: today(), annualRate: String(d.annualRate),
     months: d.termMonths && monthOptions.some(m => m.value === String(d.termMonths)) ? String(d.termMonths) : '12', remark: '' })
   settlement.maturityDate = plusMonths(settlement.occurredOn, settlement.months); begin('settle'); await options.run()
-  settlement.interestCategoryId = String(categories.value.find(c => /利息/.test(c.name))?.id ?? categories.value[0]?.id ?? '')
+  if (modal.value === 'settle' && selected.value?.id === d.id && !hasIncomeCategory(settlement.interestCategoryId)) settlement.interestCategoryId = ''
 }
 async function settle() {
   if (busy.value || !selected.value) return
   error.value = ''
-  if (!validMoney(settlement.actualInterest, true) || !settlement.payoutAccountId || (Number(settlement.actualInterest) > 0 && !settlement.interestCategoryId)) { error.value = '请选择到账账户、利息分类并填写实际利息'; return }
+  if (!validMoney(settlement.actualInterest, true) || !settlement.payoutAccountId) { error.value = '请选择到账账户并填写实际利息'; return }
+  if ((Number(settlement.actualInterest) > 0 || settlement.interestCategoryId) && !hasIncomeCategory(settlement.interestCategoryId)) { error.value = '请选择利息收入分类'; return }
   if (!settlement.occurredOn || settlement.occurredOn < selected.value.startDate || settlement.occurredOn > today()) { error.value = '到账日期须在起息日至今天之间'; return }
   const renew = settlement.action !== 'withdraw'
   if (renew && (early.value || !validRate(settlement.annualRate) || settlement.maturityDate <= settlement.occurredOn)) { error.value = '到期后才能续存，请填写新利率和有效到期日'; return }
   busy.value = true
   try {
     await settleTermDeposit(selected.value.id, submission.withRequestId({ action: settlement.action, payoutAccountId: Number(settlement.payoutAccountId),
-      actualInterest: Number(settlement.actualInterest), interestCategoryId: Number(settlement.actualInterest) > 0 ? Number(settlement.interestCategoryId) : null,
+      actualInterest: Number(settlement.actualInterest), interestCategoryId: settlement.interestCategoryId ? Number(settlement.interestCategoryId) : null,
       occurredOn: settlement.occurredOn, renewalAnnualRate: renew ? Number(settlement.annualRate) : null, renewalMaturityDate: renew ? settlement.maturityDate : null,
       renewalTermMonths: renew && settlement.months && plusMonths(settlement.occurredOn, settlement.months) === settlement.maturityDate ? Number(settlement.months) : null,
       remark: settlement.remark.trim() || null }))
@@ -241,6 +251,7 @@ useVisibilityPolling(() => modal.value ? Promise.resolve() : list.run(), 60_000)
           <CommonInput v-model="form.maturityDate" label="到期日" input-type="date" :disabled="busy || (!!editing && !isOpen(editing))" />
           <p v-if="Number.isFinite(estimate) && estimate >= 0" class="hint">预计利息 {{ money(estimate, currency) }}，不计入资产；整月按月数 / 12、自定义日期按实际天数 / 365 估算，到账以银行结算为准。</p>
           <CommonSelect v-model="form.payoutAccountId" label="默认到账账户" :options="cashOptions(currency)" :disabled="busy" />
+          <CommonSelect v-model="form.interestCategoryId" label="默认利息收入分类" :options="defaultCategoryOptions" :disabled="busy" />
           <CommonSelect v-model="form.maturityAction" label="到期意向" :options="actionOptions" :disabled="busy" />
           <p class="hint">到期仅提醒，取回或续存需手动确认。更正本金或起息日请撤销后重新登记。</p>
           <SavingsAllocationFields v-if="!editing && form.openingMode === 'new'" v-model="allocations" :goals="goalOptions" label="扣减储蓄目标" :disabled="busy" />
@@ -254,7 +265,7 @@ useVisibilityPolling(() => modal.value ? Promise.resolve() : list.run(), 60_000)
           <CommonInput v-model="settlement.actualInterest" :label="`实际利息（${selected.currencyCode}）`" input-mode="decimal" :disabled="busy" />
           <p v-if="!early" class="hint">预计利息 {{ money(selected.expectedInterest, selected.currencyCode) }}，请核对后填写实际到账金额。</p>
           <CommonSelect v-model="settlement.payoutAccountId" label="到账现金账户" :options="cashOptions(selected.currencyCode)" :disabled="busy" />
-          <CommonSelect v-if="Number(settlement.actualInterest) > 0" v-model="settlement.interestCategoryId" label="利息收入分类" :options="categories.map(c => ({ value: String(c.id), label: c.name }))" :disabled="busy" />
+          <CommonSelect v-model="settlement.interestCategoryId" label="利息收入分类" :options="[{ value: '', label: Number(settlement.actualInterest) > 0 ? '请选择收入分类' : '无利息可不选' }, ...incomeCategoryOptions]" :disabled="busy" />
           <template v-if="settlement.action !== 'withdraw'">
             <p class="hint">新存单本金 {{ money(Number(selected.principal) + (settlement.action === 'renew_all' ? Number(settlement.actualInterest) || 0 : 0), selected.currencyCode) }}。{{ settlement.action === 'renew_all' ? '本息全部续存。' : '利息留在到账现金账户。' }}</p>
             <div class="field-pair"><CommonInput v-model="settlement.annualRate" label="新年利率（%）" input-mode="decimal" :disabled="busy" /><CommonSelect v-model="settlement.months" label="新存期" :options="monthOptions" :disabled="busy" /></div>
@@ -270,11 +281,13 @@ useVisibilityPolling(() => modal.value ? Promise.resolve() : list.run(), 60_000)
             <p>{{ detail.deposit.accountName }} · 本金 {{ money(detail.deposit.principal, detail.deposit.currencyCode) }}</p>
             <p class="hint">{{ detail.deposit.startDate }} → {{ detail.deposit.maturityDate }} · 年利率 {{ Number(detail.deposit.annualRate) }}%</p>
             <p class="hint">预计本息 {{ money(detail.deposit.expectedTotal, detail.deposit.currencyCode) }} · {{ actionOptions.find(a => a.value === detail?.deposit.maturityAction)?.label }}</p>
+            <p v-if="detail.deposit.interestCategoryName" class="hint">默认利息分类 {{ detail.deposit.interestCategoryName }}</p>
             <p v-if="detail.deposit.remark" class="hint">{{ detail.deposit.remark }}</p>
             <button v-if="detail.deposit.parentDepositId" class="text-button" @click="openHistory(detail.deposit.parentDepositId)">查看原存单（撤销续存在此操作） →</button>
             <div v-for="op in detail.operations" :key="op.id" class="history-row">
               <div class="history-heading"><strong>{{ operationLabels[op.operation] ?? op.operation }}</strong><time>{{ op.occurredOn }}</time><span v-if="op.reversedAt" class="hint">已撤销</span></div>
               <p v-if="['withdraw','early_withdraw','renew_all','renew_principal'].includes(op.operation)">实际利息 {{ money(op.interest, detail.deposit.currencyCode) }}</p>
+              <p v-if="op.interestCategoryName" class="hint">收入分类 {{ op.interestCategoryName }}</p>
               <p v-if="op.cashAccountName" class="hint">{{ op.cashAccountName }} · 现金变动 {{ money(op.cashDelta, detail.deposit.currencyCode) }}</p>
               <p v-if="op.detail" class="hint">{{ op.detail }}</p>
               <div class="history-actions"><button v-if="op.childDepositId" class="text-button" @click="openHistory(op.childDepositId)">查看续存存单 →</button><button v-if="reversible(op)" class="text-button danger" @click="confirm(detail.deposit, op.id)">撤销结算</button></div>
@@ -289,6 +302,7 @@ useVisibilityPolling(() => modal.value ? Promise.resolve() : list.run(), 60_000)
         <template v-if="modal === 'form' || modal === 'settle'">
           <p v-if="options.error.value" class="error" role="alert">{{ options.error.value }} <button :disabled="busy" @click="options.run">重试</button></p>
           <p v-if="options.ready.value && !accounts.some(a => a.accountTypeCode === 'cash')" class="hint">请先到<RouterLink to="/finance/accounts/cash" @click="modal = ''">现金账户</RouterLink>创建到账账户。</p>
+          <p v-if="options.ready.value && !incomeCategoryOptions.length" class="hint">暂无可用的收入分类，请到<RouterLink to="/finance/categories" @click="modal = ''">分类管理</RouterLink>添加或启用收入分类。</p>
         </template>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
       </div>

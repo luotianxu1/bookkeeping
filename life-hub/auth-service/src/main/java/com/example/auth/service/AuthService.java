@@ -57,6 +57,7 @@ public class AuthService {
 
     @Transactional
     public void register(RegisterRequest request) {
+        AccountSecurityService.validateNewPassword(request.password());
         String normalizedUsername = request.username().trim();
         if (existsByUsername(normalizedUsername)) {
             // 防时序枚举：重名时也执行等价 BCrypt 运算，使响应时间与正常注册一致
@@ -67,7 +68,7 @@ public class AuthService {
 
         UserEntity entity = new UserEntity();
         entity.setUsername(normalizedUsername);
-        entity.setPasswordHash(passwordEncoder.encode(request.password().trim()));
+        entity.setPasswordHash(passwordEncoder.encode(request.password()));
         entity.setDisplayName(normalizedUsername);
         entity.setStatus(ACTIVE_STATUS);
         entity.setRoleName("user");

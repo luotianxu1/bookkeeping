@@ -14,6 +14,8 @@ public class TermDepositEntity {
     private Long accountId;
     private Long fundingAccountId;
     private Long payoutAccountId;
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private Long interestCategoryId;
     private Long parentDepositId;
     private String name;
     private String currencyCode;

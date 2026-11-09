@@ -23,6 +23,9 @@ onMounted(() => {
     account.value = routeAccount
   }
 
+  if (route.query.passwordReset === '1') successMessage.value = '密码已重设，请登录后生成新的恢复码'
+  if (route.query.passwordChanged === '1') successMessage.value = '密码已修改，请重新登录'
+
   if (registered) {
     successMessage.value = '注册成功，请登录后继续'
   }
@@ -143,6 +146,8 @@ async function submitLogin() {
               </button>
             </span>
           </label>
+
+          <RouterLink class="forgot-password-link" :to="{ path: '/forgot-password', query: { account } }">忘记密码？</RouterLink>
 
           <p v-if="successMessage" class="form-message form-message--success" role="status">
             <span aria-hidden="true">✓</span> {{ successMessage }}

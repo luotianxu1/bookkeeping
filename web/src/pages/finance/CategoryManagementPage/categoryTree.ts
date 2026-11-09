@@ -24,7 +24,3 @@ export function getNextCategorySortOrder(type: 'expense' | 'income', parentId: n
 export function canCategoryBeDeleted(category: Category, categories: Category[]) {
   return !category.system && !categories.some((item) => item.parentId === category.id)
 }
-
-export function isHiddenFixedExpenseCategory(category: Category) {
-  return category.system && category.type === 'expense' && category.name === '固定支出'
-}

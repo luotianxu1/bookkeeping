@@ -38,7 +38,6 @@ INSERT INTO categories (user_id, name, type, icon, color, is_system, sort_order,
 SELECT seed.user_id, seed.name, seed.type, seed.icon, seed.color, seed.is_system, seed.sort_order, seed.remark
 FROM (
   SELECT NULL AS user_id, '餐饮' AS name, 'expense' AS type, 'food' AS icon, '#1D4ED8' AS color, 1 AS is_system, 10 AS sort_order, '餐饮支出' AS remark
-  UNION ALL SELECT NULL, '日用', 'expense', 'daily', '#334155', 1, 20, '日用品支出'
   UNION ALL SELECT NULL, '交通', 'expense', 'transport', '#334155', 1, 30, '交通出行'
   UNION ALL SELECT NULL, '娱乐', 'expense', 'entertainment', '#334155', 1, 40, '娱乐消费'
   UNION ALL SELECT NULL, '购物', 'expense', 'shopping', '#334155', 1, 50, '购物消费'
@@ -46,7 +45,6 @@ FROM (
   UNION ALL SELECT NULL, '工资', 'income', 'salary', '#334155', 1, 10, '工资收入'
   UNION ALL SELECT NULL, '理财', 'income', 'investment-income', '#334155', 1, 20, '理财收入'
   UNION ALL SELECT NULL, '摄影收入', 'income', 'camera', '#1D4ED8', 1, 30, '摄影订单产生的订金与尾款收入'
-  UNION ALL SELECT NULL, '会员续费', 'expense', 'renewal', '#0F766E', 1, 95, '自动续费与会员订阅支出'
 ) seed
 WHERE NOT EXISTS (
   SELECT 1 FROM categories existing WHERE existing.user_id IS NULL AND existing.parent_id IS NULL

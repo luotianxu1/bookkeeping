@@ -45,7 +45,7 @@ const profileMenus = computed<ProfileMenuItem[]>(() => [
   { label: '任务管理', path: '/profile/task-management', meta: '查看今日任务' },
   { label: '统一提醒', path: '/profile/reminders', meta: '待办、账单与重要日子' },
   { label: '图标管理', path: '/profile/icon-management', meta: '查看系统图标' },
-  { label: '隐私与安全' },
+  { label: '隐私与安全', path: '/profile/security' },
   { label: '关于我们' },
 ])
 const darkModeEnabled = computed({
@@ -65,9 +65,8 @@ async function refreshCurrentUser() {
     const user = await getCurrentUser()
     currentUser.value = user
     setStoredCurrentUser(user)
-  } catch {
-    currentUser.value = null
-    clearStoredCurrentUser()
+  } catch (error) {
+    showFeedback(getErrorMessage(error, '个人资料加载失败'), 'error')
   }
 }
 
@@ -161,10 +160,11 @@ function showFeedback(message: string, type: 'success' | 'error') {
       :type="feedbackType"
     />
 
-    <section class="profile-user-card" aria-label="用户信息">
-      <div class="avatar">{{ avatarText }}</div>
+    <button class="profile-user-card" type="button" aria-label="编辑个人资料" @click="goMenu('/profile/edit')">
+      <div class="avatar"><img v-if="currentUser?.avatarUrl" :src="currentUser.avatarUrl" alt="头像" /><span v-else>{{ avatarText }}</span></div>
       <h2>{{ displayName }}</h2>
-    </section>
+      <span class="profile-edit-hint">编辑资料 ›</span>
+    </button>
 
     <section class="profile-menu-card" aria-label="我的功能列表">
       <button

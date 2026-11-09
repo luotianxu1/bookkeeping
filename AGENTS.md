@@ -81,6 +81,8 @@ mysql -u root -p bookkeeping_app < database/002_create_account_types.mysql.sql
 - Investment detail is local-first. Fetch redemption fees separately at `/api/finance/investments/fund-redeem-fees`; retain full transaction history for chart markers/profit calculations. `useAsyncSection` and pagination guard against stale responses.
 - `KeyedTtlCache` uses 256 fixed stripe locks + LRU eviction; TTL starts after loading completes. Polling callbacks must return their Promise for overlap protection and respect KeepAlive activation.
 
+- 公共收支分类使用 user_id=NULL；私人二级分类保留所属用户，记账/续费/分类预算的末级判断仅统计公共及本人的启用子分类。旧库若存在 is_system=1 且绑定用户的历史分类，补默认分类前先检查归属和引用，避免生成同名系统副本。
+
 ## Environment Variables (Frontend)
 
 In `web/.env` or shell:
@@ -96,5 +98,12 @@ Named tunnel `bookkeeping` is configured: <https://luotianxu.dpdns.org> → <htt
 
 - `term_deposit` 账户余额由 `term_deposits.status='active'` 的本金汇总；`accounts.current_balance` 保持 0，不把预计利息计入资产。到期仍保持 active，视图显示 due，用户确认结算后才关闭。
 - 存入/本金取回/续存使用内部 transfer，只有确认的实际利息使用 income。`TD-` 前缀流水由 `TermDepositService` 独占管理，普通流水更新/删除必须拒绝。补录不生成现金流水。
+- 存单可保存默认利息收入分类（049 的 interest_category_id）；结算可重新选择，有实际利息时必须提交本人或公共的启用末级收入分类。续存沿用本次所选分类，历史结算分类从对应收入流水读取，修改默认分类不改变历史流水。
 - 用户账务锁、目标预留、原子余额修改和幂等响应适用于全部定期写入；撤销续存须确保后继存单尚未结清，并原子恢复本金、现金及关联流水状态。
 - 002/045 的新建定义包含账户类型/提醒开关；049 创建存单与操作表。已有库须补齐 `term_deposit_enabled` 后运行新版提醒查询。新增数据库变更合并入对应 CREATE 定义，不提交独立 ALTER/同步文件。
+
+## 账号安全
+
+- 050 新建 user_security/user_sessions；JWT 必须带 jti 并匹配本人有效会话，旧无 jti 凭证不接受。三个服务均核验会话，market-service 经内部接口核验，不缓存成功结果，故障返回 503。
+- 登录验证与会话创建、改密、恢复码生成/消费、设备退出先锁 users 对应行。敏感设置写入须在锁内复验当前会话，防止已退出请求继续更新。改密及恢复码找回撤销全部会话，退出登录撤销当前会话。
+- 密码保留首尾空格，6–64 字符且 UTF-8 不超过 BCrypt 的 72 字节。恢复码用安全随机数生成，摘要存储，仅生成时展示明文；成功使用后一次性消费。密码确认与找回接口须按账号/IP 限流。

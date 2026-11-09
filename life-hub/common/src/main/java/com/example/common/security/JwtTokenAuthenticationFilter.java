@@ -25,11 +25,14 @@ public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenService jwtTokenService;
     private final UserStatusChecker userStatusChecker;
     private final SecurityErrorWriter errorWriter;
+    private final SessionChecker sessionChecker;
+    public static final String SESSION_ID_ATTRIBUTE = "app.security.sessionId";
 
-    public JwtTokenAuthenticationFilter(JwtTokenService jwtTokenService, UserStatusChecker userStatusChecker, SecurityErrorWriter errorWriter) {
+    public JwtTokenAuthenticationFilter(JwtTokenService jwtTokenService, UserStatusChecker userStatusChecker, SecurityErrorWriter errorWriter, SessionChecker sessionChecker) {
         this.jwtTokenService = jwtTokenService;
         this.userStatusChecker = userStatusChecker;
         this.errorWriter = errorWriter;
+        this.sessionChecker = sessionChecker;
     }
 
     @Override
@@ -52,8 +55,8 @@ public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
             if (username != null && userIdClaim != null
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
                 long userId = userIdClaim.longValue();
-                // 已注销/禁用的用户即使持有未过期 token 也拒绝认证（30 秒内生效）
-                if (userStatusChecker.isActive(userId)) {
+                // 状态缓存之外逐次校验有效会话及用户状态，撤销不等待缓存失效。
+                if (userStatusChecker.isActive(userId) && sessionChecker.isValid(userId, claims.getId())) {
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         username,
                         null,
@@ -61,6 +64,7 @@ public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
                     );
                     SecurityContextHolder.getContext().setAuthentication(authentication);
                     request.setAttribute(SecurityUtils.USER_ID_ATTRIBUTE, userId);
+                    request.setAttribute(SESSION_ID_ATTRIBUTE, claims.getId());
                 }
             }
         } catch (UserStatusUnavailableException unavailable) {

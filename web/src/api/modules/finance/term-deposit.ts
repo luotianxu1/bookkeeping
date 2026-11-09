@@ -2,6 +2,7 @@ import { financeRequest, requestGet, requestPost, requestPut } from '@/api/reque
 export type TermAction = 'withdraw' | 'renew_principal' | 'renew_all'
 export interface TermDeposit {
   id: number; accountId: number; accountName: string; fundingAccountId: number | null; payoutAccountId: number
+  interestCategoryId: number | null; interestCategoryName: string | null
   parentDepositId: number | null; name: string; currencyCode: string; principal: number; annualRate: number
   startDate: string; maturityDate: string; termMonths: number | null; maturityAction: TermAction
   openingMode: 'new' | 'existing' | 'renewal'; status: 'active' | 'due' | 'closed' | 'voided'; remark: string | null
@@ -9,12 +10,14 @@ export interface TermDeposit {
 }
 export interface TermOperation {
   id: number; operation: string; cashAccountId: number | null; cashAccountName: string | null; childDepositId: number | null
+  interestCategoryId: number | null; interestCategoryName: string | null
   principal: number; interest: number; cashDelta: number; occurredOn: string; detail: string | null
   reversedAt: string | null; createdAt: string
 }
 export interface TermDetail { deposit: TermDeposit; operations: TermOperation[] }
 export interface TermTerms {
   name: string; payoutAccountId: number; annualRate: number; startDate: string; maturityDate: string
+  interestCategoryId: number | null
   termMonths: number | null; maturityAction: TermAction; remark: string | null; requestId?: string
 }
 export interface CreateTermDeposit extends TermTerms {

@@ -6,7 +6,6 @@ import com.example.auth.dto.JoinFamilyRequest;
 import com.example.auth.dto.LoginRequest;
 import com.example.auth.dto.LoginResponse;
 import com.example.auth.dto.RegisterRequest;
-import com.example.auth.model.UserAccount;
 import com.example.auth.security.JwtService;
 import com.example.auth.security.LoginRateLimiter;
 import com.example.auth.security.RegisterRateLimiter;
@@ -38,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final com.example.auth.service.AccountSecurityService accountSecurityService;
     private final JwtService jwtService;
     private final LoginRateLimiter loginRateLimiter;
     private final RegisterRateLimiter registerRateLimiter;
@@ -48,11 +48,13 @@ public class AuthController {
 
     public AuthController(
         AuthService authService,
+        com.example.auth.service.AccountSecurityService accountSecurityService,
         JwtService jwtService,
         LoginRateLimiter loginRateLimiter,
         RegisterRateLimiter registerRateLimiter
     ) {
         this.authService = authService;
+        this.accountSecurityService = accountSecurityService;
         this.jwtService = jwtService;
         this.loginRateLimiter = loginRateLimiter;
         this.registerRateLimiter = registerRateLimiter;
@@ -65,21 +67,23 @@ public class AuthController {
         if (loginRateLimiter.isBlocked(rateLimitKey)) {
             return Result.<LoginResponse>fail().code(429).message("登录尝试次数过多，请 15 分钟后再试");
         }
-        UserAccount user = authService.authenticate(request.username(), request.password()).orElse(null);
+        var user = accountSecurityService.login(request.username(), request.password(), httpRequest.getHeader("User-Agent"), httpRequest.getRemoteAddr()).orElse(null);
         if (user == null) {
             loginRateLimiter.recordFailure(rateLimitKey);
             return Result.<LoginResponse>fail().code(401).message("用户名或密码错误");
         }
         loginRateLimiter.clear(rateLimitKey);
-        authService.markLoginSuccess(user.id());
-        String token = jwtService.generateToken(user.username(), user.id());
+        String token = jwtService.generateToken(user.username(), user.userId(), user.sessionId());
         writeTokenCookie(httpResponse, token, jwtService.getExpirationSeconds());
         return Result.ok(new LoginResponse(token, "Bearer", jwtService.getExpirationSeconds()));
     }
 
     @PostMapping("/logout")
     @Operation(summary = "用户登出", description = "清除登录 Cookie")
-    public Result<Void> logout(HttpServletResponse httpResponse) {
+    public Result<Void> logout(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        Long userId = com.example.common.security.SecurityUtils.currentUserId();
+        String sessionId = (String) httpRequest.getAttribute(JwtTokenAuthenticationFilter.SESSION_ID_ATTRIBUTE);
+        if (userId != null && sessionId != null) accountSecurityService.revokeSession(userId, sessionId, sessionId);
         writeTokenCookie(httpResponse, "", 0);
         return Result.<Void>ok().message("已登出");
     }
@@ -156,19 +160,6 @@ public class AuthController {
         example = "Bearer eyJhbGciOiJIUzM4NCJ9.xxx"
     )
     public Result<CurrentUserResponse> me(@AuthenticationPrincipal String username) {
-        UserAccount user = authService.getCurrentUser(username).orElse(null);
-        if (user == null) {
-            return Result.<CurrentUserResponse>fail().code(401).message("未登录或登录已过期");
-        }
-
-        return Result.ok(new CurrentUserResponse(
-            user.id(),
-            user.username(),
-            user.phone(),
-            user.email(),
-            user.displayName(),
-            user.avatarUrl(),
-            user.roleName()
-        ));
+        return Result.ok(accountSecurityService.currentUser(com.example.common.security.SecurityUtils.requireCurrentUserId()));
     }
 }

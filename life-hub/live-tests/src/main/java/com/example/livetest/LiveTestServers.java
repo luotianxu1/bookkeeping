@@ -71,6 +71,8 @@ public final class LiveTestServers {
                 + (table.getIdType() == IdType.AUTO ? " AUTO_INCREMENT" : "") + " PRIMARY KEY";
             jdbc.execute("CREATE TABLE IF NOT EXISTS " + table.getTableName() + " (" + key + ", " + fields + ")");
         }
+        jdbc.execute("CREATE TABLE user_security(user_id BIGINT PRIMARY KEY, recovery_code_hash CHAR(64), recovery_created_at TIMESTAMP)");
+        jdbc.execute("CREATE TABLE user_sessions(id CHAR(36) PRIMARY KEY, user_id BIGINT, device_name VARCHAR(100), ip_address VARCHAR(64), created_at TIMESTAMP, last_seen_at TIMESTAMP, expires_at TIMESTAMP, revoked_at TIMESTAMP)");
         jdbc.execute("CREATE TABLE accounting_requests(user_id BIGINT, operation VARCHAR(40), request_id VARCHAR(64), request_hash VARCHAR(64), response_json CLOB, PRIMARY KEY(user_id,operation,request_id))");
         jdbc.execute("CREATE TABLE reminder_settings(user_id BIGINT PRIMARY KEY, advance_days INT DEFAULT 3, todo_enabled BOOLEAN DEFAULT TRUE, anniversary_enabled BOOLEAN DEFAULT TRUE, renewal_enabled BOOLEAN DEFAULT TRUE, liability_enabled BOOLEAN DEFAULT TRUE, investment_enabled BOOLEAN DEFAULT TRUE, budget_enabled BOOLEAN DEFAULT TRUE, reimbursement_enabled BOOLEAN DEFAULT TRUE, term_deposit_enabled BOOLEAN DEFAULT TRUE)");
         jdbc.execute("CREATE TABLE reminder_states(user_id BIGINT, reminder_key VARCHAR(120), read_at TIMESTAMP, snoozed_until TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id,reminder_key))");

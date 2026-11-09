@@ -150,7 +150,7 @@ class MySqlAccountingTest {
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM food_dishes", Integer.class));
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM food_orders", Integer.class));
             assertEquals(11, jdbc.queryForObject("SELECT COUNT(*) FROM account_types", Integer.class));
-            assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM categories", Integer.class));
+            assertEquals(8, jdbc.queryForObject("SELECT COUNT(*) FROM categories", Integer.class));
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='weight_records' AND column_name='body_fat_rate'", Integer.class));
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_collation<>'utf8mb4_unicode_ci'", Integer.class));
             long owner = jdbc.queryForObject("SELECT id FROM users WHERE username='admin'", Long.class);
@@ -163,7 +163,7 @@ class MySqlAccountingTest {
                 initializeFile(jdbc, file + ".mysql.sql", true);
             assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM users", Integer.class));
             assertEquals(11, jdbc.queryForObject("SELECT COUNT(*) FROM account_types", Integer.class));
-            assertEquals(10, jdbc.queryForObject("SELECT COUNT(*) FROM categories", Integer.class));
+            assertEquals(8, jdbc.queryForObject("SELECT COUNT(*) FROM categories", Integer.class));
             assertEquals("Custom name", jdbc.queryForObject("SELECT display_name FROM users WHERE id=?", String.class, owner));
             assertEquals("user", jdbc.queryForObject("SELECT role_name FROM users WHERE id=?", String.class, owner));
             assertEquals("Custom cash", jdbc.queryForObject("SELECT name FROM account_types WHERE id=?", String.class, cashType));
@@ -201,15 +201,26 @@ class MySqlAccountingTest {
                 new SavingsAllocationService(session.getMapper(SavingsGoalMapper.class),session.getMapper(SavingsGoalEntryMapper.class)),
                 new AccountingIdempotencyService(session.getMapper(AccountingRequestMapper.class),new ObjectMapper()));
             var date=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai"));
-            var command=new com.example.app.dto.TermDepositDtos.Create(2L,1L,1L,"MySQL term",new BigDecimal("300"),new BigDecimal("2"),date.minusYears(1),date,12,"withdraw","new",null,List.of(),UUID.randomUUID().toString());
+            long incomeCategory=jdbc.queryForObject("SELECT id FROM categories WHERE type='income' LIMIT 1",Long.class);
+            var command=new com.example.app.dto.TermDepositDtos.Create(2L,1L,1L,incomeCategory,"MySQL term",new BigDecimal("300"),new BigDecimal("2"),date.minusYears(1),date,12,"withdraw","new",null,List.of(),UUID.randomUUID().toString());
             var deposit=tx.execute(t->term.create(owner,command));
+            assertEquals(incomeCategory,term.detail(owner,deposit.id()).deposit().interestCategoryId());
+            assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () ->
+                jdbc.update("UPDATE term_deposits SET interest_category_id=999999 WHERE id=?",deposit.id()));
+            jdbc.update("INSERT INTO categories(user_id,name,type,icon,status) VALUES(?,'Temporary interest','income','investment-income','active')",owner);
+            long temporaryCategory=jdbc.queryForObject("SELECT id FROM categories WHERE name='Temporary interest' AND user_id=?",Long.class,owner);
+            jdbc.update("UPDATE term_deposits SET interest_category_id=? WHERE id=?",temporaryCategory,deposit.id());
+            jdbc.update("DELETE FROM categories WHERE id=?",temporaryCategory);
+            assertNull(term.detail(owner,deposit.id()).deposit().interestCategoryId());
+            jdbc.update("UPDATE term_deposits SET interest_category_id=? WHERE id=?",incomeCategory,deposit.id());
             assertEquals(deposit.id(),tx.execute(t->term.create(owner,command)).id());
             assertEquals(0,new BigDecimal("600").compareTo(jdbc.queryForObject("SELECT current_balance FROM accounts WHERE id=1",BigDecimal.class)));
             assertEquals(0,new BigDecimal("300").compareTo(session.getMapper(AccountMapper.class).termDepositPrincipal(2L)));
-            long incomeCategory=jdbc.queryForObject("SELECT id FROM categories WHERE type='income' LIMIT 1",Long.class);
             tx.execute(t->term.settle(owner,deposit.id(),new com.example.app.dto.TermDepositDtos.Settle("renew_all",1L,incomeCategory,new BigDecimal("6"),date,new BigDecimal("1.8"),date.plusYears(1),12,null,UUID.randomUUID().toString())));
             assertEquals(0,new BigDecimal("306").compareTo(session.getMapper(AccountMapper.class).termDepositPrincipal(2L)));
             var op=term.detail(owner,deposit.id()).operations().get(0);
+            assertEquals(incomeCategory,op.interestCategoryId());
+            assertEquals(incomeCategory,term.detail(owner,op.childDepositId()).deposit().interestCategoryId());
             tx.execute(t->term.reverse(owner,deposit.id(),new com.example.app.dto.TermDepositDtos.Reverse(op.id(),UUID.randomUUID().toString())));
             tx.execute(t->term.cancel(owner,deposit.id(),new com.example.app.dto.TermDepositDtos.Cancel(UUID.randomUUID().toString())));
             assertEquals(0,new BigDecimal("900").compareTo(jdbc.queryForObject("SELECT current_balance FROM accounts WHERE id=1",BigDecimal.class)));

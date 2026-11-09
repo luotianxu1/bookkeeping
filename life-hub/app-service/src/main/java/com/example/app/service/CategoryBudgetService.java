@@ -42,8 +42,7 @@ public class CategoryBudgetService {
         var category = categories.selectById(request.categoryId());
         if (category == null || (category.getUserId() != null && !Objects.equals(category.getUserId(), userId))
             || !"expense".equals(category.getType()) || !"active".equals(category.getStatus())) throw new IllegalArgumentException("请选择有效支出分类");
-        if (categories.selectCount(new LambdaQueryWrapper<CategoryEntity>().eq(CategoryEntity::getParentId, category.getId())
-            .eq(CategoryEntity::getStatus, "active")) > 0) throw new IllegalArgumentException("请选择具体的二级分类，避免预算重复统计");
+        if (categories.countActiveChildrenForUser(category.getId(), userId) > 0) throw new IllegalArgumentException("请选择具体的二级分类，避免预算重复统计");
         if (request.amount() == null || request.amount().signum() <= 0 || request.amount().scale() > 2)
             throw new IllegalArgumentException("请输入大于0且最多两位小数的预算金额");
         var month = request.budgetMonth().withDayOfMonth(1);

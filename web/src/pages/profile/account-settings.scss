@@ -1,0 +1,26 @@
+.account-settings-page {
+  display: flex; flex-direction: column; height: 100%; min-height: 0; gap: var(--space-8);
+  color: var(--color-text-primary);
+  .settings-content { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-8); padding-bottom: var(--space-12); }
+  .settings-card { padding: var(--space-12); border-radius: var(--radius-12); background: var(--color-bg-card); }
+  .settings-card h2 { margin: 0; font-size: var(--font-size-14); }
+  .settings-card p, .settings-muted { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-12); line-height: 1.5; }
+  .settings-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-12); }
+  .settings-row > div { min-width: 0; display: grid; gap: var(--space-4); }
+  .settings-row > button { flex-shrink: 0; }
+  .settings-form { display: grid; gap: var(--space-10); }
+  .settings-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-8); }
+  .session-list { display: grid; gap: 0; }
+  .session-row { padding: var(--space-12) 0; border-bottom: 1px solid var(--color-bg-soft-2); }
+  .session-row:last-child { padding-bottom: 0; border-bottom: 0; }
+  .session-row p { overflow-wrap: anywhere; }
+  .session-title { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-6); font-size: var(--font-size-14); }
+  .current-device { font-size: var(--font-size-11); color: var(--color-text-secondary); font-weight: 400; }
+}
+.security-modal-form { display: grid; gap: var(--space-10); }
+.security-description { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-12); line-height: 1.5; }
+.security-error { margin: 0; color: var(--color-danger); font-size: var(--font-size-12); line-height: 1.5; }
+.security-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); }
+.recovery-code { display: block; padding: var(--space-12); background: var(--color-bg-soft-2); border-radius: var(--radius-8); font-size: var(--font-size-16); letter-spacing: 1px; word-break: break-all; user-select: all; line-height: 1.6; }
+.security-field { display: grid; gap: var(--space-6); font-size: var(--font-size-13); color: var(--color-text-secondary); }
+.security-field input { box-sizing: border-box; width: 100%; min-width: 0; height: var(--space-40); padding: 0 var(--space-12); border: 1px solid var(--color-border); border-radius: var(--radius-8); background: var(--color-bg-card); color: var(--color-text-primary); font: inherit; font-size: var(--font-size-14); }

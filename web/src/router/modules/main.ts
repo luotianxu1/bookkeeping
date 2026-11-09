@@ -3,6 +3,21 @@ import type { RouteRecordRaw } from 'vue-router'
 
 export const mainRoutes: RouteRecordRaw[] = [
   {
+    path: '/profile/edit', name: 'profile-edit',
+    component: () => import('@/pages/profile/ProfileEditPage/index.vue'),
+    meta: { section: 'profile', title: '个人资料' },
+  },
+  {
+    path: '/profile/security', name: 'profile-security',
+    component: () => import('@/pages/profile/AccountSecurityPage/index.vue'),
+    meta: { section: 'profile', title: '隐私与安全' },
+  },
+  {
+    path: '/forgot-password', name: 'forgot-password',
+    component: () => import('@/pages/login/ForgotPasswordPage/index.vue'),
+    meta: { section: 'profile', title: '找回密码' },
+  },
+  {
     path: '/profile/reminders',
     name: 'profile-reminders',
     component: () => import('@/pages/profile/ReminderCenterPage/index.vue'),

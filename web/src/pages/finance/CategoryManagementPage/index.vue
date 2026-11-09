@@ -27,7 +27,6 @@ import {
   buildCategoryGroups,
   canCategoryBeDeleted,
   getNextCategorySortOrder,
-  isHiddenFixedExpenseCategory,
 } from './categoryTree'
 
 const tabOptions = ['全部', '支出', '收入']
@@ -220,7 +219,7 @@ async function loadCategories() {
       userId: currentUser.id,
       status: 'active',
     })
-    categories.value = nextCategories.filter((category) => !isHiddenFixedExpenseCategory(category))
+    categories.value = nextCategories
   } catch (error) {
     categoryListError.value = getErrorMessage(error, '分类列表加载失败')
   } finally {
@@ -396,7 +395,10 @@ function canDeleteCategory(category: Category) {
                     :name="group.parent.name"
                     :size="24"
                   />
-                  <strong>{{ group.parent.name }}</strong>
+                  <span class="category-name">
+                    <strong>{{ group.parent.name }}</strong>
+                    <span v-if="group.parent.system" class="category-system-label">系统</span>
+                  </span>
                 </button>
                 <button
                   v-if="isManageMode && !group.parent.system"
@@ -437,6 +439,7 @@ function canDeleteCategory(category: Category) {
                     :size="28"
                   />
                   <strong>{{ item.name }}</strong>
+                  <span v-if="item.system" class="category-system-label">系统</span>
                 </button>
                 <button
                   v-if="isManageMode && !item.system"
@@ -475,7 +478,10 @@ function canDeleteCategory(category: Category) {
                     :name="group.parent.name"
                     :size="24"
                   />
-                  <strong>{{ group.parent.name }}</strong>
+                  <span class="category-name">
+                    <strong>{{ group.parent.name }}</strong>
+                    <span v-if="group.parent.system" class="category-system-label">系统</span>
+                  </span>
                 </button>
                 <button
                   v-if="isManageMode && !group.parent.system"
@@ -516,6 +522,7 @@ function canDeleteCategory(category: Category) {
                     :size="28"
                   />
                   <strong>{{ item.name }}</strong>
+                  <span v-if="item.system" class="category-system-label">系统</span>
                 </button>
                 <button
                   v-if="isManageMode && !item.system"

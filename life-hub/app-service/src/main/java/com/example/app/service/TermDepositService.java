@@ -57,8 +57,12 @@ public class TermDepositService {
         var deposit=requireDeposit(userId,id);
         var history=operations.selectList(new LambdaQueryWrapper<TermDepositOperationEntity>()
             .eq(TermDepositOperationEntity::getDepositId,id).orderByDesc(TermDepositOperationEntity::getId)).stream()
-            .map(o -> new Operation(o.getId(),o.getOperation(),o.getCashAccountId(),accountName(o.getCashAccountId()),o.getChildDepositId(),
-                o.getPrincipal(),o.getInterest(),o.getCashDelta(),o.getOccurredOn(),o.getDetail(),o.getReversedAt(),o.getCreatedAt())).toList();
+            .map(o -> {
+                var income=o.getInterestTransactionId()==null?null:transactions.selectById(o.getInterestTransactionId());
+                Long categoryId=income==null?null:income.getCategoryId();
+                return new Operation(o.getId(),o.getOperation(),o.getCashAccountId(),accountName(o.getCashAccountId()),o.getChildDepositId(),
+                    categoryId,categoryName(categoryId),o.getPrincipal(),o.getInterest(),o.getCashDelta(),o.getOccurredOn(),o.getDetail(),o.getReversedAt(),o.getCreatedAt());
+            }).toList();
         return new Detail(view(deposit),history);
     }
 
@@ -70,10 +74,12 @@ public class TermDepositService {
             if (!Set.of("new","existing").contains(Objects.toString(request.openingMode(),""))) fail("请选择现在存入或补录已有存单");
             var account=requireAccount(userId,request.accountId(),"term_deposit",null);
             var payout=requireAccount(userId,request.payoutAccountId(),"cash",account.getCurrencyCode());
+            if(request.interestCategoryId()!=null) requireIncomeCategory(userId,request.interestCategoryId());
             var funding="new".equals(request.openingMode()) ? requireAccount(userId,request.fundingAccountId(),"cash",account.getCurrencyCode()) : null;
             if(funding==null && request.savingsAllocations()!=null && !request.savingsAllocations().isEmpty()) fail("补录存单不能扣减储蓄目标");
             var d=new TermDepositEntity(); d.setUserId(userId); d.setAccountId(account.getId()); d.setPayoutAccountId(payout.getId());
             d.setFundingAccountId(funding==null?null:funding.getId()); d.setCurrencyCode(account.getCurrencyCode());
+            d.setInterestCategoryId(request.interestCategoryId());
             d.setPrincipal(request.principal()); d.setOpeningMode(request.openingMode()); d.setStatus("active");
             fillTerms(d,request.name(),request.annualRate(),request.startDate(),request.maturityDate(),request.termMonths(),request.maturityAction(),request.remark());
             d.setCreatedAt(now()); deposits.insert(d);
@@ -96,12 +102,14 @@ public class TermDepositService {
             var d=requireDeposit(userId,id); if("voided".equals(d.getStatus())) fail("已撤销存单不能修改");
             validateTerms(request.name(),d.getPrincipal(),request.annualRate(),request.startDate(),request.maturityDate(),request.termMonths(),request.maturityAction(),request.remark());
             requireAccount(userId,request.payoutAccountId(),"cash",d.getCurrencyCode());
+            if(request.interestCategoryId()!=null) requireIncomeCategory(userId,request.interestCategoryId());
             if(!Objects.equals(d.getStartDate(),request.startDate())) fail("起息日更正请先撤销存单后重新登记");
             if(!"active".equals(d.getStatus()) && (d.getAnnualRate().compareTo(request.annualRate())!=0
                 || !Objects.equals(d.getMaturityDate(),request.maturityDate()) || !Objects.equals(d.getTermMonths(),request.termMonths())))
                 fail("已结清存单更正利率或存期前，请先撤销结算");
             String before=termsText(d);
             d.setPayoutAccountId(request.payoutAccountId());
+            d.setInterestCategoryId(request.interestCategoryId());
             fillTerms(d,request.name(),request.annualRate(),request.startDate(),request.maturityDate(),request.termMonths(),request.maturityAction(),request.remark());
             deposits.updateById(d);
             operations.insert(operation(d,"edit",today(),before+" → "+termsText(d)));
@@ -124,7 +132,7 @@ public class TermDepositService {
             BigDecimal principal=d.getPrincipal(), interest=request.actualInterest();
             if(principal.add(interest).compareTo(MAX)>0) fail("本息合计超出金额范围");
             if(renewal && request.occurredOn().isBefore(d.getMaturityDate())) fail("存单到期后才能续存，提前取回请选择支取");
-            if(interest.signum()>0) requireIncomeCategory(userId,request.interestCategoryId());
+            if(interest.signum()>0 || request.interestCategoryId()!=null) requireIncomeCategory(userId,request.interestCategoryId());
             var op=operation(d,renewal?request.action():request.occurredOn().isBefore(d.getMaturityDate())?"early_withdraw":"withdraw",request.occurredOn(),request.remark());
             op.setCashAccountId(cash.getId()); op.setInterest(interest);
             op.setPrincipalTransactionId(transfer(d,d.getAccountId(),cash.getId(),principal,request.occurredOn(),"定期本金取回").getId());
@@ -135,6 +143,7 @@ public class TermDepositService {
                 validateTerms(d.getName(),nextPrincipal,request.renewalAnnualRate(),request.occurredOn(),request.renewalMaturityDate(),request.renewalTermMonths(),d.getMaturityAction(),d.getRemark());
                 var child=new TermDepositEntity(); child.setUserId(userId); child.setAccountId(d.getAccountId()); child.setFundingAccountId(cash.getId());
                 child.setPayoutAccountId(cash.getId()); child.setParentDepositId(d.getId()); child.setCurrencyCode(d.getCurrencyCode());
+                child.setInterestCategoryId(request.interestCategoryId());
                 child.setPrincipal(nextPrincipal); child.setOpeningMode("renewal"); child.setStatus("active"); child.setCreatedAt(now());
                 fillTerms(child,d.getName(),request.renewalAnnualRate(),request.occurredOn(),request.renewalMaturityDate(),request.renewalTermMonths(),d.getMaturityAction(),d.getRemark());
                 deposits.insert(child); op.setChildDepositId(child.getId());
@@ -217,6 +226,7 @@ public class TermDepositService {
     private void requireIncomeCategory(long userId,Long id) {
         var c=id==null?null:categories.selectById(id);
         if(c==null || (c.getUserId()!=null && !Objects.equals(c.getUserId(),userId)) || !"income".equals(c.getType()) || !"active".equals(c.getStatus())) fail("请选择启用的收入分类记录利息");
+        if(categories.countActiveChildrenForUser(id,userId)>0) fail("请选择具体的二级收入分类记录利息");
     }
     private TransactionEntity transfer(TermDepositEntity d,Long from,Long to,BigDecimal amount,LocalDate date,String title) {
         var t=transaction(d,amount,date,title); t.setType("transfer"); t.setFromAccountId(from); t.setToAccountId(to); transactions.insert(t); return t;
@@ -265,10 +275,16 @@ public class TermDepositService {
         return d.getPrincipal().multiply(d.getAnnualRate()).multiply(years).divide(BigDecimal.valueOf(100),2,RoundingMode.HALF_UP);
     }
     private String accountName(Long id) { var a=id==null?null:accounts.selectById(id); return a==null?null:a.getName(); }
-    private String termsText(TermDepositEntity d) { return d.getName()+"，年利率 "+d.getAnnualRate()+"%，到期 "+d.getMaturityDate()+"，到账账户 #"+d.getPayoutAccountId()+"，到期意向 "+d.getMaturityAction()+"，备注："+Objects.toString(d.getRemark(),""); }
+    private String categoryName(Long id) {
+        var category=id==null?null:categories.selectById(id);
+        if(category==null)return null;
+        var parent=category.getParentId()==null?null:categories.selectById(category.getParentId());
+        return parent==null?category.getName():parent.getName()+" / "+category.getName();
+    }
+    private String termsText(TermDepositEntity d) { return d.getName()+"，年利率 "+d.getAnnualRate()+"%，到期 "+d.getMaturityDate()+"，到账账户 #"+d.getPayoutAccountId()+"，利息分类 "+Objects.toString(categoryName(d.getInterestCategoryId()),"未设置")+"，到期意向 "+d.getMaturityAction()+"，备注："+Objects.toString(d.getRemark(),""); }
     private View view(TermDepositEntity d) {
         var interest=expectedInterest(d);
-        return new View(d.getId(),d.getAccountId(),accountName(d.getAccountId()),d.getFundingAccountId(),d.getPayoutAccountId(),d.getParentDepositId(),d.getName(),
+        return new View(d.getId(),d.getAccountId(),accountName(d.getAccountId()),d.getFundingAccountId(),d.getPayoutAccountId(),d.getInterestCategoryId(),categoryName(d.getInterestCategoryId()),d.getParentDepositId(),d.getName(),
             d.getCurrencyCode(),d.getPrincipal(),d.getAnnualRate(),d.getStartDate(),d.getMaturityDate(),d.getTermMonths(),d.getMaturityAction(),d.getOpeningMode(),
             "active".equals(d.getStatus()) && !d.getMaturityDate().isAfter(today())?"due":d.getStatus(),d.getRemark(),interest,d.getPrincipal().add(interest),
             ChronoUnit.DAYS.between(today(),d.getMaturityDate()),today(),"active".equals(d.getStatus()) && d.getParentDepositId()==null);

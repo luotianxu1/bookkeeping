@@ -23,7 +23,7 @@ class JwtTokenAuthenticationFilterTest {
 
     @Test void unavailableStatusReturns503AndPreservesCookie() throws Exception {
         var jwt = new JwtTokenService(SECRET);
-        var filter = new JwtTokenAuthenticationFilter(jwt, id -> { throw new UserStatusUnavailableException(); }, new SecurityErrorWriter(new ObjectMapper()));
+        var filter = new JwtTokenAuthenticationFilter(jwt, id -> { throw new UserStatusUnavailableException(); }, new SecurityErrorWriter(new ObjectMapper()), (id, session) -> true);
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/finance/accounts");
         SecretKey key = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
         String token = Jwts.builder().subject("alice").claim("userId", 1L).issuedAt(new Date()).expiration(new Date(System.currentTimeMillis() + 60_000)).signWith(key).compact();
@@ -36,5 +36,36 @@ class JwtTokenAuthenticationFilterTest {
         assertFalse(reached.get());
         assertNull(response.getHeader("Set-Cookie"));
         assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test void revokedOrMissingSessionCannotAuthenticateButValidSessionCan() throws Exception {
+        String sessionId = java.util.UUID.randomUUID().toString();
+        var filter = new JwtTokenAuthenticationFilter(new JwtTokenService(SECRET), id -> true,
+            new SecurityErrorWriter(new ObjectMapper()), (id, session) -> sessionId.equals(session));
+        for (String candidate : new String[]{"revoked", "", sessionId}) {
+            SecurityContextHolder.clearContext();
+            String token = Jwts.builder().subject("alice").claim("userId", 1L).id(candidate)
+                .expiration(new Date(System.currentTimeMillis() + 60_000))
+                .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8))).compact();
+            var request = new MockHttpServletRequest("GET", "/api/finance/accounts");
+            request.addHeader("Authorization", "Bearer " + token);
+            filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {});
+            assertEquals(candidate.equals(sessionId), SecurityContextHolder.getContext().getAuthentication() != null);
+            assertEquals(candidate.equals(sessionId) ? sessionId : null, request.getAttribute(JwtTokenAuthenticationFilter.SESSION_ID_ATTRIBUTE));
+        }
+    }
+
+    @Test void unavailableSessionCheckReturns503WithoutClearingCookie() throws Exception {
+        var filter = new JwtTokenAuthenticationFilter(new JwtTokenService(SECRET), id -> true,
+            new SecurityErrorWriter(new ObjectMapper()), (id, session) -> { throw new UserStatusUnavailableException(); });
+        String token = Jwts.builder().subject("alice").claim("userId", 1L).id(java.util.UUID.randomUUID().toString())
+            .expiration(new Date(System.currentTimeMillis() + 60_000))
+            .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8))).compact();
+        var request = new MockHttpServletRequest("GET", "/api/market/overview");
+        request.setCookies(new jakarta.servlet.http.Cookie("access_token", token));
+        var response = new MockHttpServletResponse();
+        filter.doFilter(request, response, (req, res) -> fail("must not continue"));
+        assertEquals(503, response.getStatus());
+        assertNull(response.getHeader("Set-Cookie"));
     }
 }

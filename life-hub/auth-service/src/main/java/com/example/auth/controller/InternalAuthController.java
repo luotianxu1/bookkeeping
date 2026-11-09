@@ -25,10 +25,18 @@ public class InternalAuthController {
 
     private final UserStatusChecker userStatusChecker;
     private final FamilyScopeChecker familyScopeChecker;
+    private final com.example.common.security.SessionChecker sessionChecker;
 
-    public InternalAuthController(UserStatusChecker userStatusChecker, FamilyScopeChecker familyScopeChecker) {
+    public InternalAuthController(UserStatusChecker userStatusChecker, FamilyScopeChecker familyScopeChecker, com.example.common.security.SessionChecker sessionChecker) {
         this.userStatusChecker = userStatusChecker;
         this.familyScopeChecker = familyScopeChecker;
+        this.sessionChecker = sessionChecker;
+    }
+
+    @GetMapping("/session-status")
+    public Result<Boolean> sessionStatus(@RequestParam("userId") long userId,
+                                         @RequestParam("sessionId") String sessionId) {
+        return Result.ok(sessionChecker.isValid(userId, sessionId));
     }
 
     @GetMapping("/user-status")

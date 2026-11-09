@@ -10,7 +10,7 @@ const route = useRoute()
 const activeSection = computed<AppSection>(() => route.meta.section ?? 'finance')
 const screenLabel = computed<string>(() => route.meta.title ?? '财务首页')
 const moduleHomePaths = new Set(['/finance', '/food', '/tools', '/profile'])
-const authPaths = new Set(['/login', '/register'])
+const authPaths = new Set(['/login', '/register', '/forgot-password'])
 const bottomNavVisiblePaths = new Set(['/finance', '/food', '/tools', '/profile'])
 const showBottomNav = computed<boolean>(() => bottomNavVisiblePaths.has(route.path))
 const contentMode = computed<'module-home' | 'subpage' | 'auth'>(() => {

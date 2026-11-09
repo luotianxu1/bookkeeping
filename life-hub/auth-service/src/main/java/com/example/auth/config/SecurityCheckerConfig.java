@@ -17,6 +17,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class SecurityCheckerConfig {
 
     @Bean
+    public com.example.common.security.SessionChecker sessionChecker(JdbcTemplate jdbcTemplate) {
+        return new com.example.common.security.JdbcSessionChecker(jdbcTemplate);
+    }
+
+    @Bean
     public UserStatusChecker userStatusChecker(JdbcTemplate jdbcTemplate) {
         return new JdbcUserStatusChecker(jdbcTemplate);
     }

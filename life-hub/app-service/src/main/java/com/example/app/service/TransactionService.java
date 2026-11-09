@@ -512,9 +512,7 @@ public class TransactionService {
         if (!ACTIVE_CATEGORY_STATUS.equals(category.getStatus())) {
             throw new IllegalArgumentException("分类不可用");
         }
-        if (categoryMapper.selectCount(new LambdaQueryWrapper<CategoryEntity>()
-            .eq(CategoryEntity::getParentId, category.getId())
-            .eq(CategoryEntity::getStatus, ACTIVE_CATEGORY_STATUS)) > 0) {
+        if (categoryMapper.countActiveChildrenForUser(category.getId(), userId) > 0) {
             throw new IllegalArgumentException("请选择二级分类");
         }
         return category;

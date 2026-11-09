@@ -418,3 +418,18 @@
   font-weight: 600;
   line-height: 1.6;
 }
+
+.category-name {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.category-system-label {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-11);
+  font-weight: 400;
+  line-height: 1.4;
+}

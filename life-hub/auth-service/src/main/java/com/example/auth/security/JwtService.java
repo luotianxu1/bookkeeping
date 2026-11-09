@@ -24,11 +24,12 @@ public class JwtService {
         this.expirationSeconds = expirationSeconds;
     }
 
-    public String generateToken(String username, Long userId) {
+    public String generateToken(String username, Long userId, String sessionId) {
         Instant now = Instant.now();
         Instant expiredAt = now.plusSeconds(expirationSeconds);
         return Jwts.builder()
             .subject(username)
+            .id(sessionId)
             .claim("userId", userId)
             .issuedAt(Date.from(now))
             .expiration(Date.from(expiredAt))
