@@ -20,9 +20,9 @@ export const api = {
   logout: () => request('/api/auth/logout', { method: 'POST' }),
   session: () => request<Session>(root + '/session'),
   users: (query: {
-    keyword: string
-    status: string
-    roleCode: string
+    keyword?: string | null
+    status?: string | null
+    roleCode?: string | null
     page: number
     pageSize: number
   }) =>
@@ -30,13 +30,17 @@ export const api = {
       root +
         '/users?' +
         new URLSearchParams(
-          Object.entries(query).map(([key, value]) => [key, String(value)]),
+          Object.entries(query)
+            .filter(([, value]) => value != null && value !== '')
+            .map(([key, value]) => [key, String(value)]),
         ),
     ),
   createUser: (body: CreateUser) =>
     request<User>(root + '/users', { method: 'POST', body }),
   updateUser: (id: number, body: UserProfile) =>
     request<User>(`${root}/users/${id}`, { method: 'PUT', body }),
+  deleteUser: (id: number) =>
+    request<void>(`${root}/users/${id}`, { method: 'DELETE' }),
   userStatus: (id: number, status: UserStatus) =>
     request<User>(`${root}/users/${id}/status`, {
       method: 'PUT',

@@ -8,6 +8,7 @@ import PagePanel from '@/business/components/PagePanel.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 
 import { formatAmount } from '@/business/utils/format'
+import { amountTone } from '@/business/utils/amount-tone'
 // 财务首页：组合资产总览、统计入口和收支明细列表。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -44,6 +45,7 @@ const emptyOverview: FinanceOverview = {
 }
 
 const overview = ref({ ...emptyOverview })
+const monthlyAmounts = ref({ income: 0, expense: 0, balance: 0 })
 const transactions = ref<Transaction[]>([])
 const isLoadingTransactions = ref(true)
 const transactionListError = ref('')
@@ -177,6 +179,11 @@ function updateOverview(
   budgetAmount: number,
 ) {
   const monthlyBalance = monthlyIncome - monthlyExpense
+  monthlyAmounts.value = {
+    income: monthlyIncome,
+    expense: monthlyExpense,
+    balance: monthlyBalance,
+  }
   const budgetUsagePercent =
     budgetAmount > 0 ? (monthlyExpense / budgetAmount) * 100 : 0
   const isBudgetExceeded = budgetAmount > 0 && budgetUsagePercent > 100
@@ -296,15 +303,17 @@ const dashboardMetrics = computed(() => [
   {
     label: '本月收入',
     value: overview.value.monthlyIncome.replace('收入 ', ''),
-    tone: 'success',
+    tone: amountTone(monthlyAmounts.value.income),
   },
   {
     label: '本月净支出',
     value: overview.value.monthlyExpense.replace('支出 ', ''),
+    tone: amountTone(-monthlyAmounts.value.expense),
   },
   {
     label: '本月结余',
     value: overview.value.monthlyBalance.replace('当月结余 ', ''),
+    tone: amountTone(monthlyAmounts.value.balance),
   },
 ])
 </script>

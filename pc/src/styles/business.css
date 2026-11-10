@@ -271,17 +271,11 @@
 }
 .business-content :is(.up, .positive, .rising),
 .pc-business-dialog .positive {
-  color: #d65365;
+  color: var(--color-danger);
 }
 .business-content :is(.down, .negative, .falling),
 .pc-business-dialog .negative {
-  color: #249c78;
-}
-.business-content .amount-text--positive {
-  color: #249c78;
-}
-.business-content .amount-text--negative {
-  color: #d65365;
+  color: var(--color-success);
 }
 .business-content
   :is(.num, .amount-text, [class$='-amount'], [class$='-price']) {

@@ -22,6 +22,7 @@ const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const selectedYear = ref(String(new Date().getFullYear()))
+let loadVersion = 0
 const yearOptions = createRecentYearOptions(5)
 
 onMounted(() => {
@@ -29,6 +30,7 @@ onMounted(() => {
 })
 
 async function loadPage() {
+  const version = ++loadVersion
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看工资税务'
@@ -40,17 +42,20 @@ async function loadPage() {
   pageError.value = ''
 
   try {
-    pageData.value = await getSalaryTaxPage(
+    const result = await getSalaryTaxPage(
       currentUser.id,
       Number(selectedYear.value),
     )
+    if (version !== loadVersion) return
+    pageData.value = result
   } catch (error) {
+    if (version !== loadVersion) return
     pageError.value = getErrorMessage(error, '工资税务加载失败')
     feedbackMessage.value = pageError.value
     feedbackType.value = 'error'
     feedbackVisible.value = true
   } finally {
-    isLoading.value = false
+    if (version === loadVersion) isLoading.value = false
   }
 }
 

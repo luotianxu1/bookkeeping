@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AmountText from '@/business/components/common/AmountText/index.vue'
+import { amountTone } from '@/business/utils/amount-tone'
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
 import { computed, onMounted, ref } from 'vue'
@@ -506,11 +508,19 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
     <div class="pc-statistics">
       <el-card shadow="never">
         <small>年度固定支出</small>
-        <strong>{{ formatCurrency(annualFixedExpenseAmount) }}</strong>
+        <AmountText
+          tag="strong"
+          :value="formatCurrency(annualFixedExpenseAmount)"
+          :tone="amountTone(-annualFixedExpenseAmount)"
+        />
       </el-card>
       <el-card shadow="never">
         <small>月均支出</small>
-        <strong>{{ formatCurrency(monthlyAverageAmount) }}</strong>
+        <AmountText
+          tag="strong"
+          :value="formatCurrency(monthlyAverageAmount)"
+          :tone="amountTone(-monthlyAverageAmount)"
+        />
       </el-card>
     </div>
     <DesktopTable
@@ -541,7 +551,10 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column label="金额" min-width="140">
         <template #default="{ row }: { row: DesktopRow }">
-          {{ formatCurrency(row.amount) }}
+          <AmountText
+            :value="formatCurrency(row.amount)"
+            :tone="amountTone(-row.amount)"
+          />
         </template>
       </el-table-column>
       <!-- @vue-generic {DesktopRow} -->

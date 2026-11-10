@@ -128,6 +128,12 @@
 .desktop-metric .metric-danger {
   color: var(--el-color-danger);
 }
+.desktop-metric .metric-positive {
+  color: var(--color-danger);
+}
+.desktop-metric .metric-negative {
+  color: var(--color-success);
+}
 .desktop-filter-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

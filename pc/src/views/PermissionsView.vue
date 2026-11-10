@@ -256,7 +256,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
               全选可授权权限
             </el-button>
             <el-button link :disabled="saving" @click="selected = []">
-              清空
+              移除全部权限
             </el-button>
           </div>
         </div>

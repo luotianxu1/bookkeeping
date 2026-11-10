@@ -99,9 +99,20 @@ type Transaction = DayGroup['transactions'][number]
   <el-card shadow="never" class="pc-record-card">
     <div class="pc-toolbar">
       <h3>{{ group.date }}</h3>
-      <span>收入 {{ group.income }}</span>
-      <span>支出 {{ expenseSummaryAmount(group.expense) }}</span>
-      <span>盈余 {{ group.surplus }}</span>
+      <span
+        >收入
+        <AmountText :value="group.income" :tone="summaryTone(group.income)"
+      /></span>
+      <span
+        >支出
+        <AmountText
+          :value="expenseSummaryAmount(group.expense)"
+          :tone="summaryTone(expenseSummaryAmount(group.expense))"
+      /></span>
+      <span
+        >盈余
+        <AmountText :value="group.surplus" :tone="summaryTone(group.surplus)"
+      /></span>
       <el-tag type="info">{{ group.transactions.length }} 笔</el-tag>
     </div>
     <el-table :data="group.transactions" stripe>

@@ -182,17 +182,15 @@ export function useAnalysisCharts(options: {
     const data = (analysis.value?.trendPoints ?? []).map((point) =>
       Number(point[metric] ?? 0),
     )
-    const seriesData =
-      metric === 'surplus'
-        ? data.map((value) => ({
-            value,
-            itemStyle: {
-              color:
-                value >= 0 ? getToneColor('income') : getToneColor('expense'),
-              borderRadius: value >= 0 ? [6, 6, 0, 0] : [0, 0, 6, 6],
-            },
-          }))
-        : data
+    const seriesData = data.map((value) => ({
+      value,
+      itemStyle: {
+        color: getToneColor(
+          (metric === 'expense' ? -value : value) >= 0 ? 'income' : 'expense',
+        ),
+        borderRadius: value >= 0 ? [6, 6, 0, 0] : [0, 0, 6, 6],
+      },
+    }))
 
     return {
       animation: false,

@@ -4,6 +4,7 @@ import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
 
 import { formatCnyAmount as formatAmount } from '@/business/utils/format'
+import { amountTone } from '@/business/utils/amount-tone'
 // 收支工作台：组合筛选、汇总和服务端分页流水。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -86,6 +87,7 @@ const showFeedbackModal = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 const transactionRequestSerial = ref(0)
+const searchVersion = ref(0)
 const selectedDateRange = ref<DateRangeKey>('month')
 const selectedAccountId = ref('all')
 const selectedSortOrder = ref<SortOrder>('desc')
@@ -202,6 +204,7 @@ onMounted(() => {
 watch(familyView, async () => {
   ++categorySerial
   selectedCategoryId.value = 'all'
+  draftCategoryId.value = 'all'
   categories.value = []
   currentPage.value = 1
   selectedAccountId.value = 'all'
@@ -225,6 +228,7 @@ watch(
     selectedCategoryId,
     minAmount,
     maxAmount,
+    searchVersion,
   ],
   () => {
     currentPage.value = 1
@@ -290,6 +294,9 @@ function applyAdvancedFilters() {
   minAmount.value = min
   maxAmount.value = max
   keyword.value = searchInput.value.trim()
+  filterError.value = ''
+  // 显式查询即使条件不变，也通过同一个 watcher 回到首页并刷新。
+  searchVersion.value++
 }
 
 async function loadCashAccountOptions() {
@@ -568,6 +575,7 @@ function resetDesktopFilters() {
   draftMaxAmount.value = ''
   filterError.value = ''
   clearSearchFilters()
+  searchVersion.value++
 }
 </script>
 <template>
@@ -681,10 +689,18 @@ function resetDesktopFilters() {
         {
           label: '收入',
           value: formatPositiveAmount(summaryIncomeTotal),
-          tone: 'success',
+          tone: amountTone(summaryIncomeTotal),
         },
-        { label: '净支出', value: formatAmount(summaryExpenseTotal) },
-        { label: '结余', value: formatSignedAmount(summaryBalanceTotal) },
+        {
+          label: '净支出',
+          value: formatAmount(summaryExpenseTotal),
+          tone: amountTone(-summaryExpenseTotal),
+        },
+        {
+          label: '结余',
+          value: formatSignedAmount(summaryBalanceTotal),
+          tone: amountTone(summaryBalanceTotal),
+        },
         { label: '流水笔数', value: totalItems },
       ]"
     />

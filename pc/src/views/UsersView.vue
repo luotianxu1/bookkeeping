@@ -162,6 +162,42 @@ async function assignRole() {
   }
 }
 const changing = ref<number | null>(null)
+function deletable(user: User) {
+  return (
+    can('user.delete') &&
+    manageable(user) &&
+    user.id !== session.data?.user.id &&
+    user.roleCode !== 'super_admin'
+  )
+}
+async function remove(user: User) {
+  if (changing.value !== null || !deletable(user)) return
+  try {
+    await ElMessageBox.confirm(
+      `删除“${user.displayName}”（${user.username}）？账号、账务、投资、工具、餐饮等个人数据及登录会话将一并永久删除，无法恢复。家庭关系会同步处理，其他成员的数据保留。`,
+      '删除用户',
+      {
+        type: 'warning',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+      },
+    )
+  } catch {
+    return
+  }
+  changing.value = user.id
+  try {
+    await api.deleteUser(user.id)
+    ElMessage.success('用户及关联数据已删除')
+    if (result.value.items.length === 1 && query.page > 1) query.page--
+    await reload()
+    await reloadRoles()
+  } catch (cause) {
+    showError(cause)
+  } finally {
+    changing.value = null
+  }
+}
 async function changeStatus(user: User, status: UserStatus) {
   if (changing.value !== null) return
   const action =
@@ -233,6 +269,7 @@ async function changeStatus(user: User, status: UserStatus) {
           aria-label="用户状态"
           placeholder="全部状态"
           clearable
+          value-on-clear=""
         >
           <el-option label="正常" value="active" />
           <el-option label="已停用" value="disabled" />
@@ -243,6 +280,7 @@ async function changeStatus(user: User, status: UserStatus) {
           aria-label="筛选角色"
           placeholder="全部角色"
           clearable
+          value-on-clear=""
         >
           <el-option
             v-for="role in roles"
@@ -347,7 +385,7 @@ async function changeStatus(user: User, status: UserStatus) {
             <span class="date-text">{{ formatDate(row.lastLoginAt) }}</span>
           </template>
         </UserColumn>
-        <UserColumn label="操作" fixed="right" min-width="215">
+        <UserColumn label="操作" fixed="right" min-width="270">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button
@@ -400,10 +438,20 @@ async function changeStatus(user: User, status: UserStatus) {
                   锁定
                 </el-button>
               </template>
+              <el-button
+                v-if="deletable(row)"
+                link
+                type="danger"
+                :disabled="changing !== null"
+                @click="remove(row)"
+              >
+                删除
+              </el-button>
               <span
                 v-if="
                   !manageable(row) ||
-                  (!can('user.update') &&
+                  (!deletable(row) &&
+                    !can('user.update') &&
                     ((!can('user.status') && !can('user.assign-role')) ||
                       row.id === session.data?.user.id))
                 "

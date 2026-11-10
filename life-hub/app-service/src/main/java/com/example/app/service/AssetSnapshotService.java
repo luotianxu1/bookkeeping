@@ -75,6 +75,8 @@ public class AssetSnapshotService {
     }
 
     private int captureUserSnapshots(Long userId, LocalDate targetDate) {
+        // Snapshot rows have no user FK. Serialize with account deletion and skip removed users.
+        if (accountMapper.lockUser(userId) == null) return 0;
         List<AccountResponse> activeAccounts = accountService.listNetWorthAccounts(userId, ACTIVE_STATUS);
         BigDecimal totalAssets = accountService.calculateTotalAssets(activeAccounts);
         int savedCount = 0;

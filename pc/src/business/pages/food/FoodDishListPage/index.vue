@@ -98,8 +98,9 @@ watch(
   (value) => {
     const next = Number(value)
     currentCategoryId.value =
-      Number.isFinite(next) && next > 0 ? next : currentCategoryId.value
+      Number.isFinite(next) && next > 0 ? next : null
   },
+  { immediate: true },
 )
 
 async function loadPage() {
@@ -127,13 +128,6 @@ async function loadPage() {
 
     categories.value = categoryList
     dishes.value = dishList
-
-    const routeCategory = Number(route.query.categoryId)
-    if (Number.isFinite(routeCategory) && routeCategory > 0) {
-      currentCategoryId.value = routeCategory
-    } else {
-      currentCategoryId.value = null
-    }
   } catch (error) {
     pageError.value = getErrorMessage(error, '菜品列表加载失败')
   } finally {
@@ -205,9 +199,10 @@ type DesktopRow = (typeof filteredDishes.value)[number]
           />
           <el-select
             v-model="currentCategoryId"
+            aria-label="菜品分类"
             placeholder="全部分类"
             clearable
-            @clear="currentCategoryId = null"
+            :value-on-clear="null"
           >
             <el-option
               v-for="category in categories"

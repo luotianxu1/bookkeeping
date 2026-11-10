@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Transaction } from '@/business/api/modules/finance'
 import type { ECharts } from 'echarts'
+import { readChartToken } from '@/business/utils/chart-theme'
 const props = defineProps<{ rows: Transaction[] }>()
 const chartEl = ref<HTMLElement>()
 const error = ref('')
@@ -30,6 +31,8 @@ const days = computed(() => {
   })
 })
 function draw() {
+  const incomeColor = readChartToken('--color-danger', '#d65365')
+  const expenseColor = readChartToken('--color-success', '#249c78')
   chart?.setOption({
     animation: false,
     tooltip: { trigger: 'axis', confine: true },
@@ -49,14 +52,17 @@ function draw() {
         name: '收入',
         type: 'bar',
         data: days.value.map((day) => day.income),
-        itemStyle: { color: '#249c78', borderRadius: [3, 3, 0, 0] },
+        itemStyle: { color: incomeColor, borderRadius: [3, 3, 0, 0] },
         maxBarWidth: 14,
       },
       {
         name: '净支出',
         type: 'bar',
-        data: days.value.map((day) => day.expense),
-        itemStyle: { color: '#6155d9', borderRadius: [3, 3, 0, 0] },
+        data: days.value.map((day) => ({
+          value: day.expense,
+          itemStyle: { color: day.expense < 0 ? incomeColor : expenseColor },
+        })),
+        itemStyle: { color: expenseColor, borderRadius: [3, 3, 0, 0] },
         maxBarWidth: 14,
       },
     ],

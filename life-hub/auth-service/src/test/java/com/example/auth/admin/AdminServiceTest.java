@@ -67,7 +67,8 @@ class AdminServiceTest {
         mvc = MockMvcBuilders.standaloneSetup(new AdminController(service)).setControllerAdvice(new GlobalExceptionHandler()).build();
     }
     private void execute(String ddl) throws Exception {
-        ddl = ddl.replaceAll("(?i)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", "");
+        ddl = ddl.replaceAll("(?i)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", "")
+            .replaceAll("(?im)^USE .*?;", "").replaceAll("(?im)^SET NAMES .*?;", "");
         try (var connection = data.getConnection()) { ScriptUtils.executeSqlScript(connection, new ByteArrayResource(ddl.getBytes(StandardCharsets.UTF_8))); }
     }
     private Actor actor(long id) {
@@ -110,6 +111,106 @@ class AdminServiceTest {
         assertThrows(AccessDeniedException.class, () -> service.createRole(ordinary, new CreateRole("forged", "越权", "")));
         assertThrows(UserIdentityMissingException.class, () -> service.session(new Actor(admin.id(), ordinary.sessionId())));
         assertThrows(UserIdentityMissingException.class, () -> service.session(new Actor(admin.id(), null)));
+    }
+
+    @Test void userDeletionRemovesCredentialsSessionsAndRoleMembership() {
+        RoleView role = role("deletion_viewer", "pc.access", "user.read");
+        give(ordinary, role);
+        Actor second = actor(ordinary.id());
+        jdbc.update("INSERT INTO user_security(user_id,recovery_code_hash) VALUES(?,?)", ordinary.id(), "a".repeat(64));
+        service.deleteUser(admin, ordinary.id());
+        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE id = ?", Long.class, ordinary.id()));
+        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM user_sessions WHERE user_id = ?", Long.class, ordinary.id()));
+        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM user_security WHERE user_id = ?", Long.class, ordinary.id()));
+        assertFalse(new JdbcSessionChecker(jdbc).isValid(ordinary.id(), second.sessionId()));
+        assertThrows(UserIdentityMissingException.class, () -> service.session(ordinary));
+        service.deleteRole(admin, role.id());
+        assertEquals(1, service.users(admin, "", "", "", 1, 20).total());
+    }
+
+    @Test void userDeletionRequiresLivePermissionAndProtectsSelfAndHigherRoles() {
+        RoleView viewer = role("deletion_reader", "pc.access", "user.read");
+        give(ordinary, viewer);
+        UserView target = service.createUser(admin, new CreateUser("delete_target", "password", "删除目标", null, null));
+        assertThrows(AccessDeniedException.class, () -> service.deleteUser(ordinary, target.id()));
+        assertThrows(IllegalArgumentException.class, () -> service.deleteUser(admin, admin.id()));
+        RoleView deleter = role("deleter", "pc.access", "user.read", "user.delete");
+        give(ordinary, deleter);
+        RoleView higher = role("higher", "pc.access", "user.read", "user.delete", "user.update");
+        service.assignRole(admin, target.id(), higher.code());
+        assertThrows(AccessDeniedException.class, () -> service.deleteUser(ordinary, target.id()));
+        service.assignRole(admin, target.id(), "super_admin");
+        assertThrows(IllegalArgumentException.class, () -> service.deleteUser(admin, target.id()));
+        service.assignRole(admin, target.id(), "user");
+        service.grant(admin, deleter.id(), List.of("pc.access", "user.read"));
+        assertThrows(AccessDeniedException.class, () -> service.deleteUser(ordinary, target.id()));
+        assertThrows(IllegalArgumentException.class, () -> service.grant(admin, viewer.id(), List.of("pc.access", "user.delete")));
+        assertEquals(3, service.users(admin, "", "", "", 1, 20).total());
+    }
+
+    @Test void deletionCleansEveryBusinessModuleAndPreservesOtherUsersAndSharedData() throws Exception {
+        var fixture = new UserDeletionTestData(jdbc);
+        fixture.createSchema();
+        fixture.insertSharedData();
+        fixture.insertPersonalData(admin.id());
+        var retained = fixture.snapshotExcludingUser(ordinary.id());
+        fixture.insertPersonalData(ordinary.id());
+        for (String table : jdbc.queryForList("SELECT table_name FROM information_schema.columns WHERE table_schema='public' AND column_name='user_id'", String.class)) {
+            assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE user_id = ?", Long.class, ordinary.id()) > 0,
+                "Deletion fixture must cover personal data in " + table);
+        }
+        service.deleteUser(admin, ordinary.id());
+        assertEquals(retained, fixture.snapshotExcludingUser(-1));
+        assertTrue(new JdbcSessionChecker(jdbc).isValid(admin.id(), admin.sessionId()));
+    }
+
+    @Test void rejectedDeletionRollsBackAllBusinessDataFamilyAndCredentials() throws Exception {
+        var fixture = new UserDeletionTestData(jdbc);
+        fixture.createSchema();
+        fixture.insertSharedData();
+        fixture.insertPersonalData(ordinary.id());
+        jdbc.update("INSERT INTO families(id,owner_user_id,invite_code,family_name) VALUES(1,?,'FAMILY-TEST','家庭')", ordinary.id());
+        jdbc.update("UPDATE users SET family_id=1");
+        jdbc.execute("CREATE TABLE protected_records(id BIGINT PRIMARY KEY,user_id BIGINT UNSIGNED,FOREIGN KEY(user_id) REFERENCES users(id))");
+        jdbc.update("INSERT INTO protected_records VALUES(1,?)", ordinary.id());
+        var before = fixture.snapshotExcludingUser(-1);
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class, () -> service.deleteUser(admin, ordinary.id()));
+        assertTrue(failure.getMessage().contains("全部回滚"));
+        assertEquals(before, fixture.snapshotExcludingUser(-1));
+        assertTrue(new JdbcSessionChecker(jdbc).isValid(ordinary.id(), ordinary.sessionId()));
+        jdbc.update("DELETE FROM protected_records");
+        service.deleteUser(admin, ordinary.id());
+        assertEquals(admin.id(), jdbc.queryForObject("SELECT owner_user_id FROM families WHERE id=1", Long.class));
+    }
+
+    @Test void deletingFamilyMemberPreservesHouseholdAndDeletingLastOwnerUnbindsInactiveMembers() throws Exception {
+        execute(Files.readString(Path.of("../../database/031_create_families.mysql.sql")));
+        jdbc.update("INSERT INTO families(id,owner_user_id,invite_code,family_name) VALUES(1,?,'FAMILY-ONE','家庭')", admin.id());
+        jdbc.update("UPDATE users SET family_id=1");
+        service.deleteUser(admin, ordinary.id());
+        assertEquals(admin.id(), jdbc.queryForObject("SELECT owner_user_id FROM families WHERE id=1", Long.class));
+        UserView owner = service.createUser(admin, new CreateUser("owner", "password", "户主", null, null));
+        UserView inactive = service.createUser(admin, new CreateUser("inactive", "password", "停用成员", null, null));
+        jdbc.update("INSERT INTO families(id,owner_user_id,invite_code,family_name,status) VALUES(2,?,'FAMILY-TWO','旧家庭','archived')", owner.id());
+        jdbc.update("UPDATE users SET family_id=2 WHERE id IN (?,?)", owner.id(), inactive.id());
+        jdbc.update("UPDATE users SET status='disabled' WHERE id=?", inactive.id());
+        service.deleteUser(admin, owner.id());
+        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM families WHERE id=2", Long.class));
+        assertNull(jdbc.queryForObject("SELECT family_id FROM users WHERE id=?", Long.class, inactive.id()));
+        assertEquals("disabled", jdbc.queryForObject("SELECT status FROM users WHERE id=?", String.class, inactive.id()));
+    }
+
+    @Test void familyOwnershipSkipsMembersAlreadyOwningAnotherFamily() throws Exception {
+        execute(Files.readString(Path.of("../../database/031_create_families.mysql.sql")));
+        UserView successor = service.createUser(admin, new CreateUser("successor", "password", "接任者", null, null));
+        jdbc.update("INSERT INTO families(id,owner_user_id,invite_code,family_name,status) VALUES(1,?,'FAMILY-OLD','旧家庭','archived'),(2,?,'FAMILY-NEW','家庭','active')", admin.id(), ordinary.id());
+        jdbc.update("UPDATE users SET family_id=2");
+        service.deleteUser(admin, ordinary.id());
+        assertEquals(successor.id(), jdbc.queryForObject("SELECT owner_user_id FROM families WHERE id=2", Long.class));
+        assertEquals(admin.id(), jdbc.queryForObject("SELECT owner_user_id FROM families WHERE id=1", Long.class));
+        service.deleteUser(admin, successor.id());
+        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM families WHERE id=2", Long.class));
+        assertNull(jdbc.queryForObject("SELECT family_id FROM users WHERE id=?", Long.class, admin.id()));
     }
 
     @Test void currentRoleAndBuiltinRolesCannotBeModified() {

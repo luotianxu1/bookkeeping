@@ -173,6 +173,7 @@ async function remove(role: Role) {
           placeholder="全部状态"
           aria-label="角色状态"
           clearable
+          value-on-clear=""
         >
           <el-option label="已启用" value="active" />
           <el-option label="已停用" value="disabled" />

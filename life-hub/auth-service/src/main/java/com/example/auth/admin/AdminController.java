@@ -43,6 +43,10 @@ public class AdminController {
     public Result<UserView> status(HttpServletRequest request, @PathVariable long id, @Valid @RequestBody UserStatus body) {
         return Result.ok(service.changeUserStatus(actor(request), id, body.status()));
     }
+    @DeleteMapping("/users/{id}")
+    public Result<Void> deleteUser(HttpServletRequest request, @PathVariable long id) {
+        service.deleteUser(actor(request), id); return Result.ok();
+    }
     @PutMapping("/users/{id}/role")
     public Result<UserView> role(HttpServletRequest request, @PathVariable long id, @Valid @RequestBody UserRole body) {
         return Result.ok(service.assignRole(actor(request), id, body.roleCode()));

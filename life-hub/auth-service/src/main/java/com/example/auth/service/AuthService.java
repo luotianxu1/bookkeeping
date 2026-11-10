@@ -95,7 +95,7 @@ public class AuthService {
 
     @Transactional
     public FamilyOverviewResponse createFamily(String username) {
-        UserEntity currentUser = requireActiveUserEntity(username);
+        UserEntity currentUser = requireActiveUserEntity(username, true);
         if (currentUser.getFamilyId() != null) {
             throw new IllegalArgumentException("你已加入家庭，不能再创建新家庭");
         }
@@ -117,13 +117,13 @@ public class AuthService {
 
     @Transactional
     public FamilyOverviewResponse joinFamily(String username, JoinFamilyRequest request) {
-        UserEntity currentUser = requireActiveUserEntity(username);
+        UserEntity currentUser = requireActiveUserEntity(username, true);
         if (currentUser.getFamilyId() != null) {
             throw new IllegalArgumentException("你已加入家庭，不能再加入其他家庭");
         }
 
         String normalizedInviteCode = normalizeInviteCode(request.inviteCode());
-        FamilyEntity family = findActiveFamilyByInviteCode(normalizedInviteCode)
+        FamilyEntity family = findActiveFamilyByInviteCode(normalizedInviteCode, true)
             .orElseThrow(() -> new IllegalArgumentException("家庭邀请码不存在"));
 
         updateUserFamilyId(currentUser.getId(), family.getId());
@@ -133,12 +133,12 @@ public class AuthService {
 
     @Transactional
     public FamilyOverviewResponse unbindFamilyMember(String username, Long memberUserId) {
-        UserEntity currentUser = requireActiveUserEntity(username);
+        UserEntity currentUser = requireActiveUserEntity(username, true);
         if (currentUser.getFamilyId() == null) {
             throw new IllegalArgumentException("你当前还未加入家庭");
         }
 
-        FamilyEntity family = requireActiveFamily(currentUser.getFamilyId());
+        FamilyEntity family = requireActiveFamily(currentUser.getFamilyId(), true);
         if (!currentUser.getId().equals(family.getOwnerUserId())) {
             throw new IllegalArgumentException("只有家庭管理员可以解绑成员");
         }
@@ -157,11 +157,11 @@ public class AuthService {
 
     @Transactional
     public void deleteAccount(String username) {
-        UserEntity currentUser = requireActiveUserEntity(username);
+        UserEntity currentUser = requireActiveUserEntity(username, true);
         Long familyId = currentUser.getFamilyId();
 
         if (familyId != null) {
-            FamilyEntity family = requireActiveFamily(familyId);
+            FamilyEntity family = requireActiveFamily(familyId, true);
             if (currentUser.getId().equals(family.getOwnerUserId())) {
                 handleOwnerAccountDeletion(currentUser, family);
             } else {
@@ -195,10 +195,14 @@ public class AuthService {
     }
 
     private UserEntity requireActiveUserEntity(String username) {
+        return requireActiveUserEntity(username, false);
+    }
+
+    private UserEntity requireActiveUserEntity(String username, boolean forUpdate) {
         LambdaQueryWrapper<UserEntity> wrapper = new LambdaQueryWrapper<UserEntity>()
             .eq(UserEntity::getUsername, username)
             .eq(UserEntity::getStatus, ACTIVE_STATUS)
-            .last("LIMIT 1");
+            .last(forUpdate ? "LIMIT 1 FOR UPDATE" : "LIMIT 1");
         UserEntity entity = userMapper.selectOne(wrapper);
         if (entity == null) {
             throw new IllegalArgumentException("当前用户不存在或已失效");
@@ -227,18 +231,26 @@ public class AuthService {
     }
 
     private Optional<FamilyEntity> findActiveFamilyByInviteCode(String inviteCode) {
+        return findActiveFamilyByInviteCode(inviteCode, false);
+    }
+
+    private Optional<FamilyEntity> findActiveFamilyByInviteCode(String inviteCode, boolean forUpdate) {
         LambdaQueryWrapper<FamilyEntity> wrapper = new LambdaQueryWrapper<FamilyEntity>()
             .eq(FamilyEntity::getInviteCode, inviteCode)
             .eq(FamilyEntity::getStatus, ACTIVE_STATUS)
-            .last("LIMIT 1");
+            .last(forUpdate ? "LIMIT 1 FOR UPDATE" : "LIMIT 1");
         return Optional.ofNullable(familyMapper.selectOne(wrapper));
     }
 
     private FamilyEntity requireActiveFamily(Long familyId) {
+        return requireActiveFamily(familyId, false);
+    }
+
+    private FamilyEntity requireActiveFamily(Long familyId, boolean forUpdate) {
         LambdaQueryWrapper<FamilyEntity> wrapper = new LambdaQueryWrapper<FamilyEntity>()
             .eq(FamilyEntity::getId, familyId)
             .eq(FamilyEntity::getStatus, ACTIVE_STATUS)
-            .last("LIMIT 1");
+            .last(forUpdate ? "LIMIT 1 FOR UPDATE" : "LIMIT 1");
         FamilyEntity entity = familyMapper.selectOne(wrapper);
         if (entity == null) {
             throw new IllegalArgumentException("家庭不存在或已失效");

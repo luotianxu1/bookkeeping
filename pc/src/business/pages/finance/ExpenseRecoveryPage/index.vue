@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AmountText from '@/business/components/common/AmountText/index.vue'
+import { amountTone } from '@/business/utils/amount-tone'
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
 import { computed, onMounted, ref, watch } from 'vue'
@@ -364,19 +366,28 @@ type DesktopRow = (typeof items.value)[number]
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column label="金额" min-width="150">
         <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.amount, row.currencyCode) }}
+          <AmountText
+            :value="money(row.amount, row.currencyCode)"
+            :tone="amountTone(-row.amount)"
+          />
         </template>
       </el-table-column>
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column label="已退款" min-width="140">
         <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.refundedAmount, row.currencyCode) }}
+          <AmountText
+            :value="money(row.refundedAmount, row.currencyCode)"
+            :tone="amountTone(row.refundedAmount)"
+          />
         </template>
       </el-table-column>
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column label="已报销" min-width="140">
         <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.reimbursedAmount, row.currencyCode) }}
+          <AmountText
+            :value="money(row.reimbursedAmount, row.currencyCode)"
+            :tone="amountTone(row.reimbursedAmount)"
+          />
         </template>
       </el-table-column>
       <!-- @vue-generic {DesktopRow} -->
@@ -429,7 +440,11 @@ type DesktopRow = (typeof items.value)[number]
       <div v-if="detail" class="detail-content">
         <div class="pc-toolbar card-heading">
           <strong>{{ detail.title }}</strong>
-          <strong>{{ money(detail.amount) }}</strong>
+          <AmountText
+            tag="strong"
+            :value="money(detail.amount)"
+            :tone="amountTone(-detail.amount)"
+          />
         </div>
         <p class="hint">
           {{ detail.categoryName }} · {{ detail.accountName }} ·
@@ -449,7 +464,12 @@ type DesktopRow = (typeof items.value)[number]
         <dl>
           <div>
             <dt>已退款</dt>
-            <dd>{{ money(detail.refundedAmount) }}</dd>
+            <dd>
+              <AmountText
+                :value="money(detail.refundedAmount)"
+                :tone="amountTone(detail.refundedAmount)"
+              />
+            </dd>
           </div>
           <div>
             <dt>计划报销</dt>
@@ -457,7 +477,12 @@ type DesktopRow = (typeof items.value)[number]
           </div>
           <div>
             <dt>报销到账</dt>
-            <dd>{{ money(detail.reimbursedAmount) }}</dd>
+            <dd>
+              <AmountText
+                :value="money(detail.reimbursedAmount)"
+                :tone="amountTone(detail.reimbursedAmount)"
+              />
+            </dd>
           </div>
           <div>
             <dt>待到账</dt>
@@ -513,7 +538,10 @@ type DesktopRow = (typeof items.value)[number]
           <div class="pc-toolbar card-heading">
             <strong>
               {{ receipt.kind === 'refund' ? '退款' : '报销到账' }}
-              {{ money(receipt.amount) }}
+              <AmountText
+                :value="money(receipt.amount)"
+                :tone="amountTone(receipt.amount)"
+              />
             </strong>
             <el-button
               :disabled="busy"

@@ -115,10 +115,12 @@ const nav = (value: number | null) => (value == null ? '—' : value.toFixed(4))
 let active = true,
   loadedKey = ''
 function change(values: Record<string, string | number | undefined>) {
-  void router.replace({
+  const target = {
     path: '/finance/global-market/funds',
     query: { ...route.query, page: undefined, ...values },
-  })
+  }
+  if (router.resolve(target).fullPath === route.fullPath) void load()
+  else void router.replace(target)
 }
 function submitSearch() {
   change({ q: draft.value.trim() || undefined })

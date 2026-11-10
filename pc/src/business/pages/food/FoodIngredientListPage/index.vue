@@ -97,6 +97,7 @@ watch(
     selectedCategoryId.value =
       Number.isFinite(categoryId) && categoryId > 0 ? categoryId : null
   },
+  { immediate: true },
 )
 
 async function loadPage() {
@@ -124,12 +125,6 @@ async function loadPage() {
 
     categories.value = categoryList
     ingredients.value = ingredientList
-    const routeCategoryId = Number(route.query.categoryId)
-    if (Number.isFinite(routeCategoryId) && routeCategoryId > 0) {
-      selectedCategoryId.value = routeCategoryId
-      return
-    }
-    selectedCategoryId.value = categoryList[0]?.id ?? null
   } catch (error) {
     pageError.value = getErrorMessage(error, '食材列表加载失败')
   } finally {
@@ -290,9 +285,10 @@ type DesktopRow = (typeof filteredIngredients.value)[number]
         />
         <el-select
           v-model="selectedCategoryId"
+          aria-label="食材分类"
           placeholder="全部分类"
           clearable
-          @clear="selectedCategoryId = null"
+          :value-on-clear="null"
         >
           <el-option
             v-for="category in categories"

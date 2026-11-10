@@ -39,7 +39,7 @@ public final class PcTestServer {
             var data = context.getBean(DataSource.class);
             String users = Files.readString(Path.of("../database/001_create_database_and_users.mysql.sql"));
             execute(data, users.substring(users.indexOf("CREATE TABLE"), users.indexOf("-- 首次初始化")));
-            for (String file : new String[]{"050_create_account_security.mysql.sql", "051_create_admin_roles.mysql.sql"}) {
+            for (String file : new String[]{"031_create_families.mysql.sql", "050_create_account_security.mysql.sql", "051_create_admin_roles.mysql.sql"}) {
                 execute(data, Files.readString(Path.of("../database", file)));
             }
             var jdbc = context.getBean(JdbcTemplate.class);
@@ -51,7 +51,8 @@ public final class PcTestServer {
         }
     }
     private static void execute(DataSource data, String sql) throws Exception {
-        String ddl = sql.replaceAll("(?i)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", "");
+        String ddl = sql.replaceAll("(?i)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", "")
+            .replaceAll("(?im)^USE .*?;", "").replaceAll("(?im)^SET NAMES .*?;", "");
         try (var connection = data.getConnection()) { ScriptUtils.executeSqlScript(connection, new ByteArrayResource(ddl.getBytes(StandardCharsets.UTF_8))); }
     }
     @SpringBootConfiguration

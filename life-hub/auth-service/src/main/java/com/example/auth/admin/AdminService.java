@@ -3,6 +3,7 @@ package com.example.auth.admin;
 import com.example.auth.service.AccountSecurityService;
 import com.example.common.security.UserIdentityMissingException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -98,6 +99,21 @@ public class AdminService {
                 requiredName(request.displayName()), optional(request.phone()), optional(request.email()), id);
         } catch (DuplicateKeyException ex) { throw new IllegalArgumentException("手机号或邮箱已被使用"); }
         return user(id);
+    }
+
+    @Transactional
+    public void deleteUser(Actor actor, long id) {
+        lock(actor, id);
+        SessionView session = require(actor, "user.delete");
+        UserView target = user(id);
+        if (actor.id() == id) throw new IllegalArgumentException("不能删除自己的账号");
+        if ("super_admin".equals(target.roleCode())) throw new IllegalArgumentException("不能删除超级管理员，请先调整用户角色");
+        manageableUser(session, target);
+        try {
+            new UserDataDeletion(jdbc).delete(id);
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalArgumentException("用户关联数据清理失败，删除已全部回滚，请检查数据关联后重试", ex);
+        }
     }
 
     @Transactional

@@ -39,6 +39,7 @@ const feedbackType = ref<'success' | 'error'>('success')
 const showRecordModal = ref(false)
 const editingRecord = ref<SalaryMonthRecordItem | null>(null)
 const selectedYear = ref(String(new Date().getFullYear()))
+let loadVersion = 0
 
 const recordForm = reactive({
   grossSalary: '',
@@ -54,6 +55,7 @@ onMounted(() => {
 })
 
 async function loadPage() {
+  const version = ++loadVersion
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
     pageError.value = '请先登录后查看工资明细'
@@ -65,15 +67,18 @@ async function loadPage() {
   pageError.value = ''
 
   try {
-    pageData.value = await getSalaryMonthPage(
+    const result = await getSalaryMonthPage(
       currentUser.id,
       Number(selectedYear.value),
     )
+    if (version !== loadVersion) return
+    pageData.value = result
   } catch (error) {
+    if (version !== loadVersion) return
     pageError.value = getErrorMessage(error, '工资明细加载失败')
     openFeedback(pageError.value, 'error')
   } finally {
-    isLoading.value = false
+    if (version === loadVersion) isLoading.value = false
   }
 }
 
@@ -179,7 +184,7 @@ type DetailTableRow = NonNullable<typeof pageData.value>['records'][number]
       <template #right>
         <CommonSelect
           class="salary-year-select"
-          label=""
+          label="年份"
           :model-value="selectedYear"
           :options="yearOptions"
           @update:model-value="changeYear"

@@ -2,6 +2,8 @@
 import { formatPercentage } from '@/business/utils/percentage'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
+import AmountText from '@/business/components/common/AmountText/index.vue'
+import { amountTone } from '@/business/utils/amount-tone'
 import PagePanel from '@/business/components/PagePanel.vue'
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
@@ -99,22 +101,17 @@ const summaryCards = computed(() => [
   {
     label: '收入' as const,
     amount: formatAmount(summary.value.income),
-    tone: 'positive' as const,
+    tone: amountTone(summary.value.income),
   },
   {
     label: '支出' as const,
     amount: formatAmount(summary.value.expense),
-    tone: 'negative' as const,
+    tone: amountTone(-summary.value.expense),
   },
   {
     label: '结余' as const,
     amount: formatSignedAmount(summary.value.surplus),
-    tone:
-      summary.value.surplus > 0
-        ? ('positive' as const)
-        : summary.value.surplus < 0
-          ? ('negative' as const)
-          : ('neutral' as const),
+    tone: amountTone(summary.value.surplus),
   },
 ])
 const breakdownItems = computed<TransactionAnalysisCategoryBreakdownItem[]>(
@@ -418,7 +415,11 @@ function selectDesktopPeriod(key: string) {
     ></el-alert>
     <MetricStrip
       :items="
-        summaryCards.map((item) => ({ label: item.label, value: item.amount }))
+        summaryCards.map((item) => ({
+          label: item.label,
+          value: item.amount,
+          tone: item.tone,
+        }))
       "
     />
     <el-skeleton v-if="isLoading" :rows="8" animated />
@@ -449,7 +450,12 @@ function selectDesktopPeriod(key: string) {
                 row: TransactionAnalysisCategoryBreakdownItem
               }"
             >
-              {{ formatAmount(row.amount) }}
+              <AmountText
+                :value="formatAmount(row.amount)"
+                :tone="
+                  amountTone(summaryTab === '支出' ? -row.amount : row.amount)
+                "
+              />
             </template>
           </el-table-column>
           <el-table-column
@@ -502,7 +508,10 @@ function selectDesktopPeriod(key: string) {
             <template
               #default="{ row }: { row: TransactionAnalysisPeriodSummary }"
             >
-              {{ formatAmount(row.income) }}
+              <AmountText
+                :value="formatAmount(row.income)"
+                :tone="amountTone(row.income)"
+              />
             </template>
           </el-table-column>
           <!-- @vue-generic {TransactionAnalysisPeriodSummary} -->
@@ -510,7 +519,10 @@ function selectDesktopPeriod(key: string) {
             <template
               #default="{ row }: { row: TransactionAnalysisPeriodSummary }"
             >
-              {{ formatAmount(row.expense) }}
+              <AmountText
+                :value="formatAmount(row.expense)"
+                :tone="amountTone(-row.expense)"
+              />
             </template>
           </el-table-column>
           <!-- @vue-generic {TransactionAnalysisPeriodSummary} -->
@@ -518,7 +530,10 @@ function selectDesktopPeriod(key: string) {
             <template
               #default="{ row }: { row: TransactionAnalysisPeriodSummary }"
             >
-              {{ formatAmount(row.surplus) }}
+              <AmountText
+                :value="formatAmount(row.surplus)"
+                :tone="amountTone(row.surplus)"
+              />
             </template>
           </el-table-column>
           <!-- @vue-generic {TransactionAnalysisPeriodSummary} -->
@@ -564,7 +579,14 @@ function selectDesktopPeriod(key: string) {
         <!-- @vue-generic {AnalysisRow} -->
         <el-table-column label="金额" min-width="150">
           <template #default="{ row }: { row: AnalysisRow }">
-            {{ detailAmountText(row) }}
+            <AmountText
+              :value="detailAmountText(row)"
+              :tone="
+                row.type === 'transfer'
+                  ? 'neutral'
+                  : amountTone(row.type === 'income' ? row.amount : -row.amount)
+              "
+            />
           </template>
         </el-table-column>
       </DesktopTable>

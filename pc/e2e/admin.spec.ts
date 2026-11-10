@@ -60,6 +60,11 @@ test('create and edit a user, configure a role, enforce grants, revoke access an
   await dialog.getByRole('button', { name: '创建角色', exact: true }).click()
   await expect(dialog).not.toBeVisible()
   const roleRow = page.getByRole('row').filter({ hasText: roleName })
+  await roleRow.getByRole('button', { name: '编辑', exact: true }).click()
+  await dialog.getByLabel('描述').fill('维护用户资料及角色授权')
+  await dialog.getByRole('button', { name: '保存修改', exact: true }).click()
+  await expect(dialog).not.toBeVisible()
+  await expect(roleRow).toContainText('维护用户资料及角色授权')
   await roleRow.getByRole('button', { name: '配置权限', exact: true }).click()
   await expect(page.locator('.permission-header')).toContainText(roleName)
   await page.getByText('编辑用户', { exact: true }).click()
@@ -179,6 +184,60 @@ test('create and edit a user, configure a role, enforce grants, revoke access an
   await roleRow.getByRole('button', { name: '删除', exact: true }).click()
   await page.getByRole('button', { name: '确认删除', exact: true }).click()
   await expect(roleRow).toHaveCount(0)
+})
+
+test('clearing role and status filters restores matching users', async ({ page }) => {
+  await login(page)
+  await page.getByRole('menuitem', { name: '用户管理', exact: true }).click()
+  const adminRow = page.getByRole('row').filter({ hasText: '@pc-admin' })
+  const memberRow = page.getByRole('row').filter({ hasText: '@pc-user' })
+  await expect(adminRow).toBeVisible()
+  await page.getByLabel('搜索用户', { exact: true }).fill('pc-')
+
+  async function search() {
+    const pending = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.endsWith('/api/admin/users'),
+    )
+    await page.getByRole('button', { name: '查询', exact: true }).click()
+    const response = await pending
+    expect(response.ok()).toBe(true)
+    expect((await response.json()).code).toBe(0)
+    return new URL(response.url()).searchParams
+  }
+
+  for (const filter of [
+    { label: '筛选角色', option: '普通用户', key: 'roleCode', value: 'user' },
+    { label: '用户状态', option: '已锁定', key: 'status', value: 'locked' },
+  ]) {
+    const input = page.getByRole('combobox', { name: filter.label, exact: true })
+    const select = page.locator('.filter-bar .el-select').filter({ has: input })
+    await select.locator('.el-select__wrapper').click()
+    await page.getByRole('option', { name: filter.option, exact: true }).click()
+    expect((await search()).get(filter.key)).toBe(filter.value)
+    await expect(adminRow).toHaveCount(0)
+    if (filter.key === 'roleCode') await expect(memberRow).toBeVisible()
+    else await expect(page.getByText('没有找到符合条件的用户')).toBeVisible()
+
+    await select.hover()
+    await select.locator('.el-select__clear').click()
+    const params = await search()
+    expect(params.has(filter.key)).toBe(false)
+    expect(params.get('keyword')).toBe('pc-')
+    expect(params.get('page')).toBe('1')
+    await expect(adminRow).toBeVisible()
+    await expect(memberRow).toBeVisible()
+  }
+  await page.getByRole('menuitem', { name: '角色管理', exact: true }).click()
+  const roleStatus = page.locator('.el-select').filter({
+    has: page.getByRole('combobox', { name: '角色状态', exact: true }),
+  })
+  await roleStatus.locator('.el-select__wrapper').click()
+  await page.getByRole('option', { name: '已停用', exact: true }).click()
+  const superRole = page.getByRole('row').filter({ hasText: 'super_admin' })
+  await expect(superRole).toHaveCount(0)
+  await roleStatus.hover()
+  await roleStatus.locator('.el-select__clear').click()
+  await expect(superRole).toBeVisible()
 })
 
 test('empty filters, refresh recovery and a service outage keep the browser session intact', async ({
@@ -486,4 +545,125 @@ test('menu and browser history only replace the content and preserve the shell',
   ).toBe(true)
   expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin)
   expect(documentRequests).toEqual([])
+})
+
+test('user deletion checks permissions, supports cancellation and revokes active sessions', async ({
+  page,
+  browser,
+}) => {
+  await login(page)
+  const suffix = Date.now().toString()
+  const admin = page.context().request
+  const role = (
+    await (
+      await admin.post('/auth-api/api/admin/roles', {
+        data: {
+          code: `delete_${suffix}`,
+          name: `删除验证 ${suffix}`,
+          description: '',
+        },
+      })
+    ).json()
+  ).data
+  expect(
+    (
+      await admin.put(`/auth-api/api/admin/roles/${role.id}/permissions`, {
+        data: { permissions: ['pc.access', 'user.read'] },
+      })
+    ).ok(),
+  ).toBe(true)
+  const user = (
+    await (
+      await admin.post('/auth-api/api/admin/users', {
+        data: {
+          username: `delete_${suffix}`,
+          password,
+          displayName: '删除验证用户',
+          phone: '',
+          email: '',
+        },
+      })
+    ).json()
+  ).data
+  expect(
+    (
+      await admin.put(`/auth-api/api/admin/users/${user.id}/role`, {
+        data: { roleCode: role.code },
+      })
+    ).ok(),
+  ).toBe(true)
+  const memberContext = await browser.newContext({
+    baseURL: 'http://127.0.0.1:4177',
+  })
+  try {
+    const member = await memberContext.newPage()
+    await login(member, user.username)
+    const family = await (
+      await memberContext.request.post('/auth-api/api/auth/family/create')
+    ).json()
+    expect(family.code).toBe(0)
+    expect(
+      (await (await admin.post('/auth-api/api/auth/family/join', {
+        data: { inviteCode: family.data.inviteCode },
+      })).json()).code,
+    ).toBe(0)
+    await member.goto('/users')
+    await expect(
+      member.getByRole('button', { name: '删除', exact: true }),
+    ).toHaveCount(0)
+    expect(
+      (
+        await memberContext.request.delete(
+          `/auth-api/api/admin/users/${user.id}`,
+        )
+      ).status(),
+    ).toBe(403)
+
+    await page.goto('/users')
+    await expect(
+      page
+        .getByRole('row')
+        .filter({ hasText: '@pc-admin' })
+        .getByRole('button', { name: '删除', exact: true }),
+    ).toHaveCount(0)
+    await page.getByLabel('搜索用户', { exact: true }).fill(user.username)
+    await page.getByRole('button', { name: '查询', exact: true }).click()
+    const row = page.getByRole('row').filter({ hasText: user.username })
+    await row.getByRole('button', { name: '删除', exact: true }).click()
+    await expect(page.getByText('个人数据及登录会话将一并永久删除', { exact: false })).toBeVisible()
+    await page.getByRole('button', { name: '取消', exact: true }).click()
+    await expect(row).toBeVisible()
+    expect(
+      (await memberContext.request.get('/auth-api/api/admin/session')).status(),
+    ).toBe(200)
+
+    await row.getByRole('button', { name: '删除', exact: true }).click()
+    await page.getByRole('button', { name: '确认删除', exact: true }).click()
+    await expect(row).toHaveCount(0)
+    expect(
+      (await memberContext.request.get('/auth-api/api/admin/session')).status(),
+    ).toBe(401)
+    const remainingFamily = await (await admin.get('/auth-api/api/auth/family')).json()
+    expect(remainingFamily.code).toBe(0)
+    expect(remainingFamily.data.inviteCode).toBe(family.data.inviteCode)
+    expect(remainingFamily.data.members).toHaveLength(1)
+    expect(remainingFamily.data.members[0].role).toBe('管理员')
+    const loginResult = await memberContext.request.post(
+      '/auth-api/api/auth/login',
+      {
+        data: { username: user.username, password },
+      },
+    )
+    expect((await loginResult.json()).code).not.toBe(0)
+    await page.getByRole('menuitem', { name: '角色管理', exact: true }).click()
+    const roleRow = page.getByRole('row').filter({ hasText: role.name })
+    await expect(
+      roleRow.getByRole('button', { name: '删除', exact: true }),
+    ).toBeEnabled()
+    await roleRow.getByRole('button', { name: '删除', exact: true }).click()
+    await page.getByRole('button', { name: '确认删除', exact: true }).click()
+    await expect(roleRow).toHaveCount(0)
+  } finally {
+    await memberContext.close()
+  }
 })
