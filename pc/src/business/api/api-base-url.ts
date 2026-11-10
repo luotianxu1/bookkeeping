@@ -1,0 +1,26 @@
+export type ApiService =
+  | 'default'
+  | 'auth'
+  | 'finance'
+  | 'tool'
+  | 'food'
+  | 'market'
+
+const apiBaseUrls: Record<ApiService, string> = {
+  default: import.meta.env.VITE_API_BASE_URL ?? '/auth-api',
+  auth:
+    import.meta.env.VITE_AUTH_API_BASE_URL ??
+    import.meta.env.VITE_API_BASE_URL ??
+    '/auth-api',
+  finance:
+    import.meta.env.VITE_FINANCE_API_BASE_URL ??
+    import.meta.env.VITE_API_BASE_URL ??
+    '/finance-api',
+  tool: import.meta.env.VITE_TOOL_API_BASE_URL ?? '/tool-api',
+  food: import.meta.env.VITE_FOOD_API_BASE_URL ?? '/food-api',
+  market: import.meta.env.VITE_MARKET_API_BASE_URL ?? '/market-api',
+}
+
+export function getApiBaseUrl(service: ApiService = 'default') {
+  return apiBaseUrls[service]
+}

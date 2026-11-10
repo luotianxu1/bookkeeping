@@ -13,6 +13,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: pc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pc/pnpm-lock.yaml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm exec playwright install --with-deps chromium
+      # 浏览器测试先执行 TypeScript 检查、生产构建及隔离后端构建。
+      - run: pnpm test:e2e
+      - run: pnpm test:e2e:business
+      - run: pnpm test:e2e:dev
+      - run: pnpm test:e2e:live
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pc-browser-report
+          path: |
+            pc/playwright-report/
+            pc/playwright-business-report/
+            pc/playwright-live-report/
+            pc/test-results/
+          retention-days: 7
+
   backend:
     runs-on: ubuntu-latest
     timeout-minutes: 15

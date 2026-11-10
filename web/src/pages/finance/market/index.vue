@@ -1,12 +1,23 @@
 <script setup lang="ts">
 // 行情中心外壳：搜索 + 市场切换 tab + 子路由视图（移植自 investment 项目前端，浅色移动端主题）。
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import MarketSearchBox from './components/SearchBox.vue'
 
 const router = useRouter()
 const route = useRoute()
+const isFund = computed(() => route.path.startsWith('/finance/global-market/funds'))
+const lastStockPath = ref('/finance/global-market/global')
+const lastFundPath = ref('/finance/global-market/funds')
+watch(() => route.fullPath, path => {
+  if (!route.path.startsWith('/finance/global-market/')) return
+  if (isFund.value) lastFundPath.value = path
+  else lastStockPath.value = path
+}, { immediate: true })
+function selectProduct(fund: boolean) {
+  if (fund !== isFund.value) void router.push(fund ? lastFundPath.value : lastStockPath.value)
+}
 
 /** 市场切换 tab：path 对应子路由 */
 const TABS = [
@@ -44,9 +55,16 @@ function select(path: string): void {
         back-to="/finance/more-features"
         back-label="返回更多功能"
         :prefer-back-to="true"
-      />
-      <MarketSearchBox />
-      <nav class="market-tabs" aria-label="市场切换">
+      >
+        <template #right>
+          <div class="product-switch" role="group" aria-label="行情类型">
+            <button type="button" :aria-pressed="!isFund" :class="{ active: !isFund }" @click="selectProduct(false)">股票</button>
+            <button type="button" :aria-pressed="isFund" :class="{ active: isFund }" @click="selectProduct(true)">基金</button>
+          </div>
+        </template>
+      </PageHeader>
+      <MarketSearchBox v-if="!isFund" />
+      <nav v-if="!isFund" class="market-tabs" aria-label="市场切换">
         <button
           v-for="t in TABS"
           :key="t.path"
@@ -68,7 +86,7 @@ function select(path: string): void {
     </RouterView>
 
     <footer class="market-foot">
-      数据来源：新浪财经 / 腾讯财经 / 纳斯达克官方 / 沪深港交易所。行情有延迟，不构成投资建议。
+      {{ isFund ? '数据来源：天天基金 / 新浪财经。净值按披露日更新，历史收益不代表未来表现。' : '数据来源：新浪财经 / 腾讯财经 / 纳斯达克官方 / 沪深港交易所。行情有延迟，不构成投资建议。' }}
     </footer>
   </section>
 </template>

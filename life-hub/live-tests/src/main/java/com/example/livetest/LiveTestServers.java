@@ -37,6 +37,17 @@ public final class LiveTestServers {
              var app = new SpringApplicationBuilder(FinanceWeb.class).run(properties(database, 18882))) {
             var jdbc = app.getBean(JdbcTemplate.class);
             initializeDatabase(jdbc, auth.getBean(PasswordEncoder.class));
+            if (java.util.Arrays.asList(args).contains("--pc")) {
+                // Desktop integration uses the same isolated business fixture and production RBAC.
+                jdbc.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+                String sql = java.nio.file.Files.readString(java.nio.file.Path.of("../database/051_create_admin_roles.mysql.sql"))
+                    .replaceAll("(?i)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci", "");
+                try (var connection = app.getBean(javax.sql.DataSource.class).getConnection()) {
+                    org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(connection,
+                        new org.springframework.core.io.ByteArrayResource(sql.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                }
+                jdbc.update("UPDATE users SET role_name='super_admin' WHERE id=1");
+            }
             ready = true;
             System.out.println("LIVE_E2E_READY: auth=18881 finance=18882 (isolated H2)");
             new CountDownLatch(1).await();

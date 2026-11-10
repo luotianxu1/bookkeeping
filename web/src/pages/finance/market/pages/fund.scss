@@ -1,0 +1,48 @@
+.fund-page { display: grid; gap: 10px; min-width: 0; font-size: 13px; line-height: 1.5; }
+.fund-page > *, .fund-page div { min-width: 0; }
+.fund-page :deep(.common-header-action-button) { margin-inline: 7px; flex: 0 0 30px; }
+h2, p { margin: 0; } h2 { font-size: 14px; font-weight: 600; }
+button, input { font: inherit; } button { cursor: pointer; } button:disabled { cursor: default; }
+a { color: inherit; text-decoration: none; }
+.num { font-variant-numeric: tabular-nums; }
+.up { color: var(--color-danger); } .down { color: var(--color-success); }
+.fund-search { display: flex; gap: 8px; }
+.fund-search input { flex: 1; min-width: 0; width: 0; min-height: 36px; padding: 7px 12px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-bg-card); color: var(--color-text-primary); outline: none; }
+.fund-search input:focus { border-color: var(--color-brand); }
+.fund-search :deep(.common-button) { padding: 6px 14px; }
+.fund-types { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.fund-types button { flex-shrink: 0; border: 0; border-radius: 7px; padding: 6px 10px; background: transparent; color: var(--color-text-muted); font-size: 12px; }
+.fund-types button.active { color: var(--color-brand); background: var(--color-bg-brand-soft); font-weight: 600; }
+.fund-toolbar { display: flex; align-items: flex-end; gap: 8px; }
+.fund-toolbar :deep(.common-field) { flex: 1; gap: 4px; }
+.fund-toolbar :deep(.common-field > span) { font-size: 11px; color: var(--color-text-muted); }
+.fund-toolbar :deep(.common-field-control) { min-height: 34px; padding: 6px 30px 6px 10px; border-radius: 8px; font-size: 12px; }
+.sort-order { flex-shrink: 0; min-height: 34px; border: 1px solid var(--color-border); border-radius: 8px; padding: 4px 10px; background: var(--color-bg-card); color: var(--color-text-primary); font-size: 12px; }
+.fund-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fund-heading > span, .fund-note, small { color: var(--color-text-muted); font-size: 11px; }
+.fund-note { line-height: 1.6; }
+.fund-list { border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; background: var(--color-bg-card); }
+.fund-columns, .fund-row { display: grid; grid-template-columns: minmax(0, 1fr) 65px 66px; gap: 6px; align-items: center; }
+.fund-columns { padding: 8px 10px; color: var(--color-text-muted); font-size: 11px; }
+.fund-columns > :not(:first-child), .fund-row > :not(:first-child) { text-align: right; }
+.fund-row { padding: 10px; border-top: 1px solid var(--color-border); font-size: 12px; }
+.fund-row:hover, .fund-result:hover { background: var(--color-bg-brand-soft); }
+.fund-name strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 500; line-height: 1.5; }
+.fund-name small { display: block; margin-top: 3px; font-size: 10px; white-space: nowrap; }
+.fund-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.fund-pagination :deep(.common-button) { padding: 6px 12px; }
+.fund-result { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; }
+.fund-result + .fund-result { border-top: 1px solid var(--color-border); }
+.fund-result strong, .fund-result small { display: block; overflow-wrap: anywhere; }
+.fund-result strong { font-size: 13px; font-weight: 500; }
+.fund-result > span { color: var(--color-text-muted); }
+.fund-error { color: var(--color-danger); font-size: 12px; }
+.fund-error button, .text-button { padding: 3px 0; border: 0; background: transparent; color: var(--color-brand); font-size: 12px; }
+.fund-empty { padding: 24px 10px; text-align: center; color: var(--color-text-muted); font-size: 12px; }
+.fund-panel { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-bg-card); }
+.nav-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.nav-summary > div { display: grid; gap: 2px; }.nav-summary span { color: var(--color-text-muted); font-size: 12px; }.nav-summary strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.fund-facts { display: grid; gap: 5px; margin: 0; font-size: 12px; }.fund-facts > div { display: flex; gap: 12px; justify-content: space-between; }.fund-facts dt { color: var(--color-text-muted); flex-shrink: 0; }.fund-facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.metric-switch { display: flex; gap: 3px; }.metric-switch button { border: 0; border-radius: 5px; padding: 4px 8px; background: transparent; color: var(--color-text-muted); font-size: 11px; }.metric-switch button[aria-pressed='true'] { color: var(--color-brand); background: var(--color-bg-brand-soft); }
+.period-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; }.period-grid > div { display: grid; gap: 3px; }.period-grid span { font-size: 11px; color: var(--color-text-muted); }.period-grid strong { font-size: 14px; font-variant-numeric: tabular-nums; }
+.fund-panel .fund-columns { padding: 0; }.nav-history { font-variant-numeric: tabular-nums; color: var(--color-text-primary); }

@@ -2,9 +2,10 @@
 
 ## Project Structure
 
-Monorepo with two independent components:
+Monorepo with independent frontend and backend components:
 
 - `web/` — Vue 3 mobile-first frontend
+- `pc/` — Vue 3 + TypeScript desktop workspace (RBAC + finance/assets/market/tools/food/profile business modules)
 - `life-hub/` — Spring Boot Java backend (Maven multi-module: common + auth-service + app-service + market-service)
 - `database/` — MySQL schema files (numbered for fresh database initialization)
 
@@ -25,6 +26,16 @@ pnpm build            # vue-tsc -b && vite build
 - Uses `postcss-pxtorem` for mobile viewport scaling
 - API client: `src/api/request.ts` — exports per-service instances (`authRequest`, `financeRequest`, etc.)
 - Auth: JWT in httpOnly cookie (`access_token`, `SameSite=Lax`), `withCredentials: true` in request.ts; 401 clears credentials and redirects to login. Token is NOT stored in localStorage.
+
+## PC 管理端
+
+- `cd pc && pnpm install && pnpm dev`；Node 22 / pnpm 9.12.1，开发端口 5174，预览 4174。复用 auth-service 的 Cookie 登录，`/auth-api` 同源代理到 8081。
+- 业务路由在 `pc/src/router/business.ts`，分组菜单在 `src/data/modules.ts`，桌面业务视图在 `src/business/pages`；仅复用 H5 API 契约与逻辑，不引用移动端样式。业务以 `pc.access` 进入，继续执行本人/家庭数据隔离。业务代理 `/finance-api` / `/tool-api` / `/food-api` → 8082，`/market-api` → 8083。
+- 检查：`pnpm test`、`pnpm build`、`pnpm test:e2e`。另有 `pnpm test:e2e:business`（4178，可控业务响应）和 `pnpm test:e2e:live`（18881/18882、4179，`LiveTestServers --pc` 隔离 H2）；浏览器套件顺序执行。浏览器测试依赖 Java 17 / Maven，使用可选 live-tests 的 `PcTestServer` 与隔离 H2（18883），前端预览 4177，不访问开发数据库。
+- PC RBAC 位于 auth-service 的 `admin` 包；051 定义角色及权限关联，兼容 `users.role_name` 的单角色模型。内置 `super_admin`/`user` 不可变；权限目录由服务端定义，不接受任意权限键。
+- 管理写入先锁 `admin_roles` 的 super_admin 行，再按用户 ID 顺序锁 users，锁内重新核验当前会话及实时权限。禁止自改角色/状态、修改自己所属角色、越权授权及删除有关联用户的角色。停用/锁定用户撤销全部会话。
+- 管理权限只覆盖 `/api/admin/**`；不放开移动端的用户/家庭数据隔离。权限变更不缓存，接口始终执行服务端鉴权。
+- 公共认证遇到缓存的停用状态时用 `isActiveFresh` 复核，确保重新启用的新会话可立即访问；复核故障仍返回 503，旧会话不会恢复，失败不能延长可信期。
 
 ## Backend (Spring Boot 3.3.5 + Java 17)
 

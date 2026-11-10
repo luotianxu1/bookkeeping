@@ -1,0 +1,10 @@
+// 财务域 API 统一门面：实现按域拆分到 ./finance/*，此处 re-export 保持既有 import 路径不变。
+export * from './finance/types'
+export * from './finance/account'
+export * from './finance/screener'
+export * from './finance/transaction'
+export * from './finance/renewal'
+export * from './finance/investment'
+export * from './finance/salary'
+export * from './finance/savings'
+export * from './finance/term-deposit'

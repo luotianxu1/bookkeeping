@@ -8,8 +8,21 @@ import org.apache.ibatis.annotations.Select;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public interface AccountMapper extends BaseMapper<AccountEntity> {
+
+    record TermPrincipal(Long accountId, BigDecimal principal) {}
+
+    @Select("""
+        <script>
+        SELECT account_id AS accountId, SUM(principal) AS principal FROM term_deposits
+        WHERE status='active' AND account_id IN
+        <foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach>
+        GROUP BY account_id
+        </script>
+        """)
+    List<TermPrincipal> termDepositPrincipals(@Param("ids") List<Long> ids);
 
     @Select("SELECT COALESCE(SUM(principal),0) FROM term_deposits WHERE account_id=#{id} AND status='active'")
     BigDecimal termDepositPrincipal(Long id);

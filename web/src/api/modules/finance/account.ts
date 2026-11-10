@@ -30,8 +30,8 @@ import type {
   SaveCategoryParams,
 } from './types'
 
-export function getAccountTypes(params: AccountTypeQuery = {}) {
-  return requestGet<AccountType[]>(financeRequest, '/api/finance/account-types', { params })
+export function getAccountTypes(params: AccountTypeQuery = {}, config?: AxiosRequestConfig) {
+  return requestGet<AccountType[]>(financeRequest, '/api/finance/account-types', { params, ...config })
 }
 
 export function updateAccountTypeSortOrders(params: SaveAccountTypeSortOrdersParams) {
@@ -40,6 +40,15 @@ export function updateAccountTypeSortOrders(params: SaveAccountTypeSortOrdersPar
 
 export function getAccounts(params: AccountQuery = {}, config?: AxiosRequestConfig) {
   return requestGet<Account[]>(financeRequest, '/api/finance/accounts', { params, ...config })
+}
+
+export interface AccountSummary {
+  accounts: Account[]
+  totalAssets: number
+}
+
+export function getAccountSummary(userId: number, config?: AxiosRequestConfig) {
+  return requestGet<AccountSummary>(financeRequest, '/api/finance/accounts/summary', { params: { userId }, ...config })
 }
 
 export function getAccount(id: number) {

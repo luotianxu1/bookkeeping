@@ -48,4 +48,30 @@ class UserIdentityScopeFilterTest {
         });
         assertThrows(IllegalArgumentException.class, () -> family.requireSelf(1, 2L, "只读"));
     }
+
+    @Test void rejectsEmptyOrMalformedRangesInsteadOfRemovingUserScope() throws Exception {
+        for (String parameter : java.util.List.of("userId", "userIds")) {
+            for (String value : java.util.List.of("", " ", ",", "1,", ",1", "1,,2", "0", "-1", "abc")) {
+                var request = request("GET");
+                request.addParameter(parameter, value);
+                var response = new MockHttpServletResponse();
+                filter.doFilter(request, response, (req, res) -> fail(parameter + "=" + value + " was allowed"));
+                assertEquals(400, response.getStatus(), parameter + "=" + value);
+            }
+            var request = request("GET");
+            request.addParameter(parameter, "1", "");
+            var response = new MockHttpServletResponse();
+            filter.doFilter(request, response, (req, res) -> fail("blank repeated parameter was allowed"));
+            assertEquals(400, response.getStatus());
+        }
+    }
+
+    @Test void omittedScopeDefaultsToSelfAndValidFamilyListsRemainReadable() throws Exception {
+        var request = request("GET");
+        request.addParameter("userIds", "1,2");
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {
+            assertEquals("1", req.getParameter("userId"));
+            assertEquals("1,2", req.getParameter("userIds"));
+        });
+    }
 }

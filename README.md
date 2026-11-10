@@ -319,6 +319,7 @@ JWT 通过 `access_token` httpOnly Cookie（`SameSite=Lax`）随请求携带，*
 - 自 2026-11-04 起不再依赖 JDBC/MySQL；用户状态与家庭范围经 auth-service 的内部接口查询，并使用短期本地缓存；
 - 前端经 `/market-api` 代理访问；`JWT_SECRET`、`INTERNAL_API_KEY` 与 auth/app 同值；`market.auth-base-url`（环境变量 `MARKET_AUTH_BASE_URL`）配置认证服务地址；
 - 金价主源为金投网（黄金9999 / 伦敦金 / 品牌首饰与走势），新浪作为降级源。
+- 行情中心顶部可切换股票与基金；基金页 `/finance/global-market/funds` 提供净值型公募基金排行、类型筛选、周期排序、分页及全目录搜索。`/api/market/funds` 与 `/api/market/funds/search` 使用天天基金数据，排行缓存 5 分钟、目录缓存 6 小时；详情复用 `/api/market/quote/fund/*` 的新浪净值、概况和阶段收益。货币基金的万份收益/七日年化口径不混入净值排行；所有列表标明披露日期，缺失涨幅显示“—”。
 
 ### 第三方 API 代理
 
@@ -544,3 +545,18 @@ git push
 - JWT 通过 httpOnly Cookie 携带，新增 jti 对应可撤销的服务器会话。auth-service/app-service 查询会话表，market-service 经内部鉴权接口核验，不缓存会话有效结果；依赖故障返回 503，已退出/过期会话返回 401。设备名由浏览器标识推断，每次登录生成一条会话，最多保留 20 个有效会话，活动时间按 5 分钟粒度更新。IP 为服务器实际连接地址，代理环境下可能显示代理地址。
 - `database/050_create_account_security.mysql.sql` 只新建 `user_security`、`user_sessions`，不修改已有表。新库按序执行；现有库须先执行 050，再统一重启 auth-service/app-service/market-service。升级前没有 jti 的旧登录需重新登录。
 - 验证包含账号安全的隔离 H2 事务/并发测试、公共认证过滤器与行情远程会话测试，以及 `pnpm test:e2e:live account-security.spec.ts` 的真实 HTTP 流程。浏览器测试创建隔离测试账号，不连接开发数据库。
+
+
+## PC 管理工作台
+
+新增独立的 `pc/`（Vue 3 + TypeScript + Element Plus），开发地址 <http://localhost:5174>，按权限管理、财务管理、资产管理、投资行情、生活工具、家庭餐饮、账号与家庭分组，提供独立的 Element Plus 桌面业务页面。复用 auth-service 登录及 `/api/admin/**` 管理接口，业务走 app-service/market-service 并保持本人和家庭数据隔离；数据库新增 `051_create_admin_roles.mysql.sql`，保留现有用户的单角色关联。
+
+```bash
+cd pc
+pnpm install
+pnpm dev
+```
+
+启动前执行新增的 051 数据库定义，重新构建并重启后端服务。使用现有超级管理员账号登录；自定义角色通过后台分配权限。普通用户默认无管理端访问权限。
+
+详见 [PC 启动、权限规则与测试](pc/README.md) 和 [项目功能盘点](pc/docs/FEATURES.md)。

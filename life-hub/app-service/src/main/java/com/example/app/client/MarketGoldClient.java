@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 
@@ -18,6 +19,10 @@ import java.math.BigDecimal;
  */
 @Component
 public class MarketGoldClient extends InternalMarketClientSupport {
+
+    // 缓存读取必须在浏览器默认 10 秒超时前结束，为账户展示的降级留出时间。
+    // 走势图仍使用原有 15 秒读超时。
+    private final RestTemplate spotPriceTemplate = newRestTemplate(2_000);
 
     public MarketGoldClient(
         ObjectMapper objectMapper,
@@ -44,7 +49,7 @@ public class MarketGoldClient extends InternalMarketClientSupport {
 
     /** 行情中心缓存中的现货金价格（CNY/g），缓存未预热时为 null。 */
     public BigDecimal getCachedSpotPrice() {
-        JsonNode data = fetchNode(baseUrl + "/api/internal/gold/spot-price");
+        JsonNode data = fetchNode(baseUrl + "/api/internal/gold/spot-price", spotPriceTemplate);
         if (data == null || data.isNull()) {
             return null;
         }

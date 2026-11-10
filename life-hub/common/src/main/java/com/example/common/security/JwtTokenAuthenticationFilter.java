@@ -56,7 +56,9 @@ public class JwtTokenAuthenticationFilter extends OncePerRequestFilter {
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
                 long userId = userIdClaim.longValue();
                 // 状态缓存之外逐次校验有效会话及用户状态，撤销不等待缓存失效。
-                if (userStatusChecker.isActive(userId) && sessionChecker.isValid(userId, claims.getId())) {
+                // 账号重新启用后不能被旧的停用缓存阻断；复核失败仍返回 503，且必须通过实时会话校验。
+                boolean active = userStatusChecker.isActive(userId) || userStatusChecker.isActiveFresh(userId);
+                if (active && sessionChecker.isValid(userId, claims.getId())) {
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                         username,
                         null,

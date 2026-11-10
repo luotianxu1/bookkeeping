@@ -112,6 +112,18 @@ export const financeRoutes: RouteRecordRaw[] = [
     children: [
       { path: '', redirect: '/finance/global-market/global' },
       {
+        path: 'funds',
+        name: 'finance-market-funds',
+        component: () => import('@/pages/finance/market/pages/FundPage.vue'),
+        meta: { section: 'finance', title: '行情中心 · 基金' },
+      },
+      {
+        path: 'funds/:code',
+        name: 'finance-market-fund-detail',
+        component: () => import('@/pages/finance/market/pages/FundDetailPage.vue'),
+        meta: { section: 'finance', title: '基金详情' },
+      },
+      {
         path: 'global',
         name: 'finance-market-global',
         component: () => import('@/pages/finance/market/pages/GlobalPage.vue'),

@@ -63,16 +63,20 @@ public class AuthController {
     @PostMapping("/login")
     @Operation(summary = "用户登录", description = "使用用户名和密码登录，返回 JWT 访问令牌并写入 httpOnly Cookie")
     public Result<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        String rateLimitKey = request.username().toLowerCase() + "|" + httpRequest.getRemoteAddr();
-        if (loginRateLimiter.isBlocked(rateLimitKey)) {
+        String login = request.username().trim();
+        var attempt = loginRateLimiter.tryAcquire(login, httpRequest.getRemoteAddr());
+        if (attempt == null) {
             return Result.<LoginResponse>fail().code(429).message("登录尝试次数过多，请 15 分钟后再试");
         }
-        var user = accountSecurityService.login(request.username(), request.password(), httpRequest.getHeader("User-Agent"), httpRequest.getRemoteAddr()).orElse(null);
+        com.example.auth.service.AccountSecurityService.LoginSession user = null;
+        try {
+            user = accountSecurityService.login(login, request.password(), httpRequest.getHeader("User-Agent"), httpRequest.getRemoteAddr()).orElse(null);
+        } finally {
+            attempt.complete(user != null);
+        }
         if (user == null) {
-            loginRateLimiter.recordFailure(rateLimitKey);
             return Result.<LoginResponse>fail().code(401).message("用户名或密码错误");
         }
-        loginRateLimiter.clear(rateLimitKey);
         String token = jwtService.generateToken(user.username(), user.userId(), user.sessionId());
         writeTokenCookie(httpResponse, token, jwtService.getExpirationSeconds());
         return Result.ok(new LoginResponse(token, "Bearer", jwtService.getExpirationSeconds()));

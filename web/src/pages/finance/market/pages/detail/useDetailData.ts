@@ -1,6 +1,6 @@
 // 标的详情数据层：头部快照 / 图表K线 / 分时 / 扩展资料 / F10 / 报表 / 分时回看的加载与状态。
 // 移植自 investment 项目 Detail 页。
-// 三路请求通道互不干扰：图表（K线/分时，随周期切换）、头部快照、元信息（extra/F10/报表/回看）。
+// 图表、头部快照及各个资料区域独立加载，切换标的时取消旧请求并阻止迟到响应。
 import { computed, onMounted, ref, watch, type ComputedRef } from 'vue'
 import {
   getDetail,
@@ -22,6 +22,7 @@ import {
 } from '@/api/modules/market'
 import { getErrorMessage, isCancelRequest } from '@/api/request'
 import { useRequestAbort } from '@/composables/useRequestAbort'
+import { useAsyncSection } from '@/composables/useAsyncSection'
 
 export type UseDetailDataOptions = {
   /** 分时加载前回调：清空 K线/分时两套选中状态（由页面接线到交互 composable） */
@@ -38,7 +39,6 @@ export function useDetailData(
   // 注意：hooks 在调用时才读取（页面接线交互 composable 后才赋值），不能在初始化时解构
   const { signalFor: chartSignal } = useRequestAbort()
   const { signalFor: headerSignal } = useRequestAbort()
-  const { signalFor: metaSignal } = useRequestAbort()
 
   /* ---------- 状态 ---------- */
   const loading = ref(true)
@@ -53,9 +53,6 @@ export function useDetailData(
   const scale = ref('trend') // 周期模式：默认分时，其余为新浪 K 线周期（秒），240 = 日K
   const klineScale = ref('240') // 当前 kline 实际加载的周期（分时模式不改动 K 线数据）
   const trendData = ref<TrendData | null>(null)
-
-  /** 次级资料（资金流向/公告/F10/报表/分时回看）加载失败标记：面板本体静默隐藏，统一给轻提示与重试 */
-  const secondaryError = ref('')
 
   /** 分时回看（近 5 个交易日，5 分钟粒度，仅 A 股） */
   const trendHistory = ref<TrendHistoryDay[] | null>(null)
@@ -196,87 +193,51 @@ export function useDetailData(
     loading.value = false
   }
 
-  /** 扩展信息（资金流向/公告/分红）只在切换标时加载一次，与周期切换无关 */
-  async function loadExtra(): Promise<void> {
-    try {
-      extra.value = await getExtra(kind.value, code.value, { signal: metaSignal() })
-    } catch (e) {
-      if (isCancelRequest(e)) return
-      extra.value = { moneyflow: [], announcements: [], dividends: [] }
-      secondaryError.value = getErrorMessage(e, '扩展资料加载失败')
-    }
-  }
-
-  /** F10 信息（财务指标/十大股东/融资融券/公司概况）与扩展信息一样只在切换标的时加载一次 */
-  async function loadF10(): Promise<void> {
-    try {
-      f10.value = await getF10(kind.value, code.value, { signal: metaSignal() })
-    } catch (e) {
-      if (isCancelRequest(e)) return
-      f10.value = { financials: null, holders: null, margin: null, profile: null, sectors: null }
-      secondaryError.value = getErrorMessage(e, 'F10 资料加载失败')
-    }
-  }
-
-  async function loadStatements(): Promise<void> {
-    try {
-      statements.value = await getStatements(kind.value, code.value, 5, { signal: metaSignal() })
-    } catch (e) {
-      if (isCancelRequest(e)) return
-      statements.value = null
-      secondaryError.value = getErrorMessage(e, '财务报表加载失败')
-    }
-  }
-
-  /** 三张报表是否至少有一张有数据；没有则整个区块不渲染 */
+  const extraSection = useAsyncSection(
+    signal => getExtra(kind.value, code.value, { signal }),
+    value => { extra.value = value }, '扩展资料加载失败',
+  )
+  const f10Section = useAsyncSection(
+    signal => getF10(kind.value, code.value, { signal }),
+    value => { f10.value = value }, 'F10 资料加载失败',
+  )
+  const statementsSection = useAsyncSection(
+    signal => getStatements(kind.value, code.value, 5, { signal }),
+    value => { statements.value = value }, '财务报表加载失败',
+  )
+  const historySection = useAsyncSection(
+    signal => kind.value === 'index' || kind.value === 'stock'
+      ? getTrendHistory(kind.value, code.value, 5, { signal }) : Promise.resolve(null),
+    value => { trendHistory.value = value?.days ?? null }, '分时回看加载失败',
+  )
+  const secondarySections = [extraSection, f10Section, statementsSection, historySection]
+  const secondaryError = computed(() => secondarySections.map(section => section.error.value).find(Boolean) ?? '')
   const hasStatements = computed(
     () => !!statements.value && ['income', 'balance', 'cashflow'].some((k) => !!statements.value?.[k as keyof StatementsData]),
   )
 
-  async function loadTrendHistory(): Promise<void> {
-    if (kind.value !== 'index' && kind.value !== 'stock') {
-      trendHistory.value = null
-      return
-    }
-    try {
-      const data = await getTrendHistory(kind.value, code.value, 5, { signal: metaSignal() })
-      trendHistory.value = data?.days ?? null
-    } catch (e) {
-      if (isCancelRequest(e)) return
-      trendHistory.value = null
-      secondaryError.value = getErrorMessage(e, '分时回看加载失败')
-    }
-  }
-
-  /** 次级资料统一重试：先清提示，任一再次失败会重新置位 */
   function retrySecondary(): void {
-    secondaryError.value = ''
-    loadExtra()
-    loadF10()
-    loadStatements()
-    loadTrendHistory()
+    secondarySections.forEach(section => { void section.run() })
   }
 
-  /** 切换标的时清掉上一次的次级资料错误提示 */
-  watch(() => [kind.value, code.value], () => {
-    secondaryError.value = ''
-  })
+  function loadSecondary(): void {
+    secondarySections.forEach(section => section.reset())
+    extra.value = null
+    f10.value = null
+    statements.value = null
+    trendHistory.value = null
+    retrySecondary()
+  }
 
   watch(() => [kind.value, code.value], () => load())
   /** 切换周期只静默重渲染图表：不触发整页骨架屏，旧图保留原地替换 */
   watch(scale, () => load(true))
   /** 头部实时快照：随标的切换加载一次，与图表周期无关 */
   watch(() => [kind.value, code.value], loadHeader)
-  watch(() => [kind.value, code.value], loadExtra)
-  watch(() => [kind.value, code.value], loadF10)
-  watch(() => [kind.value, code.value], loadStatements)
-  watch(() => [kind.value, code.value], loadTrendHistory)
+  watch(() => [kind.value, code.value], loadSecondary)
   onMounted(load)
   onMounted(loadHeader)
-  onMounted(loadExtra)
-  onMounted(loadF10)
-  onMounted(loadStatements)
-  onMounted(loadTrendHistory)
+  onMounted(loadSecondary)
 
   return {
     // 状态

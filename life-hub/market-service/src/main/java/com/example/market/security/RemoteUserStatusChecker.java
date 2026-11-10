@@ -4,6 +4,7 @@ import com.example.common.result.Result;
 import com.example.common.security.InternalApiKeyFilter;
 import com.example.common.security.UserStatusChecker;
 import com.example.common.security.UserStatusCache;
+import com.example.common.security.UserStatusUnavailableException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
@@ -46,28 +47,31 @@ public class RemoteUserStatusChecker implements UserStatusChecker {
 
     @Override
     public boolean isActive(long userId) {
-        return cache.isActive(userId, id -> {
-            try {
-                HttpHeaders headers = new HttpHeaders();
-                headers.set(InternalApiKeyFilter.HEADER_NAME, internalApiKey);
-                ResponseEntity<Result<Map<String, Object>>> response = restTemplate.exchange(
-                    authBaseUrl + "/api/internal/auth/user-status?userId=" + id,
-                    HttpMethod.GET,
-                    new HttpEntity<Void>(headers),
-                    new ParameterizedTypeReference<>() {
-                    }
-                );
-                Result<Map<String, Object>> body = response.getBody();
-                if (body == null || body.getCode() == null || body.getCode() != 0 || body.getData() == null) {
-                    throw new IllegalStateException("user-status query failed");
+        return cache.isActive(userId, this::isActiveFresh);
+    }
+
+    @Override
+    public boolean isActiveFresh(long userId) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set(InternalApiKeyFilter.HEADER_NAME, internalApiKey);
+            ResponseEntity<Result<Map<String, Object>>> response = restTemplate.exchange(
+                authBaseUrl + "/api/internal/auth/user-status?userId=" + userId,
+                HttpMethod.GET,
+                new HttpEntity<Void>(headers),
+                new ParameterizedTypeReference<>() {
                 }
-                if (!(body.getData().get("active") instanceof Boolean active)) {
-                    throw new IllegalStateException("user-status response missing active");
-                }
-                return active;
-            } catch (Exception ex) {
-                throw new IllegalStateException("user-status query failed", ex);
+            );
+            Result<Map<String, Object>> body = response.getBody();
+            if (body == null || body.getCode() == null || body.getCode() != 0 || body.getData() == null) {
+                throw new IllegalStateException("user-status query failed");
             }
-        });
+            if (!(body.getData().get("active") instanceof Boolean active)) {
+                throw new IllegalStateException("user-status response missing active");
+            }
+            return active;
+        } catch (Exception ex) {
+            throw new UserStatusUnavailableException();
+        }
     }
 }

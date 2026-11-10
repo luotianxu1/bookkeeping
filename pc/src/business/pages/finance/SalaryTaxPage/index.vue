@@ -1,0 +1,171 @@
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import {
+  getSalaryTaxPage,
+  type SalaryTaxPage,
+} from '@/business/api/modules/finance'
+import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
+import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
+import PageHeader from '@/business/components/common/PageHeader/index.vue'
+import { getStoredCurrentUser } from '@/business/utils/current-user'
+import { createRecentYearOptions, formatSalaryCurrency } from '../salary-shared'
+import { getErrorMessage } from '@/business/api/request'
+
+const pageData = ref<SalaryTaxPage | null>(null)
+const isLoading = ref(true)
+const pageError = ref('')
+const feedbackVisible = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
+const selectedYear = ref(String(new Date().getFullYear()))
+const yearOptions = createRecentYearOptions(5)
+
+onMounted(() => {
+  void loadPage()
+})
+
+async function loadPage() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    pageError.value = '请先登录后查看工资税务'
+    isLoading.value = false
+    return
+  }
+
+  isLoading.value = true
+  pageError.value = ''
+
+  try {
+    pageData.value = await getSalaryTaxPage(
+      currentUser.id,
+      Number(selectedYear.value),
+    )
+  } catch (error) {
+    pageError.value = getErrorMessage(error, '工资税务加载失败')
+    feedbackMessage.value = pageError.value
+    feedbackType.value = 'error'
+    feedbackVisible.value = true
+  } finally {
+    isLoading.value = false
+  }
+}
+
+function handleYearChange(value: string) {
+  selectedYear.value = value
+  void loadPage()
+}
+</script>
+
+<template>
+  <section class="pc-page salary-page" aria-label="工资税务">
+    <PageHeader
+      title="工资税务"
+      back-to="/finance/salary"
+      :prefer-back-to="true"
+    >
+      <CommonSelect
+        class="salary-year-select"
+        label=""
+        :model-value="selectedYear"
+        :options="yearOptions"
+        @update:model-value="handleYearChange"
+      />
+    </PageHeader>
+    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
+    <div v-else-if="isLoading" class="salary-loading-wrap">
+      <CommonLoading text="工资税务加载中..." />
+    </div>
+    <template v-else-if="pageData">
+      <el-card class="pc-record-card salary-summary-card" shadow="never">
+        <div class="salary-summary-head">
+          <p class="salary-summary-eyebrow">{{ pageData.year }} 年税务概览</p>
+          <div class="salary-summary-main">
+            <div class="salary-summary-main-top">
+              <strong>{{ formatSalaryCurrency(pageData.annualTax) }}</strong>
+              <span class="salary-pill">
+                已发 {{ pageData.paidMonths }} 个月
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="pc-grid salary-metric-grid">
+          <el-card
+            v-for="metric in pageData.metrics"
+            :key="metric.label"
+            class="pc-record-card salary-metric-card"
+            shadow="never"
+          >
+            <span>{{ metric.label }}</span>
+            <strong>{{ formatSalaryCurrency(metric.value) }}</strong>
+          </el-card>
+        </div>
+      </el-card>
+      <el-card class="pc-record-card salary-card" shadow="never">
+        <div class="salary-card-head">
+          <strong>专项附加扣除</strong>
+          <span class="salary-pill">年度累计</span>
+        </div>
+        <div class="pc-grid salary-deduction-list">
+          <el-card
+            v-for="item in pageData.deductions"
+            :key="item.label"
+            class="pc-record-card salary-deduction-card"
+            shadow="never"
+          >
+            <div class="salary-linked-top">
+              <div>
+                <p class="salary-deduction-title">{{ item.label }}</p>
+                <p class="salary-deduction-note">
+                  月度扣除 {{ formatSalaryCurrency(item.monthlyValue) }}
+                </p>
+              </div>
+              <div class="salary-deduction-amount">
+                <strong>{{ formatSalaryCurrency(item.annualValue) }}</strong>
+                <span>年累计</span>
+              </div>
+            </div>
+          </el-card>
+        </div>
+      </el-card>
+      <el-card class="pc-record-card salary-card" shadow="never">
+        <div class="salary-card-head">
+          <strong>个税明细</strong>
+          <span class="salary-pill">月度累计</span>
+        </div>
+        <div class="pc-grid salary-month-list">
+          <el-card
+            v-for="item in pageData.monthItems"
+            :key="item.monthKey"
+            class="pc-record-card salary-month-card"
+            shadow="never"
+          >
+            <div class="salary-month-top">
+              <div>
+                <p class="salary-month-title">{{ item.monthLabel }}</p>
+                <p class="salary-month-note">
+                  税前收入 {{ formatSalaryCurrency(item.grossIncome) }}
+                </p>
+              </div>
+              <div class="salary-month-amount">
+                <strong>{{ formatSalaryCurrency(item.taxAmount) }}</strong>
+                <span>{{ item.statusText }}</span>
+              </div>
+            </div>
+            <div class="salary-row">
+              <div><p class="salary-row-desc">税后收入</p></div>
+              <div class="salary-row-value">
+                <strong>{{ formatSalaryCurrency(item.takeHomeIncome) }}</strong>
+              </div>
+            </div>
+          </el-card>
+        </div>
+      </el-card>
+    </template>
+    <CommonFeedback
+      v-model="feedbackVisible"
+      :message="feedbackMessage"
+      :type="feedbackType"
+    />
+  </section>
+</template>

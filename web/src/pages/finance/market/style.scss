@@ -23,6 +23,28 @@
   }
 }
 
+.product-switch {
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 9px;
+  background: var(--color-bg-soft-2);
+
+  button {
+    min-width: 48px;
+    min-height: 28px;
+    padding: 3px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    &.active { background: var(--color-bg-card); color: var(--color-brand); font-weight: 600; }
+    &:focus-visible { outline: 2px solid var(--color-ring-focus); outline-offset: 1px; }
+  }
+}
+
 /* ---------- 市场切换 tab（下划线式，移动端可横滑） ---------- */
 .market-tabs {
   display: flex;

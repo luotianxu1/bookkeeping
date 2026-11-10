@@ -4,6 +4,7 @@ import com.example.common.result.Result;
 import com.example.app.dto.AccountRequest;
 import com.example.app.dto.AccountResponse;
 import com.example.app.dto.AccountSortOrderRequest;
+import com.example.app.dto.AccountSummaryResponse;
 import com.example.app.dto.AssetAccountSnapshotResponse;
 import com.example.app.dto.AssetTrendResponse;
 import com.example.app.dto.FinanceOverviewResponse;
@@ -55,11 +56,17 @@ public class AccountController {
     @GetMapping
     @Operation(summary = "查询账户列表")
     public Result<List<AccountResponse>> list(
-        @RequestParam(name = "userId", required = false) Long userId,
+        @RequestParam(name = "userId") @NotNull Long userId,
         @RequestParam(name = "accountTypeId", required = false) Long accountTypeId,
         @RequestParam(name = "status", required = false) String status
     ) {
         return Result.ok(accountService.list(userId, accountTypeId, status));
+    }
+
+    @GetMapping("/summary")
+    @Operation(summary = "查询启用账户及资产总览")
+    public Result<AccountSummaryResponse> summary(@RequestParam(name = "userId") @NotNull Long userId) {
+        return Result.ok(accountService.summary(userId));
     }
 
     @GetMapping("/overview")

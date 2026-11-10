@@ -464,17 +464,17 @@ export interface FundPeriodReturnRow {
   syl: string | null
 }
 
-export const getInvestmentFundBase = (code: string) =>
-  requestGet<InvestmentFundBase>(marketRequest, '/api/market/quote/fund/base', { params: { code } })
+export const getInvestmentFundBase = (code: string, config?: AxiosRequestConfig) =>
+  requestGet<InvestmentFundBase>(marketRequest, '/api/market/quote/fund/base', { params: { code }, ...config })
 
-export const getInvestmentFundTrend = (code: string) =>
-  requestGet<InvestmentFundTrend>(marketRequest, '/api/market/quote/fund/trend', { params: { code } })
+export const getInvestmentFundTrend = (code: string, config?: AxiosRequestConfig) =>
+  requestGet<InvestmentFundTrend>(marketRequest, '/api/market/quote/fund/trend', { params: { code }, ...config })
 
-export const getInvestmentFundPeriodReturns = (code: string) =>
+export const getInvestmentFundPeriodReturns = (code: string, config?: AxiosRequestConfig) =>
   requestGet<{ matched: boolean; rows: FundPeriodReturnRow[] }>(
     marketRequest,
     '/api/market/quote/fund/period-returns',
-    { params: { code } },
+    { params: { code }, ...config },
   )
 
 /** A股快照（code 为裸代码如 600519） */

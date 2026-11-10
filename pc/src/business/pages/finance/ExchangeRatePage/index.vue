@@ -1,0 +1,168 @@
+<script setup lang="ts">
+import DesktopInput from '@/business/components/DesktopInput.vue'
+
+// 汇率换算页：输入支付金额并进行币种换算展示。
+import { computed, onMounted, ref, watch } from 'vue'
+import { getExchangeRate } from '@/business/api/modules/finance'
+import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+import CommonSelect, {
+  type CommonSelectOption,
+} from '@/business/components/common/CommonSelect/index.vue'
+import PageHeader from '@/business/components/common/PageHeader/index.vue'
+import { getErrorMessage } from '@/business/api/request'
+
+const currencyOptions = [
+  { code: 'USD', label: 'USD 美元' },
+  { code: 'CNY', label: 'CNY 人民币' },
+  { code: 'EUR', label: 'EUR 欧元' },
+  { code: 'JPY', label: 'JPY 日元' },
+  { code: 'HKD', label: 'HKD 港币' },
+  { code: 'GBP', label: 'GBP 英镑' },
+  { code: 'AUD', label: 'AUD 澳元' },
+  { code: 'CAD', label: 'CAD 加元' },
+  { code: 'SGD', label: 'SGD 新加坡元' },
+]
+
+const fromCurrency = ref('USD')
+const toCurrency = ref('CNY')
+const fromAmount = ref('100.00')
+const rate = ref(0)
+const exchangeRateError = ref('')
+const isLoadingRate = ref(true)
+const updatedAt = ref('')
+let requestId = 0
+
+const fromCode = computed(() => fromCurrency.value)
+const toCode = computed(() => toCurrency.value)
+const currencySelectOptions = computed<CommonSelectOption[]>(() =>
+  currencyOptions.map((option) => ({
+    label: option.label,
+    value: option.code,
+  })),
+)
+
+const parsedAmount = computed(() => {
+  const numeric = Number(fromAmount.value)
+  return Number.isFinite(numeric) ? numeric : 0
+})
+
+const convertedAmount = computed(() => {
+  const value = parsedAmount.value * rate.value
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+})
+
+const rateText = computed(() => {
+  if (isLoadingRate.value && !rate.value) {
+    return '汇率加载中...'
+  }
+  return `1 ${fromCode.value} = ${rate.value.toFixed(4)} ${toCode.value}`
+})
+
+const updatedAtText = computed(() => {
+  if (!updatedAt.value) return ''
+  const date = new Date(updatedAt.value)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (part: number) => String(part).padStart(2, '0')
+  return `更新时间 ${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+})
+
+onMounted(() => {
+  loadExchangeRate()
+})
+
+watch([fromCurrency, toCurrency], () => {
+  loadExchangeRate()
+})
+
+function swapCurrencies() {
+  const previousFrom = fromCurrency.value
+  fromCurrency.value = toCurrency.value
+  toCurrency.value = previousFrom
+}
+
+async function loadExchangeRate() {
+  const currentRequestId = ++requestId
+  isLoadingRate.value = true
+  exchangeRateError.value = ''
+
+  try {
+    const result = await getExchangeRate(fromCode.value, toCode.value)
+    if (currentRequestId !== requestId) {
+      return
+    }
+    rate.value = Number(result.rate)
+    updatedAt.value = result.updatedAt
+  } catch (error) {
+    if (currentRequestId !== requestId) {
+      return
+    }
+    exchangeRateError.value = getErrorMessage(error, '汇率加载失败')
+    rate.value = 0
+    updatedAt.value = ''
+  } finally {
+    if (currentRequestId === requestId) {
+      isLoadingRate.value = false
+    }
+  }
+}
+</script>
+
+<template>
+  <section class="pc-page exchange-rate-page" aria-label="汇率换算">
+    <PageHeader title="汇率换算" back-label="返回更多功能" />
+    <el-card
+      class="pc-record-card converter-card"
+      aria-label="汇率转换器"
+      shadow="never"
+    >
+      <el-card class="pc-record-card currency-card" shadow="never">
+        <p>支付币种</p>
+        <div class="currency-row">
+          <div class="currency-select">
+            <CommonSelect
+              v-model="fromCurrency"
+              label="支付币种"
+              :options="currencySelectOptions"
+            />
+          </div>
+          <DesktopInput
+            v-model="fromAmount"
+            type="text"
+            inputmode="decimal"
+            aria-label="支付金额"
+          />
+        </div>
+      </el-card>
+      <div class="mid-row">
+        <span>{{ rateText }}</span>
+        <el-button native-type="button" @click="swapCurrencies">切换</el-button>
+      </div>
+      <el-card class="pc-record-card currency-card" shadow="never">
+        <p>到账币种</p>
+        <div class="currency-row">
+          <div class="currency-select">
+            <CommonSelect
+              v-model="toCurrency"
+              label="到账币种"
+              :options="currencySelectOptions"
+            />
+          </div>
+          <strong>{{ convertedAmount }}</strong>
+        </div>
+      </el-card>
+      <p
+        v-if="exchangeRateError"
+        class="exchange-message exchange-message-error"
+      >
+        {{ exchangeRateError }}
+      </p>
+      <CommonLoading v-else-if="isLoadingRate" text="汇率加载中..." />
+      <p v-else-if="updatedAtText" class="exchange-message">
+        {{ updatedAtText }}
+      </p>
+    </el-card>
+  </section>
+</template>

@@ -5,10 +5,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   deleteTransaction,
-  getAccounts,
+  getAccountSummary,
   getAccountTypes,
   getCurrentMonthlyBudget,
-  getFinanceOverview,
   getTransactions,
   type Transaction,
 } from '@/api/modules/finance'
@@ -106,19 +105,15 @@ async function loadCashTransactions() {
       return
     }
 
-    const [cashAccounts, transactionList, currentBudget, financeOverviewSummary] = await Promise.all([
-      getAccounts({
-        userId: currentUser.id,
-        accountTypeId: cashType.id,
-        status: 'active',
-      }),
+    const [accountSummary, transactionList, currentBudget] = await Promise.all([
+      getAccountSummary(currentUser.id),
       getTransactions({
         userId: currentUser.id,
       }),
       getCurrentMonthlyBudget(currentUser.id, currentMonthDate),
-      getFinanceOverview(currentUser.id),
     ])
 
+    const cashAccounts = accountSummary.accounts.filter(account => account.accountTypeId === cashType.id)
     const cashAccountIds = new Set(cashAccounts.map((account) => String(account.id)))
     transactions.value = transactionList.filter((transaction) => cashAccountIds.has(String(transaction.accountId)))
     const currentMonthTransactions = transactions.value.filter((transaction) =>
@@ -134,9 +129,9 @@ async function loadCashTransactions() {
     updateOverview(monthlyIncome, monthlyExpense, budgetAmount)
     overview.value = {
       ...overview.value,
-      totalAssets: financeOverviewSummary.totalAssets == null
+      totalAssets: accountSummary.totalAssets == null
         ? ''
-        : formatAmount(toNumber(financeOverviewSummary.totalAssets)),
+        : formatAmount(toNumber(accountSummary.totalAssets)),
     }
   } catch (error) {
     transactions.value = []

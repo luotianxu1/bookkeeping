@@ -14,11 +14,7 @@ import CommonSelect, { type CommonSelectOption } from '@/components/common/Commo
 import CommonSwitch from '@/components/common/CommonSwitch/index.vue'
 import {
   createAccount,
-  getAccounts,
   getAccountTypes,
-  getFinanceOverview,
-  type Account,
-  type AccountType,
 } from '@/api/modules/finance'
 import { getContacts, type Contact } from '@/api/modules/tool'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -34,6 +30,7 @@ import { getErrorMessage } from '@/api/request'
 import { useFinanceFamilyView } from '@/composables/useFinanceFamilyView'
 import { buildAccountGroups } from './accountGroup'
 import { useCollapsedGroupState } from './useCollapsedGroupState'
+import { useAccountSummary } from './useAccountSummary'
 
 const LIABILITY_ACCOUNT_CODES = new Set(['liability'])
 const CONTACT_LINKED_ACCOUNT_CODES = new Set(['debt', 'human_relation'])
@@ -50,15 +47,10 @@ const liabilityLoanTotalPeriods = ref('')
 const liabilityLoanRepaymentDay = ref('')
 const liabilityLoanStartDate = ref('')
 const includeInNetWorth = ref(true)
-const accountTypes = ref<AccountType[]>([])
-const accounts = ref<Account[]>([])
-const overviewTotalAssets = ref<number | null>(null)
 const contacts = ref<Contact[]>([])
-const isLoadingAccounts = ref(true)
 const isLoadingAccountTypes = ref(false)
 const isLoadingContacts = ref(false)
 const isSavingAccount = ref(false)
-const accountListError = ref('')
 const accountTypeError = ref('')
 const accountFormError = ref('')
 const showFeedbackModal = ref(false)
@@ -66,7 +58,6 @@ const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 
 const {
-  currentUser,
   familyView,
   familyViewOptions,
   selectedFamilyView,
@@ -77,6 +68,9 @@ const {
   viewerNameByUserId,
   loadFamilyMembers,
 } = useFinanceFamilyView()
+
+const { accounts, accountTypes, overviewTotalAssets, loadAccounts, isLoadingAccounts, accountListError } =
+  useAccountSummary(selectedViewerUserIds)
 
 const {
   collapsedGroupState,
@@ -313,38 +307,6 @@ async function saveAccount() {
   }
 }
 
-async function loadAccounts() {
-  const me = currentUser.value
-  if (!me) {
-    accountListError.value = '请先登录后查看账户'
-    accounts.value = []
-    overviewTotalAssets.value = null
-    isLoadingAccounts.value = false
-    return
-  }
-
-  isLoadingAccounts.value = true
-  accountListError.value = ''
-
-  try {
-    const targetUserIds = selectedViewerUserIds.value
-    const [accountList, typeList, overviewList] = await Promise.all([
-      Promise.all(targetUserIds.map((userId) => getAccounts({ userId, status: 'active' }))),
-      getAccountTypes({ status: 'active' }),
-      Promise.all(targetUserIds.map((userId) => getFinanceOverview(userId))),
-    ])
-    accounts.value = accountList.flat()
-    accountTypes.value = typeList
-    overviewTotalAssets.value = overviewList.reduce((total, item) => total + toNumber(item.totalAssets), 0)
-  } catch (error) {
-    accounts.value = []
-    overviewTotalAssets.value = null
-    accountListError.value = getErrorMessage(error, '账户列表加载失败')
-  } finally {
-    isLoadingAccounts.value = false
-  }
-}
-
 async function loadAccountTypes() {
   if (isLoadingAccountTypes.value) {
     return
@@ -411,11 +373,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
   feedbackMessage.value = message
   feedbackType.value = type
   showFeedbackModal.value = true
-}
-
-function toNumber(value: unknown) {
-  const parsed = Number(value ?? 0)
-  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function normalizePositiveAmount(value: string) {

@@ -1,0 +1,749 @@
+<script setup lang="ts">
+import { formatAmount as formatNumberAmount } from '@/business/utils/format'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import PageHeader from '@/business/components/common/PageHeader/index.vue'
+import AmountText from '@/business/components/common/AmountText/index.vue'
+import CommonButton from '@/business/components/common/CommonButton/index.vue'
+import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
+import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+import CommonInput from '@/business/components/common/CommonInput/index.vue'
+import CommonModal from '@/business/components/common/CommonModal/index.vue'
+import {
+  createInvestmentFixedExpense,
+  deleteInvestmentFixedExpense,
+  getInvestmentFixedExpenses,
+  getInvestmentDividendIncome,
+  refreshInvestmentDividendIncome,
+  getRenewalSubscriptions,
+  type InvestmentFixedExpense,
+  type InvestmentDividendIncomeItem,
+  type InvestmentDividendIncomePage,
+  type RenewalBillingCycle,
+  type RenewalSubscription,
+  updateInvestmentFixedExpense,
+} from '@/business/api/modules/finance'
+import { getStoredCurrentUser } from '@/business/utils/current-user'
+import { getErrorMessage } from '@/business/api/request'
+
+type FixedExpenseSource = 'investment' | 'renewal'
+
+type FixedExpenseItem = InvestmentFixedExpense & {
+  itemKey: string
+  source: FixedExpenseSource
+  editable: boolean
+}
+
+type ExpenseCoverageItem = FixedExpenseItem & {
+  coveredAmount: number
+  coveredPercent: number
+  status: 'covered' | 'partial' | 'pending'
+}
+
+function formatAmount(value: number, digits = 2) {
+  return formatNumberAmount(Math.abs(value), digits)
+}
+
+const router = useRouter()
+const isLoading = ref(true)
+const isRefreshing = ref(false)
+const pageError = ref('')
+const expenseSaving = ref(false)
+const pageData = ref<InvestmentDividendIncomePage | null>(null)
+const currentUserId = ref<number | null>(null)
+const investmentExpenseItems = ref<FixedExpenseItem[]>([])
+const renewalExpenseItems = ref<FixedExpenseItem[]>([])
+const isExpenseEditing = ref(false)
+const showExpenseModal = ref(false)
+const editingExpenseId = ref<number | null>(null)
+const expenseName = ref('')
+const expenseAmount = ref('')
+const expenseError = ref('')
+
+const summary = computed(
+  () =>
+    pageData.value?.summary ?? {
+      estimatedDividendAmount: 0,
+      estimatedDividendRate: 0,
+      actualDividendAmount: 0,
+      actualDividendRate: 0,
+      holdingCount: 0,
+    },
+)
+
+const holdings = computed(() => pageData.value?.items ?? [])
+const updateText = computed(() => {
+  const updatedAt = pageData.value?.updatedAt
+  return updatedAt ? `数据更新于 ${formatDateTime(updatedAt)}` : ''
+})
+const estimatedMonthlyIncome = computed(
+  () => summary.value.estimatedDividendAmount / 12,
+)
+const expenseModalTitle = computed(() =>
+  editingExpenseId.value ? '修改固定支出' : '新增固定支出',
+)
+const expenseItems = computed<FixedExpenseItem[]>(() => [
+  ...investmentExpenseItems.value,
+  ...renewalExpenseItems.value,
+])
+const expenseCoverageItems = computed<ExpenseCoverageItem[]>(() => {
+  let remaining = estimatedMonthlyIncome.value
+  return expenseItems.value.map((item) => {
+    const amount = Number(item.amount || 0)
+    const coveredAmount = Math.max(0, Math.min(remaining, amount))
+    const coveredPercent = amount > 0 ? (coveredAmount / amount) * 100 : 0
+    const status =
+      coveredAmount >= amount
+        ? 'covered'
+        : coveredAmount > 0
+          ? 'partial'
+          : 'pending'
+    remaining = Math.max(0, remaining - amount)
+    return {
+      ...item,
+      coveredAmount,
+      coveredPercent,
+      status,
+    }
+  })
+})
+const totalMonthlyExpense = computed(() =>
+  expenseItems.value.reduce((total, item) => total + item.amount, 0),
+)
+const incomeCoveragePercent = computed(() => {
+  if (totalMonthlyExpense.value <= 0) {
+    return 0
+  }
+  return (estimatedMonthlyIncome.value / totalMonthlyExpense.value) * 100
+})
+const incomeCoverageProgress = computed(() =>
+  Math.max(0, Math.min(100, incomeCoveragePercent.value)),
+)
+onMounted(() => {
+  void loadPageData()
+})
+
+async function loadPageData() {
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    pageError.value = '请先登录后查看攒股收息'
+    isLoading.value = false
+    return
+  }
+
+  currentUserId.value = currentUser.id
+  isLoading.value = true
+  pageError.value = ''
+  try {
+    const [dividendIncomeData, renewalSubscriptions] = await Promise.all([
+      getInvestmentDividendIncome(currentUser.id),
+      getRenewalSubscriptions({ userId: currentUser.id, status: 'active' }),
+    ])
+    pageData.value = dividendIncomeData
+    investmentExpenseItems.value = normalizeInvestmentExpenseItems(
+      dividendIncomeData.fixedExpenses,
+    )
+    renewalExpenseItems.value = normalizeRenewalExpenseItems(
+      renewalSubscriptions,
+      currentUser.id,
+    )
+  } catch (error) {
+    pageError.value = getErrorMessage(error, '攒股收息加载失败')
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function refreshDividendIncomeData() {
+  if (isLoading.value || isRefreshing.value) {
+    return
+  }
+
+  const currentUser = getStoredCurrentUser()
+  if (!currentUser) {
+    pageError.value = '请先登录后刷新攒股收息'
+    return
+  }
+
+  currentUserId.value = currentUser.id
+  isRefreshing.value = true
+  pageError.value = ''
+  try {
+    const [dividendIncomeData, renewalSubscriptions] = await Promise.all([
+      refreshInvestmentDividendIncome(currentUser.id),
+      getRenewalSubscriptions({ userId: currentUser.id, status: 'active' }),
+    ])
+    pageData.value = dividendIncomeData
+    investmentExpenseItems.value = normalizeInvestmentExpenseItems(
+      dividendIncomeData.fixedExpenses,
+    )
+    renewalExpenseItems.value = normalizeRenewalExpenseItems(
+      renewalSubscriptions,
+      currentUser.id,
+    )
+  } catch (error) {
+    pageError.value = getErrorMessage(error, '攒股收息刷新失败')
+  } finally {
+    isRefreshing.value = false
+  }
+}
+
+async function refreshExpenseItems() {
+  if (!currentUserId.value) {
+    investmentExpenseItems.value = []
+    renewalExpenseItems.value = []
+    return
+  }
+  const [investmentExpenses, renewalSubscriptions] = await Promise.all([
+    getInvestmentFixedExpenses(currentUserId.value),
+    getRenewalSubscriptions({ userId: currentUserId.value, status: 'active' }),
+  ])
+  investmentExpenseItems.value =
+    normalizeInvestmentExpenseItems(investmentExpenses)
+  renewalExpenseItems.value = normalizeRenewalExpenseItems(
+    renewalSubscriptions,
+    currentUserId.value,
+  )
+}
+
+function amountTone(value: number) {
+  if (value > 0) return 'positive'
+  if (value < 0) return 'negative'
+  return 'neutral'
+}
+
+function formatSignedCurrency(value: number) {
+  if (!Number.isFinite(value) || value === 0) {
+    return '¥0.00'
+  }
+  return `${value > 0 ? '+' : '-'} ¥${formatAmount(value)}`
+}
+
+function formatSignedPercent(value: number) {
+  if (!Number.isFinite(value) || value === 0) {
+    return '0.00%'
+  }
+  return `${value > 0 ? '+' : '-'}${formatAmount(value)}%`
+}
+
+function formatPlainCurrency(value: number) {
+  if (!Number.isFinite(value) || value === 0) {
+    return '¥0.00'
+  }
+  return `${value < 0 ? '-' : ''}¥${formatAmount(value)}`
+}
+
+function formatPlainPercent(value: number) {
+  if (!Number.isFinite(value) || value === 0) {
+    return '0.00%'
+  }
+  return `${value < 0 ? '-' : ''}${formatAmount(value)}%`
+}
+
+function formatHoldingQuantityText(quantity: number, unitName?: string | null) {
+  return `${formatAmount(quantity)} ${unitName || '份'}`
+}
+
+function formatHoldingMetaText(
+  value: number,
+  quantity: number,
+  unitName?: string | null,
+) {
+  return `${formatMonthlyIncome(value)} · ${formatHoldingQuantityText(quantity, unitName)}`
+}
+
+function formatMonthlyIncome(value: number) {
+  if (!Number.isFinite(value) || value === 0) {
+    return '¥0.00'
+  }
+  return `¥${formatAmount(value)}`
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${month}/${day} ${hour}:${minute}`
+}
+
+function openHoldingDetail(item: InvestmentDividendIncomeItem) {
+  if (!item.positionId) {
+    return
+  }
+  router.push({
+    path: '/finance/accounts/investment/detail',
+    query: { positionId: item.positionId },
+  })
+}
+
+function normalizeInvestmentExpenseItems(
+  items?: InvestmentFixedExpense[] | null,
+) {
+  if (!Array.isArray(items)) {
+    return []
+  }
+  return items
+    .map(
+      (item): FixedExpenseItem => ({
+        ...item,
+        id: Number(item.id),
+        userId: Number(item.userId),
+        name: String(item.name ?? '').trim(),
+        amount: Number(item.amount ?? 0),
+        sortOrder: Number(item.sortOrder ?? 0),
+        itemKey: `investment-${item.id}`,
+        source: 'investment',
+        editable: true,
+      }),
+    )
+    .filter(
+      (item) =>
+        Number.isFinite(item.id) &&
+        item.id > 0 &&
+        item.name &&
+        Number.isFinite(item.amount) &&
+        item.amount > 0,
+    )
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id)
+}
+
+function normalizeRenewalExpenseItems(
+  items: RenewalSubscription[] | null | undefined,
+  userId: number,
+) {
+  if (!Array.isArray(items)) {
+    return []
+  }
+  return items
+    .map(
+      (item, index): FixedExpenseItem => ({
+        id: Number(item.id),
+        userId,
+        name: String(item.name ?? '').trim(),
+        amount: toMonthlyRenewalAmount(
+          Number(item.amount ?? 0),
+          item.billingCycle,
+        ),
+        currencyCode: item.currencyCode || 'CNY',
+        sortOrder: 10000 + index,
+        status: item.status,
+        remark: item.remark ?? null,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        itemKey: `renewal-${item.id}`,
+        source: 'renewal',
+        editable: false,
+      }),
+    )
+    .filter(
+      (item) =>
+        Number.isFinite(item.id) &&
+        item.id > 0 &&
+        item.name &&
+        Number.isFinite(item.amount) &&
+        item.amount > 0,
+    )
+}
+
+function toMonthlyRenewalAmount(
+  amount: number,
+  billingCycle: RenewalBillingCycle,
+) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0
+  }
+  if (billingCycle === 'quarterly') {
+    return amount / 3
+  }
+  if (billingCycle === 'yearly') {
+    return amount / 12
+  }
+  return amount
+}
+
+function openCreateExpenseModal() {
+  editingExpenseId.value = null
+  expenseName.value = ''
+  expenseAmount.value = ''
+  expenseError.value = ''
+  showExpenseModal.value = true
+}
+
+function openEditExpenseModal(item: FixedExpenseItem) {
+  if (!item.editable) {
+    return
+  }
+  editingExpenseId.value = item.id
+  expenseName.value = item.name
+  expenseAmount.value = String(item.amount)
+  expenseError.value = ''
+  showExpenseModal.value = true
+}
+
+function closeExpenseModal() {
+  showExpenseModal.value = false
+  editingExpenseId.value = null
+  expenseName.value = ''
+  expenseAmount.value = ''
+  expenseError.value = ''
+}
+
+function saveExpenseItem() {
+  void submitExpenseItem()
+}
+
+async function submitExpenseItem() {
+  const name = expenseName.value.trim()
+  const amount = Number(expenseAmount.value)
+  if (!name) {
+    expenseError.value = '请输入固定支出名称'
+    return
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    expenseError.value = '请输入大于 0 的固定支出金额'
+    return
+  }
+  if (!currentUserId.value) {
+    expenseError.value = '用户信息缺失，请重新登录'
+    return
+  }
+  if (expenseSaving.value) {
+    return
+  }
+
+  expenseSaving.value = true
+  expenseError.value = ''
+  try {
+    if (editingExpenseId.value) {
+      const currentItem = investmentExpenseItems.value.find(
+        (item) => item.id === editingExpenseId.value,
+      )
+      await updateInvestmentFixedExpense(editingExpenseId.value, {
+        userId: currentUserId.value,
+        name,
+        amount,
+        currencyCode: currentItem?.currencyCode || 'CNY',
+        sortOrder: currentItem?.sortOrder ?? 0,
+        remark: currentItem?.remark ?? null,
+      })
+    } else {
+      await createInvestmentFixedExpense({
+        userId: currentUserId.value,
+        name,
+        amount,
+        currencyCode: 'CNY',
+        remark: null,
+      })
+    }
+    await refreshExpenseItems()
+    closeExpenseModal()
+  } catch (error) {
+    expenseError.value = getErrorMessage(error, '保存固定支出失败')
+  } finally {
+    expenseSaving.value = false
+  }
+}
+
+function getCoveragePercentText(item: ExpenseCoverageItem) {
+  return `${formatAmount(item.coveredPercent)}%`
+}
+
+function getCoverageLevelClass(item: ExpenseCoverageItem) {
+  const percent = Math.round(Math.max(0, Math.min(100, item.coveredPercent)))
+  return `coverage-level-${percent}`
+}
+
+function getIncomeCoveragePercentText() {
+  return `${formatAmount(incomeCoveragePercent.value)}%`
+}
+
+function toggleExpenseEditing() {
+  isExpenseEditing.value = !isExpenseEditing.value
+}
+
+function deleteExpenseItem(id: number) {
+  void removeExpenseItem(id)
+}
+
+async function removeExpenseItem(id: number) {
+  if (!currentUserId.value) {
+    return
+  }
+  try {
+    await deleteInvestmentFixedExpense(id, currentUserId.value)
+    await refreshExpenseItems()
+  } catch (error) {
+    pageError.value = getErrorMessage(error, '删除固定支出失败')
+  }
+}
+</script>
+
+<template>
+  <section class="pc-page dividend-income-page" aria-label="攒股收息">
+    <PageHeader title="攒股收息" back-label="返回更多功能">
+      <template #right>
+        <CommonHeaderRefreshButton
+          label="刷新攒股收息"
+          :loading="isRefreshing"
+          :disabled="isLoading"
+          @click="refreshDividendIncomeData"
+        />
+      </template>
+    </PageHeader>
+    <p v-if="pageError" class="dividend-message dividend-message-error">
+      {{ pageError }}
+    </p>
+    <CommonLoading v-else-if="isLoading" />
+    <template v-else>
+      <el-card
+        class="pc-record-card summary-card"
+        aria-label="收息总览"
+        shadow="never"
+      >
+        <div class="summary-row">
+          <AmountText
+            tag="strong"
+            :value="formatSignedCurrency(summary.estimatedDividendAmount)"
+            :tone="amountTone(summary.estimatedDividendAmount)"
+          />
+          <AmountText
+            tag="span"
+            :value="`预计 ${formatSignedPercent(summary.estimatedDividendRate)}`"
+            :tone="amountTone(summary.estimatedDividendRate)"
+          />
+        </div>
+        <p class="summary-monthly">
+          预估月薪 {{ formatMonthlyIncome(estimatedMonthlyIncome) }}
+        </p>
+        <p v-if="updateText" class="summary-footnote">
+          仅展示历史稳定分红且股息率不低于 3% 的标的，{{ updateText }}
+        </p>
+        <p v-else class="summary-footnote">
+          仅展示历史稳定分红且股息率不低于 3% 的标的
+        </p>
+      </el-card>
+      <el-card
+        class="pc-record-card expense-card"
+        aria-label="固定支出覆盖"
+        shadow="never"
+      >
+        <header class="expense-card-head">
+          <div />
+          <div class="pc-toolbar expense-card-actions">
+            <CommonButton
+              variant="secondary"
+              size="sm"
+              @click="toggleExpenseEditing"
+            >
+              {{ isExpenseEditing ? '完成' : '编辑' }}
+            </CommonButton>
+            <CommonButton
+              variant="secondary"
+              size="sm"
+              @click="openCreateExpenseModal"
+            >
+              新增支出
+            </CommonButton>
+          </div>
+        </header>
+        <p v-if="expenseCoverageItems.length === 0" class="dividend-message">
+          暂未设置固定支出，点击右上角新增后即可查看覆盖进度
+        </p>
+        <div v-else class="pc-grid expense-coverage-list">
+          <el-card
+            v-for="item in expenseCoverageItems"
+            :key="item.itemKey"
+            :class="[
+              'expense-coverage-item',
+              `is-${item.status}`,
+              getCoverageLevelClass(item),
+              { 'is-editing': isExpenseEditing },
+            ]"
+            shadow="never"
+            class="pc-record-card"
+          >
+            <div class="expense-coverage-main">
+              <div class="expense-coverage-top">
+                <strong>{{ item.name }}</strong>
+                <span>{{ formatMonthlyIncome(item.amount) }}</span>
+              </div>
+              <p class="expense-coverage-note">
+                {{ getCoveragePercentText(item) }}
+              </p>
+              <div
+                v-if="isExpenseEditing && item.editable"
+                class="pc-toolbar expense-coverage-actions"
+              >
+                <el-button
+                  native-type="button"
+                  class="expense-action-icon"
+                  aria-label="修改"
+                  @click="openEditExpenseModal(item)"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M4 20h4.75L19 9.75 14.25 5 4 15.25V20Zm3.5-1.5H5.5v-2l8.75-8.75 2 2L7.5 18.5ZM18.3 4.95l.75-.75a1.5 1.5 0 0 1 2.12 0l.63.63a1.5 1.5 0 0 1 0 2.12l-.75.75-2.75-2.75Z"
+                    />
+                  </svg>
+                </el-button>
+                <el-button
+                  native-type="button"
+                  class="expense-action-icon danger"
+                  aria-label="删除"
+                  @click="deleteExpenseItem(item.id)"
+                  type="danger"
+                  plain
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M9 3.75h6a1.25 1.25 0 0 1 1.25 1.25V6H20a.75.75 0 0 1 0 1.5h-1.03l-.72 10.12A2.5 2.5 0 0 1 15.76 20H8.24a2.5 2.5 0 0 1-2.49-2.38L5.03 7.5H4a.75.75 0 0 1 0-1.5h3.75V5A1.25 1.25 0 0 1 9 3.75Zm1.5 2.25h3V5.25h-3V6Zm-3.24 1.5.68 9.99c.03.53.47.95 1 .95h7.52c.53 0 .97-.42 1-.95l.68-9.99H7.26Zm2.49 2.25a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75Zm4.5 0a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75Z"
+                    />
+                  </svg>
+                </el-button>
+              </div>
+            </div>
+          </el-card>
+        </div>
+        <div
+          v-if="expenseCoverageItems.length > 0"
+          class="income-coverage-progress"
+          aria-label="月收息覆盖月支出"
+        >
+          <div class="income-coverage-progress-head">
+            <span>月收息覆盖月支出</span>
+            <strong>{{ getIncomeCoveragePercentText() }}</strong>
+          </div>
+          <div
+            class="income-coverage-progress-track"
+            role="progressbar"
+            aria-label="月收息覆盖月支出进度"
+            :aria-valuenow="incomeCoverageProgress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <span
+              :style="{ transform: `scaleX(${incomeCoverageProgress / 100})` }"
+            />
+          </div>
+          <p>
+            {{ formatMonthlyIncome(estimatedMonthlyIncome) }} /
+            {{ formatMonthlyIncome(totalMonthlyExpense) }}
+          </p>
+        </div>
+      </el-card>
+      <el-card
+        class="pc-record-card holding-card"
+        aria-label="持仓分红计划"
+        shadow="never"
+      >
+        <header class="holding-header">
+          <span class="holding-spacer" />
+          <div class="holding-header-right">
+            <span>股息率</span>
+            <span>预估分红</span>
+            <span>预估月薪</span>
+          </div>
+        </header>
+        <p v-if="holdings.length === 0" class="dividend-message">
+          暂无符合条件的稳定分红且股息率不低于 3% 的股票或基金持仓
+        </p>
+        <el-card
+          v-for="item in holdings"
+          :key="item.productId"
+          :class="['holding-row', { clickable: !!item.positionId }]"
+          @click="openHoldingDetail(item)"
+          shadow="never"
+          class="pc-record-card"
+        >
+          <div class="holding-main">
+            <div class="holding-top">
+              <p class="holding-name">{{ item.productName }}</p>
+              <div class="holding-right">
+                <div class="value-column">
+                  <AmountText
+                    tag="strong"
+                    :value="formatPlainPercent(item.estimatedDividendRate)"
+                    :tone="amountTone(item.estimatedDividendRate)"
+                  />
+                </div>
+                <div class="value-column">
+                  <AmountText
+                    tag="strong"
+                    :value="formatPlainCurrency(item.estimatedDividendAmount)"
+                    :tone="amountTone(item.estimatedDividendAmount)"
+                  />
+                </div>
+                <div class="value-column">
+                  <AmountText
+                    tag="strong"
+                    :value="
+                      formatMonthlyIncome(item.estimatedDividendAmount / 12)
+                    "
+                    :tone="amountTone(item.estimatedDividendAmount)"
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="holding-left">
+              <small>
+                {{
+                  formatHoldingMetaText(
+                    item.marketValue,
+                    item.holdingQuantity,
+                    item.unitName,
+                  )
+                }}
+              </small>
+            </div>
+          </div>
+        </el-card>
+      </el-card>
+    </template>
+    <CommonModal
+      v-model="showExpenseModal"
+      :title="expenseModalTitle"
+      size="compact"
+    >
+      <div class="pc-form-grid expense-modal-form">
+        <CommonInput
+          v-model="expenseName"
+          label="支出名称"
+          placeholder="例如：房租、房贷、车位费"
+        />
+        <CommonInput
+          v-model="expenseAmount"
+          label="每月金额"
+          placeholder="请输入金额"
+          input-type="number"
+          input-mode="decimal"
+        />
+        <p v-if="expenseError" class="expense-form-error">{{ expenseError }}</p>
+      </div>
+      <template #footer>
+        <div class="pc-toolbar expense-modal-actions">
+          <CommonButton
+            type="button"
+            variant="secondary"
+            :disabled="expenseSaving"
+            @click="closeExpenseModal"
+          >
+            取消
+          </CommonButton>
+          <CommonButton
+            type="button"
+            variant="primary"
+            :disabled="expenseSaving"
+            @click="saveExpenseItem"
+          >
+            {{ expenseSaving ? '保存中...' : '保存' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+  </section>
+</template>

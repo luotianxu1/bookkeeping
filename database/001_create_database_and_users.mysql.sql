@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url VARCHAR(512) NULL COMMENT '头像地址',
   status ENUM('active', 'disabled', 'locked') NOT NULL DEFAULT 'active' COMMENT '用户状态',
   default_login_provider ENUM('password', 'sms_code', 'wechat') NOT NULL DEFAULT 'password' COMMENT '默认登录方式',
-  role_name VARCHAR(64) NOT NULL DEFAULT 'user' COMMENT '当前先用角色名支撑后台列表；后续可拆为 roles/user_roles',
+  role_name VARCHAR(64) NOT NULL DEFAULT 'user' COMMENT '用户主角色编码，对应 admin_roles.code；移动端兼容字段',
   family_id BIGINT UNSIGNED NULL COMMENT '当前所属家庭ID',
   timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Shanghai' COMMENT '用户时区',
   locale VARCHAR(16) NOT NULL DEFAULT 'zh-CN' COMMENT '用户语言',

@@ -65,6 +65,14 @@ test('完整鉴权链限制家庭读取和写入归属，并校验 HTTP 请求�
   expect((await page.request.get(`${finance}/accounts?userId=2`)).status()).toBe(200)
   expect((await page.request.get(`${finance}/accounts?userId=3`)).status()).toBe(403)
   expect((await page.request.get(`${finance}/accounts?userIds=1,3`)).status()).toBe(403)
+  for (const query of ['userId=', 'userId=%20', 'userIds=', 'userIds=1,', 'userId=1&userId=']) {
+    expect((await page.request.get(`${finance}/accounts?${query}`)).status()).toBe(400)
+  }
+  const summary = await page.request.get(`${finance}/accounts/summary?userId=2`)
+  expect(summary.status()).toBe(200)
+  expect((await summary.json()).data.accounts.every((account: { userId: number }) => account.userId === 2)).toBe(true)
+  expect((await page.request.get(`${finance}/accounts/summary?userId=3`)).status()).toBe(403)
+  expect((await page.request.post(`${finance}/scheduled-tasks/today/salary-settlement/scheduled-08:10/execute`)).status()).toBe(403)
   const initial = await balance(page.request)
   const familyBalance = await balance(page.request, 3)
   const payload = { userId: 2, accountId: 1, categoryId: 1, type: 'expense', amount: 1,

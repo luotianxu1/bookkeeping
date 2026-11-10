@@ -73,7 +73,7 @@ public class UserIdentityScopeFilter extends OncePerRequestFilter {
         // userId 参数
         if (read) {
             String[] raw = params.get("userId");
-            if (raw == null || raw.length == 0) {
+            if (raw == null) {
                 params.put("userId", new String[]{String.valueOf(selfId)});
                 paramsChanged = true;
             } else if (!allReadable(selfId, raw, response)) {
@@ -87,7 +87,7 @@ public class UserIdentityScopeFilter extends OncePerRequestFilter {
         // userIds 参数（家庭联合视角）
         String[] rawUserIds = params.get("userIds");
         if (read) {
-            if (rawUserIds != null && rawUserIds.length > 0 && !allReadable(selfId, rawUserIds, response)) {
+            if (rawUserIds != null && !allReadable(selfId, rawUserIds, response)) {
                 return;
             }
         } else {
@@ -118,15 +118,25 @@ public class UserIdentityScopeFilter extends OncePerRequestFilter {
     }
 
     private boolean allReadable(long selfId, String[] rawValues, HttpServletResponse response) throws IOException {
+        if (rawValues.length == 0) {
+            errorWriter.write(response, 400, "用户范围不能为空");
+            return false;
+        }
         for (String raw : rawValues) {
-            for (String part : raw.split(",")) {
+            if (raw == null) {
+                errorWriter.write(response, 400, "用户范围不能为空");
+                return false;
+            }
+            for (String part : raw.split(",", -1)) {
                 String trimmed = part.trim();
                 if (trimmed.isEmpty()) {
-                    continue;
+                    errorWriter.write(response, 400, "用户范围不能为空");
+                    return false;
                 }
                 long target;
                 try {
                     target = Long.parseLong(trimmed);
+                    if (target <= 0) throw new NumberFormatException();
                 } catch (NumberFormatException ignored) {
                     errorWriter.write(response, 400, "请求参数格式错误");
                     return false;

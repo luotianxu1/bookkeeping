@@ -1,0 +1,135 @@
+<script setup lang="ts">
+// 通用金额文本：统一金额显示和正负颜色规则，便于后续扩展格式化能力。
+import { computed, useAttrs } from 'vue'
+
+defineOptions({
+  inheritAttrs: false,
+})
+
+type AmountTone = 'auto' | 'positive' | 'negative' | 'neutral' | 'inherit'
+
+// 金额展示组件的可配置项：
+// - tone: 颜色策略（auto 根据正负数自动判定）
+// - showSign: 是否显示 +/- 号
+// - showUnit: 是否显示货币单位（默认 ¥）
+const props = withDefaults(
+  defineProps<{
+    value: string | number
+    tag?: string
+    tone?: AmountTone
+    showSign?: boolean
+    showUnit?: boolean
+    unit?: string
+    fontSize?: string
+  }>(),
+  {
+    tag: 'span',
+    tone: 'auto',
+    showSign: false,
+    showUnit: false,
+    unit: '¥',
+  },
+)
+const attrs = useAttrs()
+
+const text = computed(() => String(props.value ?? ''))
+const trimmedText = computed(() => text.value.trim())
+const numericValue = computed(() => {
+  const normalized = trimmedText.value.replace(/[^\d.+-]/g, '')
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+})
+
+const toneClass = computed(() => {
+  if (props.tone === 'positive') return 'amount-text--positive'
+  if (props.tone === 'negative') return 'amount-text--negative'
+  if (props.tone === 'neutral') return 'amount-text--neutral'
+  if (props.tone === 'inherit') return ''
+
+  const normalized = trimmedText.value
+  if (normalized.startsWith('+')) return 'amount-text--positive'
+  if (normalized.startsWith('-')) return 'amount-text--negative'
+  if (numericValue.value !== null) {
+    if (numericValue.value > 0) return 'amount-text--positive'
+    if (numericValue.value < 0) return 'amount-text--negative'
+  }
+  return 'amount-text--neutral'
+})
+
+const signText = computed(() => {
+  if (!props.showSign) return ''
+  if (props.tone === 'positive') return '+'
+  if (props.tone === 'negative') return '-'
+  if (trimmedText.value.startsWith('+')) return '+'
+  if (trimmedText.value.startsWith('-')) return '-'
+  if (numericValue.value !== null) {
+    if (numericValue.value > 0) return '+'
+    if (numericValue.value < 0) return '-'
+  }
+  return ''
+})
+
+const valueText = computed(() => {
+  let normalized = trimmedText.value
+
+  if (
+    props.showSign &&
+    (normalized.startsWith('+') || normalized.startsWith('-'))
+  ) {
+    normalized = normalized.slice(1).trimStart()
+  }
+
+  if (props.showUnit) {
+    const escapedUnit = props.unit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    normalized = normalized.replace(new RegExp(`^${escapedUnit}\\s*`), '')
+  }
+
+  if (numericValue.value !== null) {
+    normalized = normalized.replace(/^[+-]/, '').trimStart()
+  }
+
+  return normalized
+})
+
+const displayText = computed(() => {
+  if (!props.showSign && !props.showUnit) {
+    return text.value
+  }
+
+  return `${props.showSign && signText.value ? signText.value : ''}${props.showUnit ? props.unit : ''}${valueText.value}`
+})
+</script>
+
+<template>
+  <component
+    :is="tag"
+    v-bind="attrs"
+    :class="['amount-text', toneClass, attrs.class]"
+    :style="[
+      attrs.style,
+      props.fontSize ? { fontSize: props.fontSize } : undefined,
+    ]"
+  >
+    {{ displayText }}
+  </component>
+</template>
+
+<style scoped>
+/* 金额统一等宽数字：列表刷新时数字宽度不跳动。 */
+.amount-text {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.amount-text--positive {
+  color: var(--color-danger);
+}
+
+.amount-text--negative {
+  color: var(--color-success);
+}
+
+.amount-text--neutral {
+  color: inherit;
+}
+</style>

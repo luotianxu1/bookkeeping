@@ -6,6 +6,7 @@ import com.example.common.security.SecurityUtils;
 import com.example.app.dto.AccountRequest;
 import com.example.app.dto.AccountResponse;
 import com.example.app.dto.AccountSortOrderRequest;
+import com.example.app.dto.AccountSummaryResponse;
 import com.example.app.dto.FinanceOverviewResponse;
 import com.example.app.entity.AccountEntity;
 import com.example.app.entity.AccountTypeEntity;
@@ -35,6 +36,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -52,6 +55,7 @@ import java.util.stream.Collectors;
 @Service
 public class AccountService {
 
+    private static final Logger log = LoggerFactory.getLogger(AccountService.class);
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_STATUS = "active";
     private static final String ACTIVE_POSITION_STATUS = "active";
@@ -129,15 +133,30 @@ public class AccountService {
     }
 
     public List<AccountResponse> list(Long userId, Long accountTypeId, String status) {
+        return toResponses(loadAccounts(userId, accountTypeId, status));
+    }
+
+    private List<AccountEntity> loadAccounts(Long userId, Long accountTypeId, String status) {
+        if (userId == null || userId <= 0) throw new IllegalArgumentException("用户范围不能为空");
         LambdaQueryWrapper<AccountEntity> wrapper = new LambdaQueryWrapper<AccountEntity>()
-            .eq(userId != null, AccountEntity::getUserId, userId)
+            .eq(AccountEntity::getUserId, userId)
             .eq(accountTypeId != null, AccountEntity::getAccountTypeId, accountTypeId)
             .eq(StringUtils.hasText(status), AccountEntity::getStatus, status)
             .orderByAsc(AccountEntity::getSortOrder)
             .orderByAsc(AccountEntity::getId);
 
-        List<AccountEntity> accounts = accountMapper.selectList(wrapper);
-        return toResponses(accounts);
+        return accountMapper.selectList(wrapper);
+    }
+
+    public AccountSummaryResponse summary(Long userId) {
+        List<AccountEntity> entities = loadAccounts(userId, null, DEFAULT_STATUS);
+        Map<Long, AccountTypeEntity> types = loadAccountTypes(entities);
+        List<AccountResponse> accounts = toResponses(entities, types);
+        BigDecimal total = calculateTotalAssetsFromSignedBalances(accounts.stream()
+            .filter(account -> Boolean.TRUE.equals(account.getIncludeInNetWorth()))
+            .map(account -> resolveOverviewBalance(account, types.get(account.getAccountTypeId())))
+            .toList());
+        return new AccountSummaryResponse(accounts, total);
     }
 
     public Optional<AccountResponse> getById(Long id) {
@@ -477,15 +496,20 @@ public class AccountService {
     }
 
     private List<AccountResponse> toResponses(List<AccountEntity> accounts) {
-        if (accounts.isEmpty()) {
-            return Collections.emptyList();
-        }
+        return toResponses(accounts, loadAccountTypes(accounts));
+    }
 
+    private Map<Long, AccountTypeEntity> loadAccountTypes(List<AccountEntity> accounts) {
+        if (accounts.isEmpty()) return Collections.emptyMap();
         Set<Long> accountTypeIds = accounts.stream()
             .map(AccountEntity::getAccountTypeId)
             .collect(Collectors.toSet());
-        Map<Long, AccountTypeEntity> accountTypes = accountTypeMapper.selectByIds(accountTypeIds).stream()
+        return accountTypeMapper.selectByIds(accountTypeIds).stream()
             .collect(Collectors.toMap(AccountTypeEntity::getId, Function.identity()));
+    }
+
+    private List<AccountResponse> toResponses(List<AccountEntity> accounts, Map<Long, AccountTypeEntity> accountTypes) {
+        if (accounts.isEmpty()) return Collections.emptyList();
         BalanceContext balanceContext = buildBalanceContext(accounts, accountTypes);
 
         return accounts.stream()
@@ -532,14 +556,14 @@ public class AccountService {
         if (entity == null) {
             return BigDecimal.ZERO;
         }
-        if (accountType != null && "term_deposit".equals(accountType.getCode())) {
-            return accountMapper.termDepositPrincipal(entity.getId());
-        }
         if (balanceContext != null) {
             BigDecimal cachedBalance = balanceContext.accountBalances().get(entity.getId());
             if (cachedBalance != null) {
                 return cachedBalance;
             }
+        }
+        if (accountType != null && "term_deposit".equals(accountType.getCode())) {
+            return accountMapper.termDepositPrincipal(entity.getId());
         }
         if (accountType != null && entity != null && DEBT_ACCOUNT_TYPE_CODES.contains(accountType.getCode())) {
             return resolveDebtBalance(entity.getId());
@@ -569,7 +593,7 @@ public class AccountService {
                 .eq(InvestmentPositionEntity::getStatus, ACTIVE_POSITION_STATUS));
 
         if (GOLD_ACCOUNT_TYPE_CODE.equals(accountType.getCode())) {
-            BigDecimal realtimePrice = resolvePreferredGoldPrice(positions);
+            BigDecimal realtimePrice = positions.isEmpty() ? BigDecimal.ZERO : resolvePreferredGoldPrice();
             if (realtimePrice.compareTo(BigDecimal.ZERO) > 0) {
                 BigDecimal marketValue = positions.stream()
                     .map(InvestmentPositionEntity::getHoldingQuantity)
@@ -650,10 +674,15 @@ public class AccountService {
         return outgoingTotal.subtract(incomingTotal).setScale(2, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal resolvePreferredGoldPrice(List<InvestmentPositionEntity> positions) {
-        BigDecimal cachedSpotPrice = goldPriceService.getCachedSpotPrice();
-        if (cachedSpotPrice != null && cachedSpotPrice.compareTo(BigDecimal.ZERO) > 0) {
-            return cachedSpotPrice.setScale(2, RoundingMode.HALF_UP);
+    private BigDecimal resolvePreferredGoldPrice() {
+        try {
+            BigDecimal cachedSpotPrice = goldPriceService.getCachedSpotPrice();
+            if (cachedSpotPrice != null && cachedSpotPrice.compareTo(BigDecimal.ZERO) > 0) {
+                return cachedSpotPrice.setScale(2, RoundingMode.HALF_UP);
+            }
+        } catch (IllegalStateException ex) {
+            // 仅账户读取展示降级；交易写入仍使用严格行情校验。
+            log.warn("账户黄金估值读取失败，使用已保存市值: {}", ex.getMessage());
         }
         return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
     }
@@ -775,6 +804,15 @@ public class AccountService {
                 account -> accountTypes.get(account.getAccountTypeId()).getCode()
             ));
 
+        List<Long> termAccountIds = accountTypeCodes.entrySet().stream()
+            .filter(entry -> "term_deposit".equals(entry.getValue()))
+            .map(Map.Entry::getKey).toList();
+        if (!termAccountIds.isEmpty()) {
+            termAccountIds.forEach(id -> accountBalances.put(id, BigDecimal.ZERO));
+            accountMapper.termDepositPrincipals(termAccountIds)
+                .forEach(row -> accountBalances.put(row.accountId(), row.principal()));
+        }
+
         List<Long> debtAccountIds = accountTypeCodes.entrySet().stream()
             .filter(entry -> DEBT_ACCOUNT_TYPE_CODES.contains(entry.getValue()))
             .map(Map.Entry::getKey)
@@ -875,7 +913,9 @@ public class AccountService {
             Map<Long, List<InvestmentPositionEntity>> positionsByAccount = positions.stream()
                 .collect(Collectors.groupingBy(InvestmentPositionEntity::getAccountId));
             Map<Long, BigDecimal> pendingBuyAmountsByAccount = loadPendingBuyAmountsByAccount(positionAccountIds);
-            BigDecimal realtimeGoldPrice = resolvePreferredGoldPrice(positions);
+            boolean hasGoldPositions = positions.stream()
+                .anyMatch(position -> GOLD_ACCOUNT_TYPE_CODE.equals(accountTypeCodes.get(position.getAccountId())));
+            BigDecimal realtimeGoldPrice = hasGoldPositions ? resolvePreferredGoldPrice() : BigDecimal.ZERO;
             for (Long accountId : positionAccountIds) {
                 List<InvestmentPositionEntity> accountPositions = positionsByAccount.getOrDefault(accountId, List.of());
                 String accountTypeCode = accountTypeCodes.get(accountId);

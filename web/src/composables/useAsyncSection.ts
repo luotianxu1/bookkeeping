@@ -11,6 +11,7 @@ export function useAsyncSection<T>(
   const error = ref('')
   const ready = ref(false)
   let serial = 0
+  let disposed = false
   let controller: AbortController | null = null
   const reset = () => {
     serial += 1
@@ -21,6 +22,7 @@ export function useAsyncSection<T>(
     ready.value = false
   }
   const run = async () => {
+    if (disposed) return
     controller?.abort()
     const request = ++serial
     controller = new AbortController()
@@ -38,6 +40,6 @@ export function useAsyncSection<T>(
       if (request === serial) loading.value = false
     }
   }
-  onBeforeUnmount(reset)
+  onBeforeUnmount(() => { disposed = true; reset() })
   return { loading, error, ready, run, reset }
 }

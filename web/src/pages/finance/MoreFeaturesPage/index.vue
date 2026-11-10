@@ -23,7 +23,6 @@ const featureGroups: FeatureGroup[] = [
       { icon: 'analysis', label: '收支分析', to: '/finance/analysis' },
       { icon: 'budget', label: '预算管理', to: '/finance/budgets' },
       { icon: 'renewals', label: '固定支出', to: '/finance/renewals' },
-      { icon: 'salary', label: '工资管理', to: '/finance/salary' },
       { icon: 'category-management', label: '分类管理', to: '/finance/categories' },
     ],
   },
@@ -34,6 +33,7 @@ const featureGroups: FeatureGroup[] = [
       { icon: 'trend', label: '资产趋势', to: '/finance/trend' },
       { icon: 'term-deposits', label: '定期存款', to: '/finance/term-deposits' },
       { icon: 'savings-goals', label: '储蓄目标', to: '/finance/savings-goals' },
+      { icon: 'salary', label: '工资管理', to: '/finance/salary' },
     ],
   },
   {

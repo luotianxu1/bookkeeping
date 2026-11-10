@@ -1,0 +1,90 @@
+<script setup lang="ts">
+// 工具页：展示常用工具入口卡片。
+import { RouterLink } from 'vue-router'
+type ToolItem = {
+  key: string
+  title: string
+  short: string
+  tone: 'blue' | 'purple' | 'sky' | 'green' | 'orange'
+  featured?: boolean
+  to?: string
+}
+
+const toolItems: ToolItem[] = [
+  {
+    key: 'todo',
+    title: '代办事项',
+    short: '办',
+    tone: 'blue',
+    featured: true,
+    to: '/tools/todo-items',
+  },
+  {
+    key: 'anniversary',
+    title: '纪念日',
+    short: '纪',
+    tone: 'purple',
+    featured: true,
+    to: '/tools/anniversaries',
+  },
+  {
+    key: 'calendar',
+    title: '日历',
+    short: '历',
+    tone: 'sky',
+    to: '/tools/calendar',
+  },
+  { key: 'checkin', title: '打卡', short: '打', tone: 'green' },
+  {
+    key: 'photography-orders',
+    title: '摄影订单',
+    short: '摄',
+    tone: 'blue',
+    featured: true,
+    to: '/tools/photography-orders',
+  },
+  {
+    key: 'contacts',
+    title: '联系人',
+    short: '联',
+    tone: 'orange',
+    featured: true,
+    to: '/tools/contacts',
+  },
+  {
+    key: 'health',
+    title: '健康管理',
+    short: '健',
+    tone: 'green',
+    featured: true,
+    to: '/tools/health',
+  },
+  {
+    key: 'travel-plans',
+    title: '旅行管理',
+    short: '旅',
+    tone: 'green',
+    featured: true,
+    to: '/tools/travel-plans',
+  },
+]
+</script>
+
+<template>
+  <section class="pc-page tools-page stagger-in" aria-label="工具页面">
+    <section class="pc-grid tools-grid" aria-label="工具入口">
+      <component
+        v-for="item in toolItems"
+        :key="item.key"
+        :is="item.to ? RouterLink : 'button'"
+        v-bind="item.to ? { to: item.to } : { type: 'button' }"
+        :class="['tool-card', `tone-${item.tone}`, { featured: item.featured }]"
+      >
+        <span :class="['tool-icon', `tone-${item.tone}`]">
+          {{ item.short }}
+        </span>
+        <span class="tool-title">{{ item.title }}</span>
+      </component>
+    </section>
+  </section>
+</template>
