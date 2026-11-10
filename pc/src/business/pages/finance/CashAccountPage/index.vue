@@ -1,22 +1,20 @@
 <script setup lang="ts">
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
-import { formatAmount } from '@/business/utils/format'
 // 现金账户页：支持管理模式切换与新增账户弹窗。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
-import AccountIcon from '@/business/components/common/AccountIcon/index.vue'
+
 import {
   createAccount,
   deleteAccount,
@@ -34,7 +32,6 @@ import {
 import { getStoredCurrentUser } from '@/business/utils/current-user'
 import { getErrorMessage } from '@/business/api/request'
 
-const isManageMode = ref(false)
 const showCreateAccountModal = ref(false)
 const showDeleteConfirmModal = ref(false)
 const editingAccountId = ref<number | null>(null)
@@ -65,21 +62,9 @@ const accountAmountLabel = computed(() =>
   editingAccountId.value ? '当前余额' : '初始金额',
 )
 
-const computedOverviewAmount = computed(() => {
-  const total = accountItems.value
-    .filter((account) => account.includeInNetWorth)
-    .reduce((sum, account) => sum + Number(account.currentBalance), 0)
-
-  return formatAmount(total)
-})
-
 onMounted(() => {
   loadCashAccounts()
 })
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
-}
 
 function openCreateModal() {
   editingAccountId.value = null
@@ -214,14 +199,6 @@ function confirmDeleteAccount() {
   }
 }
 
-function handleAccountClick(account: Account) {
-  if (isManageMode.value) {
-    return
-  }
-
-  openDetail(toAccountItem(account).path)
-}
-
 async function loadCashAccounts() {
   const currentUser = getStoredCurrentUser()
   if (!currentUser) {
@@ -255,21 +232,6 @@ async function loadCashAccounts() {
   }
 }
 
-function toAccountItem(account: Account) {
-  return {
-    id: account.id,
-    name: account.name,
-    subtitle: account.remark || account.accountTypeName || '现金账户',
-    amount: formatAmount(Number(account.currentBalance)),
-    path: `/finance/accounts/cash/${account.id}`,
-  }
-}
-
-function openDetail(path?: string) {
-  if (!path || isManageMode.value) return
-  router.push(path)
-}
-
 function showFeedback(message: string, type: 'success' | 'error') {
   feedbackMessage.value = message
   feedbackType.value = type
@@ -279,7 +241,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof accountItems.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="现金账户">
       <template #right>
         <el-button type="primary" @click="openCreateModal">
@@ -294,11 +256,18 @@ type DesktopRow = (typeof accountItems.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="accountItems" :loading="isLoadingAccounts">
+    <DesktopTable
+      title="现金账户列表"
+      searchable
+      search-placeholder="账户名称 / 备注"
+      :rows="accountItems"
+      :loading="isLoadingAccounts"
+    >
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column
         label="账户"
         prop="name"
+        sortable="custom"
         min-width="220"
         show-overflow-tooltip
       />
@@ -306,6 +275,7 @@ type DesktopRow = (typeof accountItems.value)[number]
       <el-table-column
         label="币种"
         prop="currencyCode"
+        sortable="custom"
         min-width="100"
         show-overflow-tooltip
       />
@@ -331,6 +301,7 @@ type DesktopRow = (typeof accountItems.value)[number]
       <el-table-column
         label="备注"
         prop="remark"
+        sortable="custom"
         min-width="220"
         show-overflow-tooltip
       />

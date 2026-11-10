@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import DesktopTable from '@/business/components/DesktopTable.vue'
-
-import DesktopInput from '@/business/components/DesktopInput.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
 
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   createFoodOrder,
@@ -19,12 +17,9 @@ import {
 } from '@/business/api/modules/food'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
 import {
-  getFoodCreatePath,
   getFoodDishDetailPath,
-  getFoodHomePath,
   getFoodMenuDetailPath,
   isDarkFoodPath,
-  mapCoverToneToClass,
   useFoodSelection,
 } from '../shared'
 import { getErrorMessage } from '@/business/api/request'
@@ -54,13 +49,6 @@ const {
   toggleDish,
 } = useFoodSelection()
 
-const visibleCategories = computed(() => {
-  if (currentCategoryId.value == null) {
-    return categories.value
-  }
-  return categories.value.filter((item) => item.id === currentCategoryId.value)
-})
-
 const filteredDishes = computed(() => {
   const search = keyword.value.trim().toLowerCase()
   return dishes.value.filter((dish) => {
@@ -81,17 +69,6 @@ const filteredDishes = computed(() => {
       .includes(search)
   })
 })
-
-const groupedDishes = computed(() =>
-  visibleCategories.value
-    .map((category) => ({
-      category,
-      dishes: filteredDishes.value.filter(
-        (dish) => dish.categoryId === category.id,
-      ),
-    }))
-    .filter((section) => section.dishes.length > 0),
-)
 
 const selectedDishes = computed(() => resolveSelectedDishes(dishes.value))
 const selectedMinutes = computed(() =>
@@ -154,18 +131,14 @@ async function loadPage() {
     const routeCategory = Number(route.query.categoryId)
     if (Number.isFinite(routeCategory) && routeCategory > 0) {
       currentCategoryId.value = routeCategory
-    } else if (categoryList[0]) {
-      currentCategoryId.value = categoryList[0].id
+    } else {
+      currentCategoryId.value = null
     }
   } catch (error) {
     pageError.value = getErrorMessage(error, '菜品列表加载失败')
   } finally {
     isLoading.value = false
   }
-}
-
-function selectCategory(categoryId: number) {
-  currentCategoryId.value = categoryId
 }
 
 function openDetail(dishId: number) {
@@ -200,14 +173,10 @@ function showFeedback(message: string, type: 'success' | 'error') {
   feedbackVisible.value = true
 }
 
-function toggleSelectedPanel() {
-  selectedPanelOpen.value = !selectedPanelOpen.value
-}
-
 type DesktopRow = (typeof filteredDishes.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="菜品管理">
       <template #right>
         <el-button type="primary" @click="router.push('/food/dishes/new')">
@@ -225,102 +194,131 @@ type DesktopRow = (typeof filteredDishes.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="filteredDishes" :loading="isLoading">
-      <template #toolbar>
-        <el-input
-          v-model="keyword"
-          placeholder="搜索"
-          clearable
-          style="width: 260px"
-        />
-        <el-select
-          v-model="currentCategoryId"
-          placeholder="全部分类"
-          clearable
-          @clear="currentCategoryId = null"
-        >
-          <el-option
-            v-for="category in categories"
-            :key="category.id"
-            :label="category.name"
-            :value="category.id"
+    <div :class="canCreateMenu ? 'desktop-main-aside' : 'desktop-stack'">
+      <DesktopTable title="菜品库" :rows="filteredDishes" :loading="isLoading">
+        <template #toolbar>
+          <el-input
+            v-model="keyword"
+            placeholder="搜索"
+            clearable
+            style="width: 260px"
           />
-        </el-select>
-      </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="菜名"
-        prop="name"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="分类"
-        prop="categoryName"
-        min-width="140"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="食材" min-width="240">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ row.ingredientPreview.join(' / ') }}
+          <el-select
+            v-model="currentCategoryId"
+            placeholder="全部分类"
+            clearable
+            @clear="currentCategoryId = null"
+          >
+            <el-option
+              v-for="category in categories"
+              :key="category.id"
+              :label="category.name"
+              :value="category.id"
+            />
+          </el-select>
         </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="口味" min-width="160">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ row.tasteTags.join(' / ') }}
+        <!-- @vue-generic {DesktopRow} -->
+        <el-table-column
+          label="菜名"
+          prop="name"
+          sortable="custom"
+          min-width="180"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DesktopRow} -->
+        <el-table-column
+          label="分类"
+          prop="categoryName"
+          sortable="custom"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DesktopRow} -->
+        <el-table-column label="食材" min-width="240">
+          <template #default="{ row }: { row: DesktopRow }">
+            {{ row.ingredientPreview.join(' / ') }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DesktopRow} -->
+        <el-table-column label="口味" min-width="160">
+          <template #default="{ row }: { row: DesktopRow }">
+            {{ row.tasteTags.join(' / ') }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DesktopRow} -->
+        <el-table-column label="烹饪时间" min-width="120">
+          <template #default="{ row }: { row: DesktopRow }">
+            {{ row.cookMinutes }} 分钟
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DesktopRow} -->
+        <el-table-column label="操作" width="210" fixed="right">
+          <template #default="{ row }: { row: DesktopRow }">
+            <div class="pc-row-actions">
+              <el-button link type="primary" @click="openDetail(row.id)">
+                详情
+              </el-button>
+              <el-button
+                v-if="canCreateMenu"
+                link
+                type="primary"
+                @click="toggleDish(row.id)"
+              >
+                {{ isSelected(row.id) ? '取消选择' : '选择' }}
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </DesktopTable>
+      <PagePanel
+        v-if="canCreateMenu"
+        title="当前菜单"
+        class="desktop-menu-selection"
+      >
+        <template #actions>
+          <el-button text :disabled="!selectedCount" @click="clearSelection">
+            清空
+          </el-button>
         </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="烹饪时间" min-width="120">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ row.cookMinutes }} 分钟
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="210" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button link type="primary" @click="openDetail(row.id)">
-              详情 / 编辑
-            </el-button>
+        <div class="desktop-selection-summary">
+          <strong>{{ selectedCount }} 道菜</strong>
+          <span>预计 {{ selectedMinutes }} 分钟</span>
+        </div>
+        <p v-if="selectedSummary" class="desktop-note">{{ selectedSummary }}</p>
+        <el-empty
+          v-if="!selectedCount"
+          description="从菜品库选择菜品"
+          :image-size="64"
+        />
+        <ul v-else class="desktop-selection-list">
+          <li v-for="dish in selectedDishes" :key="dish.id">
+            <div>
+              <strong>{{ dish.name }}</strong>
+              <small>
+                {{ dish.categoryName }} · {{ dish.cookMinutes }} 分钟
+              </small>
+            </div>
             <el-button
-              v-if="canCreateMenu"
-              link
-              type="primary"
-              @click="toggleDish(row.id)"
+              text
+              type="danger"
+              :aria-label="'移除' + dish.name"
+              @click="toggleDish(dish.id)"
             >
-              {{ isSelected(row.id) ? '取消选择' : '选择' }}
+              移除
             </el-button>
-          </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
-    <el-card v-if="canCreateMenu" shadow="never">
-      <div class="pc-toolbar">
-        <strong>
-          已选 {{ selectedCount }} 道菜 · {{ selectedMinutes }} 分钟
-        </strong>
-        <el-tag
-          v-for="dish in selectedDishes"
-          :key="dish.id"
-          closable
-          @close="toggleDish(dish.id)"
-        >
-          {{ dish.name }}
-        </el-tag>
+          </li>
+        </ul>
         <el-button
           type="primary"
+          class="desktop-selection-submit"
           :loading="isSubmitting"
           :disabled="!selectedCount"
           @click="confirmOrder"
         >
           生成菜单
         </el-button>
-      </div>
-    </el-card>
+      </PagePanel>
+    </div>
     <CommonFeedback
       v-model="feedbackVisible"
       :message="feedbackMessage"

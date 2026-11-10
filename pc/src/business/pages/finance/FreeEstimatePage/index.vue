@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import { computed, onMounted, ref } from 'vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
-import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
@@ -80,11 +84,7 @@ const targetAssets = computed(
 const remainingAssets = computed(() =>
   Math.max(targetAssets.value - currentAssets.value, 0),
 )
-const progress = computed(() =>
-  targetAssets.value > 0
-    ? Math.min((currentAssets.value / targetAssets.value) * 100, 100)
-    : 100,
-)
+
 const savingsRate = computed(() =>
   monthlyIncome.value > 0
     ? (monthlySurplus.value / monthlyIncome.value) * 100
@@ -101,28 +101,6 @@ const scenarios = computed(() =>
 )
 const selectedScenario = computed(
   () => scenarios.value.find((item) => item.id === selectedScenarioId.value)!,
-)
-const monthlyReturn = computed(
-  () => (currentAssets.value * selectedScenario.value.annualReturn) / 100 / 12,
-)
-const scenarioDifference = computed(() => {
-  const base = scenarios.value.find(
-    (item) => item.id === 'base',
-  )!.monthsToFreedom
-  const selected = selectedScenario.value.monthsToFreedom
-  if (selectedScenarioId.value === 'base')
-    return '按下方填写的收入、支出和回报率测算'
-  if (base === null || selected === null)
-    return '收入、支出和提现率相同，仅改变年化回报'
-  const difference = selected - base
-  return difference === 0
-    ? '与基准方案预计达标时间相同'
-    : `比基准方案${difference < 0 ? '提前' : '推迟'} ${formatDuration(Math.abs(difference))}`
-})
-const dataPeriodText = computed(() =>
-  estimate.value?.dataStartDate && estimate.value?.dataEndDate
-    ? `${estimate.value.dataStartDate} 至 ${estimate.value.dataEndDate}`
-    : '暂无收支日期记录',
 )
 
 function resetAssumptions() {
@@ -180,7 +158,7 @@ function formatCurrency(value: number | null | undefined) {
   return `¥ ${Number(value ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 function formatPercent(value: number | null) {
-  return value === null ? '--' : `${value.toFixed(1)}%`
+  return formatPercentage(value)
 }
 function formatDuration(months: number | null): string {
   if (months === null) return '100年内未达标'
@@ -191,107 +169,39 @@ function formatDuration(months: number | null): string {
   return `${years}年${rest ? `${rest}个月` : ''}`
 }
 onMounted(loadEstimate)
-</script>
 
+type ScenarioRow = (typeof scenarios.value)[number]
+</script>
 <template>
-  <section class="pc-page free-estimate-page" aria-label="财务自由测算">
-    <PageHeader
-      title="财务自由测算"
-      back-to="/finance/more-features"
-      back-label="返回更多功能"
-      :prefer-back-to="true"
-    />
-    <div v-if="pageError" class="free-message" role="alert">
-      <span>{{ pageError }}</span>
-      <CommonButton
-        v-if="currentUser"
-        variant="secondary"
-        size="sm"
-        @click="loadEstimate"
-      >
-        重新加载
-      </CommonButton>
-    </div>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else-if="estimate">
-      <el-card
-        class="pc-record-card free-card free-plan"
-        aria-label="方案测算"
-        shadow="never"
-      >
-        <div class="free-result" role="region" aria-label="方案结果">
-          <div class="free-result-title">
-            <span>
-              {{ selectedScenario.label }}方案 ·
-              {{
-                selectedScenario.monthsToFreedom === 0
-                  ? '当前进度'
-                  : '预计达到目标'
-              }}
-            </span>
-            <span class="free-badge">
-              年化 {{ formatPercent(selectedScenario.annualReturn) }}
-            </span>
-          </div>
-          <strong class="free-duration" aria-live="polite">
-            {{ formatDuration(selectedScenario.monthsToFreedom) }}
-          </strong>
-          <p class="free-muted">{{ scenarioDifference }}</p>
-          <dl class="free-result-metrics">
-            <div>
-              <dt>目标本金</dt>
-              <dd>{{ formatCurrency(targetAssets) }}</dd>
-            </div>
-            <div>
-              <dt>还需积累</dt>
-              <dd>{{ formatCurrency(remainingAssets) }}</dd>
-            </div>
-          </dl>
-          <div class="free-progress-heading">
-            <span>当前进度</span>
-            <strong>{{ formatPercent(progress) }}</strong>
-          </div>
-          <div
-            class="free-progress-track"
-            role="progressbar"
-            aria-label="当前方案目标进度"
-            :aria-valuenow="progress"
-            :aria-valuemin="0"
-            :aria-valuemax="100"
-          >
-            <span :style="{ width: `${progress}%` }" />
-          </div>
-          <dl class="free-result-details">
-            <div>
-              <dt>每月结余</dt>
-              <dd>
-                <AmountText
-                  :value="formatCurrency(monthlySurplus)"
-                  :tone="monthlySurplus >= 0 ? 'positive' : 'negative'"
-                />
-              </dd>
-            </div>
-            <div>
-              <dt>储蓄率</dt>
-              <dd>{{ formatPercent(savingsRate) }}</dd>
-            </div>
-            <div>
-              <dt>月均预期收益</dt>
-              <dd>{{ formatCurrency(monthlyReturn) }}</dd>
-            </div>
-          </dl>
-        </div>
-        <div class="free-settings">
-          <header class="free-card-head">
-            <h2>测算参数</h2>
-            <CommonButton
-              variant="secondary"
-              size="sm"
-              @click="resetAssumptions"
-            >
-              恢复默认
-            </CommonButton>
-          </header>
+  <section class="desktop-workspace">
+    <PageHeader title="财务自由测算">
+      <template #right>
+        <el-button @click="resetAssumptions">恢复默认</el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button link type="primary" @click="loadEstimate">重试</el-button>
+    </el-alert>
+    <template v-if="estimate">
+      <MetricStrip
+        :items="[
+          {
+            label: '预计达标时间',
+            value: formatDuration(selectedScenario.monthsToFreedom),
+          },
+          { label: '目标本金', value: formatCurrency(targetAssets) },
+          { label: '还需积累', value: formatCurrency(remainingAssets) },
+          { label: '储蓄率', value: formatPercent(savingsRate) },
+        ]"
+      />
+      <div class="desktop-calculator">
+        <PagePanel title="测算参数">
           <div class="pc-form-grid free-form">
             <label class="pc-field free-field free-field-wide">
               <span>当前净资产</span>
@@ -339,6 +249,7 @@ onMounted(loadEstimate)
               <span>安全提现率</span>
               <div class="free-input-wrap">
                 <DesktopInput
+                  percentage
                   v-model="withdrawalRateInput"
                   type="number"
                   inputmode="decimal"
@@ -354,6 +265,7 @@ onMounted(loadEstimate)
               <span>基准年化回报</span>
               <div class="free-input-wrap">
                 <DesktopInput
+                  percentage
                   v-model="expectedReturnInput"
                   type="number"
                   inputmode="decimal"
@@ -370,114 +282,89 @@ onMounted(loadEstimate)
             v-model="includeSocialInsurance"
             :label="`计入社保医保 ${formatCurrency(tianjinMinimumSelfPay)}/月`"
           />
-          <p class="free-muted">
-            月总支出 {{ formatCurrency(totalMonthlyExpense) }} · 目标本金 =
-            年支出 ÷ {{ formatPercent(withdrawalRate) }}
+          <p class="desktop-note">
+            月总支出 {{ formatCurrency(totalMonthlyExpense) }}
           </p>
-        </div>
-      </el-card>
-      <el-card
-        class="pc-record-card free-card"
-        aria-label="方案与趋势对比"
-        shadow="never"
-      >
-        <header class="free-card-head">
-          <h2>方案对比</h2>
-        </header>
-        <div class="free-scenarios" role="group" aria-label="测算方案">
-          <el-button
-            v-for="scenario in scenarios"
-            :key="scenario.id"
-            native-type="button"
-            class="free-scenario"
-            :class="{ active: scenario.id === selectedScenarioId }"
-            :aria-label="`${scenario.label}方案`"
-            :aria-pressed="scenario.id === selectedScenarioId"
-            @click="selectedScenarioId = scenario.id"
-          >
-            <span class="free-scenario-name">{{ scenario.label }}</span>
-            <strong>{{ formatPercent(scenario.annualReturn) }}</strong>
-            <span>预期年化回报</span>
-            <b>{{ formatDuration(scenario.monthsToFreedom) }}</b>
-          </el-button>
-        </div>
-        <p class="free-muted">
-          保守／乐观按基准回报率 −2／+2 个百分点（限 0–20%），其余参数相同。
-        </p>
-        <header class="free-chart-head">
-          <h3>资产与目标趋势</h3>
-          <SegmentedControl
-            v-model="chartYears"
-            :options="chartRanges"
-            label="趋势年限"
-            variant="surface"
-          />
-        </header>
-        <ProjectionChart
-          :scenarios="scenarios"
-          :target="targetAssets"
-          :selected="selectedScenarioId"
-          :years="Number(chartYears)"
-        />
-        <p class="free-muted">
-          虚线为目标本金，实线为每月投入结余后的预计资产。图中展示未来
-          {{ chartYears }} 年，达标时间最长测算 100 年。
-        </p>
-        <p v-if="monthlySurplus < 0" class="free-muted">
-          当前每月结余为负，本页沿用零投入的预测假设。
-        </p>
-      </el-card>
-      <details class="free-card free-history">
-        <summary>
-          <span>历史收支参考</span>
-          <span class="free-muted">{{ estimate.dataMonths }} 个月</span>
-          <svg
-            class="free-history-chevron"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path
-              d="m6 9 6 6 6-6"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
+        </PagePanel>
+        <div class="desktop-results">
+          <DesktopTable :rows="scenarios" :loading="false" title="方案对比">
+            <el-table-column
+              prop="label"
+              label="方案"
+              min-width="140"
+              sortable="custom"
+              show-overflow-tooltip
             />
-          </svg>
-        </summary>
-        <p class="free-muted">{{ dataPeriodText }}</p>
-        <dl class="free-data-list">
-          <div>
-            <dt>当前净资产</dt>
-            <dd>{{ formatCurrency(estimate.currentNetAssets) }}</dd>
-          </div>
-          <div>
-            <dt>历史月均收入</dt>
-            <dd>{{ formatCurrency(estimate.historicalMonthlyIncome) }}</dd>
-          </div>
-          <div>
-            <dt>历史月均支出</dt>
-            <dd>{{ formatCurrency(estimate.historicalMonthlyExpense) }}</dd>
-          </div>
-          <div>
-            <dt>收支记录</dt>
-            <dd>
-              {{ estimate.incomeTransactionCount }} 笔收入 /
-              {{ estimate.expenseTransactionCount }} 笔支出
-            </dd>
-          </div>
-          <div>
-            <dt>数据截至</dt>
-            <dd>{{ estimate.asOfDate }}</dd>
-          </div>
-        </dl>
-        <p class="free-muted">
-          恢复默认会重新填入历史数据，提现率与基准回报率均恢复为
-          4%，并计入社保医保。
-        </p>
-      </details>
+            <!-- @vue-generic {ScenarioRow} -->
+            <el-table-column label="年化回报" min-width="150">
+              <template #default="{ row }: { row: ScenarioRow }">
+                {{ formatPercent(row.annualReturn) }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {ScenarioRow} -->
+            <el-table-column label="达标时间" min-width="150">
+              <template #default="{ row }: { row: ScenarioRow }">
+                {{ formatDuration(row.monthsToFreedom) }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {ScenarioRow} -->
+            <el-table-column fixed="right" label="操作" width="150">
+              <template #default="{ row }: { row: ScenarioRow }">
+                <el-button
+                  link
+                  type="primary"
+                  :aria-label="row.label + '方案'"
+                  @click="selectedScenarioId = row.id"
+                >
+                  {{ row.id === selectedScenarioId ? '已选择' : '选择方案' }}
+                </el-button>
+              </template>
+            </el-table-column>
+          </DesktopTable>
+          <PagePanel title="资产与目标趋势">
+            <template #actions>
+              <SegmentedControl
+                v-model="chartYears"
+                :options="chartRanges"
+                label="趋势年限"
+              />
+            </template>
+            <ProjectionChart
+              :scenarios="scenarios"
+              :target="targetAssets"
+              :selected="selectedScenarioId"
+              :years="Number(chartYears)"
+            />
+          </PagePanel>
+          <PagePanel title="历史收支参考">
+            <dl class="desktop-record-details">
+              <div>
+                <dt>当前净资产</dt>
+                <dd>{{ formatCurrency(estimate.currentNetAssets) }}</dd>
+              </div>
+              <div>
+                <dt>历史月均收入</dt>
+                <dd>{{ formatCurrency(estimate.historicalMonthlyIncome) }}</dd>
+              </div>
+              <div>
+                <dt>历史月均支出</dt>
+                <dd>{{ formatCurrency(estimate.historicalMonthlyExpense) }}</dd>
+              </div>
+              <div>
+                <dt>收支记录</dt>
+                <dd>
+                  {{ estimate.incomeTransactionCount }} 笔收入 /
+                  {{ estimate.expenseTransactionCount }} 笔支出
+                </dd>
+              </div>
+              <div>
+                <dt>数据截至</dt>
+                <dd>{{ estimate.asOfDate }}</dd>
+              </div>
+            </dl>
+          </PagePanel>
+        </div>
+      </div>
       <p class="free-footnote">
         社保医保采用天津灵活就业最低养老及职工医保标准（{{
           tianjinSelfPayRule.label

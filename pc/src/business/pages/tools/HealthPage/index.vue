@@ -1,12 +1,17 @@
 <script setup lang="ts">
+import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 // 健康管理页：根据体重与活动量估算每日热量与主要营养素，提供体重打卡入口与身体数据维护（用于打卡时自动计算体脂）。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import CommonSkeleton from '@/business/components/common/CommonSkeleton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import {
@@ -273,115 +278,100 @@ function goRecords() {
   void router.push('/tools/health/records')
 }
 </script>
-
 <template>
-  <section class="pc-page health-page" aria-label="健康管理页面">
-    <PageHeader
-      title="健康管理"
-      back-to="/tools"
-      back-label="返回工具页"
-      prefer-back-to
-    >
+  <section class="desktop-workspace">
+    <PageHeader title="健康管理">
       <template #right>
-        <CommonHeaderActionButton
-          label="身体数据"
-          @click="profileModalOpen = true"
-        >
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M12 7.5A2.5 2.5 0 1 0 12 2.5A2.5 2.5 0 0 0 12 7.5ZM6 21V13.8C6 12.8 6.8 12 7.8 12H9L10 8.5H14L15 12H16.2C17.2 12 18 12.8 18 13.8V21M9.5 21V17.5H14.5V21"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </CommonHeaderActionButton>
+        <el-button @click="profileModalOpen = true">身体数据</el-button>
+        <el-button type="primary" @click="goRecords">体重打卡</el-button>
       </template>
     </PageHeader>
-    <el-card
-      class="pc-record-card health-record-card"
-      aria-label="体重打卡入口"
-      shadow="never"
-    >
-      <div class="health-record-info">
-        <h2>体重打卡</h2>
-        <CommonSkeleton v-if="isLoadingInitial" variant="list" :rows="1" />
-        <p v-else>
+    <div class="desktop-calculator">
+      <PagePanel title="营养测算">
+        <CommonInput
+          v-model="weightInput"
+          label="体重（kg）"
+          input-type="number"
+          input-mode="decimal"
+        />
+        <CommonSelect
+          v-model="activeActivity"
+          label="日常活动量"
+          :options="
+            activityOptions.map((option) =>
+              typeof option === 'string'
+                ? { label: option, value: option }
+                : option,
+            )
+          "
+        />
+        <p class="desktop-note">
           最新体重：{{
-            latestWeight === null ? '暂无记录' : `${latestWeight}kg`
+            latestWeight === null ? '暂无记录' : latestWeight + ' kg'
           }}
         </p>
-      </div>
-      <CommonButton size="sm" @click="goRecords">去打卡</CommonButton>
-    </el-card>
-    <el-card
-      class="pc-record-card health-hero"
-      aria-label="体重设置"
-      shadow="never"
-    >
-      <div class="health-hero-header">
-        <h2>每日营养需求</h2>
-        <p>根据体重估算每天需要的热量与主要营养素</p>
-      </div>
-      <CommonInput
-        v-model="weightInput"
-        label="体重（kg）"
-        placeholder="例如：65"
-        input-type="number"
-        input-mode="decimal"
-      />
-    </el-card>
-    <div class="health-activity" aria-label="日常活动量选择">
-      <span class="health-field-label">日常活动量</span>
-      <SegmentedControl
-        v-model="activeActivity"
-        :options="activityOptions"
-        label="日常活动量"
-        variant="brand"
-      />
-    </div>
-    <p v-if="weightNumber === null" class="health-message">
-      请输入有效体重（20–300kg）后查看每日所需
-    </p>
-    <template v-else>
-      <el-card
-        class="pc-record-card health-calorie-card"
-        aria-label="每日热量"
-        shadow="never"
-      >
-        <span class="health-calorie-label">每日热量</span>
-        <p class="health-calorie-value">
-          {{ calories }}
-          <span>kcal</span>
-        </p>
-        <span class="health-calorie-hint">{{ calorieHint }}</span>
-      </el-card>
-      <section class="pc-grid health-grid" aria-label="每日营养素">
-        <el-card
-          v-for="item in nutrientCards"
-          :key="item.key"
-          class="pc-record-card health-card"
-          shadow="never"
-        >
-          <span class="health-card-title">{{ item.title }}</span>
-          <p class="health-card-value">
-            {{ item.range }}
-            <span>{{ item.unit }}</span>
+      </PagePanel>
+      <div class="desktop-results">
+        <el-alert
+          v-if="weightNumber === null"
+          title="请输入有效体重（20–300 kg）"
+          type="info"
+          :closable="false"
+        />
+        <template v-else>
+          <MetricStrip
+            :items="[
+              { label: '每日热量 kcal', value: calories ?? '—' },
+              { label: '活动建议', value: calorieHint ?? '—' },
+            ]"
+          />
+          <DesktopTable
+            :rows="nutrientCards"
+            :loading="false"
+            title="每日营养需求"
+          >
+            <el-table-column
+              prop="title"
+              label="营养素"
+              min-width="140"
+              sortable="custom"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="range"
+              label="建议摄入"
+              min-width="140"
+              sortable="custom"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="unit"
+              label="单位"
+              min-width="140"
+              sortable="custom"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="hint"
+              label="说明"
+              min-width="280"
+              sortable="custom"
+              show-overflow-tooltip
+            />
+          </DesktopTable>
+        </template>
+        <section class="health-note" aria-label="估算说明">
+          <p>
+            以上为成年人常用系数的估算值，蛋白质、碳水与饮水需求会随活动量档位提高；实际需求与年龄、性别、健康状况有关，仅供参考。
           </p>
-          <span class="health-card-hint">{{ item.hint }}</span>
-        </el-card>
-      </section>
-    </template>
-    <section class="health-note" aria-label="估算说明">
-      <p>
-        以上为成年人常用系数的估算值，蛋白质、碳水与饮水需求会随活动量档位提高；实际需求与年龄、性别、健康状况有关，仅供参考。
-      </p>
-      <p>
-        脂肪按 0.8–1 g/kg 估算；膳食纤维及维生素、矿物质按固定推荐量摄入（如纤维
-        25–30g、钙 800mg），不随体重与活动量变化。
-      </p>
-    </section>
+          <p>
+            脂肪按 0.8–1 g/kg
+            估算；膳食纤维及维生素、矿物质按固定推荐量摄入（如纤维 25–30g、钙
+            800mg），不随体重与活动量变化。
+          </p>
+        </section>
+      </div>
+    </div>
     <CommonModal v-model="profileModalOpen" title="身体数据">
       <div class="health-modal-body">
         <div class="health-field">

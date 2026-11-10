@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import PagePanel from '@/business/components/PagePanel.vue'
+
 // 体重记录页：每日体重打卡（同日覆盖，默认填入上次体重）、echarts 趋势与历史列表（打卡时自动计算体脂）。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import DesktopTable from '@/business/components/DesktopTable.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonSkeleton from '@/business/components/common/CommonSkeleton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   getWeightRecords,
@@ -34,7 +38,6 @@ const timeline = computed(() =>
 )
 
 // 最新一次打卡的体脂率（未设身体数据时为空）
-const latestBodyFat = computed(() => records.value[0]?.bodyFatRate ?? null)
 
 function todayString() {
   const now = new Date()
@@ -99,7 +102,9 @@ async function renderChart() {
           (item) => item.recordDate.slice(5) === list[0]?.name,
         )
         const bodyFat =
-          point?.bodyFatRate != null ? `<br/>体脂：${point.bodyFatRate}%` : ''
+          point?.bodyFatRate != null
+            ? `<br/>体脂：${formatPercentage(point.bodyFatRate)}`
+            : ''
         return `${list[0]?.name}<br/>体重：${list[0]?.value}kg${bodyFat}`
       },
     },
@@ -171,77 +176,75 @@ async function onSubmit() {
   }
 }
 </script>
-
 <template>
-  <section class="pc-page health-record-page" aria-label="体重记录页面">
-    <PageHeader
-      title="体重打卡"
-      back-to="/tools/health"
-      back-label="返回健康管理"
-      prefer-back-to
-    />
-    <el-form
-      class="record-form-card"
-      @submit.prevent="onSubmit"
-      label-position="top"
-    >
-      <h2 class="record-form-title">今日打卡</h2>
-      <div class="record-form-row">
-        <CommonInput v-model="dateInput" label="打卡日期" input-type="date" />
-        <CommonInput
-          v-model="weightInput"
-          label="体重（kg）"
-          placeholder="例如：78.9"
-          input-type="number"
-          input-mode="decimal"
-        />
-      </div>
-      <CommonInput
-        v-model="remarkInput"
-        label="备注（选填）"
-        placeholder="例如：晨起空腹"
-      />
-      <p v-if="errorMessage" class="record-error">{{ errorMessage }}</p>
-      <CommonButton
-        class="record-submit"
-        type="submit"
-        :disabled="saving || isLoading"
-      >
-        {{ saving ? '保存中…' : '保存打卡' }}
-      </CommonButton>
-      <p class="record-hint">同一天重复打卡会覆盖当天的记录</p>
-    </el-form>
-    <el-card
-      class="pc-record-card record-chart-card"
-      aria-label="体重趋势"
-      shadow="never"
-    >
-      <div class="record-chart-header">
-        <h2 class="record-chart-title">体重趋势</h2>
-        <span v-if="latestBodyFat != null" class="record-chart-bodyfat">
-          体脂 {{ latestBodyFat }}%
-        </span>
-      </div>
-      <template v-if="isLoading"><CommonSkeleton variant="card" /></template>
-      <template v-else>
+  <section class="desktop-workspace">
+    <PageHeader title="体重记录"><template #right></template></PageHeader>
+    <div class="desktop-calculator">
+      <PagePanel title="添加记录">
+        <el-form
+          class="record-form-card"
+          @submit.prevent="onSubmit"
+          label-position="top"
+        >
+          <h2 class="record-form-title">今日打卡</h2>
+          <div class="record-form-row">
+            <CommonInput
+              v-model="dateInput"
+              label="打卡日期"
+              input-type="date"
+            />
+            <CommonInput
+              v-model="weightInput"
+              label="体重（kg）"
+              placeholder="例如：78.9"
+              input-type="number"
+              input-mode="decimal"
+            />
+          </div>
+          <CommonInput
+            v-model="remarkInput"
+            label="备注（选填）"
+            placeholder="例如：晨起空腹"
+          />
+          <p v-if="errorMessage" class="record-error">{{ errorMessage }}</p>
+          <CommonButton
+            class="record-submit"
+            type="submit"
+            :disabled="saving || isLoading"
+          >
+            {{ saving ? '保存中…' : '保存打卡' }}
+          </CommonButton>
+          <p class="record-hint">同一天重复打卡会覆盖当天的记录</p>
+        </el-form>
+      </PagePanel>
+      <PagePanel title="体重趋势">
         <div
-          v-show="timeline.length > 0"
           ref="chartRef"
-          class="pc-chart record-chart"
-        ></div>
-        <p v-if="timeline.length === 0" class="record-empty">
-          还没有打卡记录，保存第一条后这里会展示趋势图
-        </p>
-      </template>
-    </el-card>
-    <DesktopTable :rows="records" :loading="isLoading" aria-label="历史记录">
+          class="desktop-chart record-chart"
+          style="height: 360px"
+        />
+        <el-empty
+          v-if="!timeline.length && !isLoading"
+          description="暂无记录"
+        />
+      </PagePanel>
+    </div>
+    <DesktopTable
+      title="历史体重"
+      searchable
+      :rows="records"
+      :loading="isLoading"
+      aria-label="历史记录"
+    >
       <template #toolbar><h2>最近记录</h2></template>
       <el-table-column prop="recordDate" label="日期" min-width="140" />
       <el-table-column prop="weight" label="体重（kg）" min-width="140" />
       <!-- @vue-generic {WeightRecord} -->
       <el-table-column label="体脂率" min-width="120">
         <template #default="{ row }: { row: WeightRecord }">
-          {{ row.bodyFatRate == null ? '—' : `${row.bodyFatRate}%` }}
+          {{
+            row.bodyFatRate == null ? '—' : formatPercentage(row.bodyFatRate)
+          }}
         </template>
       </el-table-column>
       <el-table-column

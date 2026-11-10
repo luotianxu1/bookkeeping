@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 行情中心外壳：搜索 + 市场切换 tab + 子路由视图（移植自 investment 项目前端，浅色移动端主题）。
+// 行情工作台：统一搜索、市场页签和持久化子路由。
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
@@ -43,9 +43,6 @@ const activePath = computed(() => {
 })
 
 /** aria-current 属性值（显式类型，避免模板字面量宽化为 string） */
-function currentAttr(path: string): 'page' | undefined {
-  return activePath.value === path ? 'page' : undefined
-}
 
 function select(path: string): void {
   if (route.path !== path) {
@@ -53,52 +50,40 @@ function select(path: string): void {
   }
 }
 </script>
-
 <template>
-  <section class="pc-page market-page" aria-label="行情中心">
-    <header class="market-header">
-      <PageHeader
-        title="行情中心"
-        back-to="/finance/more-features"
-        back-label="返回更多功能"
-        :prefer-back-to="true"
-      >
-        <template #right>
-          <div class="product-switch" role="group" aria-label="行情类型">
-            <el-button
-              native-type="button"
-              :aria-pressed="!isFund"
-              :class="{ active: !isFund }"
-              @click="selectProduct(false)"
-            >
-              股票
-            </el-button>
-            <el-button
-              native-type="button"
-              :aria-pressed="isFund"
-              :class="{ active: isFund }"
-              @click="selectProduct(true)"
-            >
-              基金
-            </el-button>
-          </div>
-        </template>
-      </PageHeader>
-      <MarketSearchBox v-if="!isFund" />
-      <nav v-if="!isFund" class="pc-toolbar market-tabs" aria-label="市场切换">
-        <el-button
-          v-for="t in TABS"
-          :key="t.path"
-          class="market-tab"
-          :class="{ active: activePath === t.path }"
-          :aria-current="currentAttr(t.path)"
-          native-type="button"
-          @click="select(t.path)"
-        >
-          {{ t.label }}
-        </el-button>
-      </nav>
-    </header>
+  <section class="desktop-workspace market-page">
+    <PageHeader title="行情中心">
+      <template #right>
+        <MarketSearchBox v-if="!isFund" />
+        <el-button-group>
+          <el-button
+            :type="!isFund ? 'primary' : undefined"
+            @click="selectProduct(false)"
+          >
+            股票
+          </el-button>
+          <el-button
+            :type="isFund ? 'primary' : undefined"
+            @click="selectProduct(true)"
+          >
+            基金
+          </el-button>
+        </el-button-group>
+      </template>
+    </PageHeader>
+    <el-tabs
+      v-if="!isFund"
+      :model-value="activePath"
+      class="desktop-tabs"
+      @tab-change="select(String($event))"
+    >
+      <el-tab-pane
+        v-for="tab in TABS"
+        :key="tab.path"
+        :label="tab.label"
+        :name="tab.path"
+      />
+    </el-tabs>
     <RouterView v-slot="{ Component }">
       <KeepAlive><component :is="Component" /></KeepAlive>
     </RouterView>

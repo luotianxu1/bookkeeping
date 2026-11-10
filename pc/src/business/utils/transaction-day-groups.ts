@@ -49,6 +49,7 @@ export function buildTransactionDayGroups(
           categoryIcon: transaction.categoryIcon,
           categoryColor: transaction.categoryColor,
           accountId: transaction.accountId,
+          accountName: transaction.accountName,
           remark: transaction.remark,
           type: transaction.type,
           rawAmount: Number(transaction.amount ?? 0),

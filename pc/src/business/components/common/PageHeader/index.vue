@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft } from '@lucide/vue'
-defineProps<{
+const props = defineProps<{
   title: string
   backTo?: string
   backLabel?: string
@@ -9,6 +9,14 @@ defineProps<{
 }>()
 const router = useRouter()
 const route = useRoute()
+function goBack() {
+  if (props.backTo) return router.push(props.backTo)
+  if (router.options.history.state.back) return router.back()
+  const parent = route.path.slice(0, route.path.lastIndexOf('/'))
+  return router.push(
+    router.resolve(parent).matched.length ? parent : '/overview',
+  )
+}
 </script>
 <template>
   <header class="pc-page-header">
@@ -17,7 +25,7 @@ const route = useRoute()
         v-if="Object.keys(route.params).length"
         text
         :aria-label="backLabel || '返回'"
-        @click="router.push(backTo || '/overview')"
+        @click="goBack"
       >
         <ArrowLeft :size="16" />
       </el-button>

@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 // 黄金账户持仓页的纯格式化/计算函数：不依赖组件状态，供页面 script 与模板复用。
 import type {
   GoldAccountHolding,
@@ -76,11 +77,7 @@ export function formatSummaryWeight(value: number | null | undefined) {
 }
 
 export function formatRate(value: number | null | undefined) {
-  const rate = Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-  return `${rate}%`
+  return formatPercentage(value ?? 0)
 }
 
 export function formatAveragePriceTag(value: number | null | undefined) {

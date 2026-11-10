@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { formatPercentageText } from '@/business/utils/percentage'
+
+import PagePanel from '@/business/components/PagePanel.vue'
+
 // 市场概况：11 档涨跌分布直方图 + 涨跌占比条 + 今日实时成交额脚注。
 import { computed, onMounted, ref, watch } from 'vue'
 import {
@@ -17,7 +21,6 @@ const data = ref<MarketActivity | null>(null)
 const turnover = ref<MarketTurnover | null>(null)
 const loading = ref(true)
 const error = ref('')
-const collapsed = ref(false)
 
 /* 副标题：三个市场均为全市场口径（A股 hs_a / 港股 HKEX+新浪 / 美股纳斯达克官方） */
 const note = computed(() => {
@@ -63,12 +66,6 @@ function fmtAmount(v: number): string {
   return `${sign}${(v / 1e8).toFixed(0)}亿`
 }
 
-const turnoverPct = computed<number | null>(() => {
-  const t = turnover.value
-  if (!t || t.prev === null || t.prev <= 0) return null
-  return (t.today / t.prev - 1) * 100
-})
-
 /* ---------- 柱高归一化 ---------- */
 const maxCount = computed(() => {
   if (!data.value) return 0
@@ -80,75 +77,50 @@ function barH(count: number): string {
   return `${Math.max((count / maxCount.value) * 100, 2).toFixed(1)}%`
 }
 </script>
-
 <template>
-  <section class="ov" aria-label="市场概况">
-    <div class="spot-head">
-      <h2>市场概况</h2>
-      <span v-if="note" class="spot-note">{{ note }}</span>
-      <el-button
-        class="fold-btn"
-        native-type="button"
-        :aria-expanded="!collapsed"
-        @click="collapsed = !collapsed"
+  <section class="desktop-workspace">
+    <PagePanel title="市场涨跌分布">
+      <template #actions>
+        <el-button :loading="loading" text @click="load">刷新</el-button>
+      </template>
+      <el-alert
+        v-if="error"
+        :title="error"
+        type="error"
+        :closable="false"
+        show-icon
       >
-        {{ collapsed ? '展开' : '收起' }}
-      </el-button>
-    </div>
-    <p v-if="error" class="error-box" role="alert">
-      {{ error }}
-      <el-button class="retry" native-type="button" @click="load">
-        重试
-      </el-button>
-    </p>
-    <div v-else-if="loading" class="ov-skel" aria-busy="true"></div>
-    <template v-else-if="data">
-      <!-- 11 档涨跌分布直方图 -->
-      <div
-        v-show="!collapsed"
-        class="bars"
-        role="img"
-        aria-label="全市场个股涨跌幅分布直方图"
-      >
-        <div v-for="(d, i) in data.dist" :key="d.side + d.label" class="col">
-          <span class="num cnt" :class="d.side">{{ d.count }}</span>
-          <div class="bar-track">
-            <div
-              class="bar"
-              :class="d.side"
-              :style="{ height: barH(d.count), '--bar-delay': `${i * 45}ms` }"
-              :title="`${d.side === 'down' ? '跌' : d.side === 'up' ? '涨' : ''}${d.label}：${d.count} 家`"
-            ></div>
+        <el-button link type="primary" @click="load">重试</el-button>
+      </el-alert>
+      <el-skeleton v-if="loading" :rows="5" animated />
+      <template v-else-if="data">
+        <div class="desktop-market-distribution" role="img" :aria-label="note">
+          <div v-for="d in data.dist" :key="d.side + d.label">
+            <span>{{ d.count }}</span>
+            <div class="desktop-market-bar-track">
+              <i :class="d.side" :style="{ height: barH(d.count) }" />
+            </div>
+            <span>{{ formatPercentageText(d.label) }}</span>
           </div>
-          <span class="num lbl">{{ d.label }}</span>
         </div>
-      </div>
-      <!-- 涨跌占比条 -->
-      <div class="sum">
-        <span class="num sum-num down">跌 {{ data.down }}</span>
-        <div
-          class="ratio"
-          role="img"
-          :aria-label="`上涨 ${data.up} 家，下跌 ${data.down} 家，平盘 ${data.flat} 家`"
-        >
-          <i class="seg down" :style="{ flexGrow: data.down }"></i>
-          <i class="seg flat" :style="{ flexGrow: data.flat }"></i>
-          <i class="seg up" :style="{ flexGrow: data.up }"></i>
+        <div class="desktop-distribution-totals">
+          <span>
+            下跌
+            <strong>{{ data.down }}</strong>
+          </span>
+          <span>
+            平盘
+            <strong>{{ data.flat }}</strong>
+          </span>
+          <span>
+            上涨
+            <strong>{{ data.up }}</strong>
+          </span>
         </div>
-        <span class="num sum-num up">涨 {{ data.up }}</span>
-      </div>
-      <!-- 今日实时成交额 + 较上一日此时 -->
-      <p v-if="turnover" class="turnover num">
-        今日实时成交额
-        <strong>{{ fmtAmount(turnover.today) }}</strong>
-        <span class="vs">
-          · 较上一日此时
-          <template v-if="turnoverPct !== null">
-            {{ turnoverPct > 0 ? '+' : '' }}{{ turnoverPct.toFixed(1) }}%
-          </template>
-          <template v-else>—</template>
-        </span>
-      </p>
-    </template>
+        <p v-if="turnover" class="desktop-note">
+          实时成交额 {{ fmtAmount(turnover.today) }}
+        </p>
+      </template>
+    </PagePanel>
   </section>
 </template>

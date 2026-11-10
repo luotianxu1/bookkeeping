@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 import type {
   SalaryAccountType,
   SalaryAccountRecordItem,
@@ -26,11 +27,7 @@ export function formatSalaryCurrencyPlain(value: number | null | undefined) {
 }
 
 export function formatSalaryPercent(value: number | null | undefined) {
-  const amount = Number(value ?? 0)
-  return `${new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(Number.isFinite(amount) ? amount : 0)}%`
+  return formatPercentage(value ?? 0)
 }
 
 export function getSalaryAccountRoutePath(

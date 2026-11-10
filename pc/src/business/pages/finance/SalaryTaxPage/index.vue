@@ -1,11 +1,14 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { onMounted, ref } from 'vue'
 import {
   getSalaryTaxPage,
   type SalaryTaxPage,
 } from '@/business/api/modules/finance'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
@@ -55,112 +58,113 @@ function handleYearChange(value: string) {
   selectedYear.value = value
   void loadPage()
 }
-</script>
 
+type TaxMonthRow = NonNullable<typeof pageData.value>['monthItems'][number]
+type TaxDeductionRow = NonNullable<typeof pageData.value>['deductions'][number]
+</script>
 <template>
-  <section class="pc-page salary-page" aria-label="工资税务">
-    <PageHeader
-      title="工资税务"
-      back-to="/finance/salary"
-      :prefer-back-to="true"
-    >
-      <CommonSelect
-        class="salary-year-select"
-        label=""
-        :model-value="selectedYear"
-        :options="yearOptions"
-        @update:model-value="handleYearChange"
-      />
+  <section class="desktop-workspace">
+    <PageHeader title="工资税务">
+      <template #right>
+        <CommonSelect
+          label="年份"
+          aria-label="年份"
+          :model-value="selectedYear"
+          :options="yearOptions"
+          @update:model-value="handleYearChange"
+        />
+      </template>
     </PageHeader>
-    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
-    <div v-else-if="isLoading" class="salary-loading-wrap">
-      <CommonLoading text="工资税务加载中..." />
-    </div>
-    <template v-else-if="pageData">
-      <el-card class="pc-record-card salary-summary-card" shadow="never">
-        <div class="salary-summary-head">
-          <p class="salary-summary-eyebrow">{{ pageData.year }} 年税务概览</p>
-          <div class="salary-summary-main">
-            <div class="salary-summary-main-top">
-              <strong>{{ formatSalaryCurrency(pageData.annualTax) }}</strong>
-              <span class="salary-pill">
-                已发 {{ pageData.paidMonths }} 个月
-              </span>
-            </div>
-          </div>
-        </div>
-        <div class="pc-grid salary-metric-grid">
-          <el-card
-            v-for="metric in pageData.metrics"
-            :key="metric.label"
-            class="pc-record-card salary-metric-card"
-            shadow="never"
-          >
-            <span>{{ metric.label }}</span>
-            <strong>{{ formatSalaryCurrency(metric.value) }}</strong>
-          </el-card>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head">
-          <strong>专项附加扣除</strong>
-          <span class="salary-pill">年度累计</span>
-        </div>
-        <div class="pc-grid salary-deduction-list">
-          <el-card
-            v-for="item in pageData.deductions"
-            :key="item.label"
-            class="pc-record-card salary-deduction-card"
-            shadow="never"
-          >
-            <div class="salary-linked-top">
-              <div>
-                <p class="salary-deduction-title">{{ item.label }}</p>
-                <p class="salary-deduction-note">
-                  月度扣除 {{ formatSalaryCurrency(item.monthlyValue) }}
-                </p>
-              </div>
-              <div class="salary-deduction-amount">
-                <strong>{{ formatSalaryCurrency(item.annualValue) }}</strong>
-                <span>年累计</span>
-              </div>
-            </div>
-          </el-card>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head">
-          <strong>个税明细</strong>
-          <span class="salary-pill">月度累计</span>
-        </div>
-        <div class="pc-grid salary-month-list">
-          <el-card
-            v-for="item in pageData.monthItems"
-            :key="item.monthKey"
-            class="pc-record-card salary-month-card"
-            shadow="never"
-          >
-            <div class="salary-month-top">
-              <div>
-                <p class="salary-month-title">{{ item.monthLabel }}</p>
-                <p class="salary-month-note">
-                  税前收入 {{ formatSalaryCurrency(item.grossIncome) }}
-                </p>
-              </div>
-              <div class="salary-month-amount">
-                <strong>{{ formatSalaryCurrency(item.taxAmount) }}</strong>
-                <span>{{ item.statusText }}</span>
-              </div>
-            </div>
-            <div class="salary-row">
-              <div><p class="salary-row-desc">税后收入</p></div>
-              <div class="salary-row-value">
-                <strong>{{ formatSalaryCurrency(item.takeHomeIncome) }}</strong>
-              </div>
-            </div>
-          </el-card>
-        </div>
-      </el-card>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="pageData">
+      <MetricStrip
+        :items="[
+          {
+            label: '年度个税',
+            value: formatSalaryCurrency(pageData.annualTax),
+          },
+          { label: '已发月数', value: pageData.paidMonths },
+        ]"
+      />
+      <MetricStrip
+        :items="
+          pageData.metrics.map((metric) => ({
+            label: metric.label,
+            value: formatSalaryCurrency(metric.value),
+          }))
+        "
+      />
+      <div class="desktop-columns">
+        <DesktopTable
+          :rows="pageData.monthItems"
+          :loading="false"
+          title="月度个税"
+        >
+          <el-table-column
+            prop="monthLabel"
+            label="月份"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {TaxMonthRow} -->
+          <el-table-column label="税前收入" min-width="150">
+            <template #default="{ row }: { row: TaxMonthRow }">
+              {{ formatSalaryCurrency(row.grossIncome) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {TaxMonthRow} -->
+          <el-table-column label="个税" min-width="150">
+            <template #default="{ row }: { row: TaxMonthRow }">
+              {{ formatSalaryCurrency(row.taxAmount) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {TaxMonthRow} -->
+          <el-table-column label="税后收入" min-width="150">
+            <template #default="{ row }: { row: TaxMonthRow }">
+              {{ formatSalaryCurrency(row.takeHomeIncome) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="statusText"
+            label="状态"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+        </DesktopTable>
+        <DesktopTable
+          :rows="pageData.deductions"
+          :loading="false"
+          title="专项附加扣除"
+        >
+          <el-table-column
+            prop="label"
+            label="项目"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {TaxDeductionRow} -->
+          <el-table-column label="月度扣除" min-width="150">
+            <template #default="{ row }: { row: TaxDeductionRow }">
+              {{ formatSalaryCurrency(row.monthlyValue) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {TaxDeductionRow} -->
+          <el-table-column label="年度累计" min-width="150">
+            <template #default="{ row }: { row: TaxDeductionRow }">
+              {{ formatSalaryCurrency(row.annualValue) }}
+            </template>
+          </el-table-column>
+        </DesktopTable>
+      </div>
     </template>
     <CommonFeedback
       v-model="feedbackVisible"

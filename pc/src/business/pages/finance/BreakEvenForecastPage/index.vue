@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import PagePanel from '@/business/components/PagePanel.vue'
+
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import { computed, ref } from 'vue'
@@ -318,173 +322,180 @@ function formatNumber(value: number, digits = 2) {
 }
 
 function formatPercent(value: number) {
-  return `${formatNumber(value, 2)}%`
+  return formatPercentage(value)
 }
 </script>
-
 <template>
-  <section class="pc-page break-even-forecast-page" aria-label="回本预测">
-    <PageHeader
-      title="回本预测"
-      back-to="/finance/more-features"
-      back-label="返回更多功能"
-    />
-    <p v-if="pageError" class="forecast-message forecast-message-error">
-      {{ pageError }}
-    </p>
-    <el-card
-      class="pc-record-card forecast-card"
-      aria-label="预测条件"
-      shadow="never"
-    >
-      <div class="forecast-search-box">
-        <label
-          class="pc-field forecast-search-field"
-          aria-label="输入基金或股票名称"
+  <section class="desktop-workspace">
+    <PageHeader title="回本预测"><template #right></template></PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <div class="desktop-calculator">
+      <PagePanel title="测算条件">
+        <div class="forecast-search-box">
+          <label
+            class="pc-field forecast-search-field"
+            aria-label="输入基金或股票名称"
+          >
+            <DesktopInput
+              :value="searchKeyword"
+              type="text"
+              inputmode="search"
+              placeholder="输入股票/基金名称或代码"
+              @input="
+                handleKeywordInput(($event.target as HTMLInputElement).value)
+              "
+              @keydown.enter.prevent="searchProducts"
+            />
+            <el-button
+              native-type="button"
+              :disabled="isSearching"
+              @click="searchProducts"
+            >
+              {{ isSearching ? '搜索中' : '搜索' }}
+            </el-button>
+          </label>
+          <div v-if="searchResults.length" class="forecast-search-results">
+            <el-button
+              v-for="product in searchResults"
+              :key="getSearchResultKey(product)"
+              native-type="button"
+              :class="[
+                'forecast-search-item',
+                { active: isResultSelected(product) },
+              ]"
+              @click="selectProduct(product)"
+              class="pc-content-button"
+            >
+              <strong>{{ product.symbol }} {{ product.name }}</strong>
+              <span>{{ getSearchResultMeta(product) }}</span>
+            </el-button>
+          </div>
+        </div>
+        <p v-if="searchMessage" class="forecast-search-message">
+          {{ searchMessage }}
+        </p>
+        <div class="desktop-form-grid">
+          <label class="pc-field forecast-field">
+            <span>当前持有{{ quantityLabel }}</span>
+            <DesktopInput
+              v-model="holdingQuantityInput"
+              class="forecast-field-control"
+              type="text"
+              inputmode="decimal"
+              placeholder="请输入当前持有数量"
+              @input="hasCalculated = false"
+            />
+          </label>
+          <label class="pc-field forecast-field">
+            <span>当前持仓成本价</span>
+            <DesktopInput
+              v-model="holdingCostInput"
+              class="forecast-field-control"
+              type="text"
+              inputmode="decimal"
+              :placeholder="
+                selectedProduct?.productType === 'stock'
+                  ? '例如 11.70 元/股'
+                  : '例如 1.2350 元/份'
+              "
+              @input="hasCalculated = false"
+            />
+          </label>
+          <label class="pc-field forecast-field forecast-field-full">
+            <span>预计持有{{ quantityLabel }}</span>
+            <DesktopInput
+              v-model="targetQuantityInput"
+              class="forecast-field-control"
+              type="text"
+              inputmode="decimal"
+              :placeholder="`请输入计划补仓后的总${quantityLabel}`"
+              @input="hasCalculated = false"
+            />
+          </label>
+        </div>
+        <p v-if="validationMessage" class="forecast-message">
+          {{ validationMessage }}
+        </p>
+        <CommonButton
+          variant="primary"
+          :disabled="Boolean(validationMessage)"
+          @click="handleCalculate"
         >
-          <DesktopInput
-            :value="searchKeyword"
-            type="text"
-            inputmode="search"
-            placeholder="输入股票/基金名称或代码"
-            @input="
-              handleKeywordInput(($event.target as HTMLInputElement).value)
-            "
-            @keydown.enter.prevent="searchProducts"
-          />
-          <el-button
-            native-type="button"
-            :disabled="isSearching"
-            @click="searchProducts"
-          >
-            {{ isSearching ? '搜索中' : '搜索' }}
-          </el-button>
-        </label>
-        <div v-if="searchResults.length" class="forecast-search-results">
-          <el-button
-            v-for="product in searchResults"
-            :key="getSearchResultKey(product)"
-            native-type="button"
-            :class="[
-              'forecast-search-item',
-              { active: isResultSelected(product) },
-            ]"
-            @click="selectProduct(product)"
-            class="pc-content-button"
-          >
-            <strong>{{ product.symbol }} {{ product.name }}</strong>
-            <span>{{ getSearchResultMeta(product) }}</span>
-          </el-button>
-        </div>
+          开始测算
+        </CommonButton>
+      </PagePanel>
+      <div>
+        <PagePanel title="测算结果" v-if="visibleForecastResult">
+          <el-card class="pc-record-card result-hero" shadow="never">
+            <div class="result-hero-block">
+              <span>
+                {{
+                  visibleForecastResult.profitAmount >= 0
+                    ? '当前浮盈'
+                    : '当前浮亏'
+                }}
+              </span>
+              <AmountText
+                tag="strong"
+                class="result-amount"
+                :value="
+                  formatSignedCurrency(visibleForecastResult.profitAmount)
+                "
+                :tone="getProfitTone(visibleForecastResult.profitAmount)"
+              />
+            </div>
+            <div class="result-hero-block">
+              <span>回本所需涨幅</span>
+              <strong class="result-rate">
+                {{
+                  visibleForecastResult.isAlreadyRecovered
+                    ? '0.0%'
+                    : formatPercent(visibleForecastResult.requiredIncreaseRate)
+                }}
+              </strong>
+            </div>
+          </el-card>
+          <dl class="desktop-record-details">
+            <div class="result-row">
+              <dt>当前市值</dt>
+              <dd>{{ formatCurrency(visibleForecastResult.marketValue) }}</dd>
+            </div>
+            <div class="result-row">
+              <dt>当前成本价</dt>
+              <dd>
+                {{ formatCurrency(visibleForecastResult.avgCostPrice, 2) }}
+              </dd>
+            </div>
+            <div class="result-row">
+              <dt>当前总成本</dt>
+              <dd>
+                {{ formatCurrency(visibleForecastResult.holdingCostAmount) }}
+              </dd>
+            </div>
+            <div class="result-row">
+              <dt>预计补仓金额</dt>
+              <dd>
+                {{ formatCurrency(visibleForecastResult.additionalCost) }}
+              </dd>
+            </div>
+            <div class="result-row">
+              <dt>预计总成本</dt>
+              <dd>
+                {{ formatCurrency(visibleForecastResult.projectedCostAmount) }}
+              </dd>
+            </div>
+          </dl>
+        </PagePanel>
+        <PagePanel v-else title="测算结果">
+          <el-empty description="填写左侧条件后开始测算" />
+        </PagePanel>
       </div>
-      <p v-if="searchMessage" class="forecast-search-message">
-        {{ searchMessage }}
-      </p>
-      <div class="pc-grid forecast-grid">
-        <label class="pc-field forecast-field">
-          <span>当前持有{{ quantityLabel }}</span>
-          <DesktopInput
-            v-model="holdingQuantityInput"
-            class="forecast-field-control"
-            type="text"
-            inputmode="decimal"
-            placeholder="请输入当前持有数量"
-            @input="hasCalculated = false"
-          />
-        </label>
-        <label class="pc-field forecast-field">
-          <span>当前持仓成本价</span>
-          <DesktopInput
-            v-model="holdingCostInput"
-            class="forecast-field-control"
-            type="text"
-            inputmode="decimal"
-            :placeholder="
-              selectedProduct?.productType === 'stock'
-                ? '例如 11.70 元/股'
-                : '例如 1.2350 元/份'
-            "
-            @input="hasCalculated = false"
-          />
-        </label>
-        <label class="pc-field forecast-field forecast-field-full">
-          <span>预计持有{{ quantityLabel }}</span>
-          <DesktopInput
-            v-model="targetQuantityInput"
-            class="forecast-field-control"
-            type="text"
-            inputmode="decimal"
-            :placeholder="`请输入计划补仓后的总${quantityLabel}`"
-            @input="hasCalculated = false"
-          />
-        </label>
-      </div>
-      <p v-if="validationMessage" class="forecast-message">
-        {{ validationMessage }}
-      </p>
-      <CommonButton
-        variant="primary"
-        :disabled="Boolean(validationMessage)"
-        @click="handleCalculate"
-      >
-        开始测算
-      </CommonButton>
-    </el-card>
-    <el-card
-      v-if="visibleForecastResult"
-      class="pc-record-card result-card"
-      aria-label="回本预测结果"
-      shadow="never"
-    >
-      <el-card class="pc-record-card result-hero" shadow="never">
-        <div class="result-hero-block">
-          <span>
-            {{
-              visibleForecastResult.profitAmount >= 0 ? '当前浮盈' : '当前浮亏'
-            }}
-          </span>
-          <AmountText
-            tag="strong"
-            class="result-amount"
-            :value="formatSignedCurrency(visibleForecastResult.profitAmount)"
-            :tone="getProfitTone(visibleForecastResult.profitAmount)"
-          />
-        </div>
-        <div class="result-hero-block">
-          <span>回本所需涨幅</span>
-          <strong class="result-rate">
-            {{
-              visibleForecastResult.isAlreadyRecovered
-                ? '0.00%'
-                : formatPercent(visibleForecastResult.requiredIncreaseRate)
-            }}
-          </strong>
-        </div>
-      </el-card>
-      <dl class="result-list">
-        <div class="result-row">
-          <dt>当前市值</dt>
-          <dd>{{ formatCurrency(visibleForecastResult.marketValue) }}</dd>
-        </div>
-        <div class="result-row">
-          <dt>当前成本价</dt>
-          <dd>{{ formatCurrency(visibleForecastResult.avgCostPrice, 2) }}</dd>
-        </div>
-        <div class="result-row">
-          <dt>当前总成本</dt>
-          <dd>{{ formatCurrency(visibleForecastResult.holdingCostAmount) }}</dd>
-        </div>
-        <div class="result-row">
-          <dt>预计补仓金额</dt>
-          <dd>{{ formatCurrency(visibleForecastResult.additionalCost) }}</dd>
-        </div>
-        <div class="result-row">
-          <dt>预计总成本</dt>
-          <dd>
-            {{ formatCurrency(visibleForecastResult.projectedCostAmount) }}
-          </dd>
-        </div>
-      </dl>
-    </el-card>
+    </div>
   </section>
 </template>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import { computed, onMounted, ref } from 'vue'
@@ -7,8 +10,7 @@ import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
+
 import {
   changePassword,
   generateRecoveryCode,
@@ -170,99 +172,87 @@ function date(value: string) {
     minute: '2-digit',
   }).format(new Date(value))
 }
-</script>
 
+type SessionRow = (typeof sessions.value)[number]
+</script>
 <template>
-  <section class="pc-page account-settings-page" aria-label="隐私与安全">
-    <PageHeader title="隐私与安全" back-to="/profile" prefer-back-to>
+  <section class="desktop-workspace">
+    <PageHeader title="隐私与安全">
       <template #right>
-        <CommonHeaderRefreshButton
-          label="刷新安全设置"
-          :loading="loading"
-          @click="load"
-        />
+        <el-button :loading="loading" @click="load">刷新</el-button>
+        <el-button
+          v-if="otherSessions.length"
+          :disabled="loading"
+          @click="open('revoke')"
+        >
+          退出其他设备
+        </el-button>
       </template>
     </PageHeader>
-    <div class="settings-content">
-      <p v-if="pageError" class="security-error" role="alert">
-        {{ pageError }}
-      </p>
-      <el-card class="pc-record-card settings-card settings-row" shadow="never">
-        <div>
-          <h2>登录密码</h2>
-          <p>修改后所有设备需重新登录</p>
-        </div>
-        <CommonButton size="sm" variant="secondary" @click="open('password')">
-          修改
-        </CommonButton>
-      </el-card>
-      <el-card class="pc-record-card settings-card settings-row" shadow="never">
-        <div>
-          <h2>账号恢复码</h2>
-          <p>
-            {{
-              recovery.configured
-                ? '已设置，可用于找回密码'
-                : '未设置，忘记密码前请先保存恢复码'
-            }}
-          </p>
-        </div>
-        <CommonButton
-          size="sm"
-          variant="secondary"
-          :disabled="loading || !!pageError"
-          @click="open('recovery')"
-        >
-          {{ recovery.configured ? '重新生成' : '生成' }}
-        </CommonButton>
-      </el-card>
-      <el-card class="pc-record-card settings-card" shadow="never">
-        <div class="settings-heading">
-          <h2>登录设备</h2>
-          <CommonButton
-            v-if="otherSessions.length"
-            size="sm"
-            variant="secondary"
-            :disabled="loading"
-            @click="open('revoke')"
-          >
-            退出其他设备
-          </CommonButton>
-        </div>
-        <CommonLoading v-if="loading" text="正在加载登录设备..." />
-        <div v-else class="pc-grid session-list">
-          <el-card
-            v-for="session in sessions"
-            :key="session.id"
-            class="pc-record-card settings-row session-row"
-            shadow="never"
-          >
-            <div>
-              <strong class="session-title">
-                {{ session.deviceName }}
-                <span v-if="session.current" class="current-device">
-                  当前设备
-                </span>
-              </strong>
-              <p>最近活动 {{ date(session.lastSeenAt) }}</p>
-              <p>
-                登录于 {{ date(session.createdAt) }} · {{ session.ipAddress }}
-              </p>
-            </div>
-            <CommonButton
-              size="sm"
-              variant="secondary"
-              @click="open('revoke', session)"
-            >
-              退出
-            </CommonButton>
-          </el-card>
-          <p v-if="!sessions.length && !pageError" class="settings-muted">
-            暂无有效登录设备
-          </p>
-        </div>
-      </el-card>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <div class="desktop-columns">
+      <PagePanel title="登录密码">
+        <p class="desktop-note">修改密码后所有设备需重新登录。</p>
+        <el-button @click="open('password')">修改密码</el-button>
+      </PagePanel>
+      <PagePanel title="账号恢复码">
+        <p class="desktop-note">
+          {{ recovery.configured ? '已设置恢复码' : '尚未设置恢复码' }}
+        </p>
+        <el-button :disabled="loading || !!pageError" @click="open('recovery')">
+          {{ recovery.configured ? '重新生成' : '生成恢复码' }}
+        </el-button>
+      </PagePanel>
     </div>
+    <DesktopTable :rows="sessions" :loading="loading" title="登录设备">
+      <el-table-column
+        prop="deviceName"
+        label="设备"
+        min-width="220"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {SessionRow} -->
+      <el-table-column label="状态" min-width="150">
+        <template #default="{ row }: { row: SessionRow }">
+          <el-tag v-if="row.current" type="success">当前设备</el-tag>
+          <span v-else>有效会话</span>
+        </template>
+      </el-table-column>
+      <el-table-column
+        prop="ipAddress"
+        label="IP 地址"
+        min-width="150"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {SessionRow} -->
+      <el-table-column label="登录时间" min-width="190">
+        <template #default="{ row }: { row: SessionRow }">
+          {{ date(row.createdAt) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {SessionRow} -->
+      <el-table-column label="最近活动" min-width="190">
+        <template #default="{ row }: { row: SessionRow }">
+          {{ date(row.lastSeenAt) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {SessionRow} -->
+      <el-table-column fixed="right" label="操作" width="150">
+        <template #default="{ row }: { row: SessionRow }">
+          <el-button link type="danger" @click="open('revoke', row)">
+            退出
+          </el-button>
+        </template>
+      </el-table-column>
+    </DesktopTable>
     <CommonModal
       v-model="modalOpen"
       :title="modalTitle"

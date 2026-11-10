@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -7,6 +11,7 @@ import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
+import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
@@ -26,10 +31,8 @@ import {
   formatMetric,
   formatStartTime,
   itineraryDescription,
-  overviewExpenseRowAmount,
   routeCountText,
   routeTransferSummary,
-  typeTone,
 } from './travelFormat'
 import { openOverviewNavigation } from './travelNavigation'
 import {
@@ -341,19 +344,6 @@ const overviewMapFocusTargets = computed<FocusMapTarget[]>(() => {
   )
 })
 
-const summaryMeta = computed(() => {
-  if (!detail.value) {
-    return '暂无旅行信息'
-  }
-  const start = formatDate(detail.value.startDate)
-  const end = formatDate(detail.value.endDate)
-  const travelerCount =
-    detail.value.overview?.travelerCount ??
-    Math.max((detail.value.companions?.length ?? 0) + 1, 1)
-  const datePart = start && end ? `${start} - ${end}` : '日期待补充'
-  return `${datePart} · ${resolvedDayCount.value} 天 · ${travelerCount} 人同行`
-})
-
 const currentDayOverviewEntries = computed(() =>
   orderedDays.value.map((day) => ({
     ...day,
@@ -367,15 +357,6 @@ const currentDayOverviewEntries = computed(() =>
   })),
 )
 
-const overviewDateItems = computed(() => [
-  { key: 0, dayIndex: 0, label: '全部' },
-  ...routeDateItems.value.map((item) => ({
-    key: item.key,
-    dayIndex: item.dayIndex,
-    label: item.label,
-  })),
-])
-
 const filteredOverviewEntries = computed(() => {
   if (activeOverviewDayIndex.value === 0) {
     return currentDayOverviewEntries.value
@@ -384,20 +365,6 @@ const filteredOverviewEntries = computed(() => {
     (day) => day.dayIndex === activeOverviewDayIndex.value,
   )
 })
-
-const overviewExpenses = computed(() => detail.value?.expenses ?? [])
-
-const hasOverviewExpenseData = computed(() => {
-  if (!detail.value) {
-    return false
-  }
-
-  const expenseCount =
-    detail.value.overview?.expenseCount ?? detail.value.expenses.length
-  return expenseCount > 0
-})
-
-const hasOverviewExpenseRows = computed(() => overviewExpenses.value.length > 0)
 
 // ---------- 行程编辑弹窗 / 地点搜索 / 路程计算（见 useTravelPlanEditor） ----------
 
@@ -476,11 +443,6 @@ function setTab(tab: DetailTab) {
 
 function setDay(dayIndex: number) {
   activeDayIndex.value = dayIndex
-  void refreshMapForActiveTab()
-}
-
-function setOverviewDay(dayIndex: number) {
-  activeOverviewDayIndex.value = dayIndex
   void refreshMapForActiveTab()
 }
 
@@ -636,441 +598,308 @@ watch(
   },
   { immediate: true },
 )
-</script>
 
+type ItineraryRow = (typeof displayedCurrentDayItineraries.value)[number]
+type ExpenseRow = NonNullable<typeof currentDay.value>['expenses'][number]
+</script>
 <template>
-  <section class="pc-page travel-detail-page">
-    <PageHeader
-      :title="displayedHeaderTitle"
-      back-to="/tools/travel-plans"
-      back-label="返回旅行列表"
-    >
+  <section class="desktop-workspace desktop-travel">
+    <PageHeader :title="displayedHeaderTitle">
       <template #right>
-        <div class="header-action-group">
-          <el-button
-            class="header-action-button"
-            native-type="button"
-            @click="goToEditPage"
-          >
-            {{
-              activeTab === 'overview'
-                ? '修改旅行'
-                : isEditingCurrentPage
-                  ? '完成'
-                  : '编辑'
-            }}
-          </el-button>
-        </div>
+        <el-button
+          @click="
+            () => {
+              setTab('overview')
+              goToEditPage()
+            }
+          "
+        >
+          修改旅行
+        </el-button>
       </template>
     </PageHeader>
-    <div class="detail-segment" role="tablist" aria-label="旅行详情分页">
-      <el-button
-        :class="['segment-button', { active: activeTab === 'overview' }]"
-        native-type="button"
-        @click="setTab('overview')"
+    <el-alert
+      v-if="loadError"
+      :title="loadError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <CommonLoading v-if="isLoading" />
+    <template v-if="detail">
+      <MetricStrip
+        :items="[
+          { label: '旅行天数', value: resolvedDayCount },
+          {
+            label: '总费用',
+            value: formatMetric(detail.overview?.totalExpenseAmount),
+          },
+          {
+            label: '人均费用',
+            value: formatMetric(detail.overview?.perPersonExpenseAmount),
+          },
+          { label: '同行人数', value: detail.overview?.travelerCount ?? 1 },
+        ]"
+      />
+      <el-tabs
+        :model-value="activeTab"
+        class="desktop-tabs"
+        @tab-change="setTab($event as DetailTab)"
       >
-        概览
-      </el-button>
-      <el-button
-        :class="['segment-button', { active: activeTab === 'route' }]"
-        native-type="button"
-        @click="setTab('route')"
-      >
-        线路
-      </el-button>
-      <el-button
-        :class="['segment-button', { active: activeTab === 'expense' }]"
-        native-type="button"
-        @click="setTab('expense')"
-      >
-        费用
-      </el-button>
-    </div>
-    <div v-if="isLoading" class="detail-empty">正在加载旅行详情...</div>
-    <div v-else-if="!detail" class="detail-empty">
-      <strong>没有获取到旅行详情</strong>
-      <span>{{ loadError || '请返回列表后重新进入。' }}</span>
-    </div>
-    <el-card
-      v-else-if="activeTab === 'overview'"
-      class="pc-record-card overview-panel"
-      shadow="never"
-    >
-      <div class="overview-summary-bar">
-        <span>{{ summaryMeta }}</span>
-      </div>
-      <el-card
-        class="pc-record-card route-map-card overview-map-card"
-        shadow="never"
-      >
-        <div class="route-map-label route-map-label-left">全程地图</div>
-        <div class="route-map-label route-map-label-center">
-          {{ routeCountText(overviewMapPoints.length) }}
-        </div>
-        <svg
-          class="route-map-svg-fallback"
-          viewBox="0 0 320 150"
-          aria-hidden="true"
-        >
-          <path
-            d="M18 96C48 60 84 36 118 54C138 64 164 102 198 90C242 74 262 26 301 34"
-            fill="none"
-            stroke="#2563EB"
-            stroke-width="4"
-            stroke-linecap="round"
-          />
-          <circle cx="18" cy="96" r="4" fill="#2563EB" />
-          <circle cx="118" cy="54" r="4" fill="#22C55E" />
-          <circle cx="198" cy="90" r="4" fill="#FB923C" />
-          <circle cx="301" cy="34" r="4" fill="#8B5CF6" />
-        </svg>
-        <div ref="overviewMapRef" class="route-map-canvas"></div>
-        <span v-if="overviewMapMessage" class="route-map-empty-message">
-          {{ overviewMapMessage }}
-        </span>
-        <span class="route-map-spot route-map-spot-right">
-          {{ overviewMapLastSpot() }}
-        </span>
-      </el-card>
-      <div class="day-editor-bar">
-        <div class="day-tab-row">
-          <el-button
-            v-for="item in overviewDateItems"
-            :key="item.key"
-            :class="[
-              'day-tab',
-              { active: activeOverviewDayIndex === item.dayIndex },
-            ]"
-            native-type="button"
-            @click="setOverviewDay(item.dayIndex)"
-            class="pc-content-button"
-          >
-            {{ item.label }}
-          </el-button>
-        </div>
-      </div>
-      <div class="pc-grid overview-day-list">
-        <el-card
-          v-for="day in filteredOverviewEntries"
-          :key="day.id"
-          class="pc-record-card overview-day"
-          shadow="never"
-        >
-          <h3>Day {{ day.dayIndex }}</h3>
-          <div v-if="day.entries.length > 0" class="overview-timeline">
-            <template
-              v-for="(entry, index) in day.entries"
-              :key="`${day.id}-${index}`"
+        <el-tab-pane label="旅行概览" name="overview">
+          <div v-if="activeTab === 'overview'" class="desktop-columns">
+            <el-card
+              class="pc-record-card route-map-card overview-map-card"
+              shadow="never"
             >
-              <div v-if="entry.kind === 'item'" class="timeline-row">
-                <div class="timeline-rail">
-                  <span :class="['rail-top', { hidden: index === 0 }]"></span>
-                  <span :class="['rail-dot', `tone-${entry.tone}`]"></span>
-                  <span
-                    :class="[
-                      'rail-bottom',
-                      { hidden: index === day.entries.length - 1 },
-                    ]"
-                  ></span>
-                </div>
+              <div class="route-map-label route-map-label-left">全程地图</div>
+              <div class="route-map-label route-map-label-center">
+                {{ routeCountText(overviewMapPoints.length) }}
+              </div>
+
+              <div ref="overviewMapRef" class="route-map-canvas"></div>
+              <span v-if="overviewMapMessage" class="route-map-empty-message">
+                {{ overviewMapMessage }}
+              </span>
+              <span class="route-map-spot route-map-spot-right">
+                {{ overviewMapLastSpot() }}
+              </span>
+            </el-card>
+            <PagePanel title="每日行程">
+              <div class="pc-grid overview-day-list">
                 <el-card
-                  :class="['timeline-card', `tone-${entry.tone}`]"
-                  role="button"
-                  tabindex="0"
-                  @click="focusOverviewEntry(entry.title)"
-                  @keydown.enter.prevent="focusOverviewEntry(entry.title)"
-                  @keydown.space.prevent="focusOverviewEntry(entry.title)"
+                  v-for="day in filteredOverviewEntries"
+                  :key="day.id"
+                  class="pc-record-card overview-day"
                   shadow="never"
-                  class="pc-record-card"
                 >
-                  <h4>{{ entry.title }}</h4>
-                  <p>{{ entry.description }}</p>
+                  <h3>Day {{ day.dayIndex }}</h3>
+                  <div v-if="day.entries.length > 0" class="overview-timeline">
+                    <template
+                      v-for="(entry, index) in day.entries"
+                      :key="`${day.id}-${index}`"
+                    >
+                      <div v-if="entry.kind === 'item'" class="timeline-row">
+                        <div class="timeline-rail">
+                          <span
+                            :class="['rail-top', { hidden: index === 0 }]"
+                          ></span>
+                          <span
+                            :class="['rail-dot', `tone-${entry.tone}`]"
+                          ></span>
+                          <span
+                            :class="[
+                              'rail-bottom',
+                              { hidden: index === day.entries.length - 1 },
+                            ]"
+                          ></span>
+                        </div>
+                        <el-card
+                          :class="['timeline-card', `tone-${entry.tone}`]"
+                          role="button"
+                          tabindex="0"
+                          @click="focusOverviewEntry(entry.title)"
+                          @keydown.enter.prevent="
+                            focusOverviewEntry(entry.title)
+                          "
+                          @keydown.space.prevent="
+                            focusOverviewEntry(entry.title)
+                          "
+                          shadow="never"
+                          class="pc-record-card"
+                        >
+                          <h4>{{ entry.title }}</h4>
+                          <p>{{ entry.description }}</p>
+                        </el-card>
+                      </div>
+                      <div v-else class="timeline-transfer-row">
+                        <div class="timeline-rail transfer-only">
+                          <span class="rail-transfer"></span>
+                        </div>
+                        <div class="timeline-transfer-text">
+                          <span>{{ entry.text }}</span>
+                          <el-button
+                            v-if="entry.navigation"
+                            native-type="button"
+                            class="timeline-transfer-action"
+                            @click="openOverviewNavigation(entry)"
+                          >
+                            导航
+                          </el-button>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                  <div v-else class="day-empty-text">
+                    这一天还没有添加行程。
+                  </div>
                 </el-card>
               </div>
-              <div v-else class="timeline-transfer-row">
-                <div class="timeline-rail transfer-only">
-                  <span class="rail-transfer"></span>
-                </div>
-                <div class="timeline-transfer-text">
-                  <span>{{ entry.text }}</span>
-                  <el-button
-                    v-if="entry.navigation"
-                    native-type="button"
-                    class="timeline-transfer-action"
-                    @click="openOverviewNavigation(entry)"
-                  >
-                    导航
-                  </el-button>
-                </div>
-              </div>
-            </template>
+            </PagePanel>
           </div>
-          <div v-else class="day-empty-text">这一天还没有添加行程。</div>
-        </el-card>
-      </div>
-      <section v-if="hasOverviewExpenseData" class="overview-expense-section">
-        <div class="overview-expense-head"><span>费用概览</span></div>
-        <el-card
-          class="pc-record-card overview-expense-summary-card"
-          shadow="never"
-        >
-          <div class="overview-expense-metrics">
-            <div class="overview-expense-metric">
-              <span>总花销</span>
-              <strong>
-                {{ formatMetric(detail.overview?.totalExpenseAmount) }}
-              </strong>
-            </div>
-            <div class="overview-expense-metric align-end">
-              <span>个人花销</span>
-              <strong class="accent">
-                {{ formatMetric(detail.overview?.perPersonExpenseAmount) }}
-              </strong>
-            </div>
-          </div>
-          <p class="overview-expense-summary-text">
-            {{ resolvedDayCount }} 天行程共记录
-            {{
-              detail.overview?.expenseCount ?? detail.expenses.length
-            }}
-            笔费用。
-          </p>
-        </el-card>
-        <el-card
-          v-if="hasOverviewExpenseRows"
-          class="pc-record-card overview-expense-card"
-          shadow="never"
-        >
-          <div class="expense-list-head">
-            <span>费用清单</span>
-            <span>{{ `共 ${overviewExpenses.length} 笔` }}</span>
-          </div>
-          <div class="overview-expense-rows">
-            <div
-              v-for="row in overviewExpenses"
-              :key="row.id"
-              class="overview-expense-row"
-            >
-              <div class="overview-expense-left">
-                <strong>{{ row.title }}</strong>
-                <span>{{ expenseNote(row) }}</span>
-              </div>
-              <span class="overview-expense-amount">
-                {{ overviewExpenseRowAmount(row) }}
-              </span>
-            </div>
-          </div>
-        </el-card>
-      </section>
-    </el-card>
-    <el-card
-      v-else-if="activeTab === 'route'"
-      class="pc-record-card route-panel"
-      shadow="never"
-    >
-      <el-card class="pc-record-card route-map-card" shadow="never">
-        <div class="route-map-label route-map-label-left">
-          {{ currentRouteDateLabel || `Day ${activeDayIndex}` }}
-        </div>
-        <div class="route-map-label route-map-label-center">
-          {{ routeCountText(currentDay?.itineraries?.length ?? 0) }}
-        </div>
-        <svg
-          class="route-map-svg-fallback"
-          viewBox="0 0 320 150"
-          aria-hidden="true"
-        >
-          <path
-            d="M18 96C48 60 84 36 118 54C138 64 164 102 198 90C242 74 262 26 301 34"
-            fill="none"
-            stroke="#2563EB"
-            stroke-width="4"
-            stroke-linecap="round"
-          />
-          <circle cx="18" cy="96" r="4" fill="#2563EB" />
-          <circle cx="118" cy="54" r="4" fill="#22C55E" />
-          <circle cx="198" cy="90" r="4" fill="#FB923C" />
-          <circle cx="301" cy="34" r="4" fill="#8B5CF6" />
-        </svg>
-        <div ref="routeMapRef" class="route-map-canvas"></div>
-        <span v-if="routeMapMessage" class="route-map-empty-message">
-          {{ routeMapMessage }}
-        </span>
-        <span class="route-map-spot route-map-spot-right">
-          {{ routeMapLastSpot() }}
-        </span>
-      </el-card>
-      <div class="day-editor-bar">
-        <div class="day-bar-head"><span>日期</span></div>
-        <div class="day-tab-row">
-          <el-button
-            v-for="item in routeDateItems"
-            :key="item.key"
-            :class="['day-tab', { active: activeDayIndex === item.dayIndex }]"
-            native-type="button"
-            @click="setDay(item.dayIndex)"
-            class="pc-content-button"
-          >
-            {{ item.label }}
-          </el-button>
-        </div>
-      </div>
-      <el-card class="pc-record-card route-editor-panel" shadow="never">
-        <div class="route-editor-head">
-          <h3>Day {{ currentDay?.dayIndex || activeDayIndex }} 行程编辑</h3>
-        </div>
-        <div
-          v-if="displayedCurrentDayItineraries.length > 0"
-          class="pc-grid route-editor-list"
-        >
-          <el-card
-            v-for="(item, index) in displayedCurrentDayItineraries"
-            :key="item.id"
-            class="pc-record-card route-editor-item-wrap"
-            shadow="never"
-          >
-            <div
-              v-if="index > 0 && routeTransferSummary(item)"
-              class="route-transfer-line"
-            >
-              <span>{{ routeTransferSummary(item) }}</span>
-            </div>
-            <el-card class="pc-record-card route-editor-card" shadow="never">
-              <span :class="['order-badge', `tone-${typeTone(item.type)}`]">
-                {{ index + 1 }}
-              </span>
-              <div class="route-editor-content">
-                <el-button
-                  native-type="button"
-                  class="route-editor-title-button"
-                  @click="focusRouteEntry(item)"
-                >
-                  {{ item.title }}
-                </el-button>
-                <p>
-                  {{ formatStartTime(item.startTime) }} ·
-                  {{ itineraryDescription(item) }}
-                </p>
-              </div>
-              <div
-                v-if="isEditingCurrentPage && item.id > 0"
-                class="pc-toolbar route-editor-actions"
+        </el-tab-pane>
+        <el-tab-pane label="行程安排" name="route">
+          <div v-if="activeTab === 'route'" class="desktop-results">
+            <div class="desktop-filter-bar">
+              <el-select
+                :model-value="activeDayIndex"
+                aria-label="旅行日期"
+                @update:model-value="setDay"
               >
-                <el-button
-                  class="mini-outline-button"
-                  native-type="button"
-                  @click="
-                    openEditItemModal(
-                      itineraryEditTarget(
-                        currentDay!.id,
-                        currentDay!.dayIndex,
-                        item,
-                      ),
-                    )
-                  "
-                >
-                  修改
-                </el-button>
-                <el-button
-                  class="mini-outline-button muted"
-                  native-type="button"
-                  @click="
-                    openDeleteItemModal(
-                      itineraryEditTarget(
-                        currentDay!.id,
-                        currentDay!.dayIndex,
-                        item,
-                      ),
-                    )
-                  "
-                >
-                  删除
-                </el-button>
+                <el-option
+                  v-for="item in routeDateItems"
+                  :key="item.key"
+                  :label="item.label"
+                  :value="item.dayIndex"
+                />
+              </el-select>
+              <el-button type="primary" @click="toggleAddModal">
+                添加行程
+              </el-button>
+            </div>
+            <el-card class="pc-record-card route-map-card" shadow="never">
+              <div class="route-map-label route-map-label-left">
+                {{ currentRouteDateLabel || `Day ${activeDayIndex}` }}
               </div>
+              <div class="route-map-label route-map-label-center">
+                {{ routeCountText(currentDay?.itineraries?.length ?? 0) }}
+              </div>
+
+              <div ref="routeMapRef" class="route-map-canvas"></div>
+              <span v-if="routeMapMessage" class="route-map-empty-message">
+                {{ routeMapMessage }}
+              </span>
+              <span class="route-map-spot route-map-spot-right">
+                {{ routeMapLastSpot() }}
+              </span>
             </el-card>
-          </el-card>
-        </div>
-        <div v-else class="route-empty-text">这一天还没有添加行程。</div>
-      </el-card>
-      <el-button
-        class="add-action-button"
-        native-type="button"
-        @click="toggleAddModal"
-      >
-        + 添加当天行程
-      </el-button>
-    </el-card>
-    <el-card v-else class="pc-record-card expense-panel" shadow="never">
-      <div class="expense-summary-wrap">
-        <h4>费用总览</h4>
-        <div class="expense-metrics">
-          <el-card class="pc-record-card metric-card" shadow="never">
-            <span>总金额</span>
-            <strong>
-              {{ formatMetric(detail.overview?.totalExpenseAmount) }}
-            </strong>
-          </el-card>
-          <el-card class="pc-record-card metric-card" shadow="never">
-            <span>人均</span>
-            <strong>
-              {{ formatMetric(detail.overview?.perPersonExpenseAmount) }}
-            </strong>
-          </el-card>
-        </div>
-        <p>
-          {{ resolvedDayCount }} 天行程共记录
-          {{
-            detail.overview?.expenseCount ?? detail.expenses.length
-          }}
-          笔费用，默认按 {{ detail.overview?.travelerCount ?? 1 }} 人计算。
-        </p>
-      </div>
-      <div class="day-editor-bar compact">
-        <div class="day-tab-row">
-          <el-button
-            v-for="item in routeDateItems"
-            :key="item.key"
-            :class="['day-tab', { active: activeDayIndex === item.dayIndex }]"
-            native-type="button"
-            @click="setDay(item.dayIndex)"
-            class="pc-content-button"
+            <DesktopTable
+              :rows="displayedCurrentDayItineraries"
+              :loading="false"
+              title="当天行程"
+            >
+              <el-table-column
+                prop="title"
+                label="地点 / 活动"
+                min-width="240"
+                sortable="custom"
+                show-overflow-tooltip
+              />
+              <!-- @vue-generic {ItineraryRow} -->
+              <el-table-column label="时间" min-width="150">
+                <template #default="{ row }: { row: ItineraryRow }">
+                  {{ formatStartTime(row.startTime) }}
+                </template>
+              </el-table-column>
+              <!-- @vue-generic {ItineraryRow} -->
+              <el-table-column label="安排" min-width="220">
+                <template #default="{ row }: { row: ItineraryRow }">
+                  {{ itineraryDescription(row) }}
+                </template>
+              </el-table-column>
+              <!-- @vue-generic {ItineraryRow} -->
+              <el-table-column label="交通" min-width="180">
+                <template #default="{ row }: { row: ItineraryRow }">
+                  {{ routeTransferSummary(row) }}
+                </template>
+              </el-table-column>
+              <!-- @vue-generic {ItineraryRow} -->
+              <el-table-column fixed="right" label="操作" width="190">
+                <template #default="{ row }: { row: ItineraryRow }">
+                  <el-button link type="primary" @click="focusRouteEntry(row)">
+                    定位
+                  </el-button>
+                  <el-button
+                    v-if="row.id > 0"
+                    link
+                    type="primary"
+                    @click="
+                      openEditItemModal(
+                        itineraryEditTarget(
+                          currentDay!.id,
+                          currentDay!.dayIndex,
+                          row,
+                        ),
+                      )
+                    "
+                  >
+                    修改
+                  </el-button>
+                  <el-button
+                    v-if="row.id > 0"
+                    link
+                    type="danger"
+                    @click="
+                      openDeleteItemModal(
+                        itineraryEditTarget(
+                          currentDay!.id,
+                          currentDay!.dayIndex,
+                          row,
+                        ),
+                      )
+                    "
+                  >
+                    删除
+                  </el-button>
+                </template>
+              </el-table-column>
+            </DesktopTable>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="费用清单" name="expense">
+          <div class="desktop-filter-bar">
+            <el-select
+              :model-value="activeDayIndex"
+              aria-label="费用日期"
+              @update:model-value="setDay"
+            >
+              <el-option
+                v-for="item in routeDateItems"
+                :key="item.key"
+                :label="item.label"
+                :value="item.dayIndex"
+              />
+            </el-select>
+            <el-button type="primary" @click="openCreateExpenseModal">
+              添加费用
+            </el-button>
+          </div>
+          <DesktopTable
+            :rows="currentDay?.expenses || []"
+            :loading="false"
+            title="旅行费用"
           >
-            {{ item.label }}
-          </el-button>
-        </div>
-      </div>
-      <div
-        v-if="(currentDay?.expenses?.length ?? 0) > 0"
-        class="pc-grid expense-editor-list"
-      >
-        <el-card
-          v-for="item in currentDay?.expenses ?? []"
-          :key="item.id"
-          class="pc-record-card expense-editor-card"
-          shadow="never"
-        >
-          <div class="pc-toolbar expense-card-top">
-            <div class="expense-card-left">
-              <strong>{{ item.title }}</strong>
-              <span>{{ expenseNote(item) }}</span>
-            </div>
-            <div class="expense-card-right">
-              <span class="expense-card-amount">
-                {{ expenseAmountText(item.amount) }}
-              </span>
-              <div
-                v-if="isEditingCurrentPage"
-                class="pc-toolbar expense-card-actions"
-              >
+            <el-table-column
+              prop="title"
+              label="费用项目"
+              min-width="240"
+              sortable="custom"
+              show-overflow-tooltip
+            />
+            <!-- @vue-generic {ExpenseRow} -->
+            <el-table-column label="金额" min-width="150">
+              <template #default="{ row }: { row: ExpenseRow }">
+                {{ expenseAmountText(row.amount) }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {ExpenseRow} -->
+            <el-table-column label="备注" min-width="260">
+              <template #default="{ row }: { row: ExpenseRow }">
+                {{ expenseNote(row) }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {ExpenseRow} -->
+            <el-table-column fixed="right" label="操作" width="160">
+              <template #default="{ row }: { row: ExpenseRow }">
                 <el-button
-                  class="mini-outline-button"
-                  native-type="button"
+                  link
+                  type="primary"
                   @click="
                     openEditItemModal(
                       expenseEditTarget(
                         currentDay!.id,
                         currentDay!.dayIndex,
-                        item,
+                        row,
                       ),
                     )
                   "
@@ -1078,34 +907,26 @@ watch(
                   修改
                 </el-button>
                 <el-button
-                  class="mini-outline-button muted"
-                  native-type="button"
+                  link
+                  type="danger"
                   @click="
                     openDeleteItemModal(
                       expenseEditTarget(
                         currentDay!.id,
                         currentDay!.dayIndex,
-                        item,
+                        row,
                       ),
                     )
                   "
                 >
                   删除
                 </el-button>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </div>
-      <div v-else class="detail-empty inline">这一天还没有费用记录。</div>
-      <el-button
-        class="add-action-button"
-        native-type="button"
-        @click="openCreateExpenseModal"
-      >
-        + 为 Day {{ currentDay?.dayIndex || activeDayIndex }} 增加费用
-      </el-button>
-    </el-card>
+              </template>
+            </el-table-column>
+          </DesktopTable>
+        </el-tab-pane>
+      </el-tabs>
+    </template>
     <CommonModal
       v-model="showAddModal"
       title="添加行程"
@@ -1427,10 +1248,10 @@ watch(
         </div>
       </template>
     </CommonModal>
+    <CommonFeedback
+      v-model="showFeedbackModal"
+      :message="feedbackMessage"
+      :type="feedbackType"
+    />
   </section>
-  <CommonFeedback
-    v-model="showFeedbackModal"
-    :message="feedbackMessage"
-    :type="feedbackType"
-  />
 </template>

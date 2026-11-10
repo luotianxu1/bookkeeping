@@ -1,14 +1,16 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import CommonEmpty from '@/business/components/common/CommonEmpty/index.vue'
+
 import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import {
@@ -324,7 +326,7 @@ async function remove() {
 type DesktopRow = (typeof visibleGoals.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="储蓄目标">
       <template #right>
         <el-button :loading="list.loading.value" @click="list.run">
@@ -346,7 +348,13 @@ type DesktopRow = (typeof visibleGoals.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="visibleGoals" :loading="list.loading.value">
+    <DesktopTable
+      title="储蓄计划"
+      searchable
+      search-placeholder="目标名称 / 账户"
+      :rows="visibleGoals"
+      :loading="list.loading.value"
+    >
       <template #toolbar>
         <SegmentedControl
           v-model="selectedFilter"
@@ -358,6 +366,7 @@ type DesktopRow = (typeof visibleGoals.value)[number]
       <el-table-column
         label="目标"
         prop="name"
+        sortable="custom"
         min-width="170"
         show-overflow-tooltip
       />
@@ -365,6 +374,7 @@ type DesktopRow = (typeof visibleGoals.value)[number]
       <el-table-column
         label="关联账户"
         prop="accountName"
+        sortable="custom"
         min-width="160"
         show-overflow-tooltip
       />
@@ -384,11 +394,9 @@ type DesktopRow = (typeof visibleGoals.value)[number]
       <el-table-column label="进度" min-width="150">
         <template #default="{ row }: { row: DesktopRow }">
           <el-progress
+            :format="formatPercentage"
             :percentage="
-              Math.min(
-                100,
-                Math.round((row.currentAmount / row.targetAmount) * 100),
-              )
+              Math.min(100, (row.currentAmount / row.targetAmount) * 100)
             "
           />
         </template>
@@ -397,6 +405,7 @@ type DesktopRow = (typeof visibleGoals.value)[number]
       <el-table-column
         label="截止日期"
         prop="targetDate"
+        sortable="custom"
         min-width="130"
         show-overflow-tooltip
       />

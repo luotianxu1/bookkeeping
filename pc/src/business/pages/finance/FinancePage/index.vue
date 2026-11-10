@@ -1,4 +1,12 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import CashFlowChart from '@/business/components/CashFlowChart.vue'
+import TransactionTable from '@/business/components/TransactionTable.vue'
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import PageHeader from '@/business/components/common/PageHeader/index.vue'
+
 import { formatAmount } from '@/business/utils/format'
 // 财务首页：组合资产总览、统计入口和收支明细列表。
 import { computed, onMounted, ref } from 'vue'
@@ -12,17 +20,14 @@ import {
   type Transaction,
 } from '@/business/api/modules/finance'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonEmpty from '@/business/components/common/CommonEmpty/index.vue'
+
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonSkeleton from '@/business/components/common/CommonSkeleton/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
 import { buildTransactionDayGroups } from '@/business/utils/transaction-day-groups'
 import type { Transaction as DayTransaction } from '@/business/types/finance'
-import AssetOverviewCard from '../components/AssetOverviewCard/index.vue'
-import StatsEntry from '../components/StatsEntry/index.vue'
-import TransactionDayCard from '../components/TransactionDayCard/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import type { FinanceOverview } from '@/business/types/finance'
 import { getErrorMessage } from '@/business/api/request'
 
@@ -188,7 +193,7 @@ function updateOverview(
     budgetUsageLabel:
       budgetAmount > 0
         ? `已用 ${formatPercent(budgetUsagePercent)}`
-        : '已用 0%',
+        : '已用 0.0%',
     budgetUsagePercent:
       budgetAmount > 0 ? Math.min(Math.max(budgetUsagePercent, 0), 100) : 0,
     isBudgetExceeded,
@@ -235,10 +240,7 @@ function isWithinRecentWeek(value: string) {
 }
 
 function formatPercent(value: number) {
-  return `${new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  }).format(value)}%`
+  return formatPercentage(value)
 }
 
 function openDeleteConfirm(transaction: DayTransaction) {
@@ -288,62 +290,93 @@ function showFeedback(message: string, type: 'success' | 'error') {
   feedbackType.value = type
   showFeedbackModal.value = true
 }
-</script>
 
+const dashboardMetrics = computed(() => [
+  { label: '总资产', value: overview.value.totalAssets || '—' },
+  {
+    label: '本月收入',
+    value: overview.value.monthlyIncome.replace('收入 ', ''),
+    tone: 'success',
+  },
+  {
+    label: '本月净支出',
+    value: overview.value.monthlyExpense.replace('支出 ', ''),
+  },
+  {
+    label: '本月结余',
+    value: overview.value.monthlyBalance.replace('当月结余 ', ''),
+  },
+])
+</script>
 <template>
-  <section class="pc-page finance-home-page stagger-in" aria-label="财务首页">
+  <section class="desktop-workspace">
+    <PageHeader title="财务总览">
+      <template #right>
+        <el-button
+          :loading="isLoadingTransactions"
+          @click="loadCashTransactions"
+        >
+          刷新
+        </el-button>
+        <el-button type="primary" @click="openExpenseEntryPage">
+          记一笔
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="transactionListError"
+      :title="transactionListError"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button link type="primary" @click="loadCashTransactions">
+        重试
+      </el-button>
+    </el-alert>
+    <MetricStrip :items="dashboardMetrics" />
+    <div class="desktop-columns dashboard-columns">
+      <PagePanel title="现金收支 · 近两周">
+        <CashFlowChart :rows="transactions" />
+      </PagePanel>
+      <PagePanel title="本月预算">
+        <div class="budget-focus">
+          <el-progress
+            :format="formatPercentage"
+            type="dashboard"
+            :percentage="overview.budgetUsagePercent"
+            :status="overview.isBudgetExceeded ? 'exception' : undefined"
+            :width="150"
+          />
+          <strong>{{ overview.budget }}</strong>
+          <span>{{ overview.budgetUsageLabel }}</span>
+        </div>
+        <template #actions>
+          <el-button text @click="router.push('/finance/budgets')">
+            管理预算
+          </el-button>
+        </template>
+      </PagePanel>
+    </div>
+    <TransactionTable
+      :rows="dayGroups.flatMap((group) => group.transactions)"
+      :loading="isLoadingTransactions"
+      title="近七日收支"
+      show-delete
+      :deleting-id="deletingId"
+      @edit="openEditTransaction"
+      @delete="openDeleteConfirm"
+    />
+    <div class="desktop-bottom-actions">
+      <el-button @click="router.push('/finance/transactions')">
+        查看全部流水
+      </el-button>
+    </div>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
       :type="feedbackType"
     />
-    <AssetOverviewCard :overview="overview" />
-    <section class="feature-block" aria-label="更多功能">
-      <header class="feature-header">
-        <strong>更多功能</strong>
-        <RouterLink
-          class="feature-link"
-          to="/finance/more-features"
-          aria-label="进入更多功能"
-        >
-          >
-        </RouterLink>
-      </header>
-      <StatsEntry />
-    </section>
-    <section class="records" aria-label="收支明细">
-      <p
-        v-if="transactionListError"
-        class="records-message records-message-error"
-      >
-        {{ transactionListError }}
-      </p>
-      <CommonSkeleton
-        v-else-if="isLoadingTransactions"
-        variant="list"
-        :rows="3"
-      />
-      <CommonEmpty
-        v-else-if="dayGroups.length === 0"
-        title="暂无收支记录"
-        description="本月现金账户还没有新记录，记一笔开始管理吧。"
-        action-text="记一笔"
-        @action="openExpenseEntryPage()"
-      />
-      <template v-else>
-        <TransactionDayCard
-          v-for="group in dayGroups"
-          :key="group.date"
-          :group="group"
-          summary-mode="stacked"
-          show-delete
-          :deleting-id="deletingId"
-          @edit="openEditTransaction"
-          @delete="openDeleteConfirm"
-        />
-      </template>
-    </section>
-    <FloatingAddButton aria-label="新增记账" @click="openExpenseEntryPage" />
     <CommonModal
       v-model="showDeleteConfirmModal"
       title="确认删除"

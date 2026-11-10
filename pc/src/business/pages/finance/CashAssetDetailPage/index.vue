@@ -1,18 +1,22 @@
 <script setup lang="ts">
+import TransactionTable from '@/business/components/TransactionTable.vue'
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+
 import { formatAmount } from '@/business/utils/format'
 // 现金资产详情页：展示单个现金账户的余额与收支记录。
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import {
   deleteTransaction,
   getAccount,
@@ -30,7 +34,7 @@ import {
 } from '@/business/data/account-icons'
 import { buildTransactionDayGroups } from '@/business/utils/transaction-day-groups'
 import type { DayGroup, Transaction } from '@/business/types/finance'
-import TransactionDayCard from '../components/TransactionDayCard/index.vue'
+
 import { getErrorMessage } from '@/business/api/request'
 
 const CASH_TRANSACTION_PAGE_SIZE = 50
@@ -65,7 +69,7 @@ const setAsCommon = ref(true)
 let requestVersion = 0
 
 const accountId = computed(() => Number(route.params.accountId))
-const historyCountText = computed(() => `共 ${totalItems.value} 条`)
+
 const accountName = computed(() => account.value?.name ?? '现金账户')
 const accountTypeName = computed(() =>
   account.value?.accountTypeName
@@ -83,8 +87,6 @@ const paginationSummary = computed(
   () =>
     `第 ${currentPage.value} / ${totalPages.value} 页，共 ${totalItems.value} 条`,
 )
-const canGoPrevPage = computed(() => currentPage.value > 1)
-const canGoNextPage = computed(() => currentPage.value < totalPages.value)
 
 watch(
   accountId,
@@ -309,22 +311,6 @@ function resetPagination() {
   totalItems.value = 0
 }
 
-function goToPrevPage() {
-  if (!canGoPrevPage.value || isLoadingTransactions.value || isLoading.value) {
-    return
-  }
-  currentPage.value -= 1
-  void loadTransactionPage()
-}
-
-function goToNextPage() {
-  if (!canGoNextPage.value || isLoadingTransactions.value || isLoading.value) {
-    return
-  }
-  currentPage.value += 1
-  void loadTransactionPage()
-}
-
 function openDeleteConfirm(transaction: Transaction) {
   pendingDeleteTransaction.value = transaction
   deleteError.value = ''
@@ -375,123 +361,90 @@ function showFeedback(message: string, type: 'success' | 'error') {
   feedbackType.value = type
   showFeedbackModal.value = true
 }
-</script>
 
+function changeDesktopPage(page: number) {
+  currentPage.value = page
+  void loadTransactionPage()
+}
+</script>
 <template>
-  <section class="pc-page cash-asset-detail-page" aria-label="现金资产详情">
+  <section class="desktop-workspace">
+    <PageHeader :title="accountName">
+      <template #right>
+        <el-button v-if="account" @click="openEditAccountModal">
+          修改账户
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <el-skeleton v-if="isLoading" :rows="6" animated />
+    <template v-else>
+      <MetricStrip
+        :items="[
+          { label: '账户余额', value: accountAmount },
+          { label: '账户类型', value: accountTypeName },
+          { label: '流水笔数', value: totalItems },
+        ]"
+      />
+      <div class="desktop-main-aside">
+        <div>
+          <el-alert
+            v-if="historyError"
+            :title="historyError"
+            type="error"
+            :closable="false"
+            show-icon
+          ></el-alert>
+          <TransactionTable
+            :rows="dayGroups.flatMap((group) => group.transactions)"
+            :loading="isLoadingTransactions"
+            :paginate="false"
+            :show-delete="account?.userId === getStoredCurrentUser()?.id"
+            :deleting-id="deletingId"
+            @edit="openEditTransaction"
+            @delete="openDeleteConfirm"
+          />
+          <div v-if="hasPagination" class="desktop-pagination">
+            <span>{{ paginationSummary }}</span>
+            <el-pagination
+              :current-page="currentPage"
+              :page-size="CASH_TRANSACTION_PAGE_SIZE"
+              :total="totalItems"
+              layout="prev, pager, next"
+              :disabled="isLoadingTransactions"
+              @current-change="changeDesktopPage"
+            />
+          </div>
+        </div>
+        <PagePanel title="账户资料">
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="名称">
+              {{ accountName }}
+            </el-descriptions-item>
+            <el-descriptions-item label="类型">
+              {{ accountTypeName }}
+            </el-descriptions-item>
+            <el-descriptions-item label="币种">
+              {{ account?.currencyCode || 'CNY' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="备注">
+              {{ account?.remark || '—' }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </PagePanel>
+      </div>
+    </template>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
       :type="feedbackType"
     />
-    <header class="cash-asset-detail-header">
-      <PageHeader
-        title="资产详情"
-        back-to="/finance/accounts/cash"
-        back-label="返回现金账户"
-      >
-        <template #right>
-          <CommonHeaderActionButton
-            v-if="account"
-            label="修改现金账户"
-            @click="openEditAccountModal"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-              />
-              <path
-                d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </CommonHeaderActionButton>
-        </template>
-      </PageHeader>
-    </header>
-    <p v-if="pageError" class="cash-asset-message cash-asset-message-error">
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <el-card
-        class="pc-record-card cash-asset-overview-card"
-        aria-label="现金资产总览"
-        shadow="never"
-      >
-        <div class="cash-asset-overview-top">
-          <div class="cash-asset-overview-title">
-            <strong>{{ accountName }}</strong>
-            <span>{{ accountTypeName }}</span>
-          </div>
-        </div>
-        <AmountText
-          tag="p"
-          class="cash-asset-overview-amount"
-          :value="accountAmount"
-        />
-      </el-card>
-      <section class="cash-asset-history-wrap" aria-label="收支记录">
-        <header class="cash-asset-history-head">
-          <strong>收支记录</strong>
-          <span>{{ historyCountText }}</span>
-        </header>
-        <CommonLoading v-if="isLoadingTransactions" />
-        <section v-else class="cash-asset-history-groups">
-          <p
-            v-if="historyError"
-            class="cash-asset-empty cash-asset-empty-error"
-          >
-            {{ historyError }}
-          </p>
-          <p v-else-if="transactions.length === 0" class="cash-asset-empty">
-            暂无收支记录
-          </p>
-          <template v-else>
-            <TransactionDayCard
-              v-for="group in dayGroups"
-              :key="group.date"
-              :group="group"
-              summary-mode="stacked"
-              :show-delete="account?.userId === getStoredCurrentUser()?.id"
-              :deleting-id="deletingId"
-              @edit="openEditTransaction"
-              @delete="openDeleteConfirm"
-            />
-            <div
-              v-if="hasPagination"
-              class="cash-asset-pagination"
-              aria-label="收支记录分页"
-            >
-              <el-button
-                class="cash-asset-pagination-button"
-                native-type="button"
-                :disabled="!canGoPrevPage || isLoadingTransactions"
-                @click="goToPrevPage"
-              >
-                上一页
-              </el-button>
-              <span class="cash-asset-pagination-summary">
-                {{ paginationSummary }}
-              </span>
-              <el-button
-                class="cash-asset-pagination-button"
-                native-type="button"
-                :disabled="!canGoNextPage || isLoadingTransactions"
-                @click="goToNextPage"
-              >
-                下一页
-              </el-button>
-            </div>
-          </template>
-        </section>
-      </section>
-    </template>
     <CommonModal
       v-model="showDeleteConfirmModal"
       title="确认删除"

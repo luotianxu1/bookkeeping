@@ -9,9 +9,9 @@ import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
-import CommonEmpty from '@/business/components/common/CommonEmpty/index.vue'
+
 import CommonDateTimePicker from '@/business/components/common/CommonDateTimePicker/index.vue'
-import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
+
 import {
   getExpenseRecoveries,
   getExpenseRecovery,
@@ -296,15 +296,11 @@ async function cancelPlan() {
     busy.value = false
   }
 }
-function changePage(delta: number) {
-  page.value += delta
-  void load()
-}
 
 type DesktopRow = (typeof items.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="退款与报销">
       <template #right>
         <el-button :loading="loading" @click="load">刷新</el-button>
@@ -345,11 +341,17 @@ type DesktopRow = (typeof items.value)[number]
         ]"
       />
     </div>
-    <DesktopTable :rows="items" :loading="loading">
+    <DesktopTable
+      :paginate="false"
+      title="报销与退款明细"
+      :rows="items"
+      :loading="loading"
+    >
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column
         label="支出"
         prop="title"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />
@@ -387,6 +389,7 @@ type DesktopRow = (typeof items.value)[number]
       <el-table-column
         label="预计报销日期"
         prop="expectedReimbursementDate"
+        sortable="custom"
         min-width="160"
         show-overflow-tooltip
       />
@@ -477,10 +480,11 @@ type DesktopRow = (typeof items.value)[number]
             variant="secondary"
             :disabled="busy"
             @click="
-() => {
-showCancelPlan = true
-              formError = ''
-}"
+              () => {
+                showCancelPlan = true
+                formError = ''
+              }
+            "
           >
             {{ cancelPlanLabel }}
           </CommonButton>
@@ -514,10 +518,11 @@ showCancelPlan = true
             <el-button
               :disabled="busy"
               @click="
-() => {
-undoTarget = receipt
-                formError = ''
-}"
+                () => {
+                  undoTarget = receipt
+                  formError = ''
+                }
+              "
             >
               撤销
             </el-button>

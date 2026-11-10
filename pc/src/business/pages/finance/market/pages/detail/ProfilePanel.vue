@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { formatPercentageText } from '@/business/utils/percentage'
+
 // 公司概况（A股）：资料字段 + 简介/主营业务 + 所属板块，自 DetailPage 抽出。
 import { useRouter } from 'vue-router'
 import type { F10Data } from '@/business/api/modules/market'
@@ -27,7 +29,7 @@ function openSibling(code2: string): void {
       <div v-for="(v, k) in profile.fields" :key="k" class="profile-item">
         <span class="profile-label">{{ k }}</span>
         <span class="profile-value" :class="{ num: /\d/.test(v) }">
-          {{ v }}
+          {{ formatPercentageText(v) }}
         </span>
       </div>
     </div>

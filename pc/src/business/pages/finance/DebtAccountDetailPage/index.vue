@@ -1,15 +1,19 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import {
   createDebtRecord,
   deleteDebtRecord,
@@ -278,13 +282,6 @@ function openAddRecordModal() {
 
 function openRecordDetail(recordId: number) {
   router.push(`/finance/accounts/debt/${accountId.value}/record/${recordId}`)
-}
-
-function handleRecordKeydown(event: KeyboardEvent, recordId: number) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    openRecordDetail(recordId)
-  }
 }
 
 function openEditRecordModal(record: DebtRecord) {
@@ -587,161 +584,120 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
 type DetailTableRow = (typeof topLevelRecords.value)[number]
 </script>
-
 <template>
-  <section class="pc-page debt-account-detail-page" aria-label="债务详情">
+  <section class="desktop-workspace">
+    <PageHeader :title="detailName">
+      <template #right>
+        <el-button type="primary" @click="openAddRecordModal">
+          新增记录
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        { label: '往来净额', value: summaryAmountText },
+        { label: '借入笔数', value: borrowInCount },
+        { label: '借出笔数', value: borrowOutCount },
+        { label: '最近更新', value: latestRecordText },
+      ]"
+    />
+    <div class="desktop-main-aside">
+      <DesktopTable :rows="topLevelRecords" title="往来记录" searchable>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="发生时间" min-width="160">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatDate(row.occurredAt) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="类型" min-width="120">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatDebtRecordActionLabel(row) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="金额" min-width="140">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatRecordAmount(row) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="剩余金额" min-width="140">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatCurrency(getPrincipalRemainingAmount(row)) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="现金账户" min-width="160">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatFundingAccountName(row) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column
+          label="备注"
+          prop="remark"
+          min-width="180"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="操作" width="270" fixed="right">
+          <template #default="{ row }: { row: DetailTableRow }">
+            <div class="pc-row-actions">
+              <el-button link type="primary" @click="openRecordDetail(row.id)">
+                明细
+              </el-button>
+              <el-button
+                link
+                type="primary"
+                v-if="
+                  row.recordType !== 'repayment' &&
+                  !row.parentRecordId &&
+                  getPrincipalRemainingAmount(row) > 0
+                "
+                @click="openOffsetRecordModal(row)"
+              >
+                {{ formatOffsetActionLabel(row) }}
+              </el-button>
+              <el-button link type="primary" @click="openEditRecordModal(row)">
+                修改
+              </el-button>
+              <el-button link type="danger" @click="openDeleteModal(row)">
+                删除
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </DesktopTable>
+      <PagePanel title="账户资料">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="联系人">
+            {{ detailName }}
+          </el-descriptions-item>
+          <el-descriptions-item label="说明">
+            {{ detailSubtitle || '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="结算">
+            {{ summarySubText }}
+          </el-descriptions-item>
+          <el-descriptions-item label="备注">
+            {{ detailNote || '—' }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </PagePanel>
+    </div>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
       :type="feedbackType"
     />
-    <header class="debt-detail-header">
-      <PageHeader
-        title="债务详情"
-        back-to="/finance/accounts/debt"
-        back-label="返回债务账户"
-      />
-    </header>
-    <p v-if="pageError" class="debt-detail-message debt-detail-message-error">
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <el-card
-        class="pc-record-card debt-detail-summary-card"
-        aria-label="债务详情总览"
-        shadow="never"
-      >
-        <div class="debt-detail-summary-top">
-          <div class="debt-detail-summary-title">
-            <strong>{{ detailName }}</strong>
-            <span v-if="detailSubtitle">{{ detailSubtitle }}</span>
-          </div>
-          <span class="debt-detail-summary-badge">
-            {{ summary.recordCount }} 条记录
-          </span>
-        </div>
-        <AmountText
-          tag="p"
-          class="debt-detail-summary-amount"
-          :value="summaryAmountText"
-          tone="inherit"
-        />
-        <p class="debt-detail-summary-sub">{{ summarySubText }}</p>
-        <p v-if="detailNote" class="debt-detail-summary-note">
-          {{ detailNote }}
-        </p>
-        <div class="debt-detail-metrics">
-          <div class="debt-detail-metric">
-            <span>借入记录</span>
-            <strong>{{ borrowInCount }} 笔</strong>
-          </div>
-          <div class="debt-detail-metric">
-            <span>借出记录</span>
-            <strong>{{ borrowOutCount }} 笔</strong>
-          </div>
-          <div class="debt-detail-metric">
-            <span>最近更新</span>
-            <strong>{{ latestRecordText }}</strong>
-          </div>
-        </div>
-      </el-card>
-      <section class="debt-record-history" aria-label="债务记录">
-        <div class="debt-record-history-head">
-          <div class="debt-record-history-title"><strong>往来记录</strong></div>
-          <span class="debt-record-history-badge">
-            {{ topLevelRecords.length }} 条
-          </span>
-        </div>
-        <div class="pc-grid debt-record-history-list">
-          <p v-if="topLevelRecords.length === 0" class="debt-record-empty">
-            暂无债务记录
-          </p>
-          <template v-else>
-            <el-table :data="topLevelRecords" stripe>
-              <!-- @vue-generic {DetailTableRow} -->
-              <el-table-column label="发生时间" min-width="160">
-                <template #default="{ row }: { row: DetailTableRow }">
-                  {{ formatDate(row.occurredAt) }}
-                </template>
-              </el-table-column>
-              <!-- @vue-generic {DetailTableRow} -->
-              <el-table-column label="类型" min-width="120">
-                <template #default="{ row }: { row: DetailTableRow }">
-                  {{ formatDebtRecordActionLabel(row) }}
-                </template>
-              </el-table-column>
-              <!-- @vue-generic {DetailTableRow} -->
-              <el-table-column label="金额" min-width="140">
-                <template #default="{ row }: { row: DetailTableRow }">
-                  {{ formatRecordAmount(row) }}
-                </template>
-              </el-table-column>
-              <!-- @vue-generic {DetailTableRow} -->
-              <el-table-column label="剩余金额" min-width="140">
-                <template #default="{ row }: { row: DetailTableRow }">
-                  {{ formatCurrency(getPrincipalRemainingAmount(row)) }}
-                </template>
-              </el-table-column>
-              <!-- @vue-generic {DetailTableRow} -->
-              <el-table-column label="现金账户" min-width="160">
-                <template #default="{ row }: { row: DetailTableRow }">
-                  {{ formatFundingAccountName(row) }}
-                </template>
-              </el-table-column>
-              <!-- @vue-generic {DetailTableRow} -->
-              <el-table-column
-                label="备注"
-                prop="remark"
-                min-width="180"
-                show-overflow-tooltip
-              />
-              <!-- @vue-generic {DetailTableRow} -->
-              <el-table-column label="操作" width="270" fixed="right">
-                <template #default="{ row }: { row: DetailTableRow }">
-                  <div class="pc-row-actions">
-                    <el-button
-                      link
-                      type="primary"
-                      @click="openRecordDetail(row.id)"
-                    >
-                      明细
-                    </el-button>
-                    <el-button
-                      link
-                      type="primary"
-                      v-if="
-                        row.recordType !== 'repayment' &&
-                        !row.parentRecordId &&
-                        getPrincipalRemainingAmount(row) > 0
-                      "
-                      @click="openOffsetRecordModal(row)"
-                    >
-                      {{ formatOffsetActionLabel(row) }}
-                    </el-button>
-                    <el-button
-                      link
-                      type="primary"
-                      @click="openEditRecordModal(row)"
-                    >
-                      修改
-                    </el-button>
-                    <el-button link type="danger" @click="openDeleteModal(row)">
-                      删除
-                    </el-button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </template>
-        </div>
-      </section>
-      <FloatingAddButton
-        aria-label="新增债务记录"
-        storage-key="debt-record-create"
-        @click="openAddRecordModal"
-      />
-    </template>
     <CommonModal v-model="showRecordModal" :title="recordModalTitle">
       <div class="pc-form-grid debt-record-form">
         <p v-if="recordFormHint" class="debt-record-form-hint">

@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 // 基金/股票外部行情加载与基金累计收益点位计算。
 import {
   computed,
@@ -119,7 +120,7 @@ export function useFundMarket(options: UseFundMarketOptions) {
         (item) => item.value === selectedFundTrendRange.value,
       )?.label ?? ''
     const value = selectedFundPeriodReturn.value
-    return `${rangeLabel}收益率 ${value === null ? '--' : `${formatNumber(value)}%`}`
+    return `${rangeLabel}收益率 ${value === null ? '--' : formatPercentage(value)}`
   })
 
   function resetFundMarketState() {
@@ -581,7 +582,7 @@ export function useFundMarket(options: UseFundMarketOptions) {
         stat(
           '当日涨跌幅',
           Number.isFinite(changePercent)
-            ? `${formatNumber(changePercent)}%`
+            ? formatPercentage(changePercent)
             : '-',
           toneByNumber(changePercent),
         ),
@@ -643,7 +644,7 @@ export function useFundMarket(options: UseFundMarketOptions) {
         stat(
           '涨跌幅',
           Number.isFinite(changePercent)
-            ? `${formatNumber(changePercent)}%`
+            ? formatPercentage(changePercent)
             : '-',
           toneByNumber(changePercent),
         ),

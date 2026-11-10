@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
-import DesktopInput from '@/business/components/DesktopInput.vue'
-
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import CategoryIcon from '@/business/components/common/CategoryIcon/index.vue'
@@ -22,7 +20,6 @@ import {
 } from '@/business/api/modules/food'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
 import {
-  getFoodHomePath,
   getFoodIngredientCategoryCreatePath,
   getFoodIngredientCategoryPath,
   getFoodIngredientPath,
@@ -33,9 +30,7 @@ const route = useRoute()
 const router = useRouter()
 
 const showModal = computed(() => route.path.includes('/new'))
-const headerBackPath = computed(() =>
-  showModal.value ? getFoodIngredientCategoryPath() : getFoodHomePath(),
-)
+
 const categoryModalTitle = computed(() =>
   editingCategory.value ? '修改食材分类' : '新增食材分类',
 )
@@ -45,7 +40,7 @@ const pageError = ref('')
 const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
-const isManageMode = ref(false)
+
 const feedbackVisible = ref(false)
 const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
@@ -116,19 +111,6 @@ function openCategory(categoryId: number) {
     path: getFoodIngredientPath(),
     query: { categoryId },
   })
-}
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
-}
-
-function handleCategoryClick(category: FoodCategory) {
-  if (isManageMode.value) {
-    openEditModal(category)
-    return
-  }
-
-  openCategory(category.id)
 }
 
 function openCreateModal() {
@@ -266,7 +248,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof filteredCategories.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="食材分类">
       <template #right>
         <el-button type="primary" @click="openCreateModal">新增分类</el-button>
@@ -279,7 +261,11 @@ type DesktopRow = (typeof filteredCategories.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="filteredCategories" :loading="isLoading">
+    <DesktopTable
+      title="食材分类"
+      :rows="filteredCategories"
+      :loading="isLoading"
+    >
       <template #toolbar>
         <el-input
           v-model="keyword"
@@ -292,6 +278,7 @@ type DesktopRow = (typeof filteredCategories.value)[number]
       <el-table-column
         label="分类名称"
         prop="name"
+        sortable="custom"
         min-width="200"
         show-overflow-tooltip
       />
@@ -299,6 +286,7 @@ type DesktopRow = (typeof filteredCategories.value)[number]
       <el-table-column
         label="描述"
         prop="description"
+        sortable="custom"
         min-width="320"
         show-overflow-tooltip
       />
@@ -306,6 +294,7 @@ type DesktopRow = (typeof filteredCategories.value)[number]
       <el-table-column
         label="数量"
         prop="itemCount"
+        sortable="custom"
         min-width="120"
         show-overflow-tooltip
       />

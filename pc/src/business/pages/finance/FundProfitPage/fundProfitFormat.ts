@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 // FundProfitPage 的纯格式化/工具函数（无状态，可单测）。
 import type {
   FundProfitDetail,
@@ -48,10 +49,8 @@ export function formatSignedCurrency(value: number, digits = 2) {
   return `${sign}${formatCurrency(normalized, digits)}`
 }
 
-export function formatRate(value: number, digits = 2) {
-  const normalized = Number(value ?? 0)
-  const sign = normalized > 0 ? '+' : normalized < 0 ? '-' : ''
-  return `${sign}${formatNumber(normalized, digits)}%`
+export function formatRate(value: number) {
+  return formatPercentage(value, true)
 }
 
 export function formatHoldingQuantity(value: number) {

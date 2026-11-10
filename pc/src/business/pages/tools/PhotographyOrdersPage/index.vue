@@ -6,15 +6,15 @@ import DesktopInput from '@/business/components/DesktopInput.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonEmpty from '@/business/components/common/CommonEmpty/index.vue'
+
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect, {
   type CommonSelectOption,
 } from '@/business/components/common/CommonSelect/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import MonthPicker from '@/business/components/common/MonthPicker/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
@@ -33,12 +33,8 @@ import { getStoredCurrentUser } from '@/business/utils/current-user'
 import { getErrorMessage } from '@/business/api/request'
 import { useFeedback } from '@/business/composables/useFeedback'
 import {
-  amountTextClass,
   buildCurrentMonth,
   buildDefaultDateTimeLocal,
-  depositStatusClass,
-  depositStatusLabel,
-  finalStatusClass,
   finalStatusLabel,
   formatCurrency,
   formatDateTime,
@@ -114,15 +110,6 @@ const formRemark = ref('')
 
 const collectFinalAccountId = ref('')
 
-const isBusy = computed(
-  () =>
-    isLoading.value ||
-    isSaving.value ||
-    isUpdating.value ||
-    isCollecting.value ||
-    isDeleting.value ||
-    isCancelling.value,
-)
 const selectedMonthOrders = computed(() => {
   const [yearText = '', monthText = ''] = selectedMonth.value.split('-')
   const targetYear = Number(yearText)
@@ -411,10 +398,6 @@ function isFinalAmountLocked() {
   )
 }
 
-function toggleOrder(orderId: number) {
-  expandedOrderId.value = expandedOrderId.value === orderId ? null : orderId
-}
-
 function openCollectModal(order: PhotographyOrder) {
   selectedOrder.value = order
   collectFormError.value = ''
@@ -586,7 +569,7 @@ function openOverview() {
 type DesktopRow = (typeof filteredOrders.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="摄影订单">
       <template #right>
         <el-button @click="openOverview">订单总览</el-button>
@@ -614,7 +597,13 @@ type DesktopRow = (typeof filteredOrders.value)[number]
         <strong>{{ formatCurrency(summary.finalPending) }}</strong>
       </el-card>
     </div>
-    <DesktopTable :rows="filteredOrders" :loading="isLoading">
+    <DesktopTable
+      title="订单明细"
+      searchable
+      search-placeholder="联系方式 / 拍摄地址"
+      :rows="filteredOrders"
+      :loading="isLoading"
+    >
       <template #toolbar>
         <MonthPicker v-model="selectedMonth" />
         <SegmentedControl
@@ -639,6 +628,7 @@ type DesktopRow = (typeof filteredOrders.value)[number]
       <el-table-column
         label="联系方式"
         prop="contactInfo"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />
@@ -646,6 +636,7 @@ type DesktopRow = (typeof filteredOrders.value)[number]
       <el-table-column
         label="地址"
         prop="address"
+        sortable="custom"
         min-width="220"
         show-overflow-tooltip
       />

@@ -1,23 +1,20 @@
 <script setup lang="ts">
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
-import DesktopInput from '@/business/components/DesktopInput.vue'
-
 // 分类管理页：使用财务模块分类接口完成列表、新增、修改和删除。
 import { computed, onMounted, ref, watch } from 'vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonSelect, {
   type CommonSelectOption,
 } from '@/business/components/common/CommonSelect/index.vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CategoryIcon from '@/business/components/common/CategoryIcon/index.vue'
+
 import {
   createCategory,
   deleteCategory,
@@ -29,11 +26,7 @@ import {
 import { getStoredCurrentUser } from '@/business/utils/current-user'
 import { getErrorMessage } from '@/business/api/request'
 import { useColorPicker } from './useColorPicker'
-import {
-  buildCategoryGroups,
-  canCategoryBeDeleted,
-  getNextCategorySortOrder,
-} from './categoryTree'
+import { canCategoryBeDeleted, getNextCategorySortOrder } from './categoryTree'
 
 const tabOptions = ['全部', '支出', '收入']
 const activeTab = ref(tabOptions[0])
@@ -135,12 +128,7 @@ const categoryIconOptions: CommonSelectOption[] = [
 const categoryModalTitle = computed(() =>
   editingCategory.value ? '修改分类' : '新增分类',
 )
-const expenseCategoryGroups = computed(() =>
-  buildCategoryGroups('expense', categories.value),
-)
-const incomeCategoryGroups = computed(() =>
-  buildCategoryGroups('income', categories.value),
-)
+
 const editingCategoryHasChildren = computed(
   () =>
     editingCategory.value !== null &&
@@ -184,10 +172,6 @@ watch(formType, () => {
     formParentId.value = ROOT_PARENT_VALUE
   }
 })
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
-}
 
 function openCreateModal(parent?: Category) {
   editingCategory.value = null
@@ -374,7 +358,7 @@ function canDeleteCategory(category: Category) {
 type DesktopRow = (typeof desktopCategories.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="收支分类">
       <template #right>
         <el-button type="primary" @click="openCreateModal()">
@@ -389,7 +373,13 @@ type DesktopRow = (typeof desktopCategories.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="desktopCategories" :loading="isLoadingCategories">
+    <DesktopTable
+      title="分类目录"
+      searchable
+      search-placeholder="分类名称 / 上级分类"
+      :rows="desktopCategories"
+      :loading="isLoadingCategories"
+    >
       <template #toolbar>
         <SegmentedControl
           v-model="activeTab"
@@ -401,6 +391,7 @@ type DesktopRow = (typeof desktopCategories.value)[number]
       <el-table-column
         label="名称"
         prop="name"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />
@@ -430,6 +421,7 @@ type DesktopRow = (typeof desktopCategories.value)[number]
       <el-table-column
         label="备注"
         prop="remark"
+        sortable="custom"
         min-width="220"
         show-overflow-tooltip
       />

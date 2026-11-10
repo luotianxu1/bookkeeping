@@ -95,8 +95,8 @@
 .pc-business-dialog p {
   overflow-wrap: anywhere;
 }
-.business-content svg,
-.pc-business-dialog svg {
+.business-content svg.lucide,
+.pc-business-dialog svg.lucide {
   width: 18px;
   height: 18px;
   flex-shrink: 0;

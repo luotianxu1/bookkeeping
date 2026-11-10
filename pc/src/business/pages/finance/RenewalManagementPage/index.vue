@@ -4,17 +4,17 @@ import DesktopTable from '@/business/components/DesktopTable.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useReminderTarget } from '@/business/composables/useReminderTarget'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import CommonSelect, {
   type CommonSelectOption,
 } from '@/business/components/common/CommonSelect/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
+
 import {
   createRenewalSubscription,
   deleteRenewalSubscription,
@@ -37,28 +37,10 @@ import { getErrorMessage } from '@/business/api/request'
 
 type FilterKey = 'all' | 'due' | 'paused'
 
-type RenewalCardView = {
-  id: number
-  avatarText: string
-  avatarClass: string
-  title: string
-  statusText: string
-  statusClass: string
-  noteText: string
-  accountText: string
-  categoryText: string
-  amountText: string
-  cycleText: string
-  footNote: string
-  primaryActionText: string
-  primaryActionClass: string
-  raw: RenewalSubscription
-}
-
 const subscriptions = ref<RenewalSubscription[]>([])
 const fundingAccounts = ref<Account[]>([])
 const expenseCategories = ref<Category[]>([])
-const isManageMode = ref(false)
+
 const summary = ref<RenewalSubscriptionSummary>({
   activeCount: 0,
   pausedCount: 0,
@@ -182,58 +164,9 @@ const annualFixedExpenseAmount = computed(() =>
 
 const monthlyAverageAmount = computed(() => annualFixedExpenseAmount.value / 12)
 
-const renewalCards = computed<RenewalCardView[]>(() =>
-  filteredSubscriptions.value.map((subscription, index) => {
-    const dueDays = getDaysUntilDue(subscription.nextBillingDate)
-    const isPaused = subscription.status === 'paused'
-    const statusText = isPaused
-      ? '已暂停'
-      : dueDays === 0
-        ? '今日支出'
-        : dueDays > 0 && dueDays <= 7
-          ? `${dueDays} 天后`
-          : ''
-
-    const footNote = `下次扣款 ${formatDotDate(subscription.nextBillingDate)}`
-
-    return {
-      id: subscription.id,
-      avatarText: resolveAvatarText(subscription),
-      avatarClass: `renewal-avatar-${index % 3}`,
-      title: resolveCardTitle(subscription),
-      statusText,
-      statusClass: isPaused
-        ? 'renewal-card-status-paused'
-        : dueDays === 0
-          ? 'renewal-card-status-today'
-          : dueDays > 0 && dueDays <= 7
-            ? 'renewal-card-status-soon'
-            : 'renewal-card-status-active',
-      noteText: formatBillingSchedule(
-        subscription.billingDay,
-        subscription.billingCycle,
-      ),
-      accountText: `扣款账户 ${subscription.fundingAccountName || '--'}`,
-      categoryText: subscription.categoryName || '未设置分类',
-      amountText: `${formatCurrencyPlain(Number(subscription.amount ?? 0))}/${getBillingCycleUnit(subscription.billingCycle)}`,
-      cycleText: isPaused
-        ? '手动恢复'
-        : getBillingCycleLabel(subscription.billingCycle),
-      footNote,
-      primaryActionText: isPaused ? '恢复' : '暂停',
-      primaryActionClass: isPaused ? 'is-success' : 'is-warning',
-      raw: subscription,
-    }
-  }),
-)
-
 onMounted(() => {
   void loadPage()
 })
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
-}
 
 async function loadPage() {
   const currentUser = getStoredCurrentUser()
@@ -482,69 +415,12 @@ function isDueThisMonth(nextBillingDate: string) {
   )
 }
 
-function getDaysUntilDue(nextBillingDate: string) {
-  const target = new Date(nextBillingDate)
-  if (Number.isNaN(target.getTime())) {
-    return Number.POSITIVE_INFINITY
-  }
-  const today = new Date()
-  const current = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  )
-  const due = new Date(
-    target.getFullYear(),
-    target.getMonth(),
-    target.getDate(),
-  )
-  return Math.round((due.getTime() - current.getTime()) / 86400000)
-}
-
-function formatDotDate(value?: string | null) {
-  if (!value) {
-    return '--'
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return '--'
-  }
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${date.getFullYear()}.${month}.${day}`
-}
-
-function formatBillingSchedule(
-  day: number,
-  cycle?: RenewalBillingCycle | string | null,
-) {
-  const displayDay = String(Number(day))
-  if (cycle === 'quarterly') {
-    return `每季度 ${displayDay} 号扣款`
-  }
-  if (cycle === 'yearly') {
-    return `每年 ${displayDay} 号扣款`
-  }
-  return `每月 ${displayDay} 号扣款`
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Math.abs(value))
-}
-
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('zh-CN', {
     style: 'currency',
     currency: 'CNY',
     minimumFractionDigits: 2,
   }).format(value)
-}
-
-function formatCurrencyPlain(value: number) {
-  return `¥${formatNumber(value)}`
 }
 
 function getBillingCycleLabel(cycle?: RenewalBillingCycle | string | null) {
@@ -557,16 +433,6 @@ function getBillingCycleLabel(cycle?: RenewalBillingCycle | string | null) {
   return '连续包月'
 }
 
-function getBillingCycleUnit(cycle?: RenewalBillingCycle | string | null) {
-  if (cycle === 'quarterly') {
-    return '季'
-  }
-  if (cycle === 'yearly') {
-    return '年'
-  }
-  return '月'
-}
-
 function getAnnualCycleMultiplier(cycle?: RenewalBillingCycle | string | null) {
   if (cycle === 'quarterly') {
     return 4
@@ -575,15 +441,6 @@ function getAnnualCycleMultiplier(cycle?: RenewalBillingCycle | string | null) {
     return 1
   }
   return 12
-}
-
-function resolveAvatarText(subscription: RenewalSubscription) {
-  const source = (subscription.name || '续').trim()
-  return source.slice(0, 1)
-}
-
-function resolveCardTitle(subscription: RenewalSubscription) {
-  return subscription.name.trim()
 }
 
 function buildCategoryOptionLabel(category: Category) {
@@ -631,7 +488,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof filteredSubscriptions.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="固定支出">
       <template #right>
         <el-button type="primary" @click="openCreateModal">
@@ -656,7 +513,13 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
         <strong>{{ formatCurrency(monthlyAverageAmount) }}</strong>
       </el-card>
     </div>
-    <DesktopTable :rows="filteredSubscriptions" :loading="isLoading">
+    <DesktopTable
+      title="固定支出明细"
+      searchable
+      search-placeholder="名称 / 备注"
+      :rows="filteredSubscriptions"
+      :loading="isLoading"
+    >
       <template #toolbar>
         <el-select v-model="selectedFilter">
           <el-option
@@ -671,6 +534,7 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
       <el-table-column
         label="名称"
         prop="name"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />
@@ -690,6 +554,7 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
       <el-table-column
         label="下次支出日"
         prop="nextBillingDate"
+        sortable="custom"
         min-width="160"
         show-overflow-tooltip
       />
@@ -705,6 +570,7 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
       <el-table-column
         label="备注"
         prop="remark"
+        sortable="custom"
         min-width="200"
         show-overflow-tooltip
       />

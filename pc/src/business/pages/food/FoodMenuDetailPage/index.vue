@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
@@ -8,7 +12,7 @@ import {
   type FoodOrder,
   type FoodOrderDishItem,
 } from '@/business/api/modules/food'
-import { getFoodDishDetailPath, getFoodMenuPath } from '../shared'
+import { getFoodDishDetailPath } from '../shared'
 import { getErrorMessage } from '@/business/api/request'
 
 const route = useRoute()
@@ -70,61 +74,68 @@ function formatPlannedDate(value: string) {
 function openDishDetail(dishId: number) {
   void router.push(getFoodDishDetailPath(false, dishId))
 }
-</script>
 
+const desktopDishes = computed(() =>
+  groupedDishes.value.flatMap((group) =>
+    group.dishes.map((dish) => ({ ...dish, categoryName: group.categoryName })),
+  ),
+)
+type DishRow = (typeof desktopDishes.value)[number]
+</script>
 <template>
-  <section class="pc-page food-menu-detail-page" aria-label="菜单详情">
-    <CommonLoading v-if="isLoading" text="菜单详情加载中..." />
-    <template v-if="order && !pageError">
-      <PageHeader
-        title="菜单详情"
-        class="page-head"
-        :back-to="getFoodMenuPath()"
+  <section class="desktop-workspace">
+    <PageHeader :title="order?.title || '菜单详情'">
+      <template #right></template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <CommonLoading v-if="isLoading" />
+    <template v-if="order">
+      <MetricStrip
+        :items="[
+          { label: '用餐日期', value: formatPlannedDate(order.plannedFor) },
+          { label: '菜品数量', value: order.dishCount },
+          { label: '预计用时（分钟）', value: order.totalCookMinutes },
+        ]"
       />
-      <el-card class="pc-record-card hero-card" shadow="never">
-        <div class="hero-head">
-          <div class="hero-copy">
-            <h2>{{ order.title }}</h2>
-            <p>{{ formatPlannedDate(order.plannedFor) }}</p>
-          </div>
-        </div>
-        <div class="hero-metrics">
-          <span>{{ order.dishCount }} 道菜</span>
-          <span>预计 {{ order.totalCookMinutes }} 分钟</span>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card info-card" shadow="never">
-        <strong>菜单菜品</strong>
-        <div class="dish-groups">
-          <section
-            v-for="group in groupedDishes"
-            :key="group.categoryName"
-            class="dish-group"
-          >
-            <h3>{{ group.categoryName }}</h3>
-            <div class="pc-grid dish-list">
-              <el-button
-                v-for="dish in group.dishes"
-                :key="dish.dishId"
-                native-type="button"
-                class="pc-content-button dish-row"
-                @click="openDishDetail(dish.dishId)"
-              >
-                <span>{{ dish.dishName }}</span>
-              </el-button>
-            </div>
-          </section>
-        </div>
-      </el-card>
-      <el-card
-        v-if="order.remark"
-        class="pc-record-card info-card"
-        shadow="never"
+      <DesktopTable
+        :rows="desktopDishes"
+        :loading="false"
+        title="菜单菜品"
+        search-placeholder="搜索菜名"
+        searchable
       >
-        <strong>备注说明</strong>
-        <p>{{ order.remark }}</p>
-      </el-card>
+        <el-table-column
+          prop="dishName"
+          label="菜品"
+          min-width="260"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="categoryName"
+          label="分类"
+          min-width="200"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DishRow} -->
+        <el-table-column fixed="right" label="操作" width="150">
+          <template #default="{ row }: { row: DishRow }">
+            <el-button link type="primary" @click="openDishDetail(row.dishId)">
+              查看做法
+            </el-button>
+          </template>
+        </el-table-column>
+      </DesktopTable>
+      <PagePanel title="备注">
+        <p>{{ order.remark || '—' }}</p>
+      </PagePanel>
     </template>
-    <p v-else class="page-error">{{ pageError }}</p>
   </section>
 </template>

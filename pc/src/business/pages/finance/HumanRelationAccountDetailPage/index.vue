@@ -1,15 +1,19 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import {
   createHumanRelationRecord,
   deleteHumanRelationRecord,
@@ -391,134 +395,99 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
 type DetailTableRow = (typeof records.value)[number]
 </script>
-
 <template>
-  <section
-    class="pc-page human-relation-account-detail-page"
-    aria-label="人情详情"
-  >
+  <section class="desktop-workspace">
+    <PageHeader :title="detailName">
+      <template #right>
+        <el-button type="primary" @click="openAddRecordModal">
+          新增记录
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        { label: '往来净额', value: summaryAmountText },
+        { label: '送出笔数', value: outgoingCount },
+        { label: '收到笔数', value: incomingCount },
+        { label: '最近更新', value: latestRecordText },
+      ]"
+    />
+    <div class="desktop-main-aside">
+      <DesktopTable :rows="records" title="人情记录" searchable>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="发生时间" min-width="160">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatDate(row.occurredAt) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="类型" min-width="120">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatRecordDirectionLabel(row.direction) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="金额" min-width="140">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatRecordAmount(row) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="现金账户" min-width="160">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatFundingAccountName(row) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column
+          label="备注"
+          prop="remark"
+          min-width="240"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="操作" width="140" fixed="right">
+          <template #default="{ row }: { row: DetailTableRow }">
+            <div class="pc-row-actions">
+              <el-button link type="primary" @click="openEditRecordModal(row)">
+                修改
+              </el-button>
+              <el-button link type="danger" @click="openDeleteModal(row)">
+                删除
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </DesktopTable>
+      <PagePanel title="账户资料">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="联系人">
+            {{ detailName }}
+          </el-descriptions-item>
+          <el-descriptions-item label="说明">
+            {{ detailSubtitle || '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="结算">
+            {{ summarySubText }}
+          </el-descriptions-item>
+          <el-descriptions-item label="备注">
+            {{ detailNote || '—' }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </PagePanel>
+    </div>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
       :type="feedbackType"
     />
-    <header class="human-relation-detail-header">
-      <PageHeader
-        title="人情详情"
-        back-to="/finance/accounts/human-relation"
-        back-label="返回人情账户"
-      />
-    </header>
-    <p
-      v-if="pageError"
-      class="human-relation-detail-message human-relation-detail-message-error"
-    >
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <el-card
-        class="pc-record-card human-relation-detail-summary-card"
-        aria-label="人情详情总览"
-        shadow="never"
-      >
-        <div class="human-relation-detail-summary-top">
-          <div class="human-relation-detail-summary-title">
-            <strong>{{ detailName }}</strong>
-            <span>{{ detailSubtitle }}</span>
-          </div>
-          <span class="human-relation-detail-summary-badge">
-            {{ summary.recordCount }} 条记录
-          </span>
-        </div>
-        <AmountText
-          tag="p"
-          class="human-relation-detail-summary-amount"
-          :value="summaryAmountText"
-          tone="inherit"
-        />
-        <p class="human-relation-detail-summary-sub">{{ summarySubText }}</p>
-        <p v-if="detailNote" class="human-relation-detail-summary-note">
-          {{ detailNote }}
-        </p>
-        <div class="human-relation-detail-metrics">
-          <div class="human-relation-detail-metric">
-            <span>送出笔数</span>
-            <strong>{{ outgoingCount }} 笔</strong>
-          </div>
-          <div class="human-relation-detail-metric">
-            <span>收到笔数</span>
-            <strong>{{ incomingCount }} 笔</strong>
-          </div>
-          <div class="human-relation-detail-metric">
-            <span>最近更新</span>
-            <strong>{{ latestRecordText }}</strong>
-          </div>
-        </div>
-      </el-card>
-      <section class="human-relation-record-history" aria-label="人情记录">
-        <div class="pc-grid human-relation-record-history-list">
-          <p v-if="records.length === 0" class="human-relation-record-empty">
-            暂无人情记录
-          </p>
-          <el-table v-else :data="records" stripe>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="发生时间" min-width="160">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatDate(row.occurredAt) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="类型" min-width="120">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatRecordDirectionLabel(row.direction) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="金额" min-width="140">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatRecordAmount(row) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="现金账户" min-width="160">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatFundingAccountName(row) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column
-              label="备注"
-              prop="remark"
-              min-width="240"
-              show-overflow-tooltip
-            />
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="操作" width="140" fixed="right">
-              <template #default="{ row }: { row: DetailTableRow }">
-                <div class="pc-row-actions">
-                  <el-button
-                    link
-                    type="primary"
-                    @click="openEditRecordModal(row)"
-                  >
-                    修改
-                  </el-button>
-                  <el-button link type="danger" @click="openDeleteModal(row)">
-                    删除
-                  </el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </section>
-      <FloatingAddButton
-        aria-label="新增人情记录"
-        storage-key="human-relation-record-create"
-        @click="openAddRecordModal"
-      />
-    </template>
     <CommonModal v-model="showRecordModal" :title="recordModalTitle">
       <div class="pc-form-grid human-relation-record-form">
         <CommonSelect

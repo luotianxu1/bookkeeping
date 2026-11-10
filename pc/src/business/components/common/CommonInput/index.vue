@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { useId } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
+import { formatPercentageInput } from '@/business/utils/percentage'
 const id = useId()
-defineProps<{
+const props = defineProps<{
   label: string
   modelValue: string
   placeholder?: string
   inputType?: string
+  percentage?: boolean
   inputMode?:
     | 'none'
     | 'text'
@@ -19,6 +21,18 @@ defineProps<{
   readonly?: boolean
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const focused = ref(false)
+const displayValue = computed(() =>
+  props.percentage && !focused.value
+    ? formatPercentageInput(props.modelValue)
+    : props.modelValue,
+)
+function focus(event: FocusEvent) {
+  focused.value = true
+  // 恢复完整精度后选中数值，避免格式切换导致替换输入变为追加。
+  if (props.percentage)
+    nextTick(() => (event.target as HTMLInputElement).select())
+}
 </script>
 <template>
   <el-form-item :label="label" :for="id" class="pc-field">
@@ -48,7 +62,9 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
     <el-input
       v-else
       :id="id"
-      :model-value="modelValue"
+      :model-value="displayValue"
+      @focus="focus"
+      @blur="focused = false"
       :type="inputType || 'text'"
       :step="inputType === 'number' ? 'any' : undefined"
       :inputmode="inputMode"

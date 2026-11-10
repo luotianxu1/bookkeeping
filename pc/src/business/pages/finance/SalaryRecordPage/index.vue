@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+
 import { computed, onMounted, reactive, ref } from 'vue'
 import {
   createSalaryMonthRecord,
@@ -11,7 +15,7 @@ import {
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
@@ -44,11 +48,6 @@ const recordForm = reactive({
 
 const yearOptions = createRecentYearOptions(5)
 const canDeleteRecord = computed(() => Boolean(editingRecord.value))
-const visibleMetrics = computed(
-  () =>
-    pageData.value?.metrics.filter((metric) => metric.label !== '已补录税前') ??
-    [],
-)
 
 onMounted(() => {
   void loadPage()
@@ -174,106 +173,68 @@ function openFeedback(message: string, type: 'success' | 'error') {
 
 type DetailTableRow = NonNullable<typeof pageData.value>['records'][number]
 </script>
-
 <template>
-  <section class="pc-page salary-page" aria-label="工资明细">
-    <PageHeader
-      title="工资明细"
-      back-to="/finance/salary"
-      :prefer-back-to="true"
-    >
-      <CommonSelect
-        class="salary-year-select"
-        label=""
-        :model-value="selectedYear"
-        :options="yearOptions"
-        @update:model-value="changeYear"
-      />
+  <section class="desktop-workspace">
+    <PageHeader title="工资明细">
+      <template #right>
+        <CommonSelect
+          class="salary-year-select"
+          label=""
+          :model-value="selectedYear"
+          :options="yearOptions"
+          @update:model-value="changeYear"
+        />
+        <CommonButton @click="openRecordModal()">新增工资记录</CommonButton>
+      </template>
     </PageHeader>
-    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
-    <div v-else-if="isLoading" class="salary-loading-wrap">
-      <CommonLoading text="工资明细加载中..." />
-    </div>
-    <template v-else-if="pageData">
-      <el-card class="pc-record-card salary-summary-card" shadow="never">
-        <div class="salary-summary-head">
-          <p class="salary-summary-eyebrow">{{ pageData.year }} 年工资明细</p>
-          <div class="salary-summary-main">
-            <div class="salary-summary-main-top">
-              <strong>
-                {{ formatSalaryCurrency(pageData.recordedGrossIncome) }}
-              </strong>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="pageData">
+      <MetricStrip
+        :items="
+          pageData.metrics.map((metric) => ({
+            label: metric.label,
+            value: formatSalaryCurrency(metric.value),
+          }))
+        "
+      />
+      <DesktopTable :rows="pageData.records" title="工资记录" searchable>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column
+          label="月份"
+          prop="monthLabel"
+          min-width="160"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="税前工资" min-width="180">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatSalaryCurrency(row.grossSalary) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column
+          label="备注"
+          prop="note"
+          min-width="320"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="操作" width="100" fixed="right">
+          <template #default="{ row }: { row: DetailTableRow }">
+            <div class="pc-row-actions">
+              <el-button link type="primary" @click="openRecordModal(row)">
+                修改
+              </el-button>
             </div>
-          </div>
-        </div>
-        <div class="pc-grid salary-metric-grid">
-          <el-card
-            v-for="metric in visibleMetrics"
-            :key="metric.label"
-            class="pc-record-card salary-metric-card"
-            shadow="never"
-          >
-            <span>{{ metric.label }}</span>
-            <strong>{{ formatSalaryCurrency(metric.value) }}</strong>
-          </el-card>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>记录维护</strong></div>
-        <el-card class="pc-record-card salary-maintain-panel" shadow="never">
-          <div class="salary-row">
-            <div>
-              <p class="salary-row-label">月度工资记录</p>
-              <p class="salary-row-desc">
-                设置月薪后会在发薪日自动入账，已补录月份优先按实际税前工资参与工资测算。
-              </p>
-            </div>
-            <div class="salary-row-value">
-              <strong>{{ pageData.records.length }}</strong>
-            </div>
-          </div>
-        </el-card>
-        <div class="pc-grid salary-action-grid">
-          <CommonButton @click="openRecordModal()">新增工资记录</CommonButton>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>工资记录</strong></div>
-        <div class="pc-grid salary-record-list">
-          <el-table :data="pageData.records" stripe>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column
-              label="月份"
-              prop="monthLabel"
-              min-width="160"
-              show-overflow-tooltip
-            />
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="税前工资" min-width="180">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatSalaryCurrency(row.grossSalary) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column
-              label="备注"
-              prop="note"
-              min-width="320"
-              show-overflow-tooltip
-            />
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="操作" width="100" fixed="right">
-              <template #default="{ row }: { row: DetailTableRow }">
-                <div class="pc-row-actions">
-                  <el-button link type="primary" @click="openRecordModal(row)">
-                    修改
-                  </el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </el-card>
+          </template>
+        </el-table-column>
+      </DesktopTable>
     </template>
     <CommonModal
       v-model="showRecordModal"

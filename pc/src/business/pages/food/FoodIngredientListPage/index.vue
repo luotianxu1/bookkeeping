@@ -7,13 +7,13 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonSelect, {
   type CommonSelectOption,
 } from '@/business/components/common/CommonSelect/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   createFoodIngredient,
@@ -26,7 +26,7 @@ import {
   updateFoodIngredient,
 } from '@/business/api/modules/food'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
-import { getFoodHomePath } from '../shared'
+
 import { getErrorMessage } from '@/business/api/request'
 
 const route = useRoute()
@@ -38,7 +38,7 @@ const selectedCategoryId = ref<number | null>(null)
 const keyword = ref('')
 const pageError = ref('')
 const isLoading = ref(true)
-const isManageMode = ref(false)
+
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const showEditModal = ref(false)
@@ -85,17 +85,6 @@ const filteredIngredients = computed(() => {
       .includes(search)
   })
 })
-
-const groupedIngredients = computed(() =>
-  categories.value
-    .map((category) => ({
-      category,
-      items: filteredIngredients.value.filter(
-        (item) => item.categoryId === category.id,
-      ),
-    }))
-    .filter((group) => group.items.length > 0),
-)
 
 onMounted(() => {
   void loadPage()
@@ -146,18 +135,6 @@ async function loadPage() {
   } finally {
     isLoading.value = false
   }
-}
-
-function selectCategory(categoryId: number) {
-  selectedCategoryId.value = categoryId > 0 ? categoryId : null
-  void router.replace({
-    path: route.path,
-    query: categoryId > 0 ? { categoryId } : {},
-  })
-}
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
 }
 
 function openEditModal(item: FoodIngredient) {
@@ -286,7 +263,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof filteredIngredients.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="食材管理">
       <template #right>
         <el-button type="primary" @click="openCreateModal">新增食材</el-button>
@@ -299,7 +276,11 @@ type DesktopRow = (typeof filteredIngredients.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="filteredIngredients" :loading="isLoading">
+    <DesktopTable
+      title="食材库"
+      :rows="filteredIngredients"
+      :loading="isLoading"
+    >
       <template #toolbar>
         <el-input
           v-model="keyword"
@@ -325,6 +306,7 @@ type DesktopRow = (typeof filteredIngredients.value)[number]
       <el-table-column
         label="食材"
         prop="name"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />
@@ -332,6 +314,7 @@ type DesktopRow = (typeof filteredIngredients.value)[number]
       <el-table-column
         label="分类"
         prop="categoryName"
+        sortable="custom"
         min-width="140"
         show-overflow-tooltip
       />
@@ -339,6 +322,7 @@ type DesktopRow = (typeof filteredIngredients.value)[number]
       <el-table-column
         label="备注"
         prop="note"
+        sortable="custom"
         min-width="300"
         show-overflow-tooltip
       />

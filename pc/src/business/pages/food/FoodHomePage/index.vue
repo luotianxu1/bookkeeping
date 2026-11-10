@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import DesktopTable from '@/business/components/DesktopTable.vue'
+import PageHeader from '@/business/components/common/PageHeader/index.vue'
+
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import CommonButton from '@/business/components/common/CommonButton/index.vue'
+
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import {
   createFoodOrder,
   getFoodDishes,
@@ -152,66 +155,63 @@ function resolveManagementPath(card: Pick<FoodManagementCard, 'key' | 'path'>) {
 
   return card.path
 }
-</script>
 
+type MenuRow = NonNullable<typeof homeData.value>['recentMenus'][number]
+</script>
 <template>
-  <section class="pc-page food-home-page stagger-in" aria-label="餐饮首页">
-    <CommonLoading v-if="isLoading" text="餐饮页面加载中..." />
-    <template v-if="!pageError && homeData">
-      <el-card class="pc-record-card hero-card" shadow="never">
-        <div class="hero-title-wrap">
-          <h2>{{ homeData.heroTitle }}</h2>
-        </div>
-        <div class="pc-toolbar hero-actions">
-          <CommonButton class="hero-action hero-action-primary" @click="goMenu">
-            去点菜
-          </CommonButton>
-          <CommonButton
-            class="hero-action hero-action-secondary"
-            variant="secondary"
-            @click="createTodayMenu"
-          >
-            今日菜单
-          </CommonButton>
-        </div>
-      </el-card>
-      <section class="section-block">
-        <h2>管理中心</h2>
-        <div class="pc-grid card-grid">
-          <el-button
-            v-for="card in managementCards"
-            :key="card.key"
-            native-type="button"
-            class="pc-content-button manager-card"
-            @click="navigateByCard(card)"
-          >
-            <strong>{{ card.title }}</strong>
-            <span>{{ card.description }}</span>
-          </el-button>
-        </div>
-      </section>
-      <section class="section-block">
-        <div class="pc-toolbar section-head">
-          <h2>最近菜单</h2>
-          <RouterLink class="section-link" :to="getFoodMenuPath()">
-            查看全部
-          </RouterLink>
-        </div>
+  <section class="desktop-workspace">
+    <PageHeader title="家庭餐饮">
+      <template #right>
+        <el-button @click="createTodayMenu">今日菜单</el-button>
+        <el-button type="primary" @click="goMenu">挑选菜品</el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="homeData">
+      <div class="desktop-shortcuts">
         <el-button
-          v-for="menu in homeData.recentMenus"
-          :key="menu.orderId"
-          native-type="button"
-          class="pc-content-button recent-row"
-          @click="goRecentMenu(menu.orderId)"
+          v-for="card in managementCards"
+          :key="card.key"
+          @click="navigateByCard(card)"
         >
-          <div>
-            <strong>{{ menu.title }}</strong>
-            <span>{{ menu.summary }}</span>
-          </div>
+          {{ card.title }}
         </el-button>
-      </section>
+      </div>
+      <DesktopTable
+        :rows="homeData.recentMenus"
+        :loading="isLoading"
+        title="最近菜单"
+      >
+        <el-table-column
+          prop="title"
+          label="菜单"
+          min-width="260"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="summary"
+          label="摘要"
+          min-width="400"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {MenuRow} -->
+        <el-table-column fixed="right" label="操作" width="150">
+          <template #default="{ row }: { row: MenuRow }">
+            <el-button link type="primary" @click="goRecentMenu(row.orderId)">
+              查看菜单
+            </el-button>
+          </template>
+        </el-table-column>
+      </DesktopTable>
     </template>
-    <p v-else class="page-error">{{ pageError }}</p>
     <CommonFeedback
       v-model="feedbackVisible"
       :message="feedbackMessage"

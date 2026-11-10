@@ -129,9 +129,8 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date)
 }
 </script>
-
 <template>
-  <section class="pc-page gold-liquidation-page" aria-label="清仓记录">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader
       title="清仓记录"
       back-label="返回黄金账户持仓"
@@ -162,7 +161,12 @@ function formatDateTime(value: string | null | undefined) {
           </strong>
         </div>
       </section>
-      <DesktopTable :rows="records">
+      <DesktopTable
+        title="黄金清仓记录"
+        searchable
+        search-placeholder="搜索清仓记录"
+        :rows="records"
+      >
         <!-- @vue-generic {GoldLiquidationRecord} -->
         <el-table-column label="卖出时间" min-width="160">
           <template #default="{ row }: { row: GoldLiquidationRecord }">

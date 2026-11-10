@@ -1,13 +1,14 @@
 <script setup lang="ts">
+import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   deleteTravelPlan,
@@ -100,34 +101,12 @@ function openCreatePage() {
   void router.push('/tools/travel-plans/new')
 }
 
-function toggleEditing() {
-  isEditing.value = !isEditing.value
-}
-
 function openDetail(planId: number) {
   void router.push(`/tools/travel-plans/${planId}`)
 }
 
 function openEditPage(planId: number) {
   void router.push(`/tools/travel-plans/${planId}/edit`)
-}
-
-function handleCardClick(planId: number) {
-  if (isEditing.value) {
-    return
-  }
-  openDetail(planId)
-}
-
-function handleCardKeydown(event: KeyboardEvent, planId: number) {
-  if (isEditing.value) {
-    return
-  }
-
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    openDetail(planId)
-  }
 }
 
 function openDeleteModal(plan: TravelPlan) {
@@ -174,19 +153,10 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
-function formatDateRange(plan: TravelPlan) {
-  const start = plan.startDate ? plan.startDate.split('-').join('.') : ''
-  const end = plan.endDate ? plan.endDate.split('-').join('.') : ''
-  if (!start || !end) {
-    return plan.destination ?? ''
-  }
-  return `${start} - ${end}`
-}
-
 type DesktopRow = (typeof visiblePlans.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="旅行计划">
       <template #right>
         <el-button type="primary" @click="openCreatePage">新增旅行</el-button>
@@ -199,7 +169,13 @@ type DesktopRow = (typeof visiblePlans.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="visiblePlans" :loading="isLoading">
+    <DesktopTable
+      title="旅行计划"
+      searchable
+      search-placeholder="名称 / 目的地"
+      :rows="visiblePlans"
+      :loading="isLoading"
+    >
       <template #toolbar>
         <SegmentedControl
           v-model="activeTab"
@@ -214,6 +190,7 @@ type DesktopRow = (typeof visiblePlans.value)[number]
       <el-table-column
         label="名称"
         prop="name"
+        sortable="custom"
         min-width="200"
         show-overflow-tooltip
       />
@@ -221,6 +198,7 @@ type DesktopRow = (typeof visiblePlans.value)[number]
       <el-table-column
         label="目的地"
         prop="destination"
+        sortable="custom"
         min-width="200"
         show-overflow-tooltip
       />
@@ -228,6 +206,7 @@ type DesktopRow = (typeof visiblePlans.value)[number]
       <el-table-column
         label="开始日期"
         prop="startDate"
+        sortable="custom"
         min-width="140"
         show-overflow-tooltip
       />
@@ -235,6 +214,7 @@ type DesktopRow = (typeof visiblePlans.value)[number]
       <el-table-column
         label="结束日期"
         prop="endDate"
+        sortable="custom"
         min-width="140"
         show-overflow-tooltip
       />

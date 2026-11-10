@@ -24,6 +24,7 @@ export type Transaction = {
   categoryColor?: string | null
   /** 账户 ID。 */
   accountId?: number | null
+  accountName?: string | null
   /** 原始备注。 */
   remark?: string | null
   /** 交易方向，用于决定金额颜色和符号含义。 */

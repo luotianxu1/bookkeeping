@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import MonthPicker from '@/business/components/common/MonthPicker/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
@@ -19,14 +23,10 @@ import { getErrorMessage } from '@/business/api/request'
 import {
   amountTextClass,
   formatCurrency,
-  formatDateLabel,
-  hasOrderFoot,
   isBucketWeekend,
   orderTypeLabel,
   receivedAmount,
-  statusClass,
   statusLabel,
-  typeAccent,
 } from '../PhotographyOrdersPage/photographyOrderFormat'
 import { formatLunarLabel } from '../PhotographyOrdersPage/lunarCalendar'
 import { useOverviewCharts } from './useOverviewCharts'
@@ -70,27 +70,6 @@ const buckets = computed(() =>
     ? calendarBuckets.value
     : (overview.value?.buckets ?? []),
 )
-const selectedCalendarDate = computed(() =>
-  viewMode.value === 'calendar'
-    ? calendarActiveDate.value
-    : (overview.value?.selectedValue ?? calendarSelectedDate.value ?? null),
-)
-const showCalendarOrders = computed(
-  () => viewMode.value === 'calendar' && orders.value.length > 0,
-)
-
-const periodTitle = computed(() => {
-  if (!overview.value) return '订单列表'
-  if (viewMode.value === 'calendar') {
-    return selectedCalendarDate.value
-      ? `${formatDateLabel(selectedCalendarDate.value)}订单列表`
-      : '当天订单列表'
-  }
-  if (viewMode.value === 'month') {
-    return `${overview.value.selectedValue}年订单列表`
-  }
-  return `${overview.value.selectedValue}订单列表`
-})
 
 const bucketSectionTitle = computed(() => {
   if (viewMode.value === 'calendar') return '拍摄日历'
@@ -371,54 +350,51 @@ function formatDateTime(value: string) {
   const [datePart = '', timePart = ''] = value.replace('T', ' ').split(' ')
   return `${datePart.replace(/-/g, '.')} ${timePart.slice(0, 5)}`
 }
-</script>
 
+type OrderRow = (typeof orders.value)[number]
+</script>
 <template>
-  <section
-    class="pc-page photography-order-overview-page"
-    aria-label="摄影订单总览"
-  >
-    <PageHeader
-      title="订单总览"
-      back-to="/tools/photography-orders"
-      back-label="返回订单页"
-    />
-    <SegmentedControl
-      v-model="viewMode"
-      :options="viewOptions"
-      label="订单总览视图切换"
-      variant="brand"
-    />
-    <el-card class="pc-record-card overview-hero" shadow="never">
-      <div class="overview-picker-row">
-        <MonthPicker
-          v-if="viewMode === 'calendar'"
-          :model-value="calendarMonth"
-          @update:model-value="calendarMonth = $event"
+  <section class="desktop-workspace desktop-calendar">
+    <PageHeader title="摄影订单总览">
+      <template #right>
+        <SegmentedControl
+          v-model="viewMode"
+          :options="viewOptions"
+          label="订单总览视图切换"
+          variant="brand"
         />
-        <YearPicker
-          v-else-if="viewMode === 'month'"
-          :model-value="monthYear"
-          @update:model-value="monthYear = $event"
-        />
-      </div>
-      <div class="pc-grid overview-stats-grid">
-        <el-card class="pc-record-card overview-stat-card" shadow="never">
-          <span>总单数</span>
-          <strong>{{ summary?.totalOrders ?? 0 }}</strong>
-        </el-card>
-        <el-card class="pc-record-card overview-stat-card" shadow="never">
-          <span>总金额</span>
-          <strong :class="amountTextClass(summary?.totalContractAmount)">
-            {{ formatCurrency(summary?.totalContractAmount) }}
-          </strong>
-        </el-card>
-      </div>
-    </el-card>
-    <p v-if="pageError" class="overview-page-error">{{ pageError }}</p>
-    <CommonLoading v-else-if="isLoading" text="总览加载中..." />
-    <template v-else>
-      <el-card class="pc-record-card overview-panel" shadow="never">
+        <div class="overview-picker-row">
+          <MonthPicker
+            v-if="viewMode === 'calendar'"
+            :model-value="calendarMonth"
+            @update:model-value="calendarMonth = $event"
+          />
+          <YearPicker
+            v-else-if="viewMode === 'month'"
+            :model-value="monthYear"
+            @update:model-value="monthYear = $event"
+          />
+        </div>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        { label: '订单总数', value: summary?.totalOrders ?? 0 },
+        {
+          label: '合同总额',
+          value: formatCurrency(summary?.totalContractAmount),
+        },
+      ]"
+    />
+    <div class="desktop-columns">
+      <PagePanel title="订单分布">
         <div class="pc-toolbar overview-panel-head">
           <strong>{{ bucketSectionTitle }}</strong>
         </div>
@@ -485,144 +461,75 @@ function formatDateTime(value: string) {
             </template>
           </el-button>
         </div>
-      </el-card>
-      <el-card
-        v-if="showCalendarOrders"
-        class="pc-record-card overview-orders-panel"
-        shadow="never"
-      >
-        <div class="pc-toolbar overview-panel-head">
-          <strong>{{ periodTitle }}</strong>
-          <span>{{ orders.length }} 单</span>
-        </div>
-        <p v-if="orders.length === 0" class="overview-empty">
-          当前周期暂无订单
-        </p>
-        <div v-else class="pc-grid overview-order-list">
-          <el-card
-            v-for="order in orders"
-            :key="order.id"
-            class="pc-record-card overview-order-card"
-            shadow="never"
-          >
-            <div class="overview-order-head">
-              <div>
-                <strong>{{ orderTypeLabel(order.orderType) }}</strong>
-                <p>{{ formatDateTime(order.shootAt) }}</p>
-              </div>
-              <div class="overview-order-tags">
-                <span
-                  class="overview-order-tag"
-                  :style="{
-                    color: typeAccent(order.orderType),
-                    backgroundColor: `${typeAccent(order.orderType)}14`,
-                  }"
-                >
-                  {{ orderTypeLabel(order.orderType) }}
-                </span>
-                <span
-                  :class="[
-                    'overview-order-tag',
-                    'overview-order-tag--status',
-                    statusClass(order),
-                  ]"
-                >
-                  {{ statusLabel(order) }}
-                </span>
-              </div>
-            </div>
-            <div class="overview-order-metrics">
-              <div>
-                <span>已收收入</span>
-                <strong
-                  :class="['income', amountTextClass(receivedAmount(order))]"
-                >
-                  {{ formatCurrency(receivedAmount(order)) }}
-                </strong>
-              </div>
-            </div>
-            <div v-if="hasOrderFoot(order)" class="overview-order-foot">
-              <p v-if="order.address">地址：{{ order.address }}</p>
-              <p v-if="order.contactInfo">联系方式：{{ order.contactInfo }}</p>
-              <p v-if="order.remark">备注：{{ order.remark }}</p>
-            </div>
-          </el-card>
-        </div>
-      </el-card>
-      <section class="pc-grid overview-charts-grid">
-        <el-card
-          class="pc-record-card chart-card chart-card--wide"
-          shadow="never"
-        >
-          <div class="chart-card-head">
-            <div><strong>收益趋势</strong></div>
-          </div>
-          <div v-if="!lineHasData" class="chart-empty">
-            当前周期还没有可展示的趋势数据
-          </div>
-          <div v-else ref="lineChartRef" class="pc-chart chart-surface"></div>
-        </el-card>
-        <el-card class="pc-record-card chart-card" shadow="never">
-          <div class="chart-card-head">
-            <div><strong>分类分布</strong></div>
-          </div>
-          <div v-if="!quantityPieHasData" class="chart-empty">
-            当前周期暂无分类分布数据
-          </div>
-          <div
-            v-else
-            ref="pieChartRef"
-            class="pc-chart chart-surface chart-surface--pie"
-          ></div>
-          <div v-if="quantityPieHasData" class="type-legend">
-            <el-card
-              v-for="item in typeStats"
-              :key="item.type"
-              class="pc-record-card type-legend-item"
-              shadow="never"
-            >
-              <span
-                class="type-dot"
-                :style="{ backgroundColor: typeAccent(item.type) }"
-              ></span>
-              <div>
-                <strong>{{ item.label }}</strong>
-                <p>{{ item.orderCount }} 单</p>
-              </div>
-            </el-card>
-          </div>
-        </el-card>
-        <el-card class="pc-record-card chart-card" shadow="never">
-          <div class="chart-card-head">
-            <div><strong>收益类型</strong></div>
-          </div>
-          <div v-if="!revenuePieHasData" class="chart-empty">
-            当前周期暂无收益类型数据
-          </div>
-          <div
-            v-else
-            ref="revenuePieChartRef"
-            class="pc-chart chart-surface chart-surface--pie"
-          ></div>
-          <div v-if="revenuePieHasData" class="type-legend">
-            <el-card
-              v-for="item in typeStats"
-              :key="`revenue-${item.type}`"
-              class="pc-record-card type-legend-item"
-              shadow="never"
-            >
-              <span
-                class="type-dot"
-                :style="{ backgroundColor: typeAccent(item.type) }"
-              ></span>
-              <div>
-                <strong>{{ item.label }}</strong>
-                <p>{{ formatCurrency(item.contractAmount) }}</p>
-              </div>
-            </el-card>
-          </div>
-        </el-card>
-      </section>
-    </template>
+      </PagePanel>
+      <PagePanel title="收益趋势">
+        <div v-if="lineHasData" ref="lineChartRef" class="desktop-chart" />
+        <el-empty v-else description="暂无趋势数据" />
+      </PagePanel>
+    </div>
+    <div class="desktop-columns">
+      <PagePanel title="分类分布">
+        <div
+          v-if="quantityPieHasData"
+          ref="pieChartRef"
+          class="desktop-chart"
+        />
+        <el-empty v-else description="暂无分类数据" />
+      </PagePanel>
+      <PagePanel title="收益类型">
+        <div
+          v-if="revenuePieHasData"
+          ref="revenuePieChartRef"
+          class="desktop-chart"
+        />
+        <el-empty v-else description="暂无收益数据" />
+      </PagePanel>
+    </div>
+    <DesktopTable
+      :rows="orders"
+      :loading="isLoading"
+      title="当前周期订单"
+      search-placeholder="搜索地址或联系方式"
+      searchable
+    >
+      <!-- @vue-generic {OrderRow} -->
+      <el-table-column label="类型" min-width="150">
+        <template #default="{ row }: { row: OrderRow }">
+          {{ orderTypeLabel(row.orderType) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {OrderRow} -->
+      <el-table-column label="拍摄时间" min-width="200">
+        <template #default="{ row }: { row: OrderRow }">
+          {{ formatDateTime(row.shootAt) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {OrderRow} -->
+      <el-table-column label="状态" min-width="150">
+        <template #default="{ row }: { row: OrderRow }">
+          {{ statusLabel(row) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {OrderRow} -->
+      <el-table-column label="已收收入" min-width="150">
+        <template #default="{ row }: { row: OrderRow }">
+          {{ formatCurrency(receivedAmount(row)) }}
+        </template>
+      </el-table-column>
+      <el-table-column
+        prop="address"
+        label="地点"
+        min-width="220"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="contactInfo"
+        label="联系方式"
+        min-width="180"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+    </DesktopTable>
   </section>
 </template>

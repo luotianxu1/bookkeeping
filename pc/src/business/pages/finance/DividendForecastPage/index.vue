@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import PagePanel from '@/business/components/PagePanel.vue'
+
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import { computed, ref } from 'vue'
@@ -321,199 +325,199 @@ function formatNumber(value: number, digits = 2) {
 }
 
 function formatPercent(value: number) {
-  return `${formatNumber(value, 2)}%`
+  return formatPercentage(value)
 }
 </script>
-
 <template>
-  <section class="pc-page dividend-forecast-page" aria-label="收息预测">
-    <PageHeader
-      title="收息预测"
-      back-to="/finance/more-features"
-      back-label="返回更多功能"
-    />
-    <p v-if="pageError" class="forecast-message forecast-message-error">
-      {{ pageError }}
-    </p>
-    <el-card
-      class="pc-record-card forecast-card"
-      aria-label="预测条件"
-      shadow="never"
-    >
-      <div class="forecast-search-box">
-        <label
-          class="pc-field forecast-search-field"
-          aria-label="输入基金或股票代码"
-        >
-          <DesktopInput
-            :value="searchKeyword"
-            type="search"
-            inputmode="search"
-            placeholder="输入基金或股票代码"
-            @input="
-              handleKeywordInput(($event.target as HTMLInputElement).value)
-            "
-            @keydown.enter.prevent="searchProducts"
-          />
-          <el-button
-            native-type="button"
-            :disabled="isSearching"
-            @click="searchProducts"
+  <section class="desktop-workspace">
+    <PageHeader title="收息预测"><template #right></template></PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <div class="desktop-calculator">
+      <PagePanel title="测算条件">
+        <div class="forecast-search-box">
+          <label
+            class="pc-field forecast-search-field"
+            aria-label="输入基金或股票代码"
           >
-            {{ isSearching ? '搜索中' : '搜索' }}
-          </el-button>
-        </label>
-        <div
-          v-if="searchResults.length > 0"
-          class="forecast-search-results"
-          aria-label="搜索结果"
-        >
-          <el-button
-            v-for="product in searchResults"
-            :key="getSearchResultKey(product)"
-            native-type="button"
-            :class="[
-              'forecast-search-item',
-              { active: isResultSelected(product) },
-            ]"
-            @click="selectProduct(product)"
-            class="pc-content-button"
+            <DesktopInput
+              :value="searchKeyword"
+              type="search"
+              inputmode="search"
+              placeholder="输入基金或股票代码"
+              @input="
+                handleKeywordInput(($event.target as HTMLInputElement).value)
+              "
+              @keydown.enter.prevent="searchProducts"
+            />
+            <el-button
+              native-type="button"
+              :disabled="isSearching"
+              @click="searchProducts"
+            >
+              {{ isSearching ? '搜索中' : '搜索' }}
+            </el-button>
+          </label>
+          <div
+            v-if="searchResults.length > 0"
+            class="forecast-search-results"
+            aria-label="搜索结果"
           >
-            <strong>{{ product.symbol }} {{ product.name }}</strong>
-            <span>{{ getSearchResultMeta(product) }}</span>
-          </el-button>
-        </div>
-      </div>
-      <p v-if="searchMessage" class="forecast-search-message">
-        {{ searchMessage }}
-      </p>
-      <div v-if="selectedProduct" class="forecast-selected-product">
-        <strong>{{ selectedProduct.symbol }} {{ selectedProduct.name }}</strong>
-        <span>{{ selectedProductSummary }}</span>
-        <CommonLoading v-if="isLoadingQuote" text="正在查询最新行情..." />
-        <div
-          v-else-if="selectedProductQuote"
-          class="forecast-quote-detail"
-          aria-label="最新行情详情"
-        >
-          <div>
-            <span>
-              {{
-                selectedProductQuote.productType === 'fund'
-                  ? '最新净值'
-                  : '最新价'
-              }}
-            </span>
-            <strong>
-              {{
-                selectedProductQuote.latestPrice == null
-                  ? '-'
-                  : formatCurrency(
-                      selectedProductQuote.latestPrice,
-                      selectedProductQuote.productType === 'fund' ? 4 : 2,
-                    )
-              }}
-            </strong>
+            <el-button
+              v-for="product in searchResults"
+              :key="getSearchResultKey(product)"
+              native-type="button"
+              :class="[
+                'forecast-search-item',
+                { active: isResultSelected(product) },
+              ]"
+              @click="selectProduct(product)"
+              class="pc-content-button"
+            >
+              <strong>{{ product.symbol }} {{ product.name }}</strong>
+              <span>{{ getSearchResultMeta(product) }}</span>
+            </el-button>
           </div>
-          <div>
-            <span>数据日期</span>
-            <strong>{{ selectedProductQuote.quoteDate || '暂无' }}</strong>
-          </div>
-          <small>
-            {{ selectedProductQuote.source || '行情数据' }} ·
-            {{ isSelectedQuoteToday ? '今日数据' : '最近可用数据' }}
-          </small>
         </div>
-        <p v-else class="forecast-quote-empty">
-          暂无可用行情，持仓金额模式暂不可用
+        <p v-if="searchMessage" class="forecast-search-message">
+          {{ searchMessage }}
         </p>
+        <div v-if="selectedProduct" class="forecast-selected-product">
+          <strong>
+            {{ selectedProduct.symbol }} {{ selectedProduct.name }}
+          </strong>
+          <span>{{ selectedProductSummary }}</span>
+          <CommonLoading v-if="isLoadingQuote" text="正在查询最新行情..." />
+          <div
+            v-else-if="selectedProductQuote"
+            class="forecast-quote-detail"
+            aria-label="最新行情详情"
+          >
+            <div>
+              <span>
+                {{
+                  selectedProductQuote.productType === 'fund'
+                    ? '最新净值'
+                    : '最新价'
+                }}
+              </span>
+              <strong>
+                {{
+                  selectedProductQuote.latestPrice == null
+                    ? '-'
+                    : formatCurrency(
+                        selectedProductQuote.latestPrice,
+                        selectedProductQuote.productType === 'fund' ? 4 : 2,
+                      )
+                }}
+              </strong>
+            </div>
+            <div>
+              <span>数据日期</span>
+              <strong>{{ selectedProductQuote.quoteDate || '暂无' }}</strong>
+            </div>
+            <small>
+              {{ selectedProductQuote.source || '行情数据' }} ·
+              {{ isSelectedQuoteToday ? '今日数据' : '最近可用数据' }}
+            </small>
+          </div>
+          <p v-else class="forecast-quote-empty">
+            暂无可用行情，持仓金额模式暂不可用
+          </p>
+        </div>
+        <label class="pc-field forecast-field">
+          <span>输入方式</span>
+          <SegmentedControl
+            v-model="holdingInputMode"
+            :options="inputModeOptions"
+            label="持仓输入方式"
+          />
+        </label>
+        <label class="pc-field forecast-field">
+          <span>{{ holdingInputLabel }}</span>
+          <DesktopInput
+            v-model="holdingInputValue"
+            class="forecast-field-control"
+            type="number"
+            inputmode="decimal"
+            min="0"
+            step="0.01"
+            placeholder="请输入数值"
+          />
+        </label>
+        <p v-if="formError" class="forecast-message forecast-message-error">
+          {{ formError }}
+        </p>
+        <CommonButton
+          variant="primary"
+          :disabled="isCalculating || isLoadingQuote"
+          @click="calculateForecast"
+        >
+          {{ isCalculating ? '测算中...' : '开始测算' }}
+        </CommonButton>
+      </PagePanel>
+      <div>
+        <PagePanel title="测算结果" v-if="forecastResult">
+          <div class="result-card-head">
+            <div>
+              <p>{{ forecastResult.productTypeLabel }}</p>
+              <strong>{{ forecastResult.name }}</strong>
+            </div>
+            <AmountText
+              tag="strong"
+              class="result-amount"
+              :value="formatCurrency(forecastResult.estimatedDividendAmount)"
+            />
+          </div>
+          <p class="result-note">{{ forecastResult.calculationNote }}</p>
+          <div class="desktop-form-grid">
+            <div class="result-stat">
+              <span>{{ currentPriceLabel }}</span>
+              <strong>
+                {{ formatCurrency(forecastResult.currentPrice, 4) }}
+              </strong>
+            </div>
+            <div class="result-stat">
+              <span>近12个月分红次数</span>
+              <strong>{{ forecastResult.lastYearDividendCount }} 次</strong>
+            </div>
+            <div class="result-stat">
+              <span>近12个月每单位分红</span>
+              <strong>
+                {{ formatNumber(forecastResult.lastYearDividendPerUnit, 4) }} /
+                {{ forecastResult.unitName || '份' }}
+              </strong>
+            </div>
+            <div class="result-stat">
+              <span>折算持仓数量</span>
+              <strong>
+                {{ formatNumber(forecastResult.estimatedHoldingQuantity) }}
+                {{ forecastResult.unitName || '份' }}
+              </strong>
+            </div>
+            <div class="result-stat">
+              <span>对应持仓金额</span>
+              <strong>
+                {{ formatCurrency(forecastResult.estimatedHoldingAmount) }}
+              </strong>
+            </div>
+            <div class="result-stat">
+              <span>预计收息率</span>
+              <strong>
+                {{ formatPercent(forecastResult.estimatedDividendRate) }}
+              </strong>
+            </div>
+          </div>
+        </PagePanel>
+        <PagePanel v-else title="测算结果">
+          <el-empty description="填写左侧条件后开始测算" />
+        </PagePanel>
       </div>
-      <label class="pc-field forecast-field">
-        <span>输入方式</span>
-        <SegmentedControl
-          v-model="holdingInputMode"
-          :options="inputModeOptions"
-          label="持仓输入方式"
-        />
-      </label>
-      <label class="pc-field forecast-field">
-        <span>{{ holdingInputLabel }}</span>
-        <DesktopInput
-          v-model="holdingInputValue"
-          class="forecast-field-control"
-          type="number"
-          inputmode="decimal"
-          min="0"
-          step="0.01"
-          placeholder="请输入数值"
-        />
-      </label>
-      <p v-if="formError" class="forecast-message forecast-message-error">
-        {{ formError }}
-      </p>
-      <CommonButton
-        variant="primary"
-        :disabled="isCalculating || isLoadingQuote"
-        @click="calculateForecast"
-      >
-        {{ isCalculating ? '测算中...' : '开始测算' }}
-      </CommonButton>
-    </el-card>
-    <CommonLoading v-if="isCalculating" text="正在测算收息..." />
-    <el-card
-      v-else-if="forecastResult"
-      class="pc-record-card result-card"
-      aria-label="收息预测结果"
-      shadow="never"
-    >
-      <div class="result-card-head">
-        <div>
-          <p>{{ forecastResult.productTypeLabel }}</p>
-          <strong>{{ forecastResult.name }}</strong>
-        </div>
-        <AmountText
-          tag="strong"
-          class="result-amount"
-          :value="formatCurrency(forecastResult.estimatedDividendAmount)"
-        />
-      </div>
-      <p class="result-note">{{ forecastResult.calculationNote }}</p>
-      <div class="pc-grid result-grid">
-        <div class="result-stat">
-          <span>{{ currentPriceLabel }}</span>
-          <strong>{{ formatCurrency(forecastResult.currentPrice, 4) }}</strong>
-        </div>
-        <div class="result-stat">
-          <span>近12个月分红次数</span>
-          <strong>{{ forecastResult.lastYearDividendCount }} 次</strong>
-        </div>
-        <div class="result-stat">
-          <span>近12个月每单位分红</span>
-          <strong>
-            {{ formatNumber(forecastResult.lastYearDividendPerUnit, 4) }} /
-            {{ forecastResult.unitName || '份' }}
-          </strong>
-        </div>
-        <div class="result-stat">
-          <span>折算持仓数量</span>
-          <strong>
-            {{ formatNumber(forecastResult.estimatedHoldingQuantity) }}
-            {{ forecastResult.unitName || '份' }}
-          </strong>
-        </div>
-        <div class="result-stat">
-          <span>对应持仓金额</span>
-          <strong>
-            {{ formatCurrency(forecastResult.estimatedHoldingAmount) }}
-          </strong>
-        </div>
-        <div class="result-stat">
-          <span>预计收息率</span>
-          <strong>
-            {{ formatPercent(forecastResult.estimatedDividendRate) }}
-          </strong>
-        </div>
-      </div>
-    </el-card>
+    </div>
   </section>
 </template>

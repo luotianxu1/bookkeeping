@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 // 投资详情页共享工具：类型、常量与纯函数（无 Vue 响应式依赖）。
 import type {
   Account,
@@ -99,9 +100,8 @@ export function formatNumber(value: number, digits = 2) {
   }).format(value)
 }
 
-export function formatPercentValue(value: number, digits = 2) {
-  if (!Number.isFinite(value)) return '--'
-  return `${formatNumber(value * 100, digits)}%`
+export function formatPercentValue(value: number) {
+  return formatPercentage(value * 100)
 }
 
 export function formatCurrency(value: number) {
@@ -709,7 +709,7 @@ export function buildFundPeriodReturnStats(
     const value = returnByPeriod[title]
     return stat(
       label,
-      value !== undefined && value !== null ? `${formatNumber(value)}%` : '--',
+      value !== undefined && value !== null ? formatPercentage(value) : '--',
       value !== undefined && value !== null ? toneByNumber(value) : 'neutral',
     )
   })

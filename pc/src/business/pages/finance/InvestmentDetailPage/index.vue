@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { confirmAction } from '@/business/utils/confirm'
 // 投资详情页：负责数据加载与页面编排，行情/图表/弹窗/交易列表拆分至同目录子模块。
 import { computed, ref, watch } from 'vue'
@@ -46,13 +52,10 @@ import {
   fundTrendRangeOptions,
   formatAutoInvestFrequency,
   formatAutoInvestStatus,
-  getDividendRecordKey,
   getDividendStatusLabel,
   isInitialFundSubscriptionTransaction,
   isTodayMarketData,
-  statClass,
   statTone,
-  toneByNumber,
 } from './utils'
 import { getErrorMessage } from '@/business/api/request'
 
@@ -146,18 +149,7 @@ const todayProfitValue = computed(() => {
   }
   return formatCurrency(Number(detail.value.position.dayProfit))
 })
-const todayProfitTone = computed<'positive' | 'negative' | 'neutral'>(() => {
-  if (currentPosition.value?.subscriptionStatus === 'pending') {
-    return 'neutral'
-  }
-  if (
-    detail.value?.position?.dayProfit === null ||
-    detail.value?.position?.dayProfit === undefined
-  ) {
-    return 'neutral'
-  }
-  return toneByNumber(Number(detail.value.position.dayProfit))
-})
+
 const todayValue = computed(() => {
   if (
     detail.value?.position?.dayProfitRate === null ||
@@ -165,23 +157,9 @@ const todayValue = computed(() => {
   ) {
     return '--'
   }
-  return formatNumber(Number(detail.value.position.dayProfitRate)) + '%'
+  return formatPercentage(detail.value.position.dayProfitRate)
 })
-const todayTone = computed<'positive' | 'negative' | 'neutral'>(() => {
-  const fallbackRate = detail.value?.position?.dayProfitRate
-  const resolvedValue =
-    fallbackRate === null || fallbackRate === undefined
-      ? null
-      : Number(fallbackRate)
-  if (
-    resolvedValue === null ||
-    !Number.isFinite(resolvedValue) ||
-    resolvedValue === 0
-  ) {
-    return 'neutral'
-  }
-  return resolvedValue > 0 ? 'positive' : 'negative'
-})
+
 const showTodayMetrics = computed(() => {
   if (currentPosition.value?.subscriptionStatus === 'pending') {
     return false
@@ -250,19 +228,12 @@ const currentFundChartProfitRate = computed(() => {
   }
   return (currentFundChartProfit.value / costAmount) * 100
 })
-const currentTotalProfitTone = computed<'positive' | 'negative' | 'neutral'>(
-  () => toneByNumber(currentFundChartProfit.value),
-)
+
 const currentFundChartProfitRateText = computed(() => {
   const rate = currentFundChartProfitRate.value
-  return rate === null ? '--' : `${rate > 0 ? '+' : ''}${formatNumber(rate)}%`
+  return rate === null ? '--' : formatPercentage(rate, true)
 })
-const currentFundChartProfitRateTone = computed<
-  'positive' | 'negative' | 'neutral'
->(() => {
-  const rate = currentFundChartProfitRate.value
-  return rate === null ? 'neutral' : toneByNumber(rate)
-})
+
 const cumulativeProfitChartAriaLabel = computed(
   () =>
     `${detail.value?.name || currentPosition.value?.productName || '基金'}累计收益折线图，当前累计收益${formatCurrency(currentFundChartProfit.value)}，累计收益率${currentFundChartProfitRateText.value}`,
@@ -509,7 +480,7 @@ async function removeAutoInvestPlan(plan: InvestmentAutoInvestPlan) {
   if (!currentUser || isSavingAutoInvest.value) {
     return
   }
-  if (!await confirmAction('确认删除该定投计划吗？')) {
+  if (!(await confirmAction('确认删除该定投计划吗？'))) {
     return
   }
   isSavingAutoInvest.value = true
@@ -577,497 +548,395 @@ watch(
   },
   { immediate: true },
 )
-</script>
 
+type DividendRow = (typeof dividendRecords.value)[number]
+type PlanRow = (typeof autoInvestPlans.value)[number]
+</script>
 <template>
-  <section
-    :class="['investment-detail-page', { 'is-dark': isDark }]"
-    aria-label="投资详情"
-    class="pc-page"
-  >
-    <CommonFeedback
-      v-model="showFeedbackModal"
-      :message="feedbackMessage"
-      :type="feedbackType"
-    />
-    <PageHeader title="投资详情" :back-to="backTo" back-label="返回投资账户" />
-    <p
-      v-if="pageError"
-      class="investment-detail-message investment-detail-message-error"
+  <section class="desktop-workspace">
+    <PageHeader
+      :title="detail?.name || detail?.position.productName || '投资详情'"
     >
-      {{ pageError }}
-      <el-button native-type="button" @click="detailSection.run()">
-        重试
-      </el-button>
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else-if="detail">
-      <el-card
-        class="pc-record-card investment-detail-summary-card"
-        aria-label="投资详情总览"
-        shadow="never"
-      >
-        <div class="investment-detail-summary-title">
-          <strong>
-            {{ detail.name || detail.position.productName }}
-            <span v-if="isFundPosition">
-              {{ detail.symbol || detail.position.productSymbol }}
-            </span>
-          </strong>
-          <span v-if="!isFundPosition">
-            {{ detail.symbol || detail.position.productSymbol }} ·
-            {{ detail.productType === 'stock' ? '股票' : '投资资产' }}
-          </span>
-        </div>
-        <div class="investment-detail-summary-head">
-          <div class="investment-detail-summary-main">
-            <AmountText
-              tag="p"
-              class="investment-detail-summary-amount"
-              tone="inherit"
-              :value="summaryAmount"
-            />
-            <p class="investment-detail-summary-updated">
-              {{ displayUpdatedAt }}
-            </p>
-          </div>
-          <div
-            v-if="showTodayMetrics || showFundCumulativeProfitChart"
-            class="investment-detail-summary-side"
-          >
-            <div
-              v-if="showFundCumulativeProfitChart"
-              class="investment-detail-summary-metric-group"
-            >
-              <div class="investment-detail-summary-metric">
-                <span>累计收益</span>
-                <AmountText
-                  tag="strong"
-                  :tone="currentTotalProfitTone"
-                  :value="formatCurrency(currentFundChartProfit)"
-                />
-              </div>
-              <div class="investment-detail-summary-metric">
-                <span>累计收益率</span>
-                <AmountText
-                  tag="strong"
-                  :tone="currentFundChartProfitRateTone"
-                  :value="currentFundChartProfitRateText"
-                />
-              </div>
-            </div>
-            <div
-              v-if="showTodayMetrics"
-              class="investment-detail-summary-metric-group"
-            >
-              <div class="investment-detail-summary-metric">
-                <span>当日盈亏</span>
-                <AmountText
-                  tag="strong"
-                  :tone="todayProfitTone"
-                  :value="todayProfitValue"
-                />
-              </div>
-              <div class="investment-detail-summary-metric">
-                <span>当日收益率</span>
-                <AmountText
-                  tag="strong"
-                  :tone="todayTone"
-                  :value="todayValue"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div
-          v-if="showDividendReminder"
-          class="investment-detail-dividend-reminder"
+      <template #right>
+        <section
+          class="pc-toolbar investment-detail-actions"
+          aria-label="持仓操作"
         >
-          <span class="investment-detail-dividend-reminder-badge">
-            {{ dividendReminderLabel }}
-          </span>
-          <span class="investment-detail-dividend-reminder-text">
-            {{ dividendReminderText }}
-          </span>
-        </div>
-      </el-card>
-      <p v-if="accountsLoading" class="investment-detail-description">
-        资金账户加载中…
-      </p>
-      <p
-        v-if="accountsError"
-        class="investment-detail-message investment-detail-message-error"
-      >
-        {{ accountsError }}
-        <el-button native-type="button" @click="accountSection.run()">
-          重试
-        </el-button>
-      </p>
-      <p v-if="feesLoading" class="investment-detail-description">
-        赎回费率加载中…
-      </p>
-      <p
-        v-if="feesError"
-        class="investment-detail-message investment-detail-message-error"
-      >
-        {{ feesError }}
-        <el-button native-type="button" @click="feeSection.run()">
-          重试
-        </el-button>
-      </p>
-      <section
-        class="pc-toolbar investment-detail-actions"
-        aria-label="持仓操作"
-      >
-        <el-button
-          class="investment-detail-action-button buy"
-          native-type="button"
-          :disabled="!accountsReady"
-          @click="tradeModalRef?.open('buy')"
-        >
-          加仓
-        </el-button>
-        <el-button
-          class="investment-detail-action-button sell"
-          native-type="button"
-          :disabled="isPendingSubscription || !accountsReady"
-          @click="tradeModalRef?.open('sell')"
-        >
-          减仓
-        </el-button>
-        <el-button
-          class="investment-detail-action-button auto-invest"
-          native-type="button"
-          :disabled="!showAutoInvestSection || !accountsReady || !plansReady"
-          @click="autoInvestModalRef?.open()"
-        >
-          定投
-        </el-button>
-        <el-button
-          class="investment-detail-action-button edit"
-          native-type="button"
-          :disabled="!accountsReady"
-          @click="editModalRef?.open()"
-        >
-          修改
-        </el-button>
-        <el-button
-          class="investment-detail-action-button delete"
-          native-type="button"
-          :disabled="isDeletingPosition"
-          @click="openDeleteModal"
-          type="danger"
-          plain
-        >
-          删除
-        </el-button>
-      </section>
-      <el-card
-        class="pc-record-card investment-detail-card"
-        :aria-label="detail.productType === 'fund' ? '基金走势' : '行情走势'"
-        shadow="never"
-      >
-        <header class="investment-detail-card-head">
-          <h2>
-            {{
-              detail.chartType === 'candlestick'
-                ? '股票日K走势'
-                : isFundProfitChartActive
-                  ? '累计收益走势'
-                  : '累计净值走势'
-            }}
-          </h2>
-          <AmountText
-            v-if="isFundPosition && !isFundProfitChartActive"
-            tag="span"
-            class="investment-detail-period-return"
-            :tone="selectedFundPeriodReturnTone"
-            :value="fundTrendPeriodReturnText"
-          />
-          <span v-else>
-            {{ externalStatus || detail.source || '行情接口' }}
-          </span>
-        </header>
-        <SegmentedControl
-          v-if="showFundCumulativeProfitChart"
-          v-model="selectedFundChartView"
-          :options="fundChartViewOptions"
-          label="基金走势图表切换"
-          class="investment-detail-chart-tabs"
-        />
-        <SegmentedControl
-          v-if="detail.productType === 'fund' && !isFundProfitChartActive"
-          v-model="selectedFundTrendRange"
-          :options="fundTrendRangeOptions"
-          label="基金走势区间切换"
-          variant="surface"
-        />
-        <p v-if="marketLoading" class="investment-detail-description">
-          行情加载中…
-        </p>
-        <p
-          v-if="marketError"
-          class="investment-detail-message investment-detail-message-error"
-        >
-          {{ marketError }}
           <el-button
+            class="investment-detail-action-button buy"
             native-type="button"
-            @click="loadExternalMarketData(detail)"
+            :disabled="!accountsReady"
+            @click="tradeModalRef?.open('buy')"
           >
-            重试
+            加仓
           </el-button>
-        </p>
-        <p v-if="historyLoading" class="investment-detail-description">
-          完整交易历史加载中…
-        </p>
-        <p
-          v-if="historyError"
-          class="investment-detail-message investment-detail-message-error"
-        >
-          {{ historyError }}
-          <el-button native-type="button" @click="historySection.run()">
-            重试
+          <el-button
+            class="investment-detail-action-button sell"
+            native-type="button"
+            :disabled="isPendingSubscription || !accountsReady"
+            @click="tradeModalRef?.open('sell')"
+          >
+            减仓
           </el-button>
-        </p>
-        <template v-if="historyReady && isFundProfitChartActive">
-          <div
-            v-if="cumulativeProfitPoints.length"
-            ref="cumulativeProfitChartRef"
-            class="pc-chart investment-detail-chart investment-detail-profit-chart"
-            role="img"
-            :aria-label="cumulativeProfitChartAriaLabel"
-          ></div>
-          <p v-else class="investment-detail-empty">
-            {{ externalStatus || '暂无累计收益走势数据' }}
-          </p>
-        </template>
-        <template v-else-if="historyReady">
-          <div
-            v-if="detail.chartPoints.length"
-            ref="chartRef"
-            class="pc-chart investment-detail-chart"
-          ></div>
-          <p v-else class="investment-detail-empty">暂无走势数据</p>
-        </template>
-      </el-card>
-      <el-card
-        class="pc-record-card investment-detail-card"
-        aria-label="资产详细数据"
-        shadow="never"
-      >
-        <h2>
-          {{
-            detail.productType === 'stock'
-              ? '股票详细数据'
-              : detail.productType === 'fund'
-                ? '基金详细数据'
-                : '资产详细数据'
-          }}
-        </h2>
-        <div class="pc-grid investment-detail-grid">
-          <div
-            v-for="entry in detail.marketStats"
-            :key="entry.label"
-            class="investment-detail-grid-item"
+          <el-button
+            class="investment-detail-action-button auto-invest"
+            native-type="button"
+            :disabled="!showAutoInvestSection || !accountsReady || !plansReady"
+            @click="autoInvestModalRef?.open()"
           >
-            <span>{{ entry.label }}</span>
-            <AmountText
-              tag="strong"
-              :class="statClass(entry)"
-              :tone="statTone(entry)"
-              :value="entry.value"
-            />
-          </div>
-        </div>
-      </el-card>
-      <el-card
-        class="pc-record-card investment-detail-card"
-        aria-label="持仓分析"
-        shadow="never"
-      >
-        <h2>持仓分析</h2>
-        <div class="pc-grid investment-detail-grid">
-          <div
-            v-for="entry in detail.holdingStats"
-            :key="entry.label"
-            class="investment-detail-grid-item"
+            定投
+          </el-button>
+          <el-button
+            class="investment-detail-action-button edit"
+            native-type="button"
+            :disabled="!accountsReady"
+            @click="editModalRef?.open()"
           >
-            <span>{{ entry.label }}</span>
-            <AmountText
-              tag="strong"
-              :class="statClass(entry)"
-              :tone="statTone(entry)"
-              :value="entry.value"
-            />
-          </div>
-        </div>
-      </el-card>
-      <el-card
-        v-if="showDividendRecordsSection"
-        class="pc-record-card investment-detail-card"
-        aria-label="近一年分红与计划"
-        shadow="never"
-      >
-        <header class="investment-detail-card-head">
-          <h2>近一年分红与计划</h2>
-          <span>{{ dividendRecords.length }} 条</span>
-        </header>
-        <div class="pc-grid investment-detail-dividend-list">
-          <el-card
-            v-for="entry in dividendRecords"
-            :key="getDividendRecordKey(entry)"
-            class="pc-record-card investment-detail-dividend-item"
-            shadow="never"
+            修改
+          </el-button>
+          <el-button
+            class="investment-detail-action-button delete"
+            native-type="button"
+            :disabled="isDeletingPosition"
+            @click="openDeleteModal"
+            type="danger"
+            plain
           >
-            <div class="investment-detail-dividend-top">
-              <div class="investment-detail-dividend-title">
-                <strong>{{ formatDividendDate(entry.payDate) }}</strong>
-              </div>
-              <em class="investment-detail-dividend-status">
-                {{ getDividendStatusLabel(entry.status, entry.actualAmount) }}
-              </em>
-            </div>
-            <div class="pc-grid investment-detail-dividend-grid">
-              <div>
-                <span>每单位分红</span>
-                <strong>
-                  {{ formatDividendPerUnit(entry.dividendPerUnit) }}
-                </strong>
-              </div>
-              <div>
-                <span>
-                  {{
-                    entry.actualAmount === null ||
-                    entry.actualAmount === undefined
-                      ? '预计分红'
-                      : '到账分红'
-                  }}
-                </span>
-                <strong>
-                  {{
-                    formatCurrency(
-                      Number(entry.actualAmount ?? entry.expectedAmount ?? 0),
-                    )
-                  }}
-                </strong>
-              </div>
-            </div>
-          </el-card>
-        </div>
-      </el-card>
-      <p v-if="plansLoading" class="investment-detail-description">
-        定投计划加载中…
-      </p>
-      <p
-        v-if="plansError"
-        class="investment-detail-message investment-detail-message-error"
-      >
-        {{ plansError }}
-        <el-button native-type="button" @click="planSection.run()">
-          重试
-        </el-button>
-      </p>
-      <el-card
-        v-if="showAutoInvestPlansSection"
-        class="pc-record-card investment-detail-card"
-        aria-label="定投计划"
-        shadow="never"
-      >
-        <header class="investment-detail-card-head"><h2>定投计划</h2></header>
-        <div class="pc-grid investment-auto-invest-list">
-          <el-card
-            v-for="plan in autoInvestPlans"
-            :key="plan.id"
-            class="pc-record-card investment-auto-invest-item"
-            shadow="never"
-          >
-            <div class="investment-auto-invest-top">
-              <div class="investment-auto-invest-main">
-                <strong>{{ formatCurrency(Number(plan.amount)) }}</strong>
-                <span>{{ formatAutoInvestFrequency(plan.frequency) }}</span>
-              </div>
-              <em
-                :class="['investment-auto-invest-status', `is-${plan.status}`]"
-              >
-                {{ formatAutoInvestStatus(plan.status) }}
-              </em>
-            </div>
-            <div class="pc-grid investment-auto-invest-grid">
-              <div>
-                <span>下次执行</span>
-                <strong>{{ plan.nextExecuteDate }}</strong>
-              </div>
-              <div>
-                <span>扣款账户</span>
-                <strong>{{ plan.fundingAccountName || '--' }}</strong>
-              </div>
-              <div>
-                <span>最近执行</span>
-                <strong>{{ formatDateTimeLabel(plan.lastExecutedAt) }}</strong>
-              </div>
-              <div>
-                <span>备注</span>
-                <strong>{{ plan.remark?.trim() || '--' }}</strong>
-              </div>
-            </div>
-            <div class="pc-toolbar investment-auto-invest-actions">
-              <el-button
-                native-type="button"
-                :disabled="isSavingAutoInvest || !accountsReady"
-                @click="autoInvestModalRef?.open(plan)"
-              >
-                修改
-              </el-button>
-              <el-button
-                native-type="button"
-                :disabled="isSavingAutoInvest"
-                @click="
-                  updateAutoInvestPlanStatus(
-                    plan,
-                    plan.status === 'active' ? 'paused' : 'active',
-                  )
-                "
-              >
-                {{ plan.status === 'active' ? '暂停' : '恢复' }}
-              </el-button>
-              <el-button
-                native-type="button"
-                class="danger"
-                :disabled="isSavingAutoInvest"
-                @click="removeAutoInvestPlan(plan)"
-                type="danger"
-                plain
-              >
-                删除
-              </el-button>
-            </div>
-          </el-card>
-        </div>
-      </el-card>
-      <p
-        v-if="transactionError"
-        class="investment-detail-message investment-detail-message-error"
-      >
-        {{ transactionError }}
-        <el-button native-type="button" @click="loadTransactionPage()">
-          重试
-        </el-button>
-      </p>
-      <TransactionList
-        v-if="!transactionError"
-        :items="transactionPageItems"
-        :unit-name="detail.unitName || detail.position.unitName || ''"
-        :total="transactionTotal"
-        :current-page="currentTransactionPage"
-        :total-pages="totalTransactionPages"
-        :summary="transactionPaginationSummary"
-        :can-prev="canGoPrevTransactionPage"
-        :can-next="canGoNextTransactionPage"
-        :is-loading="isLoadingTransactionPage"
-        @prev="goToPrevTransactionPage"
-        @next="goToNextTransactionPage"
-        @open-pending="openPendingTransactionModal"
+            删除
+          </el-button>
+        </section>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button link type="primary" @click="loadDetail">重试</el-button>
+    </el-alert>
+    <CommonLoading v-if="isLoading" />
+    <template v-if="detail">
+      <MetricStrip
+        :items="[
+          { label: '持仓市值', value: summaryAmount },
+          ...(showTodayMetrics
+            ? [
+                { label: '当日盈亏', value: todayProfitValue },
+                { label: '当日收益率', value: todayValue },
+              ]
+            : []),
+          ...(showFundCumulativeProfitChart
+            ? [
+                {
+                  label: '累计收益',
+                  value: formatCurrency(currentFundChartProfit),
+                },
+                { label: '累计收益率', value: currentFundChartProfitRateText },
+              ]
+            : []),
+        ]"
       />
+      <el-alert
+        v-if="showDividendReminder"
+        :title="dividendReminderLabel"
+        :description="dividendReminderText"
+        :closable="false"
+        type="info"
+      />
+      <el-alert
+        v-if="accountsError"
+        :title="accountsError"
+        type="error"
+        :closable="false"
+        show-icon
+      >
+        <el-button link type="primary" @click="accountSection.run()">
+          重试
+        </el-button>
+      </el-alert>
+      <el-alert
+        v-if="feesError"
+        :title="feesError"
+        type="error"
+        :closable="false"
+        show-icon
+      >
+        <el-button link type="primary" @click="feeSection.run()">
+          重试
+        </el-button>
+      </el-alert>
+      <div class="desktop-main-aside">
+        <PagePanel title="收益与走势">
+          <header class="investment-detail-card-head">
+            <h2>
+              {{
+                detail.chartType === 'candlestick'
+                  ? '股票日K走势'
+                  : isFundProfitChartActive
+                    ? '累计收益走势'
+                    : '累计净值走势'
+              }}
+            </h2>
+            <AmountText
+              v-if="isFundPosition && !isFundProfitChartActive"
+              tag="span"
+              class="investment-detail-period-return"
+              :tone="selectedFundPeriodReturnTone"
+              :value="fundTrendPeriodReturnText"
+            />
+            <span v-else>
+              {{ externalStatus || detail.source || '行情接口' }}
+            </span>
+          </header>
+          <SegmentedControl
+            v-if="showFundCumulativeProfitChart"
+            v-model="selectedFundChartView"
+            :options="fundChartViewOptions"
+            label="基金走势图表切换"
+            class="investment-detail-chart-tabs"
+          />
+          <SegmentedControl
+            v-if="detail.productType === 'fund' && !isFundProfitChartActive"
+            v-model="selectedFundTrendRange"
+            :options="fundTrendRangeOptions"
+            label="基金走势区间切换"
+            variant="surface"
+          />
+          <p v-if="marketLoading" class="investment-detail-description">
+            行情加载中…
+          </p>
+          <p
+            v-if="marketError"
+            class="investment-detail-message investment-detail-message-error"
+          >
+            {{ marketError }}
+            <el-button
+              native-type="button"
+              @click="loadExternalMarketData(detail)"
+            >
+              重试
+            </el-button>
+          </p>
+          <p v-if="historyLoading" class="investment-detail-description">
+            完整交易历史加载中…
+          </p>
+          <p
+            v-if="historyError"
+            class="investment-detail-message investment-detail-message-error"
+          >
+            {{ historyError }}
+            <el-button native-type="button" @click="historySection.run()">
+              重试
+            </el-button>
+          </p>
+          <template v-if="historyReady && isFundProfitChartActive">
+            <div
+              v-if="cumulativeProfitPoints.length"
+              ref="cumulativeProfitChartRef"
+              class="pc-chart investment-detail-chart investment-detail-profit-chart"
+              role="img"
+              :aria-label="cumulativeProfitChartAriaLabel"
+            ></div>
+            <p v-else class="investment-detail-empty">
+              {{ externalStatus || '暂无累计收益走势数据' }}
+            </p>
+          </template>
+          <template v-else-if="historyReady">
+            <div
+              v-if="detail.chartPoints.length"
+              ref="chartRef"
+              class="pc-chart investment-detail-chart"
+            ></div>
+            <p v-else class="investment-detail-empty">暂无走势数据</p>
+          </template>
+        </PagePanel>
+        <PagePanel title="持仓分析">
+          <el-descriptions :column="1" border>
+            <el-descriptions-item
+              v-for="entry in detail.holdingStats"
+              :key="entry.label"
+              :label="entry.label"
+            >
+              <AmountText :tone="statTone(entry)" :value="entry.value" />
+            </el-descriptions-item>
+          </el-descriptions>
+          <p class="desktop-note">{{ displayUpdatedAt }}</p>
+        </PagePanel>
+      </div>
+      <el-tabs class="desktop-tabs" model-value="transactions">
+        <el-tab-pane label="交易记录" name="transactions">
+          <el-alert
+            v-if="transactionError"
+            :title="transactionError"
+            type="error"
+            :closable="false"
+            show-icon
+          >
+            <el-button link type="primary" @click="loadTransactionPage()">
+              重试
+            </el-button>
+          </el-alert>
+          <TransactionList
+            v-if="!transactionError"
+            :items="transactionPageItems"
+            :unit-name="detail.unitName || detail.position.unitName || ''"
+            :total="transactionTotal"
+            :current-page="currentTransactionPage"
+            :total-pages="totalTransactionPages"
+            :summary="transactionPaginationSummary"
+            :can-prev="canGoPrevTransactionPage"
+            :can-next="canGoNextTransactionPage"
+            :is-loading="isLoadingTransactionPage"
+            @prev="goToPrevTransactionPage"
+            @next="goToNextTransactionPage"
+            @open-pending="openPendingTransactionModal"
+          />
+        </el-tab-pane>
+        <el-tab-pane label="行情数据" name="market">
+          <PagePanel title="资产详细数据">
+            <el-descriptions :column="2" border>
+              <el-descriptions-item
+                v-for="entry in detail.marketStats"
+                :key="entry.label"
+                :label="entry.label"
+              >
+                <AmountText :tone="statTone(entry)" :value="entry.value" />
+              </el-descriptions-item>
+            </el-descriptions>
+          </PagePanel>
+        </el-tab-pane>
+        <el-tab-pane
+          v-if="showDividendRecordsSection"
+          label="分红计划"
+          name="dividends"
+        >
+          <DesktopTable
+            :rows="dividendRecords"
+            :loading="false"
+            title="近一年分红与计划"
+          >
+            <!-- @vue-generic {DividendRow} -->
+            <el-table-column label="分红日期" min-width="150">
+              <template #default="{ row }: { row: DividendRow }">
+                {{ formatDividendDate(row.payDate) }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {DividendRow} -->
+            <el-table-column label="状态" min-width="150">
+              <template #default="{ row }: { row: DividendRow }">
+                {{ getDividendStatusLabel(row.status, row.actualAmount) }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {DividendRow} -->
+            <el-table-column label="每单位分红" min-width="150">
+              <template #default="{ row }: { row: DividendRow }">
+                {{ formatDividendPerUnit(row.dividendPerUnit) }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {DividendRow} -->
+            <el-table-column label="预计 / 到账分红" min-width="150">
+              <template #default="{ row }: { row: DividendRow }">
+                {{
+                  formatCurrency(
+                    Number(row.actualAmount ?? row.expectedAmount ?? 0),
+                  )
+                }}
+              </template>
+            </el-table-column>
+          </DesktopTable>
+        </el-tab-pane>
+        <el-tab-pane
+          v-if="showAutoInvestPlansSection"
+          label="定投计划"
+          name="plans"
+        >
+          <el-alert
+            v-if="plansError"
+            :title="plansError"
+            type="error"
+            :closable="false"
+            show-icon
+          >
+            <el-button link type="primary" @click="planSection.run()">
+              重试
+            </el-button>
+          </el-alert>
+          <DesktopTable
+            :rows="autoInvestPlans"
+            :loading="plansLoading"
+            title="定投计划"
+          >
+            <!-- @vue-generic {PlanRow} -->
+            <el-table-column label="金额" min-width="150">
+              <template #default="{ row }: { row: PlanRow }">
+                {{ formatCurrency(Number(row.amount)) }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {PlanRow} -->
+            <el-table-column label="频率" min-width="150">
+              <template #default="{ row }: { row: PlanRow }">
+                {{ formatAutoInvestFrequency(row.frequency) }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {PlanRow} -->
+            <el-table-column label="状态" min-width="150">
+              <template #default="{ row }: { row: PlanRow }">
+                {{ formatAutoInvestStatus(row.status) }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="nextExecuteDate"
+              label="下次执行"
+              min-width="160"
+              sortable="custom"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="fundingAccountName"
+              label="扣款账户"
+              min-width="170"
+              sortable="custom"
+              show-overflow-tooltip
+            />
+            <!-- @vue-generic {PlanRow} -->
+            <el-table-column fixed="right" label="操作" width="180">
+              <template #default="{ row }: { row: PlanRow }">
+                <el-button
+                  link
+                  type="primary"
+                  :disabled="isSavingAutoInvest || !accountsReady"
+                  @click="autoInvestModalRef?.open(row)"
+                >
+                  修改
+                </el-button>
+                <el-button
+                  link
+                  type="primary"
+                  :disabled="isSavingAutoInvest"
+                  @click="
+                    updateAutoInvestPlanStatus(
+                      row,
+                      row.status === 'active' ? 'paused' : 'active',
+                    )
+                  "
+                >
+                  {{ row.status === 'active' ? '暂停' : '恢复' }}
+                </el-button>
+                <el-button
+                  link
+                  type="danger"
+                  :disabled="isSavingAutoInvest"
+                  @click="removeAutoInvestPlan(row)"
+                >
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </DesktopTable>
+        </el-tab-pane>
+      </el-tabs>
     </template>
     <TradeModal
       v-if="detail"
@@ -1094,6 +963,11 @@ watch(
       :funding-accounts="fundingAccounts"
       @saved="loadDetail"
       @feedback="showFeedback"
+    />
+    <CommonFeedback
+      v-model="showFeedbackModal"
+      :message="feedbackMessage"
+      :type="feedbackType"
     />
     <CommonModal
       v-model="showDeleteModal"

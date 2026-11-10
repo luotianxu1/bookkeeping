@@ -6,10 +6,10 @@ import DesktopInput from '@/business/components/DesktopInput.vue'
 import { computed, onMounted, ref } from 'vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import {
@@ -106,16 +106,6 @@ const visibleItems = computed(() => {
 
     return left.id - right.id
   })
-})
-
-const emptyMessage = computed(() => {
-  if (activeTab.value === 'today') {
-    return '今天还没有待办事项'
-  }
-  if (activeTab.value === 'completed') {
-    return '还没有已完成事项'
-  }
-  return '暂无待办事项'
 })
 
 onMounted(() => {
@@ -277,10 +267,6 @@ async function toggleTodoStatus(item: TodoItem) {
   }
 }
 
-function toggleExpandedTodo(itemId: number) {
-  expandedTodoId.value = expandedTodoId.value === itemId ? null : itemId
-}
-
 async function confirmDeleteTodo() {
   const currentUser = getStoredCurrentUser()
   const target = deletingTodo.value
@@ -438,7 +424,7 @@ function padNumber(value: number) {
 type DesktopRow = (typeof visibleItems.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="待办事项">
       <template #right>
         <el-button type="primary" @click="openCreateModal">
@@ -467,7 +453,13 @@ type DesktopRow = (typeof visibleItems.value)[number]
         <strong>{{ completedCount }}</strong>
       </el-card>
     </div>
-    <DesktopTable :rows="visibleItems" :loading="isLoading">
+    <DesktopTable
+      title="待办清单"
+      searchable
+      search-placeholder="搜索事项 / 备注"
+      :rows="visibleItems"
+      :loading="isLoading"
+    >
       <template #toolbar>
         <SegmentedControl
           v-model="activeTab"
@@ -479,6 +471,7 @@ type DesktopRow = (typeof visibleItems.value)[number]
       <el-table-column
         label="事项"
         prop="title"
+        sortable="custom"
         min-width="240"
         show-overflow-tooltip
       />
@@ -504,6 +497,7 @@ type DesktopRow = (typeof visibleItems.value)[number]
       <el-table-column
         label="备注"
         prop="remark"
+        sortable="custom"
         min-width="200"
         show-overflow-tooltip
       />

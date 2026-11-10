@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 // 收益预测页：展示基金盘中预估收益，并支持按投资账户查看。
 import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import AmountText from '@/business/components/common/AmountText/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonSelect, {
   type CommonSelectOption,
 } from '@/business/components/common/CommonSelect/index.vue'
@@ -81,26 +86,11 @@ const visibleHoldings = computed<FundProfitForecastHolding[]>(() => {
   )
 })
 
-const hasInvestmentAccounts = computed(
-  () => (forecast.value?.accounts.length ?? 0) > 0,
-)
-const summaryTitle = computed(() =>
-  selectedAccount.value
-    ? `${selectedAccount.value.accountName}当日收益预测`
-    : '持仓基金当日收益预测',
-)
 const summaryHint = computed(() => {
   const timeText = formatDateTime(visibleSummary.value.estimatedAt)
   return timeText
     ? `按开盘时盘中估值实时预测（最近更新 ${timeText}）`
     : '按开盘时盘中估值实时预测'
-})
-const emptyMessage = computed(() => {
-  if (!hasInvestmentAccounts.value) {
-    return '暂无投资账户'
-  }
-
-  return selectedAccount.value ? '该账户暂无基金持仓' : '暂无基金持仓'
 })
 
 onMounted(() => {
@@ -151,8 +141,7 @@ function formatSignedCurrency(value: number) {
 }
 
 function formatSignedRate(value: number) {
-  const sign = value > 0 ? '+' : value < 0 ? '-' : ''
-  return `${sign}${formatNumber(value)}%`
+  return formatPercentage(value, true)
 }
 
 function formatCurrency(value: number) {
@@ -198,111 +187,85 @@ function formatDateTime(value: string | null | undefined) {
     hour12: false,
   }).format(date)
 }
-</script>
 
+type DesktopRow = (typeof visibleHoldings.value)[number]
+</script>
 <template>
-  <section class="pc-page profit-forecast-page" aria-label="收益预测">
-    <PageHeader title="收益预测" back-label="返回更多功能" />
-    <p
+  <section class="desktop-workspace">
+    <PageHeader title="收益预测">
+      <template #right>
+        <CommonSelect
+          v-model="selectedAccountId"
+          label="查看账户"
+          :options="accountSelectOptions"
+        />
+      </template>
+    </PageHeader>
+    <el-alert
       v-if="pageError"
-      class="profit-forecast-message profit-forecast-message-error"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        {
+          label: '预估收益',
+          value: formatSignedCurrency(visibleSummary.estimateProfit),
+        },
+        {
+          label: '预估收益率',
+          value: formatSignedRate(visibleSummary.estimateProfitRate),
+        },
+        {
+          label: '持仓市值',
+          value: formatCurrency(visibleSummary.holdingAmount),
+        },
+      ]"
+    />
+    <DesktopTable
+      :rows="visibleHoldings"
+      :loading="isLoading"
+      title="持仓收益预测"
+      search-placeholder="搜索基金"
+      searchable
     >
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <el-card
-        class="pc-record-card summary-card"
-        aria-label="收益预测汇总"
-        shadow="never"
-      >
-        <div class="summary-top">
-          <p class="summary-title">{{ summaryTitle }}</p>
-          <div class="summary-account-pill">
-            <CommonSelect
-              v-model="selectedAccountId"
-              label="查看账户"
-              :options="accountSelectOptions"
-            />
-          </div>
-        </div>
-        <div class="summary-row">
+      <el-table-column
+        prop="productName"
+        label="基金"
+        min-width="200"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="持仓" min-width="180">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ formatHoldingMeta(row) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="预估收益" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
           <AmountText
-            tag="strong"
-            class="summary-profit"
-            :value="formatSignedCurrency(visibleSummary.estimateProfit)"
-            :tone="getProfitTone(visibleSummary.estimateProfit)"
+            :value="formatSignedCurrency(row.estimateProfit)"
+            :tone="getProfitTone(row.estimateProfit)"
           />
-        </div>
-        <div class="summary-row summary-row--headline">
-          <span class="summary-rate-group">
-            <span class="summary-rate-label">预计</span>
-            <AmountText
-              tag="span"
-              class="summary-rate"
-              :value="formatSignedRate(visibleSummary.estimateProfitRate)"
-              :tone="getProfitTone(visibleSummary.estimateProfitRate)"
-            />
-          </span>
-          <span>
-            持仓市值 {{ formatCurrency(visibleSummary.holdingAmount) }}
-          </span>
-        </div>
-        <p class="summary-hint">{{ summaryHint }}</p>
-      </el-card>
-      <el-card
-        class="pc-record-card holding-card"
-        aria-label="持仓收益预测"
-        shadow="never"
-      >
-        <header class="holding-header">
-          <span class="holding-header-title">
-            {{
-              selectedAccount
-                ? `${selectedAccount.accountName}基金明细`
-                : '全部基金明细'
-            }}
-          </span>
-          <div class="holding-header-right"><span>预估收益</span></div>
-        </header>
-        <p v-if="visibleHoldings.length === 0" class="holding-empty">
-          {{ emptyMessage }}
-        </p>
-        <el-card
-          v-for="item in visibleHoldings"
-          :key="item.positionId"
-          v-else
-          class="pc-record-card holding-row"
-          shadow="never"
-        >
-          <div class="holding-left">
-            <p class="holding-name">{{ item.productName }}</p>
-            <AmountText
-              tag="p"
-              class="holding-amount"
-              :value="formatHoldingMeta(item)"
-              tone="inherit"
-            />
-            <p class="holding-update">{{ formatHoldingUpdatedAt(item) }}</p>
-          </div>
-          <div class="holding-right">
-            <div class="value-column">
-              <AmountText
-                tag="strong"
-                class="value-profit"
-                :value="formatSignedCurrency(item.estimateProfit)"
-                :tone="getProfitTone(item.estimateProfit)"
-              />
-              <AmountText
-                tag="span"
-                class="value-rate"
-                :value="formatSignedRate(item.estimateProfitRate)"
-                :tone="getProfitTone(item.estimateProfitRate)"
-              />
-            </div>
-          </div>
-        </el-card>
-      </el-card>
-    </template>
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="预估收益率" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ formatSignedRate(row.estimateProfitRate) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="更新" min-width="180">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ formatHoldingUpdatedAt(row) }}
+        </template>
+      </el-table-column>
+    </DesktopTable>
+    <p class="desktop-note">{{ summaryHint }}</p>
   </section>
 </template>

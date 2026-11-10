@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PagePanel from '@/business/components/PagePanel.vue'
+
 // 财务更多功能页：按业务类型分组展示财务功能入口。
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import FeatureIcon, {
@@ -120,33 +122,25 @@ const featureGroups: FeatureGroup[] = [
   },
 ]
 </script>
-
 <template>
-  <section class="pc-page more-features-page" aria-label="财务更多功能">
-    <PageHeader
-      title="更多功能"
-      back-to="/finance"
-      back-label="返回财务首页"
-      :prefer-back-to="true"
-    />
-    <section
-      v-for="group in featureGroups"
-      :key="group.title"
-      class="feature-group"
-    >
-      <h2>{{ group.title }}</h2>
-      <div class="pc-grid feature-grid">
-        <RouterLink
-          v-for="item in group.items"
-          :key="item.label"
-          class="feature-item"
-          :to="item.to"
-          :aria-label="item.label"
-        >
-          <FeatureIcon :icon="item.icon" :label="item.label" :size="32" />
-          <strong>{{ item.label }}</strong>
-        </RouterLink>
-      </div>
-    </section>
+  <section class="desktop-workspace">
+    <PageHeader title="财务功能"><template #right></template></PageHeader>
+    <div class="desktop-columns">
+      <PagePanel
+        v-for="group in featureGroups"
+        :key="group.title"
+        :title="group.title"
+      >
+        <div class="desktop-link-list">
+          <RouterLink v-for="item in group.items" :key="item.to" :to="item.to">
+            <span>
+              <FeatureIcon :icon="item.icon" :label="item.label" :size="20" />
+              {{ item.label }}
+            </span>
+            <span aria-hidden="true">→</span>
+          </RouterLink>
+        </div>
+      </PagePanel>
+    </div>
   </section>
 </template>

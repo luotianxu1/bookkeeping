@@ -1,10 +1,16 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 // 金价页：使用 ECharts 折线图展示价格走势，并支持暗黑模式配色。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import {
   getGoldPrices,
   type GoldPrice,
@@ -104,10 +110,6 @@ const chartExtrema = computed(() => {
   )
 })
 
-const showPriceFallback = computed(
-  () => !isLoadingGoldPrice.value && !hasSpotGold.value && !hasLondonGold.value,
-)
-
 const spotDelta = computed(() =>
   hasSpotGold.value
     ? formatDelta(
@@ -157,11 +159,11 @@ function formatDelta(change?: number | null, changePercent?: number | null) {
   }
 
   const displayChange = normalizeDisplayNumber(normalizedChange)
-  const displayPercent = normalizeDisplayNumber(normalizedPercent)
+  const displayPercent = normalizeDisplayNumber(normalizedPercent, 1)
   const toneSource = displayPercent !== 0 ? displayPercent : displayChange
 
   return {
-    text: `${formatSignedNumber(displayChange)} (${formatSignedNumber(displayPercent)}%)`,
+    text: `${formatSignedNumber(displayChange)} (${formatPercentage(displayPercent, true)})`,
     tone: getDeltaTone(toneSource),
   }
 }
@@ -535,120 +537,75 @@ onBeforeUnmount(() => {
   chartIns = null
 })
 </script>
-
 <template>
-  <section class="pc-page gold-price-page" aria-label="金价">
-    <header class="gold-price-header">
-      <PageHeader title="金价" back-label="返回更多功能">
-        <template #right>
-          <CommonHeaderRefreshButton
-            label="刷新金价"
-            :loading="isRefreshingPrice"
-            @click="refreshCurrentGoldPrice"
-          />
+  <section class="desktop-workspace">
+    <PageHeader title="黄金行情">
+      <template #right>
+        <el-button
+          :loading="isRefreshingPrice"
+          @click="refreshCurrentGoldPrice"
+        >
+          刷新金价
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="goldPriceError"
+      :title="goldPriceError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        {
+          label: '现货金 CNY/g',
+          value: formatMoney(currentGoldPrice?.spotGold?.price),
+        },
+        { label: '现货涨跌', value: spotDelta.text },
+        {
+          label: '伦敦金 USD/oz',
+          value: formatMoney(currentGoldPrice?.londonGold?.price),
+        },
+        { label: '伦敦金涨跌', value: londonDelta.text },
+      ]"
+    />
+    <div class="desktop-main-aside">
+      <PagePanel title="金价走势">
+        <template #actions>
+          <el-radio-group v-model="activeTrend" :disabled="isLoadingTrend">
+            <el-radio-button
+              v-for="item in trendOptions"
+              :key="item"
+              :value="item"
+            >
+              {{ item }}
+            </el-radio-button>
+          </el-radio-group>
         </template>
-      </PageHeader>
-    </header>
-    <el-card
-      class="pc-record-card spot-london-card"
-      aria-label="现货与伦敦金价"
-      shadow="never"
-    >
-      <header class="card-head">
-        <p>现货 / 伦敦金价</p>
-        <span>
-          {{
-            isRefreshingPrice || isLoadingPrice
-              ? '更新中...'
-              : '自动同步缓存行情'
-          }}
-        </span>
-      </header>
-      <p
-        v-if="isLoadingGoldPrice && !currentGoldPrice"
-        class="gold-price-message"
+        <div ref="chartRef" class="desktop-chart" style="height: 400px" />
+        <p class="desktop-note">{{ marketFootText }}</p>
+      </PagePanel>
+      <DesktopTable
+        :rows="jewelryRows"
+        :loading="isLoadingGoldPrice"
+        title="品牌首饰金价"
       >
-        正在获取实时行情
-      </p>
-      <p
-        v-if="goldPriceError"
-        class="gold-price-message gold-price-message-error"
-      >
-        {{ goldPriceError }}
-      </p>
-      <p v-if="showPriceFallback" class="gold-price-message">
-        暂无可靠实时行情
-      </p>
-      <div class="pc-grid market-grid">
-        <el-card class="pc-record-card market-item" shadow="never">
-          <p class="market-label">现货金 (CNY/g)</p>
-          <AmountText
-            tag="strong"
-            :value="formatMoney(currentGoldPrice?.spotGold?.price)"
-          />
-          <AmountText tag="em" :value="spotDelta.text" :tone="spotDelta.tone" />
-        </el-card>
-        <el-card class="pc-record-card market-item" shadow="never">
-          <p class="market-label">伦敦金 (USD/oz)</p>
-          <AmountText
-            tag="strong"
-            :value="formatMoney(currentGoldPrice?.londonGold?.price)"
-          />
-          <AmountText
-            tag="em"
-            :value="londonDelta.text"
-            :tone="londonDelta.tone"
-          />
-        </el-card>
-      </div>
-      <p class="market-foot">{{ marketFootText }}</p>
-    </el-card>
-    <section class="pc-toolbar trend-tabs" aria-label="趋势范围">
-      <el-button
-        v-for="item in trendOptions"
-        :key="item"
-        native-type="button"
-        :class="{ active: activeTrend === item }"
-        :disabled="isLoadingTrend"
-        @click="activeTrend = item"
-        class="pc-content-button"
-      >
-        {{ item }}
-      </el-button>
-    </section>
-    <el-card
-      class="pc-record-card trend-card"
-      aria-label="价格走势"
-      shadow="never"
-    >
-      <p class="card-title">价格走势</p>
-      <div ref="chartRef" class="pc-chart trend-chart" />
-      <p
-        v-if="!isLoadingTrend && chartPoints.length === 0"
-        class="gold-price-message"
-      >
-        暂无可靠走势数据
-      </p>
-    </el-card>
-    <el-card
-      class="pc-record-card jewelry-card"
-      aria-label="首饰金价参考"
-      shadow="never"
-    >
-      <header class="card-head">
-        <p>首饰金价参考 (CNY/g)</p>
-        <span>品牌门店价</span>
-      </header>
-      <div v-for="item in jewelryRows" :key="item.brand" class="jewelry-row">
-        <span>{{ item.brand }}</span>
-        <AmountText tag="strong" :value="item.price" />
-      </div>
-      <p
-        v-if="!isLoadingGoldPrice && jewelryRows.length === 0"
-        class="gold-price-message"
-      >
-        暂无可靠门店金价数据
-      </p>
-    </el-card>
+        <el-table-column
+          prop="brand"
+          label="品牌"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="price"
+          label="元 / 克"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+      </DesktopTable>
+    </div>
   </section>
 </template>

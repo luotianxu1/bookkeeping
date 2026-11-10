@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
 // F10：融资融券 + 财务指标（A股），自 DetailPage 抽出。
 import type { F10Data } from '@/business/api/modules/market'
 import { dirClass, pct, signedYi } from '@/business/utils/marketFormat'
@@ -66,10 +67,20 @@ defineProps<{
             <template #default="{ row: r }">{{ r.name }}</template>
           </el-table-column>
           <el-table-column label="最新报告期" min-width="120">
-            <template #default="{ row: r }">{{ finVal(r.latest) }}</template>
+            <template #default="{ row: r }">
+              {{
+                r.name.includes('%')
+                  ? formatPercentage(r.latest)
+                  : finVal(r.latest)
+              }}
+            </template>
           </el-table-column>
           <el-table-column label="上年同期" min-width="120">
-            <template #default="{ row: r }">{{ finVal(r.prev) }}</template>
+            <template #default="{ row: r }">
+              {{
+                r.name.includes('%') ? formatPercentage(r.prev) : finVal(r.prev)
+              }}
+            </template>
           </el-table-column>
           <el-table-column label="同比" min-width="120">
             <template #default="{ row: r }">

@@ -1,16 +1,18 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
-// 联系人管理页：按最新画板还原为纯列表页，并保留增删改查弹窗。
-import { computed, onMounted, ref } from 'vue'
+// 联系人管理：搜索、排序、分页与增删改查对话框。
+import { onMounted, ref } from 'vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   createContact,
@@ -28,7 +30,7 @@ const isSaving = ref(false)
 const isDeleting = ref(false)
 const pageError = ref('')
 const formError = ref('')
-const isManageMode = ref(false)
+
 const showContactModal = ref(false)
 const showDeleteModal = ref(false)
 const editingContact = ref<Contact | null>(null)
@@ -48,10 +50,6 @@ function openCreateModal() {
   editingContact.value = null
   resetForm()
   showContactModal.value = true
-}
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
 }
 
 function openEditModal(contact: Contact) {
@@ -205,7 +203,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof contacts.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="联系人">
       <template #right>
         <el-button type="primary" @click="openCreateModal">
@@ -220,11 +218,31 @@ type DesktopRow = (typeof contacts.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="contacts" :loading="isLoading">
+    <MetricStrip
+      :items="[
+        { label: '联系人', value: contacts.length },
+        {
+          label: '已填写电话',
+          value: contacts.filter((item) => item.phone).length,
+        },
+        {
+          label: '有备注',
+          value: contacts.filter((item) => item.remark).length,
+        },
+      ]"
+    />
+    <DesktopTable
+      title="通讯录"
+      searchable
+      search-placeholder="姓名 / 电话 / 备注"
+      :rows="contacts"
+      :loading="isLoading"
+    >
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column
         label="姓名"
         prop="name"
+        sortable="custom"
         min-width="160"
         show-overflow-tooltip
       />
@@ -232,6 +250,7 @@ type DesktopRow = (typeof contacts.value)[number]
       <el-table-column
         label="电话"
         prop="phone"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />
@@ -239,6 +258,7 @@ type DesktopRow = (typeof contacts.value)[number]
       <el-table-column
         label="备注"
         prop="remark"
+        sortable="custom"
         min-width="260"
         show-overflow-tooltip
       />

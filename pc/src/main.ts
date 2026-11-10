@@ -5,6 +5,7 @@ import 'element-plus/es/components/message-box/style/css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import '@/styles/main.css'
 import '@/styles/business.css'
+import '@/styles/desktop.css'
 import App from './App.vue'
 import router from './router'
 

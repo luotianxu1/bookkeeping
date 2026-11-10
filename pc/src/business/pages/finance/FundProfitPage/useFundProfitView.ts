@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 // 基金收益页展示层派生状态：汇总卡片、近7日走势、收益日历、明细列表的计算逻辑。
 import { computed, type Ref } from 'vue'
 import type {
@@ -148,7 +149,9 @@ export function useFundProfitView(options: UseFundProfitViewOptions) {
     if (!availableCount) {
       return '--'
     }
-    return `${Math.round((trendStats.value.positiveDays / availableCount) * 100)}%`
+    return formatPercentage(
+      (trendStats.value.positiveDays / availableCount) * 100,
+    )
   })
 
   const trendNegativeRate = computed(() => {
@@ -158,7 +161,9 @@ export function useFundProfitView(options: UseFundProfitViewOptions) {
     if (!availableCount) {
       return '--'
     }
-    return `${Math.round((trendStats.value.negativeDays / availableCount) * 100)}%`
+    return formatPercentage(
+      (trendStats.value.negativeDays / availableCount) * 100,
+    )
   })
 
   const trendFootnote = computed(() => {

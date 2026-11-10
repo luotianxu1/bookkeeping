@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import { formatAmount } from '@/business/utils/format'
@@ -6,20 +11,19 @@ import { formatAmount } from '@/business/utils/format'
 // 持仓展示的纯函数见 ./holdingDisplay，新增资产弹窗逻辑见 ./useAddAsset。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import AccountIcon from '@/business/components/common/AccountIcon/index.vue'
+
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
 import AmountText from '@/business/components/common/AmountText/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import {
   getAccounts,
   getInvestmentAutoInvestPlans,
@@ -45,37 +49,13 @@ import { useRequestAbort } from '@/business/composables/useRequestAbort'
 import { useVisibilityPolling } from '@/business/composables/useVisibilityPolling'
 import {
   compareHoldingsByProfitRate,
-  formatCurrency,
-  getAllocationPercent,
-  getDividendReminderLabel,
-  getDividendReminderText,
-  getHoldingActionLabel,
-  getHoldingActionRate,
-  getHoldingActionTone,
-  getHoldingActionValue,
-  getHoldingBottomLabel,
-  getHoldingBottomRate,
-  getHoldingBottomValue,
-  getHoldingDayProfitRateText,
   getHoldingDayProfitText,
   getHoldingDayProfitTone,
   getHoldingMarketValue,
-  getHoldingMarketValueLabel,
-  getHoldingPendingAmount,
-  getHoldingPrimaryLabel,
-  getHoldingPrimaryValue,
-  getHoldingProfitLabel,
-  getHoldingProfitRate,
   getHoldingProfitValue,
   getHoldingQuantityTag,
-  getHoldingSecondaryLabel,
-  getHoldingSecondaryValue,
-  getHoldingSyncText,
-  hasAutoInvestPlan,
-  hasRecentDividendReminder,
   isAfterQuoteRefreshTime,
   isInitialFundSubscriptionTransaction,
-  isPendingSubscription,
   shouldDisplayHolding,
 } from './holdingDisplay'
 import { useAddAsset } from './useAddAsset'
@@ -87,10 +67,7 @@ const { signalFor } = useRequestAbort()
 let loadSeq = 0
 
 const investmentTabs = ['A股', '基金']
-const HOLDING_VIEW_MODE_STORAGE_KEY = 'bookkeeping_investment_holding_view_mode'
-type HoldingViewMode = 'card' | 'list'
 const activeTab = ref('A股')
-const holdingViewMode = ref<HoldingViewMode>('card')
 const showAccountSettingsModal = ref(false)
 const isLoading = ref(true)
 const pageError = ref('')
@@ -178,18 +155,6 @@ const showInvestmentTabSwitch = computed(() => {
   return hasStocks && hasFunds
 })
 
-const pendingAmountsByPositionId = computed(() => {
-  const pendingMap = new Map<number, number>()
-  for (const entry of transactions.value) {
-    if (entry.settlementStatus !== 'pending' || !entry.positionId) {
-      continue
-    }
-    const nextAmount =
-      (pendingMap.get(entry.positionId) ?? 0) + Number(entry.amount || 0)
-    pendingMap.set(entry.positionId, nextAmount)
-  }
-  return pendingMap
-})
 const pendingAdditionalAmountsByPositionId = computed(() => {
   const pendingMap = new Map<number, number>()
   for (const entry of transactions.value) {
@@ -207,14 +172,7 @@ const pendingAdditionalAmountsByPositionId = computed(() => {
   }
   return pendingMap
 })
-const autoInvestPositionIds = computed(
-  () =>
-    new Set(
-      autoInvestPlans.value
-        .filter((plan) => plan.status !== 'cancelled')
-        .map((plan) => plan.positionId),
-    ),
-)
+
 const hasRefreshableHoldings = computed(() =>
   visiblePositions.value.some(
     (item) => item.productType === 'fund' || item.productType === 'stock',
@@ -248,7 +206,7 @@ const summaryDayProfitRateText = computed(() =>
   summary.value.dayProfitRate === null ||
   summary.value.dayProfitRate === undefined
     ? '--'
-    : `${formatAmount(summary.value.dayProfitRate)}%`,
+    : formatPercentage(summary.value.dayProfitRate),
 )
 
 const summaryMetrics = computed(() => [
@@ -259,7 +217,6 @@ const summaryMetrics = computed(() => [
 ])
 
 onMounted(() => {
-  restoreHoldingViewMode()
   void loadInvestmentData()
   currentTime.value = new Date()
 })
@@ -275,27 +232,6 @@ watch(
     void loadInvestmentData()
   },
 )
-
-watch(holdingViewMode, (nextMode) => {
-  if (typeof window === 'undefined') {
-    return
-  }
-  window.localStorage.setItem(HOLDING_VIEW_MODE_STORAGE_KEY, nextMode)
-})
-
-function restoreHoldingViewMode() {
-  if (typeof window === 'undefined') {
-    return
-  }
-  const stored = window.localStorage.getItem(HOLDING_VIEW_MODE_STORAGE_KEY)
-  if (stored === 'card' || stored === 'list') {
-    holdingViewMode.value = stored
-  }
-}
-
-function toggleHoldingViewMode() {
-  holdingViewMode.value = holdingViewMode.value === 'list' ? 'card' : 'list'
-}
 
 function openAccountSettingsModal() {
   const account = selectedAccount.value
@@ -563,285 +499,115 @@ function showFeedback(message: string, type: 'success' | 'error') {
 
 type DetailTableRow = (typeof holdings.value)[number]
 </script>
-
 <template>
-  <section class="pc-page investment-account-page" aria-label="投资账户">
+  <section class="desktop-workspace">
+    <PageHeader :title="selectedAccount?.name || '投资持仓'">
+      <template #right>
+        <el-button @click="openLiquidationList">清仓明细</el-button>
+        <el-button
+          v-if="shouldShowQuoteRefreshButton"
+          :loading="isRefreshingQuotes"
+          @click="refreshQuoteData"
+        >
+          刷新行情
+        </el-button>
+        <el-button v-if="selectedAccount" @click="openAccountSettingsModal">
+          账户设置
+        </el-button>
+        <el-button type="primary" @click="openAddModal">新增资产</el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        { label: '总市值', value: formatAmount(summary.totalMarketValue) },
+        { label: '当日收益', value: summaryDayProfitText },
+        { label: '当日收益率', value: summaryDayProfitRateText },
+      ]"
+    />
+    <MetricStrip
+      :items="
+        summaryMetrics.map((metric) => ({
+          label: metric.label,
+          value: metric.isRate
+            ? formatPercentage(metric.value)
+            : formatAmount(metric.value),
+        }))
+      "
+    />
+    <DesktopTable :rows="holdings" title="持仓列表" searchable>
+      <template #toolbar>
+        <SegmentedControl
+          v-if="showInvestmentTabSwitch"
+          v-model="activeTab"
+          :options="investmentTabs"
+          label="投资分类筛选"
+        />
+      </template>
+      <!-- @vue-generic {DetailTableRow} -->
+      <el-table-column
+        label="产品"
+        prop="productName"
+        min-width="200"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {DetailTableRow} -->
+      <el-table-column label="市值 / 待确认" min-width="180">
+        <template #default="{ row }: { row: DetailTableRow }">
+          {{
+            getHoldingMarketValue(
+              row,
+              pendingAdditionalAmountsByPositionId.get(row.id) ?? 0,
+            )
+          }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DetailTableRow} -->
+      <el-table-column label="份额 / 股数" min-width="140">
+        <template #default="{ row }: { row: DetailTableRow }">
+          {{ getHoldingQuantityTag(row) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DetailTableRow} -->
+      <el-table-column label="当日收益" min-width="140">
+        <template #default="{ row }: { row: DetailTableRow }">
+          <AmountText
+            :value="getHoldingDayProfitText(row)"
+            :tone="getHoldingDayProfitTone(row)"
+          />
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DetailTableRow} -->
+      <el-table-column label="持仓收益" min-width="150">
+        <template #default="{ row }: { row: DetailTableRow }">
+          <AmountText :value="getHoldingProfitValue(row)" />
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DetailTableRow} -->
+      <el-table-column label="操作" width="150" fixed="right">
+        <template #default="{ row }: { row: DetailTableRow }">
+          <div class="pc-row-actions">
+            <el-button
+              link
+              type="primary"
+              @click="openInvestmentDetail(row.id)"
+            >
+              详情 / 交易
+            </el-button>
+          </div>
+        </template>
+      </el-table-column>
+    </DesktopTable>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
       :type="feedbackType"
-    />
-    <PageHeader
-      title="投资详情"
-      back-to="/finance/accounts/investment"
-      back-label="返回投资账户"
-    >
-      <template #right>
-        <div class="pc-toolbar investment-header-actions">
-          <CommonHeaderActionButton
-            class="investment-view-toggle"
-            :class="{ 'is-active': holdingViewMode === 'list' }"
-            :label="
-              holdingViewMode === 'list' ? '切换为卡片样式' : '切换为列表样式'
-            "
-            :aria-pressed="holdingViewMode === 'list'"
-            @click="toggleHoldingViewMode"
-          >
-            <svg
-              v-if="holdingViewMode === 'list'"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-            >
-              <rect
-                x="3.5"
-                y="4.5"
-                width="17"
-                height="15"
-                rx="2"
-                stroke="currentColor"
-                stroke-width="1.8"
-              />
-              <path
-                d="M3.5 9.5H20.5"
-                stroke="currentColor"
-                stroke-width="1.8"
-              />
-              <path
-                d="M3.5 14.5H20.5"
-                stroke="currentColor"
-                stroke-width="1.8"
-              /></svg
-            ><svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect
-                x="3.5"
-                y="4.5"
-                width="17"
-                height="6"
-                rx="2"
-                stroke="currentColor"
-                stroke-width="1.8"
-              />
-              <rect
-                x="3.5"
-                y="13.5"
-                width="17"
-                height="6"
-                rx="2"
-                stroke="currentColor"
-                stroke-width="1.8"
-              />
-            </svg>
-          </CommonHeaderActionButton>
-          <CommonHeaderActionButton
-            label="清仓明细"
-            @click="openLiquidationList"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M8 6H21"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              />
-              <path
-                d="M8 12H21"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              />
-              <path
-                d="M8 18H21"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              />
-              <path
-                d="M3.5 6H4.5"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-              />
-              <path
-                d="M3.5 12H4.5"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-              />
-              <path
-                d="M3.5 18H4.5"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </CommonHeaderActionButton>
-          <CommonHeaderRefreshButton
-            v-if="shouldShowQuoteRefreshButton"
-            label="刷新投资持仓数据"
-            :loading="isRefreshingQuotes"
-            @click="refreshQuoteData"
-          />
-          <CommonHeaderActionButton
-            v-if="selectedAccount"
-            label="修改投资账户"
-            @click="openAccountSettingsModal"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-              />
-              <path
-                d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </CommonHeaderActionButton>
-        </div>
-      </template>
-    </PageHeader>
-    <p v-if="pageError" class="investment-message investment-message-error">
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <el-card
-        class="pc-record-card investment-summary-card"
-        aria-label="投资总览"
-        shadow="never"
-      >
-        <div class="investment-summary-top">
-          <div class="investment-summary-main">
-            <div class="investment-summary-account">
-              <AccountIcon
-                v-if="selectedAccount"
-                :icon="selectedAccount.icon"
-                :account-type-code="selectedAccount.accountTypeCode"
-                :color="selectedAccount.color"
-                :name="selectedAccount.name"
-                :size="28"
-              />
-              <p>{{ selectedAccount?.name || '投资账户' }}</p>
-            </div>
-            <AmountText
-              tag="strong"
-              :value="formatAmount(summary.totalMarketValue)"
-            />
-            <span>
-              {{
-                selectedAccount?.remark?.trim() ||
-                `同步于 ${summary.lastSyncedAt ? new Date(summary.lastSyncedAt).toLocaleString('zh-CN') : '暂无'}`
-              }}
-            </span>
-          </div>
-          <div class="investment-summary-side">
-            <span>今日盈亏</span>
-            <AmountText
-              tag="strong"
-              class="investment-summary-profit"
-              font-size="18px"
-              :value="summaryDayProfitText"
-            />
-            <AmountText
-              tag="span"
-              class="investment-summary-rate"
-              :value="summaryDayProfitRateText"
-            />
-          </div>
-        </div>
-        <div class="investment-metrics">
-          <div
-            v-for="metric in summaryMetrics"
-            :key="metric.label"
-            class="investment-metric-item"
-          >
-            <span>{{ metric.label }}</span>
-            <AmountText
-              tag="strong"
-              class="investment-metric-value"
-              font-size="12px"
-              :value="
-                metric.isRate
-                  ? `${formatAmount(metric.value)}%`
-                  : formatAmount(metric.value)
-              "
-            />
-          </div>
-        </div>
-      </el-card>
-      <SegmentedControl
-        v-if="showInvestmentTabSwitch"
-        v-model="activeTab"
-        :options="investmentTabs"
-        label="投资分类筛选"
-      />
-      
-      <el-table :data="holdings" stripe>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column
-          label="产品"
-          prop="productName"
-          min-width="200"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="市值 / 待确认" min-width="180">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{
-              getHoldingMarketValue(
-                row,
-                pendingAdditionalAmountsByPositionId.get(row.id) ?? 0,
-              )
-            }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="份额 / 股数" min-width="140">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ getHoldingQuantityTag(row) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="当日收益" min-width="140">
-          <template #default="{ row }: { row: DetailTableRow }">
-            <AmountText
-              :value="getHoldingDayProfitText(row)"
-              :tone="getHoldingDayProfitTone(row)"
-            />
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="持仓收益" min-width="150">
-          <template #default="{ row }: { row: DetailTableRow }">
-            <AmountText :value="getHoldingProfitValue(row)" />
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="操作" width="150" fixed="right">
-          <template #default="{ row }: { row: DetailTableRow }">
-            <div class="pc-row-actions">
-              <el-button
-                link
-                type="primary"
-                @click="openInvestmentDetail(row.id)"
-              >
-                详情 / 交易
-              </el-button>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-      <p v-if="holdings.length === 0" class="investment-message">暂无持仓</p>
-    </template>
-    <FloatingAddButton
-      aria-label="新增投资资产"
-      storage-key="investment-account"
-      @click="openAddModal"
     />
     <CommonModal
       v-model="showAccountSettingsModal"

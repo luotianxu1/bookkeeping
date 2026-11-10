@@ -1,5 +1,8 @@
 <script setup lang="ts">
-// 板块列表页：全部行业/概念板块，涨跌幅或成交额排序（移植自 investment Sectors 页）。
+import DesktopTable from '@/business/components/DesktopTable.vue'
+import PageHeader from '@/business/components/common/PageHeader/index.vue'
+
+// 行业和概念板块列表，支持涨跌幅、成交额排序。
 import { computed, onMounted, ref } from 'vue'
 import {
   getSectorSpot,
@@ -33,9 +36,6 @@ const sorted = computed<SectorRow[]>(() => {
 })
 
 /* 入场错峰：前 12 个递增延迟，之后统一 */
-function delay(idx: number): string {
-  return `${Math.min(idx, 12) * 40}ms`
-}
 
 async function load(): Promise<void> {
   loading.value = true
@@ -59,17 +59,11 @@ function switchKind(k: SectorKind): void {
 
 onMounted(load)
 </script>
-
 <template>
-  <div class="pc-page sectors-page">
-    <!-- 页头 -->
-    <header class="page-head">
-      <h1>{{ KIND_META[kind].title }}</h1>
-      <span class="page-note num">
-        共 {{ sectors.length }} {{ KIND_META[kind].unit }}
-      </span>
-    </header>
-    <!-- 分类 + 排序工具条 -->
+  <section class="desktop-workspace">
+    <PageHeader :title="KIND_META[kind].title">
+      <template #right></template>
+    </PageHeader>
     <div class="pc-toolbar toolbar">
       <div class="pc-toolbar toolbar-group" role="group" aria-label="板块分类">
         <el-button
@@ -105,32 +99,48 @@ onMounted(load)
         </el-button>
       </div>
     </div>
-    <p v-if="error" class="error-box" role="alert">
-      板块加载失败：{{ error }}
-      <el-button class="retry" native-type="button" @click="load">
-        重试
-      </el-button>
-    </p>
-    <div v-else-if="loading" class="tiles" aria-busy="true">
-      <div v-for="n in 18" :key="n" class="tile skeleton-tile"></div>
-    </div>
-    <!-- 全部板块：正方形方块阵 -->
-    <div v-else-if="sorted.length" class="tiles">
-      <el-card
-        v-for="(sec, idx) in sorted"
-        :key="sec['代码']"
-        class="pc-record-card tile"
-        :style="{ '--rise-delay': delay(idx) }"
-        shadow="never"
-      >
-        <span class="rank num">{{ idx + 1 }}</span>
-        <span class="tile-name">{{ sec['名称'] }}</span>
-        <span class="num tile-pct" :class="dirClass(sec['涨跌幅'])">
-          {{ pct(sec['涨跌幅']) }}
-        </span>
-        <span class="num tile-vol">{{ amt(sec['总成交额']) }}</span>
-      </el-card>
-    </div>
-    <p v-else class="empty">暂无数据</p>
-  </div>
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button link type="primary" @click="load">重试</el-button>
+    </el-alert>
+    <DesktopTable
+      :rows="sorted"
+      :loading="loading"
+      title="板块排名"
+      search-placeholder="搜索板块"
+      searchable
+    >
+      <el-table-column
+        prop="代码"
+        label="代码"
+        min-width="140"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="名称"
+        label="板块"
+        min-width="220"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {SectorRow} -->
+      <el-table-column label="涨跌幅" min-width="150">
+        <template #default="{ row }: { row: SectorRow }">
+          <span :class="dirClass(row['涨跌幅'])">{{ pct(row['涨跌幅']) }}</span>
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {SectorRow} -->
+      <el-table-column label="成交额" min-width="150">
+        <template #default="{ row }: { row: SectorRow }">
+          {{ amt(row['总成交额']) }}
+        </template>
+      </el-table-column>
+    </DesktopTable>
+  </section>
 </template>

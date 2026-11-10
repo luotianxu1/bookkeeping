@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PagePanel from '@/business/components/PagePanel.vue'
+
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   getSalarySettings,
@@ -6,10 +8,10 @@ import {
   type SalarySettings,
   type SaveSalarySettingsParams,
 } from '@/business/api/modules/finance'
-import CommonButton from '@/business/components/common/CommonButton/index.vue'
+
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
@@ -261,26 +263,38 @@ function openFeedback(message: string, type: 'success' | 'error') {
   feedbackVisible.value = true
 }
 </script>
-
 <template>
-  <section class="pc-page salary-page" aria-label="工资设置">
-    <PageHeader
-      title="工资设置"
-      back-to="/finance/salary"
-      :prefer-back-to="true"
-    />
-    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
-    <div v-else-if="isLoading" class="salary-loading-wrap">
-      <CommonLoading text="工资设置加载中..." />
-    </div>
-    <template v-else-if="settings">
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>收入与发薪</strong></div>
-        <div class="pc-grid salary-form-grid salary-settings-form-grid">
-          <p class="salary-modal-note">
-            调整后会立即刷新工资首页、公积金、社保、医保和税务结果。
-          </p>
-          <div class="salary-form-grid-two">
+  <section class="desktop-workspace">
+    <PageHeader title="工资设置">
+      <template #right>
+        <el-button
+          type="primary"
+          :loading="isSaving"
+          :disabled="!settings"
+          @click="submitQuickAdjust"
+        >
+          保存设置
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <el-alert
+      v-if="formError"
+      :title="formError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="settings">
+      <div class="desktop-columns">
+        <PagePanel title="收入与发薪">
+          <div class="desktop-form-grid">
             <CommonInput
               v-model="form.monthlyGrossSalary"
               label="税前工资"
@@ -292,22 +306,16 @@ function openFeedback(message: string, type: 'success' | 'error') {
               label="发薪日"
               :options="payDayOptions"
             />
+            <CommonInput
+              v-model="form.annualBonus"
+              label="年内累计奖金"
+              input-type="number"
+              input-mode="decimal"
+            />
           </div>
-          <CommonInput
-            v-model="form.annualBonus"
-            label="年内累计奖金"
-            input-type="number"
-            input-mode="decimal"
-          />
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>缴费基数</strong></div>
-        <div class="pc-grid salary-form-grid salary-settings-form-grid">
-          <p class="salary-settings-helper">
-            未手动修改时，社保与公积金基数会跟随税前工资同步更新。
-          </p>
-          <div class="salary-form-grid-two">
+        </PagePanel>
+        <PagePanel title="缴费基数">
+          <div class="desktop-form-grid">
             <CommonInput
               v-model="form.socialSecurityBase"
               label="社保基数"
@@ -321,84 +329,79 @@ function openFeedback(message: string, type: 'success' | 'error') {
               input-mode="decimal"
             />
           </div>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>缴存比例</strong></div>
-        <div class="pc-grid salary-form-grid salary-settings-form-grid">
-          <div class="salary-settings-rate-group">
-            <div class="salary-settings-rate-head"><strong>公积金</strong></div>
-            <div class="salary-form-grid-two">
-              <CommonInput
-                v-model="form.housingFundPersonalRate"
-                label="个人比例 (%)"
-                input-type="number"
-                input-mode="decimal"
-              />
-              <CommonInput
-                v-model="form.housingFundCompanyRate"
-                label="单位比例 (%)"
-                input-type="number"
-                input-mode="decimal"
-              />
-            </div>
+        </PagePanel>
+      </div>
+      <div class="desktop-columns">
+        <PagePanel title="公积金">
+          <div class="desktop-form-grid">
+            <CommonInput
+              percentage
+              v-model="form.housingFundPersonalRate"
+              label="个人比例 (%)"
+              input-type="number"
+              input-mode="decimal"
+            />
+            <CommonInput
+              percentage
+              v-model="form.housingFundCompanyRate"
+              label="单位比例 (%)"
+              input-type="number"
+              input-mode="decimal"
+            />
           </div>
-          <div class="salary-settings-rate-group">
-            <div class="salary-settings-rate-head">
-              <strong>养老保险</strong>
-            </div>
-            <div class="salary-form-grid-two">
-              <CommonInput
-                v-model="form.pensionPersonalRate"
-                label="个人比例 (%)"
-                input-type="number"
-                input-mode="decimal"
-              />
-              <CommonInput
-                v-model="form.pensionCompanyRate"
-                label="单位比例 (%)"
-                input-type="number"
-                input-mode="decimal"
-              />
-            </div>
+        </PagePanel>
+        <PagePanel title="养老保险">
+          <div class="desktop-form-grid">
+            <CommonInput
+              percentage
+              v-model="form.pensionPersonalRate"
+              label="个人比例 (%)"
+              input-type="number"
+              input-mode="decimal"
+            />
+            <CommonInput
+              percentage
+              v-model="form.pensionCompanyRate"
+              label="单位比例 (%)"
+              input-type="number"
+              input-mode="decimal"
+            />
           </div>
-          <div class="salary-settings-rate-group">
-            <div class="salary-settings-rate-head">
-              <strong>医疗保险</strong>
-            </div>
-            <div class="salary-form-grid-two">
-              <CommonInput
-                v-model="form.medicalPersonalRate"
-                label="个人比例 (%)"
-                input-type="number"
-                input-mode="decimal"
-              />
-              <CommonInput
-                v-model="form.medicalCompanyRate"
-                label="单位比例 (%)"
-                input-type="number"
-                input-mode="decimal"
-              />
-            </div>
+        </PagePanel>
+        <PagePanel title="医疗保险">
+          <div class="desktop-form-grid">
+            <CommonInput
+              percentage
+              v-model="form.medicalPersonalRate"
+              label="个人比例 (%)"
+              input-type="number"
+              input-mode="decimal"
+            />
+            <CommonInput
+              percentage
+              v-model="form.medicalCompanyRate"
+              label="单位比例 (%)"
+              input-type="number"
+              input-mode="decimal"
+            />
           </div>
-          <div class="salary-settings-rate-group">
-            <div class="salary-settings-rate-head">
-              <strong>失业保险</strong>
-            </div>
-            <div class="salary-form-grid-two">
-              <CommonInput
-                v-model="form.unemploymentPersonalRate"
-                label="个人比例 (%)"
-                input-type="number"
-                input-mode="decimal"
-              />
-              <CommonInput
-                v-model="form.unemploymentCompanyRate"
-                label="单位比例 (%)"
-                input-type="number"
-                input-mode="decimal"
-              />
-            </div>
+        </PagePanel>
+        <PagePanel title="失业保险">
+          <div class="desktop-form-grid">
+            <CommonInput
+              percentage
+              v-model="form.unemploymentPersonalRate"
+              label="个人比例 (%)"
+              input-type="number"
+              input-mode="decimal"
+            />
+            <CommonInput
+              percentage
+              v-model="form.unemploymentCompanyRate"
+              label="单位比例 (%)"
+              input-type="number"
+              input-mode="decimal"
+            />
             <CommonInput
               v-model="form.medicalFixedAmount"
               label="大额医疗 (元/月)"
@@ -406,87 +409,69 @@ function openFeedback(message: string, type: 'success' | 'error') {
               input-mode="decimal"
             />
           </div>
+        </PagePanel>
+      </div>
+      <PagePanel title="个税与专项扣除">
+        <div class="desktop-form-grid">
+          <CommonInput
+            v-model="form.taxFreeThreshold"
+            label="个税起征点"
+            input-type="number"
+            input-mode="decimal"
+          />
+          <CommonInput
+            v-model="form.taxYear"
+            label="纳税年度"
+            input-type="number"
+            input-mode="numeric"
+          />
+          <CommonInput
+            v-model="form.childEducation"
+            label="子女教育"
+            input-type="number"
+            input-mode="decimal"
+          />
+          <CommonInput
+            v-model="form.continuingEducation"
+            label="继续教育"
+            input-type="number"
+            input-mode="decimal"
+          />
+          <CommonInput
+            v-model="form.housingLoan"
+            label="住房贷款"
+            input-type="number"
+            input-mode="decimal"
+          />
+          <CommonInput
+            v-model="form.housingRent"
+            label="住房租金"
+            input-type="number"
+            input-mode="decimal"
+          />
+          <CommonInput
+            v-model="form.elderlyCare"
+            label="赡养老人"
+            input-type="number"
+            input-mode="decimal"
+          />
+          <CommonInput
+            v-model="form.seriousMedical"
+            label="大病医疗"
+            input-type="number"
+            input-mode="decimal"
+          />
+          <CommonInput
+            v-model="form.otherDeduction"
+            label="其他扣除"
+            input-type="number"
+            input-mode="decimal"
+          />
         </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>个税与专项扣除</strong></div>
-        <div class="pc-grid salary-form-grid salary-settings-form-grid">
-          <div class="salary-form-grid-two">
-            <CommonInput
-              v-model="form.taxFreeThreshold"
-              label="个税起征点"
-              input-type="number"
-              input-mode="decimal"
-            />
-            <CommonInput
-              v-model="form.taxYear"
-              label="纳税年度"
-              input-type="number"
-              input-mode="numeric"
-            />
-          </div>
-          <div class="pc-grid salary-settings-deduction-grid">
-            <CommonInput
-              v-model="form.childEducation"
-              label="子女教育"
-              input-type="number"
-              input-mode="decimal"
-            />
-            <CommonInput
-              v-model="form.continuingEducation"
-              label="继续教育"
-              input-type="number"
-              input-mode="decimal"
-            />
-            <CommonInput
-              v-model="form.housingLoan"
-              label="住房贷款"
-              input-type="number"
-              input-mode="decimal"
-            />
-            <CommonInput
-              v-model="form.housingRent"
-              label="住房租金"
-              input-type="number"
-              input-mode="decimal"
-            />
-            <CommonInput
-              v-model="form.elderlyCare"
-              label="赡养老人"
-              input-type="number"
-              input-mode="decimal"
-            />
-            <CommonInput
-              v-model="form.seriousMedical"
-              label="大病医疗"
-              input-type="number"
-              input-mode="decimal"
-            />
-            <CommonInput
-              v-model="form.otherDeduction"
-              label="其他扣除"
-              input-type="number"
-              input-mode="decimal"
-            />
-          </div>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>备注与保存</strong></div>
-        <div class="pc-grid salary-form-grid salary-settings-form-grid">
-          <CommonInput v-model="form.remark" label="备注" />
-          <p v-if="formError" class="salary-error-text">{{ formError }}</p>
-          <div class="salary-modal-footer salary-settings-footer">
-            <CommonButton
-              class="salary-settings-button"
-              :disabled="isSaving"
-              @click="submitQuickAdjust"
-            >
-              {{ isSaving ? '保存中...' : '更新所得' }}
-            </CommonButton>
-          </div>
-        </div>
-      </el-card>
+      </PagePanel>
+      <PagePanel title="备注">
+        <CommonInput v-model="form.remark" label="备注" />
+      </PagePanel>
     </template>
     <CommonFeedback
       v-model="feedbackVisible"

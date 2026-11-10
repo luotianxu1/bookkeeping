@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 // 投资账户页持仓展示的纯函数集合：只做「持仓数据 → 展示文案/色调」的映射，不持有响应式状态。
 // 依赖页面级状态的函数（定投计划、待确认金额、总市值）一律通过参数显式传入。
 import { formatAmount } from '@/business/utils/format'
@@ -165,7 +166,7 @@ export function getHoldingActionRate(position: InvestmentPosition) {
   }
   return position.dayProfitRate === null || position.dayProfitRate === undefined
     ? '--'
-    : `${formatAmount(position.dayProfitRate)}%`
+    : formatPercentage(position.dayProfitRate)
 }
 
 export function getHoldingActionTone(
@@ -201,7 +202,7 @@ export function getHoldingDayProfitRateText(position: InvestmentPosition) {
   }
   return position.dayProfitRate === null || position.dayProfitRate === undefined
     ? '--'
-    : `${formatAmount(position.dayProfitRate)}%`
+    : formatPercentage(position.dayProfitRate)
 }
 
 export function getHoldingDayProfitTone(
@@ -268,7 +269,7 @@ export function getHoldingBottomValue(position: InvestmentPosition) {
 export function getHoldingBottomRate(position: InvestmentPosition) {
   return isPendingSubscription(position)
     ? '待确认'
-    : `${formatAmount(getHoldingTotalProfitRate(position))}%`
+    : formatPercentage(getHoldingTotalProfitRate(position))
 }
 
 export function getHoldingProfitLabel(position: InvestmentPosition) {
@@ -286,7 +287,7 @@ export function getHoldingProfitRate(position: InvestmentPosition) {
   if (isPendingSubscription(position)) {
     return '待确认'
   }
-  return `${formatAmount(position.holdingProfitRate)}%`
+  return formatPercentage(position.holdingProfitRate)
 }
 
 export function getAllocationPercent(

@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
-import DesktopInput from '@/business/components/DesktopInput.vue'
-
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
@@ -16,7 +14,7 @@ import {
   type FoodOrder,
 } from '@/business/api/modules/food'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
-import { getFoodHomePath, getFoodMenuDetailPath } from '../shared'
+import { getFoodMenuDetailPath } from '../shared'
 import { getErrorMessage } from '@/business/api/request'
 
 const router = useRouter()
@@ -78,10 +76,6 @@ function formatPlannedDate(value: string) {
   return value.replace(/-/g, '.')
 }
 
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
-}
-
 function openOrderDetail(orderId: number) {
   if (isManageMode.value) {
     return
@@ -132,7 +126,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof filteredOrders.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="菜单订单">
       <template #right>
         <el-button
@@ -150,7 +144,7 @@ type DesktopRow = (typeof filteredOrders.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="filteredOrders" :loading="isLoading">
+    <DesktopTable title="菜单订单" :rows="filteredOrders" :loading="isLoading">
       <template #toolbar>
         <el-input
           v-model="keyword"
@@ -163,6 +157,7 @@ type DesktopRow = (typeof filteredOrders.value)[number]
       <el-table-column
         label="名称"
         prop="title"
+        sortable="custom"
         min-width="200"
         show-overflow-tooltip
       />
@@ -188,6 +183,7 @@ type DesktopRow = (typeof filteredOrders.value)[number]
       <el-table-column
         label="备注"
         prop="remark"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />

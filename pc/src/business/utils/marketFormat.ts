@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 /** 行情中心共享展示格式化工具 */
 
 /** 通用展示（null → —） */
@@ -12,8 +13,7 @@ export function f2(v: number | null | undefined): string {
 
 /** 涨跌幅（带符号 + 百分号） */
 export function pct(v: number | null | undefined): string {
-  if (v === null || v === undefined) return '—'
-  return `${v > 0 ? '+' : ''}${v.toFixed(2)}%`
+  return formatPercentage(v, true)
 }
 
 /** 成交额统一换算为「亿」（快照表用） */

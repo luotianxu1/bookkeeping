@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { formatPercentageText } from '@/business/utils/percentage'
+
 // 通用金额文本：统一金额显示和正负颜色规则，便于后续扩展格式化能力。
 import { computed, useAttrs } from 'vue'
 
@@ -32,7 +34,7 @@ const props = withDefaults(
 )
 const attrs = useAttrs()
 
-const text = computed(() => String(props.value ?? ''))
+const text = computed(() => String(formatPercentageText(props.value ?? '')))
 const trimmedText = computed(() => text.value.trim())
 const numericValue = computed(() => {
   const normalized = trimmedText.value.replace(/[^\d.+-]/g, '')

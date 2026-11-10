@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+import PageHeader from '@/business/components/common/PageHeader/index.vue'
+
 import {
   computed,
   onActivated,
@@ -9,7 +14,7 @@ import {
 } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
+
 import { useAsyncSection } from '@/business/composables/useAsyncSection'
 import {
   getInvestmentFundBase,
@@ -143,168 +148,162 @@ function back() {
     router.back()
   else void router.push('/finance/global-market/funds')
 }
-</script>
 
+type ReturnRow = (typeof returns.value)[number]
+type NavRow = (typeof recent.value)[number]
+</script>
 <template>
-  <section class="pc-page fund-page fund-detail" aria-label="基金详情">
-    <div class="fund-heading">
-      <el-button class="text-button" @click="back">‹ 返回基金列表</el-button>
-      <CommonHeaderRefreshButton
-        label="刷新基金详情"
-        :loading="loading"
-        :disabled="!valid"
-        @click="load"
-      />
-    </div>
-    <p v-if="!valid" class="fund-error" role="alert">
-      基金代码无效，请从基金列表重新选择。
-    </p>
+  <section class="desktop-workspace">
+    <PageHeader :title="base?.Datas?.SHORTNAME || code">
+      <template #right>
+        <el-button @click="back">返回列表</el-button>
+        <el-button :loading="loading" :disabled="!valid" @click="load">
+          刷新
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert v-if="!valid" title="基金代码无效" type="error" />
     <template v-else>
-      <p v-if="info.error.value" class="fund-error" role="alert">
-        {{ info.error.value }}
-        <el-button @click="info.run">重试资料</el-button>
-      </p>
-      <CommonLoading v-if="info.loading.value && !info.ready.value" />
-      <el-card
-        v-if="base?.matched"
-        class="pc-record-card fund-panel"
-        aria-label="基金概况"
-        shadow="never"
+      <el-alert
+        v-if="info.error.value"
+        :title="info.error.value"
+        type="error"
+        :closable="false"
+        show-icon
       >
-        <div>
-          <h2>{{ base.Datas.SHORTNAME || code }}</h2>
-          <p class="fund-note">
-            {{ code }}
-            <span v-if="base.Datas.FTYPE">· {{ base.Datas.FTYPE }}</span>
-          </p>
-        </div>
-        <div class="nav-summary">
-          <div>
-            <span>单位净值</span>
-            <strong>{{ price(base.Datas.DWJZ) }}</strong>
-            <small>{{ base.Datas.FSRQ || '暂无净值日期' }}</small>
-          </div>
-          <div>
-            <span>累计净值</span>
-            <strong>{{ price(base.Datas.LJJZ) }}</strong>
-            <small>含历史分红</small>
-          </div>
-        </div>
-        <dl class="fund-facts">
-          <div>
-            <dt>基金公司</dt>
-            <dd>{{ base.Datas.JJGS || '—' }}</dd>
-          </div>
-          <div>
-            <dt>申购状态</dt>
-            <dd>{{ base.Datas.SGZT || '—' }}</dd>
-          </div>
-          <div>
-            <dt>赎回状态</dt>
-            <dd>{{ base.Datas.SHZT || '—' }}</dd>
-          </div>
-        </dl>
-      </el-card>
-      <p v-else-if="info.ready.value" class="fund-empty">
-        暂未获取到 {{ code }} 的基金资料，可刷新重试。
-      </p>
-      <el-card
-        class="pc-record-card fund-panel"
-        aria-label="基金净值走势"
-        shadow="never"
-      >
-        <div class="fund-heading">
-          <h2>净值走势</h2>
-          <div class="metric-switch" role="group" aria-label="净值口径">
-            <el-button :aria-pressed="metric === 'nav'" @click="metric = 'nav'">
-              单位
-            </el-button>
-            <el-button
-              :aria-pressed="metric === 'accNav'"
-              @click="metric = 'accNav'"
-            >
-              累计
-            </el-button>
-          </div>
-        </div>
-        <nav class="fund-types" aria-label="净值时间范围">
-          <el-button
-            v-for="item in ranges"
-            :key="item.value"
-            :aria-pressed="range === item.value"
-            :class="{ active: range === item.value }"
-            @click="range = item.value"
-            class="pc-content-button"
-          >
-            {{ item.label }}
-          </el-button>
-        </nav>
-        <p v-if="trend.error.value" class="fund-error" role="alert">
-          {{ trend.error.value }}
-          <el-button @click="trend.run">重试走势</el-button>
-        </p>
-        <CommonLoading v-if="trend.loading.value && !trend.ready.value" />
-        <FundNavChart
-          v-else-if="points.length"
-          :key="code"
-          :points="points"
-          :metric="metric"
+        <el-button link type="primary" @click="info.run">重试</el-button>
+      </el-alert>
+      <template v-if="base?.matched">
+        <MetricStrip
+          :items="[
+            { label: '单位净值', value: price(base.Datas.DWJZ) },
+            { label: '累计净值', value: price(base.Datas.LJJZ) },
+            { label: '净值日期', value: base.Datas.FSRQ || '—' },
+          ]"
         />
-        <p v-else-if="trend.ready.value" class="fund-empty">
-          暂无可展示的净值历史
-        </p>
-        <p class="fund-note">
-          {{
-            metric === 'nav'
-              ? '单位净值会受分红、拆分影响，走势不等于投资收益率。'
-              : '累计净值包含历史分红，不代表分红再投资收益率。'
-          }}
-        </p>
-      </el-card>
-      <el-card
-        class="pc-record-card fund-panel"
-        aria-label="基金阶段收益"
-        shadow="never"
-      >
-        <h2>阶段收益</h2>
-        <p v-if="periods.error.value" class="fund-error" role="alert">
-          {{ periods.error.value }}
-          <el-button @click="periods.run">重试收益</el-button>
-        </p>
-        <CommonLoading v-if="periods.loading.value && !periods.ready.value" />
-        <div v-else-if="returns.length" class="pc-grid period-grid">
-          <div v-for="p in returns" :key="p.title">
-            <span>{{ periodLabels[p.title] || p.title }}</span>
-            <strong :class="dirClass(number(p.syl))">
-              {{ pct(number(p.syl)) }}
-            </strong>
+      </template>
+      <div class="desktop-main-aside">
+        <PagePanel title="净值走势">
+          <div class="fund-heading">
+            <h2>净值走势</h2>
+            <div class="metric-switch" role="group" aria-label="净值口径">
+              <el-button
+                :aria-pressed="metric === 'nav'"
+                @click="metric = 'nav'"
+              >
+                单位
+              </el-button>
+              <el-button
+                :aria-pressed="metric === 'accNav'"
+                @click="metric = 'accNav'"
+              >
+                累计
+              </el-button>
+            </div>
           </div>
+          <nav class="fund-types" aria-label="净值时间范围">
+            <el-button
+              v-for="item in ranges"
+              :key="item.value"
+              :aria-pressed="range === item.value"
+              :class="{ active: range === item.value }"
+              @click="range = item.value"
+              class="pc-content-button"
+            >
+              {{ item.label }}
+            </el-button>
+          </nav>
+          <p v-if="trend.error.value" class="fund-error" role="alert">
+            {{ trend.error.value }}
+            <el-button @click="trend.run">重试走势</el-button>
+          </p>
+          <CommonLoading v-if="trend.loading.value && !trend.ready.value" />
+          <FundNavChart
+            v-else-if="points.length"
+            :key="code"
+            :points="points"
+            :metric="metric"
+          />
+          <p v-else-if="trend.ready.value" class="fund-empty">
+            暂无可展示的净值历史
+          </p>
+          <p class="fund-note">
+            {{
+              metric === 'nav'
+                ? '单位净值会受分红、拆分影响，走势不等于投资收益率。'
+                : '累计净值包含历史分红，不代表分红再投资收益率。'
+            }}
+          </p>
+        </PagePanel>
+        <div class="desktop-results">
+          <PagePanel title="基金资料" v-if="base?.matched">
+            <dl class="desktop-record-details">
+              <div>
+                <dt>基金公司</dt>
+                <dd>{{ base.Datas.JJGS || '—' }}</dd>
+              </div>
+              <div>
+                <dt>申购状态</dt>
+                <dd>{{ base.Datas.SGZT || '—' }}</dd>
+              </div>
+              <div>
+                <dt>赎回状态</dt>
+                <dd>{{ base.Datas.SHZT || '—' }}</dd>
+              </div>
+            </dl>
+          </PagePanel>
+          <el-alert
+            v-if="periods.error.value"
+            :title="periods.error.value"
+            type="error"
+            :closable="false"
+            show-icon
+          >
+            <el-button link type="primary" @click="periods.run">重试</el-button>
+          </el-alert>
+          <DesktopTable
+            :rows="returns"
+            :loading="periods.loading.value"
+            title="阶段收益"
+          >
+            <!-- @vue-generic {ReturnRow} -->
+            <el-table-column label="周期" min-width="150">
+              <template #default="{ row }: { row: ReturnRow }">
+                {{ periodLabels[row.title] || row.title }}
+              </template>
+            </el-table-column>
+            <!-- @vue-generic {ReturnRow} -->
+            <el-table-column label="收益" min-width="150">
+              <template #default="{ row }: { row: ReturnRow }">
+                <span :class="dirClass(number(row.syl))">
+                  {{ pct(number(row.syl)) }}
+                </span>
+              </template>
+            </el-table-column>
+          </DesktopTable>
         </div>
-        <p v-else-if="periods.ready.value" class="fund-empty">
-          暂无阶段收益数据
-        </p>
-        <p class="fund-note">
-          按净值历史及分红再投资口径测算；历史不足的区间显示“—”。
-        </p>
-      </el-card>
-      <el-card
-        v-if="recent.length"
-        class="pc-record-card fund-panel"
-        aria-label="近期净值"
-        shadow="never"
-      >
-        <h2>近期净值</h2>
-        <div class="fund-columns">
-          <span>日期</span>
-          <span>单位净值</span>
-          <span>累计净值</span>
-        </div>
-        <div v-for="p in recent" :key="p.date" class="fund-columns nav-history">
-          <span>{{ p.date }}</span>
-          <span>{{ price(p.nav) }}</span>
-          <span>{{ price(p.accNav) }}</span>
-        </div>
-      </el-card>
+      </div>
+      <DesktopTable :rows="recent" :loading="false" title="历史净值">
+        <el-table-column
+          prop="date"
+          label="日期"
+          min-width="180"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {NavRow} -->
+        <el-table-column label="单位净值" min-width="150">
+          <template #default="{ row }: { row: NavRow }">
+            {{ price(row.nav) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {NavRow} -->
+        <el-table-column label="累计净值" min-width="150">
+          <template #default="{ row }: { row: NavRow }">
+            {{ price(row.accNav) }}
+          </template>
+        </el-table-column>
+      </DesktopTable>
     </template>
   </section>
 </template>

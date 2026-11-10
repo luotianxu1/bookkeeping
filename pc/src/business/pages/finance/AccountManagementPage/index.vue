@@ -1,14 +1,19 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
+import AmountText from '@/business/components/common/AmountText/index.vue'
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { formatAmount } from '@/business/utils/format'
 // 账户管理页：还原 Pencil「账户管理」画板中的总览、账户分组和新增按钮。
 import { computed, onMounted, ref, watch } from 'vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonEmpty from '@/business/components/common/CommonEmpty/index.vue'
+
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import CommonSelect, {
   type CommonSelectOption,
@@ -23,8 +28,7 @@ import {
   DEFAULT_INVESTMENT_ACCOUNT_ICON,
 } from '@/business/data/account-icons'
 import type { AccountGroup, AccountOverview } from '@/business/types/account'
-import AccountGroupCard from '../components/AccountGroupCard/index.vue'
-import AccountOverviewCard from '../components/AccountOverviewCard/index.vue'
+
 import { getErrorMessage } from '@/business/api/request'
 import { useFinanceFamilyView } from '@/business/composables/useFinanceFamilyView'
 import { buildAccountGroups } from './accountGroup'
@@ -115,15 +119,6 @@ const familyViewSelectOptions = computed<CommonSelectOption[]>(() =>
     value: option.value,
   })),
 )
-const familyViewHint = computed(() => {
-  if (!isReadOnlyFamilyView.value) {
-    return ''
-  }
-
-  return selectedFamilyView.value.kind === 'total'
-    ? '当前为家庭总计视角，可查看全家账户汇总。'
-    : `当前查看 ${selectedFamilyView.value.label} 的账户数据。`
-})
 
 const accountOverview = computed<AccountOverview>(() => ({
   label:
@@ -476,57 +471,109 @@ function normalizeNullableAmount(value: string) {
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) ? parsed : Number.NaN
 }
-</script>
 
+const desktopAccountGroup = ref('')
+const desktopAccounts = computed(() =>
+  accountGroups.value
+    .filter(
+      (group) =>
+        !desktopAccountGroup.value || group.title === desktopAccountGroup.value,
+    )
+    .flatMap((group) =>
+      group.items.map((item) => ({ ...item, groupTitle: group.title })),
+    ),
+)
+type DesktopAccountRow = (typeof desktopAccounts.value)[number]
+</script>
 <template>
-  <section class="pc-page account-management-page" aria-label="账户管理">
+  <section class="desktop-workspace">
+    <PageHeader title="账户管理">
+      <template #right>
+        <CommonSelect
+          v-if="canSwitchFamilyView"
+          v-model="familyView"
+          label="家庭视角"
+          :options="familyViewSelectOptions"
+          aria-label="家庭视角"
+        />
+        <el-button
+          v-if="isSelfView"
+          type="primary"
+          @click="openCreateAccountModal"
+        >
+          新增账户
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="accountListError"
+      :title="accountListError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        { label: '资产总额', value: accountOverview.amount },
+        { label: '账户数量', value: accounts.length },
+        { label: '资产类型', value: accountGroups.length },
+      ]"
+    />
+    <DesktopTable
+      :rows="desktopAccounts"
+      :loading="isLoadingAccounts"
+      title="全部账户"
+      search-placeholder="搜索账户"
+      searchable
+    >
+      <template #toolbar>
+        <el-select
+          v-model="desktopAccountGroup"
+          aria-label="账户类型"
+          style="width: 180px"
+        >
+          <el-option label="全部类型" value="" />
+          <el-option
+            v-for="group in accountGroups"
+            :key="group.title"
+            :label="group.title"
+            :value="group.title"
+          />
+        </el-select>
+      </template>
+      <el-table-column
+        prop="name"
+        label="账户"
+        min-width="200"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="groupTitle"
+        label="类型"
+        min-width="140"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {DesktopAccountRow} -->
+      <el-table-column label="余额" min-width="160">
+        <template #default="{ row }: { row: DesktopAccountRow }">
+          <AmountText :value="row.amount || '—'" />
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopAccountRow} -->
+      <el-table-column fixed="right" label="操作" width="120">
+        <template #default="{ row }: { row: DesktopAccountRow }">
+          <RouterLink v-if="row.path" :to="row.path">
+            <el-button link type="primary">查看账户</el-button>
+          </RouterLink>
+        </template>
+      </el-table-column>
+    </DesktopTable>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
       :type="feedbackType"
-    />
-    <PageHeader title="账户管理" back-to="/finance" back-label="返回财务首页">
-      <template #right>
-        <div v-if="canSwitchFamilyView" class="account-family-switch">
-          <CommonSelect
-            v-model="familyView"
-            label="切换家庭成员账户视角"
-            :options="familyViewSelectOptions"
-          />
-        </div>
-      </template>
-    </PageHeader>
-    <AccountOverviewCard :overview="accountOverview" />
-    <p v-if="familyViewHint" class="account-view-hint">{{ familyViewHint }}</p>
-    <p
-      v-if="accountListError"
-      class="account-list-message account-list-message-error"
-    >
-      {{ accountListError }}
-    </p>
-    <CommonLoading v-else-if="isLoadingAccounts" />
-    <CommonEmpty
-      v-else-if="accountGroups.length === 0"
-      :title="
-        selectedFamilyView.kind === 'total' ? '当前家庭暂无账户' : '暂无账户'
-      "
-      description="添加一个现金或投资账户，开始记录每笔收支。"
-      action-text="新增账户"
-      @action="openCreateAccountModal()"
-    />
-    <div v-else class="account-groups">
-      <AccountGroupCard
-        v-for="group in accountGroups"
-        :key="group.accountTypeId ?? group.title"
-        :group="group"
-        @toggle="toggleAccountGroup(group)"
-      />
-    </div>
-    <FloatingAddButton
-      v-if="isSelfView"
-      aria-label="新增账户"
-      storage-key="account-management"
-      @click="openCreateAccountModal"
     />
     <CommonModal
       v-model="showCreateAccountModal"
@@ -585,6 +632,7 @@ function normalizeNullableAmount(value: string) {
           input-mode="decimal"
         />
         <CommonInput
+          percentage
           v-if="isLiabilityAccountTypeSelected"
           v-model="liabilityLoanInterestRate"
           label="贷款利率（%）"

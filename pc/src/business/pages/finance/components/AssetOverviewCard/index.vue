@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
 // 资产总览卡片：展示总资产、月结余、收入支出和预算进度。
 import type { FinanceOverview } from '@/business/types/finance'
 import AmountText from '@/business/components/common/AmountText/index.vue'
@@ -16,6 +18,7 @@ defineProps<{
         <AmountText tag="h1" :value="overview.totalAssets || '--'" />
       </div>
       <el-progress
+        :format="formatPercentage"
         type="circle"
         :width="80"
         :stroke-width="7"

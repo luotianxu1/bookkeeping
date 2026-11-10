@@ -5,13 +5,13 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import {
   createAccount,
   deleteAccount,
@@ -152,53 +152,9 @@ const liabilityCards = computed<LiabilityCardView[]>(() =>
   }),
 )
 
-const summaryAmountText = computed(() =>
-  formatCurrency(summary.value.totalAmount),
-)
-const currentMonthLiabilityTotal = computed(() => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
-  return accounts.value.reduce((total, account) => {
-    if (account.loanSettledAt || Number(account.currentBalance ?? 0) <= 0) {
-      return total
-    }
-    const records = recordsByAccountId.value.get(account.id) ?? []
-    const pendingAmountThisMonth = records.reduce((recordTotal, record) => {
-      if (record.repaymentStatus === 'paid') {
-        return recordTotal
-      }
-      const occurredAt = new Date(record.occurredAt)
-      if (Number.isNaN(occurredAt.getTime())) {
-        return recordTotal
-      }
-      return occurredAt.getFullYear() === year &&
-        occurredAt.getMonth() === month
-        ? recordTotal + Number(record.amount ?? 0)
-        : recordTotal
-    }, 0)
-    if (pendingAmountThisMonth > 0) {
-      return total + pendingAmountThisMonth
-    }
-
-    const nextPeriod = getNextPeriod(account, records)
-    const dueDate = buildScheduledDate(account, nextPeriod)
-    if (!dueDate) {
-      return total
-    }
-    return dueDate.getFullYear() === year && dueDate.getMonth() === month
-      ? total + getMonthlyPayment(account)
-      : total
-  }, 0)
-})
-
 onMounted(() => {
   void loadLiabilityPage()
 })
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
-}
 
 function openLiabilityDetail(accountId: number) {
   if (isManageMode.value) {
@@ -598,7 +554,7 @@ function buildScheduledDate(account: Account, period: number) {
 type DesktopRow = (typeof liabilityCards.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="负债账户">
       <template #right>
         <el-button type="primary" @click="openCreateAccountModal">
@@ -613,11 +569,18 @@ type DesktopRow = (typeof liabilityCards.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="liabilityCards" :loading="isLoading">
+    <DesktopTable
+      title="贷款账户列表"
+      searchable
+      search-placeholder="贷款名称 / 还款信息"
+      :rows="liabilityCards"
+      :loading="isLoading"
+    >
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column
         label="账户"
         prop="account.name"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />
@@ -625,6 +588,7 @@ type DesktopRow = (typeof liabilityCards.value)[number]
       <el-table-column
         label="待还金额"
         prop="amountText"
+        sortable="custom"
         min-width="140"
         show-overflow-tooltip
       />
@@ -632,6 +596,7 @@ type DesktopRow = (typeof liabilityCards.value)[number]
       <el-table-column
         label="还款周期"
         prop="secondaryText"
+        sortable="custom"
         min-width="220"
         show-overflow-tooltip
       />
@@ -639,6 +604,7 @@ type DesktopRow = (typeof liabilityCards.value)[number]
       <el-table-column
         label="还款信息"
         prop="noteText"
+        sortable="custom"
         min-width="220"
         show-overflow-tooltip
       />
@@ -687,6 +653,7 @@ type DesktopRow = (typeof liabilityCards.value)[number]
           input-mode="decimal"
         />
         <CommonInput
+          percentage
           v-model="loanInterestRate"
           label="贷款利率（%）"
           placeholder="例如：3.25"

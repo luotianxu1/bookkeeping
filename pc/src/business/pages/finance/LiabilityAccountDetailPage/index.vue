@@ -1,20 +1,23 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed } from 'vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import { useFeedback } from '@/business/composables/useFeedback'
 import {
   formatCurrency,
   formatDate,
   formatInstallmentLabel,
   formatRecordAmount,
-  formatRemainingLabel,
   formatRepaymentStatus,
 } from './liabilityFormat'
 import { formatRate } from './liabilityLoanPlan'
@@ -100,194 +103,137 @@ const loanInterestRateText = computed(() => formatRate(account.value))
 
 type DetailTableRow = (typeof records.value)[number]
 </script>
-
 <template>
-  <section class="pc-page debt-account-detail-page" aria-label="负债详情">
+  <section class="desktop-workspace">
+    <PageHeader :title="detailName">
+      <template #right>
+        <el-button
+          type="danger"
+          plain
+          :disabled="isDeletingAccount || !account"
+          @click="openAccountDeleteModal"
+        >
+          删除账户
+        </el-button>
+        <el-button :disabled="isSettled" @click="openAddRecordModal">
+          新增月账单
+        </el-button>
+        <el-button
+          type="primary"
+          :disabled="isSettled"
+          @click="openPrepayModal"
+        >
+          提前还款
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        { label: '待还金额', value: summaryAmountText },
+        { label: '累计还款', value: formatCurrency(paidAmount) },
+        { label: '月供参考', value: formatCurrency(monthlyPaymentAmount) },
+        { label: '剩余期数', value: remainingInstallmentPeriods },
+      ]"
+    />
+    <div class="desktop-main-aside">
+      <DesktopTable :rows="records" title="还款账单" searchable>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="日期" min-width="140">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatDate(row.occurredAt) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="期数" min-width="120">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatInstallmentLabel(row) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="状态" min-width="140">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatRepaymentStatus(row.repaymentStatus, row.repaymentType) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="金额" min-width="140">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatRecordAmount(row) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column
+          label="备注"
+          prop="remark"
+          min-width="240"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="操作" width="210" fixed="right">
+          <template #default="{ row }: { row: DetailTableRow }">
+            <div class="pc-row-actions">
+              <template v-if="row.repaymentType !== 'prepayment'">
+                <el-button
+                  link
+                  type="primary"
+                  v-if="row.repaymentStatus !== 'paid'"
+                  @click="openRepayModal(row)"
+                >
+                  还款
+                </el-button>
+                <el-button
+                  link
+                  type="primary"
+                  @click="openEditRecordModal(row)"
+                >
+                  修改
+                </el-button>
+                <el-button link type="danger" @click="openDeleteModal(row)">
+                  删除
+                </el-button>
+              </template>
+            </div>
+          </template>
+        </el-table-column>
+      </DesktopTable>
+      <PagePanel title="贷款合同">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="状态">
+            {{ isSettled ? '已结清' : '还款中' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="本金">
+            {{ formatCurrency(Number(account?.loanTotalAmount ?? 0)) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="合同总额">
+            {{ formatCurrency(totalRepaymentAmount) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="利率">
+            {{ loanInterestRateText }}
+          </el-descriptions-item>
+          <el-descriptions-item label="还款日">
+            {{ account?.loanRepaymentDay ?? '—' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="下期账单">
+            {{ nextDueText }}
+          </el-descriptions-item>
+          <el-descriptions-item label="备注">
+            {{ detailNote || '—' }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </PagePanel>
+    </div>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
       :type="feedbackType"
     />
-    <header class="debt-detail-header">
-      <PageHeader
-        :title="`${detailName}账单`"
-        back-to="/finance/accounts/liability"
-        back-label="返回负债账户"
-      >
-        <template #right>
-          <el-button
-            native-type="button"
-            class="debt-detail-delete-button"
-            :disabled="isDeletingAccount || !account"
-            @click="openAccountDeleteModal"
-            type="danger"
-            plain
-          >
-            删除账户
-          </el-button>
-        </template>
-      </PageHeader>
-    </header>
-    <p v-if="pageError" class="debt-detail-message debt-detail-message-error">
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <el-card
-        class="pc-record-card debt-detail-summary-card"
-        aria-label="负债详情总览"
-        shadow="never"
-      >
-        <div class="debt-detail-summary-top">
-          <div class="debt-detail-summary-title">
-            <strong>贷款合同</strong>
-            <span>
-              {{ detailName }} · 每月
-              {{ account?.loanRepaymentDay ?? '--' }} 日还款
-            </span>
-          </div>
-          <span class="debt-detail-summary-badge">
-            {{ isSettled ? '已结清' : '还款中' }}
-          </span>
-        </div>
-        <AmountText
-          tag="p"
-          class="debt-detail-summary-amount"
-          :value="summaryAmountText"
-          tone="inherit"
-        />
-        <p class="debt-detail-summary-sub">下期账单 {{ nextDueText }}</p>
-        <p v-if="detailNote" class="debt-detail-summary-note">
-          {{ detailNote }}
-        </p>
-        <div class="debt-detail-metrics">
-          <div class="debt-detail-metric">
-            <span>合同总额</span>
-            <strong>{{ formatCurrency(totalRepaymentAmount) }}</strong>
-          </div>
-          <div class="debt-detail-metric">
-            <span>已还金额</span>
-            <strong>{{ formatCurrency(paidAmount) }}</strong>
-          </div>
-          <div class="debt-detail-metric">
-            <span>月供参考</span>
-            <strong>{{ formatCurrency(monthlyPaymentAmount) }}</strong>
-          </div>
-          <div class="debt-detail-metric">
-            <span>贷款本金</span>
-            <strong>
-              {{ formatCurrency(Number(account?.loanTotalAmount ?? 0)) }}
-            </strong>
-          </div>
-          <div class="debt-detail-metric">
-            <span>贷款利率</span>
-            <strong>{{ loanInterestRateText }}</strong>
-          </div>
-          <div class="debt-detail-metric">
-            <span>剩余期数</span>
-            <strong>{{ remainingInstallmentPeriods }} 期</strong>
-          </div>
-        </div>
-        <div class="pc-toolbar debt-detail-summary-actions">
-          <CommonButton
-            variant="secondary"
-            :disabled="isSettled"
-            @click="openAddRecordModal"
-          >
-            新增月账单
-          </CommonButton>
-          <CommonButton
-            variant="primary"
-            :disabled="isSettled"
-            @click="openPrepayModal"
-          >
-            提前还款
-          </CommonButton>
-        </div>
-      </el-card>
-      <section class="debt-record-history" aria-label="还款记录">
-        <div class="debt-record-history-head">
-          <div class="debt-record-history-title">
-            <strong>月账单列表</strong>
-            <span>支持按月还款、修改账单，也支持整笔提前结清</span>
-          </div>
-          <span class="debt-record-history-badge">{{ records.length }} 条</span>
-        </div>
-        <div class="pc-grid debt-record-history-list">
-          <p v-if="records.length === 0" class="debt-record-empty">
-            暂无月账单
-          </p>
-          <el-table v-else :data="records" stripe>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="日期" min-width="140">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatDate(row.occurredAt) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="期数" min-width="120">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatInstallmentLabel(row) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="状态" min-width="140">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{
-                  formatRepaymentStatus(row.repaymentStatus, row.repaymentType)
-                }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="金额" min-width="140">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatRecordAmount(row) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column
-              label="备注"
-              prop="remark"
-              min-width="240"
-              show-overflow-tooltip
-            />
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="操作" width="210" fixed="right">
-              <template #default="{ row }: { row: DetailTableRow }">
-                <div class="pc-row-actions">
-                  <template v-if="row.repaymentType !== 'prepayment'">
-                    <el-button
-                      link
-                      type="primary"
-                      v-if="row.repaymentStatus !== 'paid'"
-                      @click="openRepayModal(row)"
-                    >
-                      还款
-                    </el-button>
-                    <el-button
-                      link
-                      type="primary"
-                      @click="openEditRecordModal(row)"
-                    >
-                      修改
-                    </el-button>
-                    <el-button link type="danger" @click="openDeleteModal(row)">
-                      删除
-                    </el-button>
-                  </template>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </section>
-      <FloatingAddButton
-        v-if="!isSettled"
-        aria-label="新增月账单"
-        storage-key="liability-record-create"
-        @click="openAddRecordModal"
-      />
-    </template>
     <CommonModal v-model="showRepayModal" title="确认月供还款">
       <div class="pc-form-grid debt-record-form">
         <CommonInput

@@ -1,15 +1,18 @@
 <script setup lang="ts">
+import { formatPercentageText } from '@/business/utils/percentage'
+
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonEmpty from '@/business/components/common/CommonEmpty/index.vue'
+
 import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import {
@@ -51,8 +54,8 @@ const urgencyLabels = {
   overdue: '已到期',
   today: '今天',
   upcoming: '即将到期',
-  warning: '已用 80%',
-  exceeded: '已用 100%',
+  warning: '已用 80.0%',
+  exceeded: '已用 100.0%',
 }
 const snoozedCount = computed(
   () => items.value.filter((item) => item.snoozedUntil).length,
@@ -145,142 +148,132 @@ async function saveSettings() {
     settingsSaving.value = false
   }
 }
-</script>
 
+type ReminderRow = (typeof visibleItems.value)[number]
+</script>
 <template>
-  <section class="pc-page reminder-page" aria-label="统一提醒">
-    <PageHeader title="统一提醒" back-to="/profile" prefer-back-to>
+  <section class="desktop-workspace">
+    <PageHeader title="统一提醒">
       <template #right>
-        <div class="pc-toolbar reminder-header-actions">
-          <CommonHeaderRefreshButton
-            label="刷新提醒"
-            :loading="refreshing"
-            @click="refresh"
-          />
-          <CommonHeaderActionButton
-            label="提醒设置"
-            :disabled="busy"
-            @click="openSettings"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-              />
-              <path
-                d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </CommonHeaderActionButton>
-        </div>
+        <el-button :disabled="busy" @click="openSettings">提醒设置</el-button>
+        <el-button :loading="refreshing" @click="refresh">刷新</el-button>
       </template>
     </PageHeader>
-    <SegmentedControl
-      v-model="tab"
-      :options="[
-        { label: `未读 ${unreadCount}`, value: 'unread' },
-        { label: '全部', value: 'all' },
-        { label: `稍后 ${snoozedCount}`, value: 'snoozed' },
-      ]"
-      label="提醒状态"
-    />
-    <div class="pc-toolbar reminder-toolbar">
-      <span class="reminder-type-select">
-        <el-select v-model="category" aria-label="提醒类型" style="width: 200px">
-          <el-option value="all" label="全部类型" />
-          <el-option v-for="(label, key) in labels" :key="key" :value="key" :label="label" />
-        </el-select>
-      </span>
-      <el-button
-        v-if="tab !== 'snoozed'"
-        native-type="button"
-        :disabled="busy || !visibleItems.some((item) => !item.read)"
-        @click="readAll"
-      >
-        全部已读
-      </el-button>
-    </div>
-    <p v-if="error" class="reminder-error" role="alert">
-      {{ error }}
-      <el-button native-type="button" :disabled="busy" @click="refresh">
-        重试
-      </el-button>
-    </p>
-    <p v-if="feedback" class="reminder-note" role="status">{{ feedback }}</p>
-    <CommonLoading v-if="loading" text="正在整理提醒..." />
-    <section v-else class="pc-grid reminder-list" aria-label="提醒列表">
-      <el-card
-        v-for="item in visibleItems"
-        :key="item.key"
-        :class="['reminder-card', { 'is-read': item.read }]"
-        shadow="never"
-        class="pc-record-card"
-      >
-        <div class="pc-toolbar reminder-card-heading">
-          <span>
-            {{ labels[item.type] }}
-            <i v-if="!item.read" aria-label="未读" />
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button link type="primary" @click="refresh">重试</el-button>
+    </el-alert>
+    <p v-if="feedback" role="status">{{ feedback }}</p>
+    <DesktopTable :rows="visibleItems" :loading="loading" title="提醒列表">
+      <template #toolbar>
+        <SegmentedControl
+          v-model="tab"
+          :options="[
+            { label: `未读 ${unreadCount}`, value: 'unread' },
+            { label: '全部', value: 'all' },
+            { label: `稍后 ${snoozedCount}`, value: 'snoozed' },
+          ]"
+          label="提醒状态"
+        />
+        <div class="pc-toolbar reminder-toolbar">
+          <span class="reminder-type-select">
+            <el-select
+              v-model="category"
+              aria-label="提醒类型"
+              style="width: 200px"
+            >
+              <el-option value="all" label="全部类型" />
+              <el-option
+                v-for="(label, key) in labels"
+                :key="key"
+                :value="key"
+                :label="label"
+              />
+            </el-select>
           </span>
-          <span :class="['reminder-status', item.urgency]">
-            {{ urgencyLabels[item.urgency] }}
-          </span>
-        </div>
-        <el-button
-          class="reminder-open"
-          native-type="button"
-          :disabled="busy"
-          @click="openItem(item)"
-        >
-          <h2>{{ item.title }}</h2>
-          <p>{{ item.description }}</p>
-          <span class="reminder-card-meta">
-            <time :datetime="item.dueAt">
-              {{ formatDate(item.dueAt, item.allDay) }}
-            </time>
-            <span class="reminder-link">查看详情 →</span>
-          </span>
-        </el-button>
-        <p v-if="item.snoozedUntil" class="reminder-note">
-          {{ formatDate(item.snoozedUntil) }} 再次提醒
-        </p>
-        <footer>
           <el-button
-            v-if="item.snoozedUntil"
+            v-if="tab !== 'snoozed'"
             native-type="button"
+            :disabled="busy || !visibleItems.some((item) => !item.read)"
+            @click="readAll"
+          >
+            全部已读
+          </el-button>
+        </div>
+      </template>
+      <!-- @vue-generic {ReminderRow} -->
+      <el-table-column label="类型" min-width="150">
+        <template #default="{ row }: { row: ReminderRow }">
+          {{ labels[row.type] }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {ReminderRow} -->
+      <el-table-column label="提醒" min-width="360">
+        <template #default="{ row }: { row: ReminderRow }">
+          <el-button
+            link
+            type="primary"
+            @click="openItem(row)"
             :disabled="busy"
-            @click="act([item.key], 'resume')"
+          >
+            {{ row.title }}
+          </el-button>
+          <p class="desktop-note">
+            {{ formatPercentageText(row.description) }}
+          </p>
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {ReminderRow} -->
+      <el-table-column label="时间" min-width="180">
+        <template #default="{ row }: { row: ReminderRow }">
+          {{ formatDate(row.dueAt, row.allDay) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {ReminderRow} -->
+      <el-table-column label="紧急程度" min-width="150">
+        <template #default="{ row }: { row: ReminderRow }">
+          {{ urgencyLabels[row.urgency] }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {ReminderRow} -->
+      <el-table-column label="状态" min-width="150">
+        <template #default="{ row }: { row: ReminderRow }">
+          {{ row.read ? '已读' : '未读' }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {ReminderRow} -->
+      <el-table-column fixed="right" label="操作" width="210">
+        <template #default="{ row }: { row: ReminderRow }">
+          <el-button
+            v-if="row.snoozedUntil"
+            link
+            type="primary"
+            :disabled="busy"
+            @click="act([row.key], 'resume')"
           >
             恢复提醒
           </el-button>
           <template v-else>
             <el-button
-              native-type="button"
+              link
+              type="primary"
               :disabled="busy"
-              @click="act([item.key], item.read ? 'unread' : 'read')"
+              @click="act([row.key], row.read ? 'unread' : 'read')"
             >
-              {{ item.read ? '标为未读' : '标为已读' }}
+              {{ row.read ? '标为未读' : '标为已读' }}
             </el-button>
-            <el-button
-              native-type="button"
-              :disabled="busy"
-              @click="snoozeTarget = item"
-            >
+            <el-button link :disabled="busy" @click="snoozeTarget = row">
               稍后提醒
             </el-button>
           </template>
-        </footer>
-      </el-card>
-      <CommonEmpty
-        v-if="!visibleItems.length && !error"
-        :title="tab === 'unread' ? '暂时没有未读提醒' : '暂无提醒'"
-        description="符合提醒设置的待办、纪念日和账单会显示在这里。"
-      />
-    </section>
+        </template>
+      </el-table-column>
+    </DesktopTable>
     <CommonModal
       v-model="showSettings"
       title="提醒设置"

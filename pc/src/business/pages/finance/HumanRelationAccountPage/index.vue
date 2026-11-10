@@ -5,15 +5,15 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import {
   createAccount,
   deleteAccount,
@@ -160,17 +160,9 @@ const relationCards = computed<HumanRelationCardView[]>(() =>
   }),
 )
 
-const summaryAmountText = computed(() =>
-  formatSignedCurrency(summary.value.netAmount),
-)
-
 onMounted(() => {
   void loadHumanRelationPage()
 })
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
-}
 
 function openHumanRelationDetail(accountId: number) {
   if (isManageMode.value) {
@@ -384,7 +376,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof relationCards.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="人情往来">
       <template #right>
         <el-button type="primary" @click="openCreateAccountModal">
@@ -399,11 +391,18 @@ type DesktopRow = (typeof relationCards.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="relationCards" :loading="isLoading">
+    <DesktopTable
+      title="往来账户列表"
+      searchable
+      search-placeholder="联系人 / 备注"
+      :rows="relationCards"
+      :loading="isLoading"
+    >
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column
         label="联系人"
         prop="displayName"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />
@@ -423,6 +422,7 @@ type DesktopRow = (typeof relationCards.value)[number]
       <el-table-column
         label="结余"
         prop="netAmountText"
+        sortable="custom"
         min-width="160"
         show-overflow-tooltip
       />
@@ -430,6 +430,7 @@ type DesktopRow = (typeof relationCards.value)[number]
       <el-table-column
         label="备注"
         prop="noteText"
+        sortable="custom"
         min-width="220"
         show-overflow-tooltip
       />

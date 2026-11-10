@@ -1,5 +1,8 @@
 <script setup lang="ts">
-// 板块高亮卡片：领涨/领跌 TOP6 正方形方块阵（行业/概念/美股行业通用）。
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
+// 行业、概念和海外板块的领涨、领跌排名表。
 import { computed } from 'vue'
 import type { SectorKind, SectorRow } from '@/business/api/modules/market'
 import { amt, dirClass, pct } from '@/business/utils/marketFormat'
@@ -23,76 +26,81 @@ const isConcept = computed(() => (props.kind ?? 'concept') === 'concept')
 const title = computed(
   () => props.heading ?? (isConcept.value ? '概念板块' : '行业板块'),
 )
-const unitNote = computed(() =>
-  props.heading ? '个行业' : isConcept.value ? '个概念' : '个行业',
-)
 
 /* 领涨 / 领跌 TOP6（接口已按涨跌幅降序） */
 const topGainers = computed(() => props.sectors.slice(0, 6))
 const topLosers = computed(() => props.sectors.slice(-6).reverse())
 </script>
-
 <template>
-  <section aria-labelledby="sector-title" class="sector-section">
-    <div class="spot-head">
-      <h2 id="sector-title">{{ title }}</h2>
-      <span class="spot-note">
-        领涨 / 领跌 TOP6 · 共 {{ sectors.length }} {{ unitNote }}
-      </span>
-      <el-button
-        v-if="showMore !== false"
-        class="more-btn"
-        native-type="button"
-        @click="emit('more')"
+  <section class="desktop-workspace">
+    <PagePanel :title="title">
+      <template #actions>
+        <el-button
+          v-if="showMore !== false"
+          text
+          type="primary"
+          @click="emit('more')"
+        >
+          全部板块
+        </el-button>
+      </template>
+      <el-alert
+        v-if="error"
+        :title="error"
+        type="error"
+        :closable="false"
+        show-icon
       >
-        更多
-        <span class="more-arrow" aria-hidden="true">→</span>
-      </el-button>
-    </div>
-    <p v-if="error" class="error-box" role="alert">板块加载失败：{{ error }}</p>
-    <div v-else-if="loading" class="table-wrap" aria-busy="true">
-      <div v-for="n in 4" :key="n" class="table-line"></div>
-    </div>
-    <div v-else-if="sectors.length" class="pc-grid sector-grid">
-      <div class="sector-group">
-        <h3 class="sector-sub up">领涨板块</h3>
-        <div class="sec-tiles">
-          <el-card
-            v-for="sec in topGainers"
-            :key="sec['代码']"
-            class="pc-record-card sector-card"
-            shadow="never"
-          >
-            <span class="sec-name">{{ sec['名称'] }}</span>
-            <span class="num sec-pct" :class="dirClass(sec['涨跌幅'])">
-              {{ pct(sec['涨跌幅']) }}
-            </span>
-            <span class="num sec-vol">
-              {{ amt(sec['总成交额'], currency ?? '') }}
-            </span>
-          </el-card>
-        </div>
+        <el-button link type="primary" @click="emit('retry')">重试</el-button>
+      </el-alert>
+      <div class="desktop-columns">
+        <DesktopTable :rows="topGainers" :loading="loading" title="领涨板块">
+          <el-table-column
+            prop="名称"
+            label="板块"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {SectorRow} -->
+          <el-table-column label="涨跌幅" min-width="150">
+            <template #default="{ row }: { row: SectorRow }">
+              <span :class="dirClass(row['涨跌幅'])">
+                {{ pct(row['涨跌幅']) }}
+              </span>
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {SectorRow} -->
+          <el-table-column label="成交额" min-width="150">
+            <template #default="{ row }: { row: SectorRow }">
+              {{ amt(row['总成交额'], currency ?? '') }}
+            </template>
+          </el-table-column>
+        </DesktopTable>
+        <DesktopTable :rows="topLosers" :loading="loading" title="领跌板块">
+          <el-table-column
+            prop="名称"
+            label="板块"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {SectorRow} -->
+          <el-table-column label="涨跌幅" min-width="150">
+            <template #default="{ row }: { row: SectorRow }">
+              <span :class="dirClass(row['涨跌幅'])">
+                {{ pct(row['涨跌幅']) }}
+              </span>
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {SectorRow} -->
+          <el-table-column label="成交额" min-width="150">
+            <template #default="{ row }: { row: SectorRow }">
+              {{ amt(row['总成交额'], currency ?? '') }}
+            </template>
+          </el-table-column>
+        </DesktopTable>
       </div>
-      <div class="sector-group">
-        <h3 class="sector-sub down">领跌板块</h3>
-        <div class="sec-tiles">
-          <el-card
-            v-for="sec in topLosers"
-            :key="sec['代码']"
-            class="pc-record-card sector-card"
-            shadow="never"
-          >
-            <span class="sec-name">{{ sec['名称'] }}</span>
-            <span class="num sec-pct" :class="dirClass(sec['涨跌幅'])">
-              {{ pct(sec['涨跌幅']) }}
-            </span>
-            <span class="num sec-vol">
-              {{ amt(sec['总成交额'], currency ?? '') }}
-            </span>
-          </el-card>
-        </div>
-      </div>
-    </div>
-    <p v-else class="empty">暂无数据</p>
+    </PagePanel>
   </section>
 </template>

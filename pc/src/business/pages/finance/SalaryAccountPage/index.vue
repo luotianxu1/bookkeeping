@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { formatPercentageText } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+
 import DesktopTable from '@/business/components/DesktopTable.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -13,9 +18,9 @@ import {
 } from '@/business/api/modules/finance'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
@@ -275,114 +280,53 @@ function formatInterestSettlementDate(value?: string | null) {
   return `${matched[1]} 年 ${Number(matched[2])} 月 ${Number(matched[3])} 日`
 }
 </script>
-
 <template>
-  <section class="pc-page salary-page" :aria-label="pageTitle">
-    <PageHeader
-      :title="pageTitle"
-      back-to="/finance/salary"
-      :prefer-back-to="true"
-    >
-      <CommonHeaderActionButton
-        v-if="isCompactSummaryPage"
-        label="修改账户总额"
-        :disabled="isLoading || !pageData"
-        @click="openBalanceModal"
-      >
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z"
-            stroke="currentColor"
-            stroke-width="1.8"
-          />
-          <path
-            d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </CommonHeaderActionButton>
-      <CommonSelect
-        v-if="!isCompactSummaryPage"
-        class="salary-year-select"
-        label=""
-        :model-value="selectedYear"
-        :options="yearOptions"
-        @update:model-value="changeYear"
-      />
+  <section class="desktop-workspace">
+    <PageHeader :title="pageTitle">
+      <template #right>
+        <CommonSelect
+          label="年份"
+          aria-label="年份"
+          :model-value="selectedYear"
+          :options="yearOptions"
+          @update:model-value="changeYear"
+        />
+        <el-button
+          v-if="isCompactSummaryPage"
+          :disabled="isLoading || !pageData"
+          type="primary"
+          @click="openBalanceModal"
+        >
+          调整账户总额
+        </el-button>
+      </template>
     </PageHeader>
-    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
-    <div v-else-if="isLoading" class="salary-loading-wrap">
-      <CommonLoading text="账户数据加载中..." />
-    </div>
-    <template v-else-if="pageData">
-      <el-card class="pc-record-card salary-summary-card" shadow="never">
-        <div class="salary-summary-head">
-          <p v-if="!isCompactSummaryPage" class="salary-summary-eyebrow">
-            {{ pageData.title }}
-          </p>
-          <div class="salary-summary-main">
-            <div class="salary-summary-main-top">
-              <strong>
-                {{ formatSalaryCurrency(pageData.currentBalance) }}
-              </strong>
-              <CommonSelect
-                v-if="isCompactSummaryPage"
-                class="salary-year-select salary-summary-year-select"
-                label=""
-                :model-value="selectedYear"
-                :options="yearOptions"
-                @update:model-value="changeYear"
-              />
-              <span v-if="!isCompactSummaryPage" class="salary-pill">
-                {{ pageData.year }} 年
-              </span>
-            </div>
-            <div v-if="!isCompactSummaryPage" class="salary-summary-sub">
-              <span>{{ pageData.subtitle }}</span>
-              <span class="highlight">{{ pageData.badgeText }}</span>
-            </div>
-          </div>
-        </div>
-        <div class="pc-grid salary-metric-grid">
-          <el-card
-            v-for="metric in visibleMetrics"
-            :key="metric.label"
-            class="pc-record-card salary-metric-card"
-            shadow="never"
-          >
-            <span>{{ metric.label }}</span>
-            <strong>{{ formatSalaryCurrency(metric.value) }}</strong>
-          </el-card>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>账户明细</strong></div>
-        <div class="pc-grid salary-list">
-          <el-card
-            v-for="item in pageData.details"
-            :key="item.label"
-            class="pc-record-card salary-row"
-            shadow="never"
-          >
-            <div>
-              <p class="salary-row-label">{{ item.label }}</p>
-              <p class="salary-row-desc">{{ item.description }}</p>
-            </div>
-            <div class="salary-row-value">
-              <strong>{{ formatSalaryCurrency(item.value) }}</strong>
-            </div>
-          </el-card>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head">
-          <strong>账户记录</strong>
-          <span class="salary-pill">近 12 条</span>
-        </div>
-        <DesktopTable :rows="pageData.records">
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="pageData">
+      <MetricStrip
+        :items="[
+          {
+            label: '当前余额',
+            value: formatSalaryCurrency(pageData.currentBalance),
+          },
+        ]"
+      />
+      <MetricStrip
+        :items="
+          visibleMetrics.map((metric) => ({
+            label: metric.label,
+            value: formatSalaryCurrency(metric.value),
+          }))
+        "
+      />
+      <div class="desktop-main-aside">
+        <DesktopTable title="账户记录" searchable :rows="pageData.records">
           <el-table-column prop="monthLabel" label="月份" min-width="140" />
           <el-table-column
             prop="amountLabel"
@@ -409,18 +353,22 @@ function formatInterestSettlementDate(value?: string | null) {
             </template>
           </el-table-column>
         </DesktopTable>
-      </el-card>
-      <el-card
-        v-if="pageData.forecast"
-        class="pc-record-card salary-card"
-        shadow="never"
-      >
-        <div class="salary-card-head">
-          <strong>明年预测</strong>
-          <span class="salary-pill">
-            {{ pageData.forecast.forecastYear }} 年
-          </span>
-        </div>
+        <PagePanel title="缴纳明细">
+          <el-descriptions :column="1" border>
+            <el-descriptions-item
+              v-for="item in pageData.details"
+              :key="item.label"
+              :label="item.label"
+            >
+              {{ formatSalaryCurrency(item.value) }}
+              <p class="desktop-note">
+                {{ formatPercentageText(item.description) }}
+              </p>
+            </el-descriptions-item>
+          </el-descriptions>
+        </PagePanel>
+      </div>
+      <PagePanel title="明年预测" v-if="pageData.forecast">
         <el-card class="pc-record-card salary-forecast-panel" shadow="never">
           <div class="salary-row">
             <div><p class="salary-row-label">预测缴费基数</p></div>
@@ -471,7 +419,7 @@ function formatInterestSettlementDate(value?: string | null) {
             </div>
           </div>
         </el-card>
-      </el-card>
+      </PagePanel>
     </template>
     <CommonModal
       v-model="showBalanceModal"

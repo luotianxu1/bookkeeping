@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, ref, watch } from 'vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import {
   getCategoryBudgets,
   saveCategoryBudget,
@@ -120,77 +124,90 @@ async function remove() {
     busy.value = false
   }
 }
-</script>
 
+type DesktopRow = (typeof items.value)[number]
+</script>
 <template>
-  <section class="category-budgets" aria-label="分类预算">
-    <div class="pc-toolbar section-heading">
-      <h2>分类预算</h2>
-      <el-button :disabled="loading || !!error" @click="open()">
-        新增分类预算
-      </el-button>
-    </div>
-    <p class="hint">
-      按具体支出分类设置；已用达 80% 和 100% 时在统一提醒中提示。
-    </p>
-    <CommonLoading v-if="loading" />
-    <p v-else-if="error" class="error" role="alert">
-      {{ error }}
-      <el-button @click="load">重试</el-button>
-    </p>
-    <template v-else>
-      <el-card
-        v-for="item in items"
-        :key="item.id"
-        class="pc-record-card category-card"
-        :class="{
-          warning: item.usagePercent >= 80,
-          exceeded: item.usagePercent >= 100,
-        }"
-        shadow="never"
-      >
-        <div class="pc-toolbar section-heading">
-          <strong>{{ item.categoryName }}</strong>
-          <span>{{ money(item.amount) }}</span>
-        </div>
-        <p>
-          已用 {{ money(item.usedAmount) }} ·
-          {{ item.remainingAmount >= 0 ? '剩余' : '超出' }}
-          {{ money(Math.abs(item.remainingAmount)) }}
-        </p>
-        <div class="progress">
-          <span
-            :style="{
-              width: `${Math.min(100, Math.max(0, item.usagePercent))}%`,
-            }"
+  <section class="desktop-workspace">
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button link type="primary" @click="load">重试</el-button>
+    </el-alert>
+    <DesktopTable :rows="items" :loading="loading" title="分类预算">
+      <template #toolbar>
+        <el-button
+          type="primary"
+          :disabled="loading || !!error"
+          @click="open()"
+        >
+          新增分类预算
+        </el-button>
+      </template>
+      <el-table-column
+        prop="categoryName"
+        label="支出分类"
+        min-width="180"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="预算" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ money(row.amount) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="已使用" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ money(row.usedAmount) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="剩余预算" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ money(row.remainingAmount) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="执行进度" min-width="200">
+        <template #default="{ row }: { row: DesktopRow }">
+          <el-progress
+            :format="formatPercentage"
+            :percentage="Math.min(100, Math.max(0, row.usagePercent))"
+            :status="
+              row.usagePercent >= 100
+                ? 'exception'
+                : row.usagePercent >= 80
+                  ? 'warning'
+                  : undefined
+            "
           />
-        </div>
-        <div class="pc-toolbar section-heading">
-          <span>
-            {{
-              item.usagePercent >= 100
-                ? '预算已用完'
-                : item.usagePercent >= 80
-                  ? '预算即将用完'
-                  : `已用 ${item.usagePercent}%`
-            }}
-          </span>
-          <div class="pc-toolbar actions">
-            <el-button @click="open(item)">修改</el-button>
-            <el-button
-              @click="
-() => {
-deleting = item
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column fixed="right" label="操作" width="140">
+        <template #default="{ row }: { row: DesktopRow }">
+          <el-button link type="primary" @click="open(row)">修改</el-button>
+          <el-button
+            link
+            type="danger"
+            @click="
+              () => {
+                deleting = row
                 formError = ''
-}"
-            >
-              删除
-            </el-button>
-          </div>
-        </div>
-      </el-card>
-      <p v-if="!items.length" class="hint">该月还没有分类预算</p>
-    </template>
+              }
+            "
+          >
+            删除
+          </el-button>
+        </template>
+      </el-table-column>
+    </DesktopTable>
     <CommonModal
       v-model="show"
       title="分类预算"

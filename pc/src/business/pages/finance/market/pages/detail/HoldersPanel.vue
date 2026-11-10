@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
 // 十大流通股东 + 股东人数变化（A股），自 DetailPage 抽出。
 import { computed } from 'vue'
 import type { F10Data } from '@/business/api/modules/market'
@@ -46,7 +48,7 @@ const holderTrendRows = computed(() => {
         </el-table-column>
         <el-table-column label="占总股本" min-width="120">
           <template #default="{ row: h }">
-            {{ h.ratio === null ? '—' : `${h.ratio}%` }}
+            {{ h.ratio === null ? '—' : formatPercentage(h.ratio) }}
           </template>
         </el-table-column>
         <el-table-column label="较上期" min-width="120">

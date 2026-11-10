@@ -22,12 +22,12 @@ export function formatRate(currentAccount: Account | null) {
     currentAccount.loanInterestRate != null &&
     Number.isFinite(Number(currentAccount.loanInterestRate))
   ) {
-    return `${Number(currentAccount.loanInterestRate).toFixed(2)}%`
+    return `${Number(currentAccount.loanInterestRate).toFixed(1)}%`
   }
   const principal = Number(currentAccount.loanTotalAmount ?? 0)
   const interestAmount = Number(currentAccount.loanInterestAmount ?? 0)
   if (principal > 0 && interestAmount > 0) {
-    return `${((interestAmount / principal) * 100).toFixed(2)}%`
+    return `${((interestAmount / principal) * 100).toFixed(1)}%`
   }
   return '未设置'
 }

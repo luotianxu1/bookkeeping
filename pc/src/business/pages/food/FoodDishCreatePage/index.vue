@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import DesktopInput from '@/business/components/DesktopInput.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import CommonButton from '@/business/components/common/CommonButton/index.vue'
+
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonSelect, {
   type CommonSelectOption,
 } from '@/business/components/common/CommonSelect/index.vue'
@@ -208,147 +208,108 @@ function showFeedback(message: string, type: 'success' | 'error') {
   feedbackVisible.value = true
 }
 </script>
-
 <template>
-  <section
-    :class="['food-create-page', { dark: isDark }]"
-    aria-label="新增菜品"
-    class="pc-page"
-  >
-    <CommonLoading
-      v-if="isLoading || isSaving"
-      :text="isSaving ? '菜品保存中...' : '页面加载中...'"
-    />
-    <template v-if="!pageError">
-      <PageHeader
-        title="新增菜品"
-        class="page-head"
-        :back-to="getFoodDishListPath(isDark)"
-      />
-      <el-card class="pc-record-card form-card" shadow="never">
-        <h2>基础信息</h2>
-        <label class="pc-field field-block">
-          <span>菜品名称</span>
-          <DesktopInput
-            v-model.trim="name"
-            type="text"
-            placeholder="例如：番茄牛腩锅"
-          />
-        </label>
-        <div class="pc-grid pc-form-grid field-grid">
-          <div class="field-block">
-            <CommonSelect
-              v-model="categorySelectValue"
-              label="分类"
-              :options="categoryOptions"
-            />
-          </div>
-          <label class="pc-field field-block">
-            <span>口味标签</span>
-            <DesktopInput
-              v-model.trim="tasteTags"
-              type="text"
-              placeholder="酸甜 / 浓郁"
-            />
-          </label>
-        </div>
-        <label class="pc-field field-block">
-          <span>预计时间</span>
-          <DesktopInput v-model.trim="cookMinutes" type="number" min="1" />
-        </label>
-        <label class="pc-field field-block">
-          <span>菜品图片</span>
-          <div class="upload-box">
-            <strong>上传成品图</strong>
-            <span>支持 3 张图片，点菜页会展示主图</span>
-          </div>
-        </label>
-        <label class="pc-field field-block">
-          <span>菜品介绍</span>
-          <DesktopInput
-            v-model.trim="description"
-            rows="3"
-            placeholder="描述这道菜的口感、适合场景与搭配建议"
-            type="textarea"
-          ></DesktopInput>
-        </label>
-      </el-card>
-      <el-card class="pc-record-card form-card" shadow="never">
-        <div class="pc-toolbar section-head">
-          <h2>所需食材</h2>
-          <el-button
-            native-type="button"
-            class="ghost-link"
-            @click="addIngredientRow"
-          >
-            添加一项
-          </el-button>
-        </div>
-        <div v-for="item in ingredients" :key="item.uid" class="mini-row">
-          <DesktopInput
-            v-model.trim="item.ingredientName"
-            type="text"
-            placeholder="食材名称"
-          />
-          <DesktopInput
-            v-model.trim="item.amount"
-            type="text"
-            placeholder="数量"
-          />
-          <el-button
-            native-type="button"
-            class="pc-content-button row-remove"
-            @click="removeIngredientRow(ingredients.indexOf(item))"
-            type="danger"
-            plain
-          >
-            删除
-          </el-button>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card form-card" shadow="never">
-        <div class="pc-toolbar section-head">
-          <h2>做法步骤</h2>
-          <el-button
-            native-type="button"
-            class="ghost-link"
-            @click="addStepRow"
-          >
-            添加步骤
-          </el-button>
-        </div>
-        <div v-for="(item, index) in steps" :key="item.uid" class="step-box">
-          <span>{{ index + 1 }}</span>
-          <DesktopInput
-            v-model.trim="item.text"
-            rows="2"
-            placeholder="填写步骤内容"
-            type="textarea"
-          ></DesktopInput>
-          <el-button
-            native-type="button"
-            class="pc-content-button row-remove step-remove"
-            @click="removeStepRow(steps.indexOf(item))"
-            type="danger"
-            plain
-          >
-            删除
-          </el-button>
-        </div>
-      </el-card>
-      <div class="action-bar">
-        <CommonButton
-          variant="secondary"
-          @click="router.push(getFoodDishListPath(isDark))"
-        >
+  <section class="desktop-workspace">
+    <PageHeader title="新增菜品">
+      <template #right>
+        <el-button @click="router.push(getFoodDishListPath(isDark))">
           取消
-        </CommonButton>
-        <CommonButton :disabled="isSaving" @click="saveDish">
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="isSaving"
+          :disabled="isLoading || !!pageError"
+          @click="saveDish"
+        >
           保存菜品
-        </CommonButton>
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <div class="desktop-main-aside">
+      <div class="desktop-results">
+        <PagePanel title="基本信息">
+          <el-form label-position="top">
+            <div class="desktop-form-grid">
+              <el-form-item label="菜品名称">
+                <el-input v-model.trim="name" />
+              </el-form-item>
+              <CommonSelect
+                v-model="categorySelectValue"
+                label="分类"
+                :options="categoryOptions"
+              />
+              <el-form-item label="口味标签">
+                <el-input v-model.trim="tasteTags" />
+              </el-form-item>
+              <el-form-item label="烹饪时间（分钟）">
+                <el-input v-model.trim="cookMinutes" type="number" min="1" />
+              </el-form-item>
+              <el-form-item label="菜品介绍" class="desktop-span-all">
+                <el-input
+                  v-model.trim="description"
+                  type="textarea"
+                  :rows="3"
+                />
+              </el-form-item>
+            </div>
+          </el-form>
+        </PagePanel>
+        <PagePanel title="做法步骤">
+          <template #actions>
+            <el-button @click="addStepRow">添加步骤</el-button>
+          </template>
+          <div class="desktop-recipe-steps">
+            <div
+              v-for="(item, index) in steps"
+              :key="item.uid"
+              class="desktop-recipe-step"
+            >
+              <el-tag>{{ index + 1 }}</el-tag>
+              <el-input
+                v-model.trim="item.text"
+                type="textarea"
+                :rows="2"
+                placeholder="填写步骤"
+              />
+              <el-button
+                link
+                type="danger"
+                @click="removeStepRow(steps.indexOf(item))"
+              >
+                删除
+              </el-button>
+            </div>
+          </div>
+        </PagePanel>
       </div>
-    </template>
-    <p v-else class="page-error">{{ pageError }}</p>
+      <PagePanel title="所需食材">
+        <template #actions>
+          <el-button @click="addIngredientRow">添加食材</el-button>
+        </template>
+        <div
+          v-for="item in ingredients"
+          :key="item.uid"
+          class="desktop-ingredient-row"
+        >
+          <el-input v-model.trim="item.ingredientName" placeholder="食材" />
+          <el-input v-model.trim="item.amount" placeholder="数量" />
+          <el-button
+            link
+            type="danger"
+            @click="removeIngredientRow(ingredients.indexOf(item))"
+          >
+            删除
+          </el-button>
+        </div>
+      </PagePanel>
+    </div>
     <CommonFeedback
       v-model="feedbackVisible"
       :message="feedbackMessage"

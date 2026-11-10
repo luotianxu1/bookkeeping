@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { getErrorMessage } from '@/business/api/request'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
 import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
@@ -12,7 +17,6 @@ import {
   getMarketStatus,
   type LimitUpDownStatistics,
   type MarketStatus,
-  type MarketStatusIndex,
 } from '@/business/api/modules/market'
 import {
   getStockScreenResults,
@@ -26,11 +30,6 @@ import {
 import {
   clampNumber,
   createOptimisticRunningState,
-  formatDate,
-  formatIndexValue,
-  formatKlineNumber,
-  formatMarketTime,
-  formatPercent,
   formatPrice,
   formatSignedPercent,
   formatTurnover,
@@ -120,9 +119,7 @@ const scanProgressPercent = computed(() => {
   if (scanTotalStocks.value <= 0) {
     return 0
   }
-  const percent = Math.round(
-    (scanProcessedStocks.value / scanTotalStocks.value) * 100,
-  )
+  const percent = (scanProcessedStocks.value / scanTotalStocks.value) * 100
   return Math.min(scanIsRunning.value ? 99 : 100, Math.max(0, percent))
 })
 const scanProgressStatus = computed(() => {
@@ -144,7 +141,7 @@ const scanProgressStatus = computed(() => {
 const scanProgressLabel = computed(() =>
   scanProgressIsIndeterminate.value
     ? '扫描准备中'
-    : `扫描进度 ${scanProgressPercent.value}%`,
+    : `扫描进度 ${formatPercentage(scanProgressPercent.value)}`,
 )
 const resultTotal = computed(() => screenPage.value?.total || 0)
 const activeLimitStocks = computed(() =>
@@ -153,25 +150,13 @@ const activeLimitStocks = computed(() =>
     : limitStatistics.value?.limitDowns || [],
 )
 // 涨跌停列表默认只展示前 5 只，避免卡片把整页撑得过长
-const LIMIT_LIST_PREVIEW_COUNT = 5
+
 const limitListExpanded = ref(false)
-const visibleLimitStocks = computed(() =>
-  limitListExpanded.value
-    ? activeLimitStocks.value
-    : activeLimitStocks.value.slice(0, LIMIT_LIST_PREVIEW_COUNT),
-)
-const limitListHiddenCount = computed(() =>
-  Math.max(0, activeLimitStocks.value.length - LIMIT_LIST_PREVIEW_COUNT),
-)
+
 watch(activeLimitTab, () => {
   limitListExpanded.value = false
 })
-const primaryMarketIndices = computed<MarketStatusIndex[]>(() => {
-  const primaryCodes = new Set(['000001', '399001', '399006', '899050'])
-  return (marketStatus.value?.indices || []).filter((item) =>
-    primaryCodes.has(item.code),
-  )
-})
+
 const activeRule = computed(
   () =>
     screeningRules.find((rule) => rule.key === activeRuleKey.value) ||
@@ -181,9 +166,6 @@ const ruleOptions = computed(() =>
   screeningRules.map((rule) => ({ label: rule.label, value: rule.key })),
 )
 const hasMore = computed(() => results.value.length < resultTotal.value)
-const dataTradeDate = computed(
-  () => screenPage.value?.run?.tradeDate || latestRun.value?.tradeDate || '',
-)
 
 watch(activeRuleKey, () => {
   disposeAllKlineCharts()
@@ -462,10 +444,11 @@ function buildQuery(page: number) {
     pageSize: 20,
   }
 }
-</script>
 
+type LimitRow = (typeof activeLimitStocks.value)[number]
+</script>
 <template>
-  <section class="pc-page stock-screener-page" aria-label="A股选股">
+  <section class="desktop-workspace">
     <PageHeader
       title="A股选股"
       back-to="/finance/more-features"
@@ -479,7 +462,9 @@ function buildQuery(page: number) {
           @click="handleHeaderScanAction"
         >
           {{
-            scanProgressIsIndeterminate ? '扫描中' : `${scanProgressPercent}%`
+            scanProgressIsIndeterminate
+              ? '扫描中'
+              : formatPercentage(scanProgressPercent)
           }}
         </el-button>
         <CommonHeaderRefreshButton
@@ -490,12 +475,231 @@ function buildQuery(page: number) {
         />
       </template>
     </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <el-alert
+      v-if="marketStatusError"
+      :title="marketStatusError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <el-alert
+      v-if="limitStatisticsError"
+      :title="limitStatisticsError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="marketStatus">
+      <MetricStrip
+        :items="[
+          { label: '上涨', value: marketStatus.advanceCount },
+          { label: '下跌', value: marketStatus.declineCount },
+          { label: '平盘', value: marketStatus.flatCount },
+          { label: '成交额', value: formatTurnover(marketStatus.turnover) },
+        ]"
+      />
+    </template>
+    <div class="desktop-aside-main">
+      <el-card class="pc-record-card rule-panel" shadow="never">
+        <div class="pc-toolbar rule-panel-heading">
+          <div><strong>选股规则</strong></div>
+        </div>
+        <CommonSelect
+          v-model="activeRuleKey"
+          label="规则"
+          :options="ruleOptions"
+        />
+        <div class="rule-strategy" :aria-label="`${activeRule.title}策略说明`">
+          <h3>{{ activeRule.title }}</h3>
+          <p>{{ activeRule.description }}</p>
+          <ul>
+            <li v-for="point in activeRule.points" :key="point">{{ point }}</li>
+          </ul>
+        </div>
+        <CommonSwitch
+          v-model="criteria.includeChiNext"
+          label="包含创业板（300/301）"
+        />
+        <CommonSwitch
+          v-model="criteria.includeStar"
+          label="包含科创板（688）"
+        />
+        <el-button
+          class="apply-button"
+          native-type="button"
+          :disabled="isLoading"
+          @click="applyRules()"
+        >
+          {{ isLoading ? '筛选中…' : '搜索匹配股票' }}
+        </el-button>
+      </el-card>
+      <div class="desktop-results">
+        <DesktopTable
+          :paginate="false"
+          :rows="results"
+          :loading="isLoading"
+          title="选股结果"
+        >
+          <el-table-column
+            prop="stockCode"
+            label="代码"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="stockName"
+            label="股票"
+            min-width="180"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {StockScreenItem} -->
+          <el-table-column label="市场" min-width="150">
+            <template #default="{ row }: { row: StockScreenItem }">
+              {{ marketLabel(row.market) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {StockScreenItem} -->
+          <el-table-column label="收盘价" min-width="150">
+            <template #default="{ row }: { row: StockScreenItem }">
+              {{ formatPrice(row.signalClose) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {StockScreenItem} -->
+          <el-table-column label="涨跌幅" min-width="150">
+            <template #default="{ row }: { row: StockScreenItem }">
+              <span :class="marketChangeClass(itemChangePercent(row))">
+                {{ formatSignedPercent(itemChangePercent(row)) }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="signalDate"
+            label="信号日"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {StockScreenItem} -->
+          <el-table-column label="走势" min-width="150">
+            <template #default="{ row }: { row: StockScreenItem }">
+              <el-button link type="primary" @click="toggleCard(row)">
+                查看日 K
+              </el-button>
+            </template>
+          </el-table-column>
+        </DesktopTable>
+        <div class="desktop-pagination">
+          <span>已显示 {{ results.length }} / {{ resultTotal }} 只</span>
+          <el-button v-if="hasMore" :loading="isLoadingMore" @click="loadMore">
+            加载更多
+          </el-button>
+        </div>
+        <template
+          v-for="item in results.filter(
+            (item) => cardKey(item) === expandedKey,
+          )"
+          :key="cardKey(item)"
+        >
+          <el-card
+            v-if="expandedKey === `${item.signalDate}-${item.stockCode}`"
+            class="pc-record-card kline-panel"
+            shadow="never"
+          >
+            <div
+              v-show="
+                klineLoadingKey !== `${item.signalDate}-${item.stockCode}` &&
+                klineErrorKey !== `${item.signalDate}-${item.stockCode}`
+              "
+              :ref="
+                (el) =>
+                  setKlineContainer(
+                    `${item.signalDate}-${item.stockCode}`,
+                    el as Element | null,
+                  )
+              "
+              class="pc-chart kline-chart"
+            ></div>
+            <div
+              v-if="klineLoadingKey === `${item.signalDate}-${item.stockCode}`"
+              class="kline-status"
+              aria-live="polite"
+            >
+              日K加载中…
+            </div>
+            <div
+              v-else-if="
+                klineErrorKey === `${item.signalDate}-${item.stockCode}`
+              "
+              class="kline-status error"
+              role="alert"
+            >
+              <span>{{ klineChartError }}</span>
+              <el-button native-type="button" @click="loadKline(item)">
+                重试
+              </el-button>
+            </div>
+          </el-card>
+        </template>
+        <el-collapse>
+          <el-collapse-item title="市场涨跌停" name="limits">
+            <DesktopTable
+              :rows="activeLimitStocks"
+              :loading="false"
+              title="涨跌停股票"
+            >
+              <template #toolbar>
+                <el-radio-group v-model="activeLimitTab">
+                  <el-radio-button value="up">涨停</el-radio-button>
+                  <el-radio-button value="down">跌停</el-radio-button>
+                </el-radio-group>
+              </template>
+              <el-table-column
+                prop="name"
+                label="名称"
+                min-width="140"
+                sortable="custom"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                prop="code"
+                label="代码"
+                min-width="140"
+                sortable="custom"
+                show-overflow-tooltip
+              />
+              <el-table-column
+                prop="industry"
+                label="行业"
+                min-width="140"
+                sortable="custom"
+                show-overflow-tooltip
+              />
+              <!-- @vue-generic {LimitRow} -->
+              <el-table-column label="涨跌幅" min-width="150">
+                <template #default="{ row }: { row: LimitRow }">
+                  {{ formatSignedPercent(row.changePercent) }}
+                </template>
+              </el-table-column>
+            </DesktopTable>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+    </div>
     <CommonModal v-model="scanProgressOpen" title="刷新选股数据" size="compact">
       <div class="scan-progress-content" aria-live="polite">
         <div class="scan-progress-heading">
           <span>{{ scanProgressLabel }}</span>
           <strong v-if="!scanProgressIsIndeterminate">
-            {{ scanProgressPercent }}%
+            {{ formatPercentage(scanProgressPercent) }}
           </strong>
         </div>
         <div
@@ -571,390 +775,5 @@ function buildQuery(page: number) {
         </el-button>
       </template>
     </CommonModal>
-    <el-card
-      v-if="marketStatus"
-      class="pc-record-card market-status-card"
-      aria-label="大盘状态"
-      shadow="never"
-    >
-      <header class="market-status-heading">
-        <div><strong>大盘状态</strong></div>
-        <span class="market-status-time">
-          {{ formatMarketTime(marketStatus.updatedAt) }}
-        </span>
-      </header>
-      <div class="pc-grid market-index-grid" aria-label="主要指数">
-        <el-card
-          v-for="index in primaryMarketIndices"
-          :key="index.code"
-          shadow="never"
-          class="pc-record-card"
-        >
-          <span>{{ index.name }}</span>
-          <strong>{{ formatIndexValue(index.value) }}</strong>
-          <b :class="marketChangeClass(index.changePercent)">
-            {{ formatSignedPercent(index.changePercent) }}
-          </b>
-        </el-card>
-      </div>
-      <div class="market-breadth">
-        <div class="market-breadth-counts">
-          <span>
-            <b class="positive">{{ marketStatus.advanceCount }}</b>
-            上涨
-          </span>
-          <span>
-            <b class="negative">{{ marketStatus.declineCount }}</b>
-            下跌
-          </span>
-          <span>
-            <b>{{ marketStatus.flatCount }}</b>
-            平盘
-          </span>
-        </div>
-        <div
-          class="market-breadth-track"
-          role="img"
-          :aria-label="`上涨股票占比 ${marketStatus.advanceRatio.toFixed(1)}%`"
-        >
-          <span
-            class="advance"
-            :style="{ width: `${marketStatus.advanceRatio}%` }"
-          ></span>
-        </div>
-      </div>
-      <footer class="market-status-footer">
-        <span>成交额 {{ formatTurnover(marketStatus.turnover) }}</span>
-        <span>{{ marketStatus.source }}</span>
-      </footer>
-    </el-card>
-    <div
-      v-else-if="isMarketStatusLoading"
-      class="market-status-placeholder"
-      aria-live="polite"
-    >
-      大盘状态加载中…
-    </div>
-    <div v-else-if="marketStatusError" class="market-status-error" role="alert">
-      <span>{{ marketStatusError }}</span>
-      <el-button native-type="button" @click="loadMarketStatus">
-        重新加载
-      </el-button>
-    </div>
-    <el-card
-      v-if="limitStatistics"
-      class="pc-record-card limit-statistics-card"
-      aria-label="涨跌停数据"
-      shadow="never"
-    >
-      <header class="limit-statistics-heading">
-        <div><strong>涨跌停数据</strong></div>
-        <span class="limit-statistics-time">
-          {{ formatMarketTime(limitStatistics.updatedAt) }}
-        </span>
-      </header>
-      <div class="pc-grid limit-summary-grid">
-        <el-card class="pc-record-card limit-up-summary" shadow="never">
-          <span>涨停</span>
-          <div>
-            <strong>{{ limitStatistics.limitUpCount }}</strong>
-            <b>只</b>
-          </div>
-        </el-card>
-        <el-card class="pc-record-card limit-down-summary" shadow="never">
-          <span>跌停</span>
-          <div>
-            <strong>{{ limitStatistics.limitDownCount }}</strong>
-            <b>只</b>
-          </div>
-        </el-card>
-        <el-card shadow="never" class="pc-record-card">
-          <span>炸板</span>
-          <div>
-            <strong>{{ limitStatistics.brokenLimitCount }}</strong>
-            <b>只</b>
-          </div>
-        </el-card>
-        <el-card shadow="never" class="pc-record-card">
-          <span>封板率</span>
-          <div>
-            <strong>{{ limitStatistics.sealRate.toFixed(1) }}</strong>
-            <b>%</b>
-          </div>
-        </el-card>
-      </div>
-      <div
-        class="pc-toolbar limit-stock-tabs"
-        role="tablist"
-        aria-label="涨跌停股票列表"
-      >
-        <el-button
-          id="limit-tab-up"
-          :class="{ active: activeLimitTab === 'up' }"
-          native-type="button"
-          role="tab"
-          aria-controls="limit-stock-panel"
-          :aria-selected="activeLimitTab === 'up'"
-          @click="activeLimitTab = 'up'"
-        >
-          涨停
-          <b>{{ limitStatistics.limitUpCount }}</b>
-        </el-button>
-        <el-button
-          id="limit-tab-down"
-          :class="{ active: activeLimitTab === 'down' }"
-          native-type="button"
-          role="tab"
-          aria-controls="limit-stock-panel"
-          :aria-selected="activeLimitTab === 'down'"
-          @click="activeLimitTab = 'down'"
-        >
-          跌停
-          <b>{{ limitStatistics.limitDownCount }}</b>
-        </el-button>
-      </div>
-      <el-card
-        id="limit-stock-panel"
-        class="pc-record-card limit-stock-panel"
-        role="tabpanel"
-        :aria-labelledby="
-          activeLimitTab === 'up' ? 'limit-tab-up' : 'limit-tab-down'
-        "
-        :aria-label="activeLimitTab === 'up' ? '涨停股票' : '跌停股票'"
-        shadow="never"
-      >
-        <div v-if="activeLimitStocks.length" class="pc-grid limit-stock-list">
-          <div
-            v-for="stock in visibleLimitStocks"
-            :key="`${activeLimitTab}-${stock.code}`"
-          >
-            <span>
-              <b>{{ stock.name }}</b>
-              <small>{{ stock.code }} · {{ stock.industry || '其他' }}</small>
-            </span>
-            <strong :class="activeLimitTab === 'up' ? 'positive' : 'negative'">
-              {{ formatSignedPercent(stock.changePercent) }}
-            </strong>
-          </div>
-        </div>
-        <el-button
-          v-if="limitListHiddenCount > 0 || limitListExpanded"
-          :class="['limit-list-toggle', { expanded: limitListExpanded }]"
-          native-type="button"
-          @click="limitListExpanded = !limitListExpanded"
-        >
-          {{
-            limitListExpanded
-              ? '收起列表'
-              : `展开全部 ${activeLimitStocks.length} 只`
-          }}
-        </el-button>
-        <p v-else>
-          {{ activeLimitTab === 'up' ? '暂无涨停股票' : '暂无跌停股票' }}
-        </p>
-      </el-card>
-      <footer class="limit-statistics-footer">
-        <span>盘中触及涨停但未封住计为炸板</span>
-        <span>{{ limitStatistics.source }}</span>
-      </footer>
-    </el-card>
-    <div
-      v-else-if="isLimitStatisticsLoading"
-      class="limit-statistics-placeholder"
-      aria-live="polite"
-    >
-      涨跌停数据加载中…
-    </div>
-    <div
-      v-else-if="limitStatisticsError"
-      class="limit-statistics-error"
-      role="alert"
-    >
-      <span>{{ limitStatisticsError }}</span>
-      <el-button native-type="button" @click="loadLimitStatistics">
-        重新加载
-      </el-button>
-    </div>
-    <p v-if="actionMessage" class="page-message" aria-live="polite">
-      {{ actionMessage }}
-    </p>
-    <p v-if="pageError" class="page-message error" role="alert">
-      {{ pageError }}
-    </p>
-    <el-card class="pc-record-card rule-panel" shadow="never">
-      <div class="pc-toolbar rule-panel-heading">
-        <div><strong>选股规则</strong></div>
-      </div>
-      <CommonSelect
-        v-model="activeRuleKey"
-        label="规则"
-        :options="ruleOptions"
-      />
-      <div class="rule-strategy" :aria-label="`${activeRule.title}策略说明`">
-        <h3>{{ activeRule.title }}</h3>
-        <p>{{ activeRule.description }}</p>
-        <ul>
-          <li v-for="point in activeRule.points" :key="point">{{ point }}</li>
-        </ul>
-      </div>
-      <CommonSwitch
-        v-model="criteria.includeChiNext"
-        label="包含创业板（300/301）"
-      />
-      <CommonSwitch v-model="criteria.includeStar" label="包含科创板（688）" />
-      <el-button
-        class="apply-button"
-        native-type="button"
-        :disabled="isLoading"
-        @click="applyRules()"
-      >
-        {{ isLoading ? '筛选中…' : '搜索匹配股票' }}
-      </el-button>
-    </el-card>
-    <CommonLoading
-      v-if="isLoading && results.length === 0"
-      text="正在读取全市场指标..."
-    />
-    <section v-else class="result-section" aria-label="选股结果">
-      <div class="result-heading">
-        <div>
-          <span>选股结果</span>
-          <h2>{{ resultTotal }} 只股票</h2>
-        </div>
-        <span v-if="dataTradeDate" class="trade-date">
-          {{ formatDate(dataTradeDate) }}
-        </span>
-      </div>
-      <el-card
-        v-for="item in results"
-        :key="`${item.signalDate}-${item.stockCode}`"
-        :class="[
-          'stock-card',
-          { expanded: expandedKey === `${item.signalDate}-${item.stockCode}` },
-        ]"
-        shadow="never"
-        class="pc-record-card"
-      >
-        <header
-          role="button"
-          tabindex="0"
-          :aria-expanded="
-            expandedKey === `${item.signalDate}-${item.stockCode}`
-          "
-          :aria-label="`${item.stockName} 日K走势`"
-          @click="toggleCard(item)"
-          @keydown.enter.prevent="toggleCard(item)"
-          @keydown.space.prevent="toggleCard(item)"
-        >
-          <div class="stock-identity">
-            <span class="market-badge">{{ marketLabel(item.market) }}</span>
-            <div>
-              <h3>{{ item.stockName }}</h3>
-              <p>
-                {{ item.stockCode }}
-                <template
-                  v-if="
-                    activeRuleKey === 'yin-yang-double-bear' && item.yinYangType
-                  "
-                >
-                  · {{ item.yinYangType }} · 回升
-                  {{ formatPercent(item.yinYangPenetrationPct) }}
-                </template>
-                <template
-                  v-else-if="
-                    activeRuleKey === 'first-board-high-bear' &&
-                    item.firstBoardBuyPoint
-                  "
-                >
-                  · {{ item.firstBoardBuyPoint }} · 高阴量比
-                  {{ formatKlineNumber(item.highBearVolumeRatio) }}
-                </template>
-              </p>
-            </div>
-          </div>
-          <div class="stock-card-trailing">
-            <div class="stock-price">
-              <strong>{{ formatPrice(item.signalClose) }}</strong>
-              <span :class="marketChangeClass(itemChangePercent(item))">
-                {{ formatSignedPercent(itemChangePercent(item)) }}
-              </span>
-            </div>
-            <svg class="expand-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m7 10 5 5 5-5" />
-            </svg>
-          </div>
-        </header>
-        <el-card
-          v-if="expandedKey === `${item.signalDate}-${item.stockCode}`"
-          class="pc-record-card kline-panel"
-          shadow="never"
-        >
-          <div
-            v-show="
-              klineLoadingKey !== `${item.signalDate}-${item.stockCode}` &&
-              klineErrorKey !== `${item.signalDate}-${item.stockCode}`
-            "
-            :ref="
-              (el) =>
-                setKlineContainer(
-                  `${item.signalDate}-${item.stockCode}`,
-                  el as Element | null,
-                )
-            "
-            class="pc-chart kline-chart"
-          ></div>
-          <div
-            v-if="klineLoadingKey === `${item.signalDate}-${item.stockCode}`"
-            class="kline-status"
-            aria-live="polite"
-          >
-            日K加载中…
-          </div>
-          <div
-            v-else-if="klineErrorKey === `${item.signalDate}-${item.stockCode}`"
-            class="kline-status error"
-            role="alert"
-          >
-            <span>{{ klineChartError }}</span>
-            <el-button native-type="button" @click="loadKline(item)">
-              重试
-            </el-button>
-          </div>
-        </el-card>
-      </el-card>
-      <div v-if="results.length === 0" class="empty-state">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 19V9m5 10V5m5 14v-7m5 7V3M3 19h18" />
-        </svg>
-        <strong>
-          {{
-            screenPage?.run ? '暂无符合当前规则的股票' : '还没有可用的扫描数据'
-          }}
-        </strong>
-        <p>
-          {{
-            screenPage?.run
-              ? '当前交易日没有股票同时满足全部形态条件'
-              : '点击右上角刷新按钮启动首次全市场扫描'
-          }}
-        </p>
-      </div>
-      <el-button
-        v-if="hasMore"
-        class="load-more-button"
-        native-type="button"
-        :disabled="isLoadingMore"
-        @click="loadMore"
-      >
-        {{
-          isLoadingMore
-            ? '加载中…'
-            : `加载更多（已显示 ${results.length} / ${resultTotal}）`
-        }}
-      </el-button>
-    </section>
-    <p class="risk-note">
-      筛选结果仅基于公开历史行情和技术形态，不构成投资建议。
-    </p>
   </section>
 </template>

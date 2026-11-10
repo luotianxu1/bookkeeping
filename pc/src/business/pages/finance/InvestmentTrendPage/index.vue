@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { ECharts, EChartsCoreOption } from 'echarts'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import AmountText from '@/business/components/common/AmountText/index.vue'
 import CommonSelect, {
   type CommonSelectOption,
@@ -33,10 +37,7 @@ import {
 import {
   formatAxisMoney,
   formatCurrency,
-  formatDateTime,
   formatSignedCurrency,
-  getAllocationDotStyle,
-  getAllocationTrackStyle,
 } from './trendFormat'
 
 type TrendRangeLabel = '近7日' | '近30日' | '近60日' | '年内' | '全部'
@@ -109,15 +110,7 @@ const effectiveUserIds = computed(() => {
   }
   return selectedViewerUserIds.value
 })
-const familyViewHint = computed(() => {
-  if (!showFamilySwitch.value || !isReadOnlyFamilyView.value) {
-    return ''
-  }
 
-  return selectedFamilyView.value.kind === 'total'
-    ? '当前为家庭总计视角，可查看全家资产趋势。'
-    : `当前查看 ${selectedFamilyView.value.label} 的资产趋势。`
-})
 const familyViewSelectOptions = computed<CommonSelectOption[]>(() =>
   familyViewOptions.value.map((option) => ({
     label: option.label,
@@ -129,27 +122,11 @@ const requestKey = computed(
     `${showFamilySwitch.value ? selectedFamilyView.value.value : 'self'}:${accountId.value ?? 'all'}:${activeRange.value}`,
 )
 
-const backTo = computed(() =>
-  accountId.value
-    ? `/finance/accounts/investment/${accountId.value}`
-    : '/finance',
-)
-const backLabel = computed(() =>
-  accountId.value ? '返回投资账户' : '返回财务首页',
-)
 const showYesterdaySnapshotSection = computed(() => !accountId.value)
 
 const totalAssets = computed(() => formatCurrency(trend.value?.totalAssets))
 const latestTrendPoints = computed(() => trend.value?.trendPoints ?? [])
-const previousPointLabel = computed(() => {
-  const range = (trend.value?.range ?? rangeMap[activeRange.value]) as
-    | AssetTrendRange
-    | string
-  if (range === '7d' || range === '30d' || range === '60d') return '较上一天'
-  if (range === 'ytd') return '较上月'
-  if (range === 'all') return '较上年'
-  return '较上期'
-})
+
 const previousPointAmount = computed<number | null>(() => {
   const points = latestTrendPoints.value
   if (points.length < 2) {
@@ -176,46 +153,22 @@ const previousPointRateText = computed(() => {
   }
   const rate = ((currentValue - previousValue) / previousValue) * 100
   return `${rate.toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
   })}%`
 })
 const hasTrendPoints = computed(
   () => (trend.value?.trendPoints.length ?? 0) > 0,
 )
-const rangeDateText = computed(() => {
-  if (!trend.value?.startDate || !trend.value?.endDate) {
-    return '--'
-  }
-  return `${trend.value.startDate} 至 ${trend.value.endDate}`
-})
-const syncText = computed(() => {
-  if (!trend.value?.lastSyncedAt) {
-    return `统计区间 ${rangeDateText.value}`
-  }
-  return `更新于 ${formatDateTime(trend.value.lastSyncedAt)}`
-})
+
 const allocations = computed(() => trend.value?.allocations ?? [])
-const yesterdaySnapshotDateText = computed(() =>
-  yesterdaySnapshotDate.value
-    ? `${yesterdaySnapshotDate.value} 快照`
-    : '昨日快照',
-)
+
 const visibleYesterdaySnapshots = computed(() =>
   yesterdaySnapshots.value.filter(
     (item) => Math.abs(Number(item.changeAmount ?? 0)) > 0,
   ),
 )
-const yesterdaySnapshotCurrentTotalText = computed(() =>
-  yesterdaySnapshotCurrentTotal.value === null
-    ? '--'
-    : formatCurrency(yesterdaySnapshotCurrentTotal.value),
-)
-const yesterdaySnapshotChangeAmountText = computed(() =>
-  yesterdaySnapshotChangeAmount.value === null
-    ? '--'
-    : formatCurrency(yesterdaySnapshotChangeAmount.value),
-)
+
 const trendRangeKey = computed<AssetTrendRange>(() => {
   const range = trend.value?.range
   return range === '7d' ||
@@ -226,13 +179,7 @@ const trendRangeKey = computed<AssetTrendRange>(() => {
     ? range
     : rangeMap[activeRange.value]
 })
-const rangeDetailSummaryText = computed(() => {
-  if (trendRangeKey.value === '7d') return '7天总资产'
-  if (trendRangeKey.value === '30d') return '30天总资产'
-  if (trendRangeKey.value === '60d') return '60天总资产'
-  if (trendRangeKey.value === 'ytd') return '12个月总资产'
-  return '按年总资产'
-})
+
 const rangeDetailCompareText = computed(() => {
   if (
     trendRangeKey.value === '7d' ||
@@ -607,261 +554,161 @@ function resetYesterdaySnapshots() {
   yesterdaySnapshotChangeAmount.value = null
   snapshotError.value = ''
 }
-</script>
 
+type AllocationRow = (typeof allocations.value)[number]
+type TrendRow = (typeof rangeDetailPoints.value)[number]
+type SnapshotRow = (typeof visibleYesterdaySnapshots.value)[number]
+</script>
 <template>
-  <section class="pc-page investment-trend-page" aria-label="资产趋势">
-    <PageHeader title="资产趋势" :back-to="backTo" :back-label="backLabel">
+  <section class="desktop-workspace">
+    <PageHeader title="资产趋势">
       <template #right>
-        <div v-if="showFamilySwitch" class="trend-family-switch">
-          <CommonSelect
-            v-model="familyView"
-            label="切换家庭成员资产趋势视角"
-            :options="familyViewSelectOptions"
-          />
-        </div>
+        <CommonSelect
+          v-if="showFamilySwitch"
+          v-model="familyView"
+          label="家庭视角"
+          :options="familyViewSelectOptions"
+        />
       </template>
     </PageHeader>
-    <p v-if="familyViewHint" class="trend-view-hint">{{ familyViewHint }}</p>
-    <p
+    <el-alert
       v-if="pageError"
-      class="investment-trend-message investment-trend-message-error"
-    >
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else-if="trend">
-      <SegmentedControl
-        v-model="activeRange"
-        :options="rangeOptions"
-        label="趋势区间选择"
-        variant="surface"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="trend">
+      <MetricStrip
+        :items="[
+          { label: '总资产', value: totalAssets },
+          { label: '资产变动', value: previousPointAmountText },
+          { label: '变动比例', value: previousPointRateText },
+        ]"
       />
-      <el-card
-        class="pc-record-card investment-trend-summary-card"
-        aria-label="资产总览"
-        shadow="never"
+      <div class="desktop-columns dashboard-columns">
+        <PagePanel title="总资产走势">
+          <template #actions>
+            <SegmentedControl
+              v-model="activeRange"
+              :options="rangeOptions"
+              label="趋势区间选择"
+              variant="surface"
+            />
+          </template>
+          <div v-if="hasTrendPoints" ref="chartRef" class="desktop-chart" />
+          <el-empty v-else description="暂无趋势数据" />
+        </PagePanel>
+        <DesktopTable :rows="allocations" :loading="false" title="资产分布">
+          <el-table-column
+            prop="label"
+            label="类型"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {AllocationRow} -->
+          <el-table-column label="余额" min-width="150">
+            <template #default="{ row }: { row: AllocationRow }">
+              {{ formatCurrency(row.balance) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {AllocationRow} -->
+          <el-table-column label="占比" min-width="150">
+            <template #default="{ row }: { row: AllocationRow }">
+              {{ Number(row.percent ?? 0).toFixed(1) }}%
+            </template>
+          </el-table-column>
+        </DesktopTable>
+      </div>
+      <DesktopTable
+        :rows="rangeDetailPoints"
+        :loading="false"
+        title="区间资产明细"
       >
-        <div class="investment-trend-summary-top">
-          <div class="investment-trend-summary-main">
-            <AmountText tag="strong" tone="inherit" :value="totalAssets" />
-            <span>{{ syncText }}</span>
-          </div>
-          <div class="investment-trend-summary-side">
-            <span>{{ previousPointLabel }}</span>
+        <el-table-column
+          prop="label"
+          label="日期"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {TrendRow} -->
+        <el-table-column label="资产" min-width="150">
+          <template #default="{ row }: { row: TrendRow }">
+            {{ row.value === null ? '—' : formatCurrency(row.value) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {TrendRow} -->
+        <el-table-column label="变动" min-width="150">
+          <template #default="{ row }: { row: TrendRow }">
             <AmountText
-              tag="strong"
-              class="summary-profit"
-              :value="previousPointAmountText"
+              :value="
+                row.changeAmount === null
+                  ? '—'
+                  : formatCurrency(row.changeAmount)
+              "
               show-sign
-              show-unit
             />
-            <AmountText
-              tag="span"
-              class="summary-rate"
-              :value="previousPointRateText"
-              show-sign
-            />
-          </div>
-        </div>
-      </el-card>
-      <el-card
-        class="pc-record-card investment-trend-card"
-        aria-label="总资产走势"
-        shadow="never"
-      >
-        <header class="investment-trend-card-head">
-          <div><strong>总资产走势</strong></div>
-        </header>
-        <div
-          v-if="hasTrendPoints"
-          ref="chartRef"
-          class="pc-chart investment-trend-chart"
-        ></div>
-        <p v-else class="investment-trend-empty">
-          当前区间暂无可展示的资产走势
-        </p>
-      </el-card>
-      <el-card
-        class="pc-record-card investment-trend-card"
-        aria-label="资产分布"
-        shadow="never"
-      >
-        <header class="investment-trend-card-head">
-          <div><strong>资产分布</strong></div>
-        </header>
-        <div v-if="allocations.length > 0" class="pc-grid allocation-list">
-          <el-card
-            v-for="item in allocations"
-            :key="`${item.accountTypeCode}-${item.label}`"
-            class="pc-record-card allocation-item"
-            shadow="never"
-          >
-            <div class="allocation-row">
-              <div class="allocation-title">
-                <span
-                  class="allocation-dot"
-                  :style="getAllocationDotStyle(item, isDark)"
-                ></span>
-                <strong>{{ item.label }}</strong>
-              </div>
-              <div class="allocation-side">
-                <AmountText
-                  tag="span"
-                  tone="inherit"
-                  :value="formatCurrency(item.balance)"
-                />
-                <span>{{ `${Number(item.percent ?? 0).toFixed(2)}%` }}</span>
-              </div>
-            </div>
-            <div
-              class="allocation-track"
-              :style="getAllocationTrackStyle(item, isDark)"
-            >
-              <span class="allocation-fill"></span>
-            </div>
-          </el-card>
-        </div>
-        <p v-else class="investment-trend-empty">暂无可展示的资产分布</p>
-      </el-card>
-      <el-card
-        class="pc-record-card investment-trend-card"
-        aria-label="区间资产明细"
-        shadow="never"
-      >
-        <header class="investment-trend-card-head">
-          <div><strong>区间资产明细</strong></div>
-          <span class="range-detail-side-text">
-            {{ rangeDetailSummaryText }} · {{ rangeDetailCompareText }}
-          </span>
-        </header>
-        <div
-          v-if="rangeDetailPoints.length > 0"
-          class="pc-grid range-detail-list"
+          </template>
+        </el-table-column>
+      </DesktopTable>
+      <template v-if="showYesterdaySnapshotSection">
+        <DesktopTable
+          :rows="visibleYesterdaySnapshots"
+          :loading="false"
+          title="账户快照对比"
+          search-placeholder="搜索账户"
+          searchable
         >
-          <el-card
-            v-for="item in rangeDetailPoints"
-            :key="item.key"
-            class="pc-record-card range-detail-item"
-            shadow="never"
-          >
-            <span class="range-detail-label">{{ item.label }}</span>
-            <div class="range-detail-main">
-              <AmountText
-                v-if="item.value !== null"
-                tag="strong"
-                tone="inherit"
-                class="range-detail-value"
-                :value="formatCurrency(item.value)"
-                show-unit
-              />
-              <strong
-                v-else
-                class="range-detail-value range-detail-value--empty"
-              >
-                --
-              </strong>
-              <div class="range-detail-change">
-                <span>{{ rangeDetailCompareText }}</span>
-                <AmountText
-                  tag="span"
-                  class="range-detail-change-value"
-                  :value="
-                    item.changeAmount === null
-                      ? '--'
-                      : formatCurrency(item.changeAmount)
-                  "
-                  show-sign
-                  show-unit
-                />
-              </div>
-            </div>
-          </el-card>
-        </div>
-        <p v-else class="investment-trend-empty">
-          当前区间暂无可展示的资产数据
-        </p>
-      </el-card>
-      <el-card
-        v-if="showYesterdaySnapshotSection"
-        class="pc-record-card investment-trend-card"
-        aria-label="昨日账户快照"
-        shadow="never"
-      >
-        <header class="investment-trend-card-head">
-          <div>
-            <strong>昨日账户快照</strong>
-            <p class="snapshot-total-summary">
-              今日总资产
-              <AmountText
-                tag="span"
-                tone="inherit"
-                :value="yesterdaySnapshotCurrentTotalText"
-                show-unit
-              />
-              ，
-              <AmountText
-                tag="span"
-                :value="yesterdaySnapshotChangeAmountText"
-                show-sign
-                show-unit
-              />
-            </p>
-          </div>
-          <span class="range-detail-side-text">
-            {{ yesterdaySnapshotDateText }}
-          </span>
-        </header>
-        <div
-          v-if="visibleYesterdaySnapshots.length > 0"
-          class="pc-grid snapshot-account-list"
-        >
-          <el-card
-            v-for="item in visibleYesterdaySnapshots"
-            :key="`${item.userId}-${item.accountId}`"
-            class="pc-record-card snapshot-account-item"
-            shadow="never"
-          >
-            <div class="snapshot-account-main">
-              <div class="snapshot-account-title">
-                <strong>{{ item.accountName }}</strong>
-                <span class="snapshot-account-type">
-                  {{ item.accountTypeLabel }}
-                </span>
-                <span v-if="item.ownerLabel" class="snapshot-account-owner">
-                  {{ item.ownerLabel }}
-                </span>
-              </div>
-              <div class="snapshot-account-compare">
-                <span>今日</span>
-                <AmountText
-                  tag="span"
-                  tone="inherit"
-                  :value="formatCurrency(item.currentAssets)"
-                  show-unit
-                />
-                <AmountText
-                  tag="span"
-                  class="snapshot-account-change"
-                  :value="formatCurrency(item.changeAmount)"
-                  show-sign
-                  show-unit
-                />
-              </div>
-            </div>
-            <AmountText
-              tag="strong"
-              tone="inherit"
-              class="snapshot-account-value"
-              :value="formatCurrency(item.totalAssets)"
-              show-unit
-            />
-          </el-card>
-        </div>
-        <p v-else class="investment-trend-empty">
-          {{ snapshotError || '暂无昨日账户快照' }}
-        </p>
-      </el-card>
+          <el-table-column
+            prop="accountName"
+            label="账户"
+            min-width="200"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="accountTypeLabel"
+            label="类型"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <el-table-column
+            prop="ownerLabel"
+            label="成员"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {SnapshotRow} -->
+          <el-table-column label="昨日资产" min-width="150">
+            <template #default="{ row }: { row: SnapshotRow }">
+              {{ formatCurrency(row.totalAssets) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {SnapshotRow} -->
+          <el-table-column label="今日资产" min-width="150">
+            <template #default="{ row }: { row: SnapshotRow }">
+              {{ formatCurrency(row.currentAssets) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {SnapshotRow} -->
+          <el-table-column label="资产变动" min-width="150">
+            <template #default="{ row }: { row: SnapshotRow }">
+              <AmountText :value="formatCurrency(row.changeAmount)" show-sign />
+            </template>
+          </el-table-column>
+        </DesktopTable>
+        <el-alert
+          v-if="snapshotError"
+          :title="snapshotError"
+          type="error"
+          :closable="false"
+          show-icon
+        ></el-alert>
+      </template>
     </template>
   </section>
 </template>

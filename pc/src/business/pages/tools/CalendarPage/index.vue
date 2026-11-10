@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
@@ -6,7 +8,6 @@ import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import {
   getCalendarOverview,
-  type CalendarAnniversaryNote,
   type CalendarDay,
   type CalendarMonth,
   type CalendarOverview,
@@ -133,13 +134,6 @@ function switchView(nextView: string) {
 
   viewMode.value = normalized
   void loadOverview()
-}
-
-function openYearView() {
-  if (!isMonthView.value) {
-    return
-  }
-  switchView('year')
 }
 
 function shiftPeriod(offset: number) {
@@ -270,57 +264,34 @@ function toChineseDay(day: number) {
   return day === 30 ? '三十' : String(day)
 }
 
-function noteStatusClass(item: CalendarAnniversaryNote) {
-  if (item.daysOffset === 0) {
-    return 'is-today'
-  }
-  return item.daysOffset > 0 ? 'is-upcoming' : 'is-past'
-}
+type AnniversaryRow = (typeof monthAnniversaries.value)[number]
 </script>
-
 <template>
-  <section class="pc-page calendar-page" aria-label="日历页面">
-    <PageHeader title="日历" back-to="/tools" back-label="返回工具页" />
-    <div class="pc-toolbar calendar-top-tabs">
-      <SegmentedControl
-        :model-value="viewMode"
-        :options="viewOptions"
-        label="日历视图切换"
-        variant="surface"
-        @update:model-value="switchView"
-      />
-    </div>
-    <div class="calendar-period-bar">
-      <el-button
-        native-type="button"
-        class="pc-content-button calendar-period-arrow"
-        @click="shiftPeriod(-1)"
-      >
-        ‹
-      </el-button>
-      <el-button
-        v-if="isMonthView"
-        native-type="button"
-        class="calendar-period-title is-button"
-        @click="openYearView"
-      >
-        {{ periodLabel }}
-      </el-button>
-      <span v-else class="calendar-period-title">{{ periodLabel }}</span>
-      <el-button
-        native-type="button"
-        class="pc-content-button calendar-period-arrow"
-        @click="shiftPeriod(1)"
-      >
-        ›
-      </el-button>
-    </div>
-    <CommonLoading v-if="showInitialLoading" text="日历加载中..." />
-    <p v-else-if="pageError" class="calendar-message calendar-message-error">
-      {{ pageError }}
-    </p>
+  <section class="desktop-workspace desktop-calendar calendar-page">
+    <PageHeader title="日历">
+      <template #right>
+        <SegmentedControl
+          :model-value="viewMode"
+          :options="viewOptions"
+          label="日历视图切换"
+          variant="surface"
+          @update:model-value="switchView"
+        />
+        <el-button @click="shiftPeriod(-1)">上一周期</el-button>
+        <strong>{{ periodLabel }}</strong>
+        <el-button @click="shiftPeriod(1)">下一周期</el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <CommonLoading v-if="showInitialLoading" />
     <template v-else>
-      <section v-if="isMonthView" class="calendar-month-view">
+      <div v-if="isMonthView" class="desktop-main-aside">
         <el-card
           class="pc-record-card calendar-month-card"
           aria-label="月历"
@@ -372,33 +343,34 @@ function noteStatusClass(item: CalendarAnniversaryNote) {
             </el-button>
           </div>
         </el-card>
-        <el-card
-          class="pc-record-card calendar-notes-card"
-          aria-label="本月纪念日"
-          shadow="never"
+        <DesktopTable
+          :rows="monthAnniversaries"
+          :loading="false"
+          title="本月纪念日"
         >
-          <strong>本月纪念日</strong>
-          <p v-if="monthAnniversaries.length === 0" class="calendar-empty">
-            本月还没有纪念日
-          </p>
-          <el-card
-            v-for="item in monthAnniversaries"
-            :key="item.id"
-            class="pc-record-card calendar-note-item"
-            shadow="never"
-          >
-            <div class="calendar-note-main">
-              <strong>{{ item.title }}</strong>
-              <p v-if="item.remark">{{ item.remark }}</p>
-            </div>
-            <div class="calendar-note-side">
-              <span>{{ formatMonthDay(item.occurrenceDate) }}</span>
-              <b :class="noteStatusClass(item)">{{ item.statusLabel }}</b>
-            </div>
-          </el-card>
-        </el-card>
-      </section>
-      <section v-else class="calendar-year-view" aria-label="年历">
+          <el-table-column
+            prop="title"
+            label="纪念日"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {AnniversaryRow} -->
+          <el-table-column label="日期" min-width="150">
+            <template #default="{ row }: { row: AnniversaryRow }">
+              {{ formatMonthDay(row.occurrenceDate) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="statusLabel"
+            label="状态"
+            min-width="140"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+        </DesktopTable>
+      </div>
+      <section v-if="!isMonthView" class="calendar-year-view" aria-label="年历">
         <div class="pc-grid calendar-year-grid">
           <el-button
             v-for="month in overview?.months ?? []"

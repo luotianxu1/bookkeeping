@@ -52,7 +52,7 @@ const flowSumAvg = computed(() => {
   const rows = props.rows
   if (!rows.length) return '—'
   const avg = rows.reduce((acc, r) => acc + r.ratio, 0) / rows.length
-  return `日均 ${avg >= 0 ? '+' : ''}${avg.toFixed(2)}%`
+  return `日均 ${avg >= 0 ? '+' : ''}${avg.toFixed(1)}%`
 })
 </script>
 
@@ -85,7 +85,7 @@ const flowSumAvg = computed(() => {
         <span>
           净流入率
           <b :class="dirClass(latestFlow.net)">
-            {{ latestFlow.ratio.toFixed(2) }}%
+            {{ latestFlow.ratio.toFixed(1) }}%
           </b>
         </span>
         <span>
@@ -129,11 +129,11 @@ const flowSumAvg = computed(() => {
         </el-table-column>
         <el-table-column label="换手率" min-width="120">
           <template #default="{ row: r }">
-            {{ r.turnover.toFixed(2) }}%
+            {{ r.turnover.toFixed(1) }}%
           </template>
         </el-table-column>
         <el-table-column label="净流入率" min-width="120">
-          <template #default="{ row: r }">{{ r.ratio.toFixed(2) }}%</template>
+          <template #default="{ row: r }">{{ r.ratio.toFixed(1) }}%</template>
         </el-table-column>
         <el-table-column label="主力净流入" min-width="120">
           <template #default="{ row: r }">

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 // 个股双列榜（通用模块）：
 // - a：涨跌停个股（/limits，按成交额降序）
 // - hk / us：领涨 / 领跌 TOP15（/movers，带流动性门槛，按涨跌幅排序）
@@ -111,112 +113,81 @@ watch(mk, () => {
 
 /* ---------- 阵营统计 ---------- */
 /** 全模块最大单股成交额：热度条归一化基准 */
-const maxAmount = computed(() => {
-  if (!data.value) return 0
-  const all = [...data.value.up, ...data.value.down]
-  return all.reduce((m, s) => Math.max(m, s.amount), 0)
-})
-
-const upTotal = computed(() =>
-  data.value ? data.value.up.reduce((a, s) => a + s.amount, 0) : 0,
-)
-const downTotal = computed(() =>
-  data.value ? data.value.down.reduce((a, s) => a + s.amount, 0) : 0,
-)
 
 /** 热度条宽度百分比（按全模块最大成交额归一化） */
-function heatW(amount: number): string {
-  if (!maxAmount.value) return '0%'
-  return `${Math.max((amount / maxAmount.value) * 100, 6).toFixed(1)}%`
-}
 
 /** 入场错峰下标：长列表截断在 12 档，避免尾巴等太久 */
-function stagger(i: number): number {
-  return Math.min(i, 12)
-}
 </script>
-
 <template>
-  <section class="limits-mod" aria-label="个股榜">
-    <div class="spot-head">
-      <h2>{{ heading }}</h2>
-      <span v-if="data" class="spot-note">{{ data.extraNote }}</span>
-      <el-button
-        v-if="error"
-        class="retry"
-        native-type="button"
-        @click="load()"
-      >
-        重试
-      </el-button>
-    </div>
-    <p v-if="error" class="error-box" role="alert">{{ error }}</p>
-    <div v-else-if="loading" class="limit-skel" aria-busy="true"></div>
-    <div v-else-if="data" class="cols">
-      <!-- 领涨阵营 -->
-      <div class="col">
-        <header class="sub-head">
-          <h3 class="sub up">
-            {{ upLabel }}
-            <span class="num count">{{ data.up.length }}</span>
-          </h3>
-          <span class="num total" :title="`${upLabel}个股成交额合计`">
-            {{ amt(upTotal, currency) }}
-          </span>
-        </header>
-        <div v-if="data.up.length" class="chips" role="list">
-          <el-button
-            v-for="(s, i) in data.up"
-            :key="s.code"
-            class="chip"
-            role="listitem"
-            native-type="button"
-            :style="{ '--w': heatW(s.amount), '--i': stagger(i) }"
-            :title="`${mk === 'us' ? s.code + ' · ' : ''}${s.name} · 价格 ${s.price.toFixed(2)} · 成交额 ${amt(s.amount, currency)}`"
-            @click="open(s.code)"
-          >
-            <span class="row">
-              <span class="name">{{ s.name }}</span>
-              <span class="num val up">{{ pct(s.pct) }}</span>
-            </span>
-            <span class="num chip-amt">{{ amt(s.amount, currency) }}</span>
-            <i class="heat up" aria-hidden="true"></i>
-          </el-button>
-        </div>
-        <p v-else class="empty">暂无</p>
-      </div>
-      <!-- 领跌阵营 -->
-      <div class="col">
-        <header class="sub-head">
-          <h3 class="sub down">
-            {{ downLabel }}
-            <span class="num count">{{ data.down.length }}</span>
-          </h3>
-          <span class="num total" :title="`${downLabel}个股成交额合计`">
-            {{ amt(downTotal, currency) }}
-          </span>
-        </header>
-        <div v-if="data.down.length" class="chips" role="list">
-          <el-button
-            v-for="(s, i) in data.down"
-            :key="s.code"
-            class="chip"
-            role="listitem"
-            native-type="button"
-            :style="{ '--w': heatW(s.amount), '--i': stagger(i) }"
-            :title="`${mk === 'us' ? s.code + ' · ' : ''}${s.name} · 价格 ${s.price.toFixed(2)} · 成交额 ${amt(s.amount, currency)}`"
-            @click="open(s.code)"
-          >
-            <span class="row">
-              <span class="name">{{ s.name }}</span>
-              <span class="num val down">{{ pct(s.pct) }}</span>
-            </span>
-            <span class="num chip-amt">{{ amt(s.amount, currency) }}</span>
-            <i class="heat down" aria-hidden="true"></i>
-          </el-button>
-        </div>
-        <p v-else class="empty">暂无</p>
-      </div>
-    </div>
+  <section class="desktop-workspace">
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button link type="primary" @click="load()">重试</el-button>
+    </el-alert>
+    <el-tabs class="desktop-tabs">
+      <el-tab-pane :label="upLabel">
+        <DesktopTable
+          :rows="data?.up || []"
+          :loading="loading"
+          :title="heading"
+          :paginate="false"
+        >
+          <!-- @vue-generic {RankStock} -->
+          <el-table-column label="股票" min-width="160">
+            <template #default="{ row }: { row: RankStock }">
+              <el-button link type="primary" @click="open(row.code)">
+                {{ row.name }}
+              </el-button>
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {RankStock} -->
+          <el-table-column label="涨跌幅" min-width="150">
+            <template #default="{ row }: { row: RankStock }">
+              {{ pct(row.pct) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {RankStock} -->
+          <el-table-column label="成交额" min-width="150">
+            <template #default="{ row }: { row: RankStock }">
+              {{ amt(row.amount, currency) }}
+            </template>
+          </el-table-column>
+        </DesktopTable>
+      </el-tab-pane>
+      <el-tab-pane :label="downLabel">
+        <DesktopTable
+          :rows="data?.down || []"
+          :loading="loading"
+          :title="heading"
+          :paginate="false"
+        >
+          <!-- @vue-generic {RankStock} -->
+          <el-table-column label="股票" min-width="160">
+            <template #default="{ row }: { row: RankStock }">
+              <el-button link type="primary" @click="open(row.code)">
+                {{ row.name }}
+              </el-button>
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {RankStock} -->
+          <el-table-column label="涨跌幅" min-width="150">
+            <template #default="{ row }: { row: RankStock }">
+              {{ pct(row.pct) }}
+            </template>
+          </el-table-column>
+          <!-- @vue-generic {RankStock} -->
+          <el-table-column label="成交额" min-width="150">
+            <template #default="{ row }: { row: RankStock }">
+              {{ amt(row.amount, currency) }}
+            </template>
+          </el-table-column>
+        </DesktopTable>
+      </el-tab-pane>
+    </el-tabs>
   </section>
 </template>

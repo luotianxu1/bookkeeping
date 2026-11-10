@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 // 美股行情页：走 market-service /api/market/us/overview（腾讯快照 + SPY/QQQ 分时折算）。
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import { useRouter } from 'vue-router'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
-import CommonSkeleton from '@/business/components/common/CommonSkeleton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   getUsOverview,
@@ -84,37 +85,6 @@ const premarketLoading = ref(false)
 const premarketError = ref('')
 const nowTime = ref(Date.now())
 
-const sessionTitle = computed(() => {
-  switch (premarketData.value?.sessionStatus) {
-    case 'Pre-Market':
-      return '盘前行情'
-    case 'Market Open':
-    case 'Open':
-      return '常规行情'
-    case 'After-Hours':
-      return '盘后行情'
-    case 'Market Closed':
-    case 'Closed':
-      return '最近行情'
-    default:
-      return 'ETF代理行情'
-  }
-})
-
-const premarketFootText = computed(() => {
-  switch (premarketData.value?.sessionStatus) {
-    case 'Pre-Market':
-      return 'SPY / QQQ 代理盘前方向，每30秒更新'
-    case 'Market Open':
-    case 'Open':
-      return 'SPY / QQQ 代理常规交易方向，每30秒更新'
-    case 'After-Hours':
-      return 'SPY / QQQ 代理盘后方向，每30秒更新'
-    default:
-      return 'SPY / QQQ 代理指数方向，每30秒更新'
-  }
-})
-
 const showProxyMarketCard = computed(() => {
   if (isUsRegularMarketTime(new Date(nowTime.value))) {
     return false
@@ -185,7 +155,7 @@ function formatChange(card: IndexCard) {
     return '--'
   }
   const sign = card.change >= 0 ? '+' : ''
-  return `${sign}${formatNumber(card.change)}  ${sign}${card.changePercent.toFixed(2)}%`
+  return `${sign}${formatNumber(card.change)}  ${sign}${card.changePercent.toFixed(1)}%`
 }
 
 function formatPremarketChange(index: UsPremarketData['indices'][number]) {
@@ -193,28 +163,7 @@ function formatPremarketChange(index: UsPremarketData['indices'][number]) {
     return '--'
   }
   const sign = index.changePercent >= 0 ? '+' : ''
-  return `${sign}${index.changePercent.toFixed(2)}%`
-}
-
-function premarketTone(index: UsPremarketData['indices'][number]) {
-  if (index.changePercent == null || !Number.isFinite(index.changePercent)) {
-    return ''
-  }
-  return index.changePercent >= 0 ? 'up' : 'down'
-}
-
-function formatPremarketTime(value?: string | null) {
-  if (!value) {
-    return '--:--'
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return '--:--'
-  }
-  return date.toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return `${sign}${index.changePercent.toFixed(1)}%`
 }
 
 // 把后端聚合数据写入卡片：分时整段替换（每分钟一个点，含盘前时段）
@@ -410,83 +359,60 @@ onBeforeUnmount(() => {
   chartInstances.clear()
   chartEls.clear()
 })
-</script>
 
+type ProxyRow = NonNullable<typeof premarketData.value>['indices'][number]
+</script>
 <template>
-  <section class="pc-page us-market-page" aria-label="美股行情">
-    <header class="us-market-header">
-      <PageHeader title="美股行情" back-label="返回更多功能">
-        <template #right>
-          <CommonHeaderRefreshButton
-            label="刷新行情"
-            :loading="isRefreshing"
-            @click="refresh"
-          />
-        </template>
-      </PageHeader>
-    </header>
-    <el-card
-      v-if="premarketData && showProxyMarketCard"
-      class="pc-record-card premarket-card"
-      aria-label="美股ETF代理行情"
-      shadow="never"
+  <section class="desktop-workspace">
+    <PageHeader title="美股行情">
+      <template #right>
+        <el-button :loading="isRefreshing" @click="refresh">刷新行情</el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="premarketError"
+      :title="premarketError"
+      type="error"
+      :closable="false"
+      show-icon
     >
-      <header class="premarket-heading">
-        <div>
-          <h2>{{ sessionTitle }}</h2>
-          <span class="premarket-session">
-            {{ premarketData.sessionLabel }}
-          </span>
-        </div>
-        <time :datetime="premarketData.updatedAt">
-          {{ formatPremarketTime(premarketData.updatedAt) }}
-        </time>
-      </header>
-      <div class="pc-grid premarket-index-grid">
-        <el-card
-          v-for="index in premarketData.indices"
-          :key="index.indexCode"
-          :class="premarketTone(index)"
-          shadow="never"
-          class="pc-record-card"
-        >
-          <header>
-            <div>
-              <strong>
-                {{ index.proxySymbol }} · {{ index.indexName }}代理
-              </strong>
-            </div>
-            <span class="premarket-change">
-              {{ formatPremarketChange(index) }}
-            </span>
-          </header>
-          <p class="premarket-price">{{ formatNumber(index.price) }}</p>
-        </el-card>
-      </div>
-      <footer>
-        <span>{{ premarketFootText }}</span>
-        <span>{{ premarketData.source }}</span>
-      </footer>
-    </el-card>
-    <div
-      v-else-if="!premarketData && premarketLoading"
-      class="premarket-placeholder"
-      aria-live="polite"
-    >
-      盘前行情加载中…
-    </div>
-    <div
-      v-else-if="!premarketData && premarketError"
-      class="premarket-error"
-      role="alert"
-    >
-      <span>{{ premarketError }}</span>
-      <el-button native-type="button" @click="loadPremarket">
-        重新加载
-      </el-button>
-    </div>
-    <CommonSkeleton v-if="isInitialLoading" variant="card" :rows="2" />
-    <div v-else class="pc-grid us-market-grid">
+      <el-button link type="primary" @click="loadPremarket">重试</el-button>
+    </el-alert>
+    <template v-if="premarketData && showProxyMarketCard">
+      <DesktopTable
+        :rows="premarketData.indices"
+        :loading="false"
+        title="ETF 代理行情"
+      >
+        <el-table-column
+          prop="indexName"
+          label="指数"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="proxySymbol"
+          label="代理 ETF"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {ProxyRow} -->
+        <el-table-column label="价格" min-width="150">
+          <template #default="{ row }: { row: ProxyRow }">
+            {{ formatNumber(row.price) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {ProxyRow} -->
+        <el-table-column label="涨跌" min-width="150">
+          <template #default="{ row }: { row: ProxyRow }">
+            {{ formatPremarketChange(row) }}
+          </template>
+        </el-table-column>
+      </DesktopTable>
+    </template>
+    <div class="desktop-market-charts">
       <el-card
         v-for="card in cards"
         :key="card.code"
@@ -530,9 +456,5 @@ onBeforeUnmount(() => {
         </div>
       </el-card>
     </div>
-    <footer class="us-market-foot">
-      指数来源：market-service（腾讯快照 + SPY/QQQ
-      分时折算，纳指100为QQQ代理）；ETF代理行情来源：Nasdaq公开行情。数据可能延迟，不构成投资建议。
-    </footer>
   </section>
 </template>

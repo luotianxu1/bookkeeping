@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   getAccounts,
@@ -78,13 +81,6 @@ function openDebtDetail(accountId: number) {
   router.push(`/finance/accounts/debt/${accountId}`)
 }
 
-function handleGroupKeydown(event: KeyboardEvent, accountId: number) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    openDebtDetail(accountId)
-  }
-}
-
 onMounted(() => {
   void loadHistory()
 })
@@ -137,54 +133,50 @@ function getDebtRecordBalanceDelta(
   }
   return record.recordType === 'repayment' ? amount : -amount
 }
-</script>
 
+type DesktopRow = (typeof debtGroups.value)[number]
+</script>
 <template>
-  <section class="pc-page debt-history-page" aria-label="已结清债务账户">
-    <header class="debt-history-header">
-      <PageHeader
-        title="已结清明细"
-        back-to="/finance/accounts/debt"
-        back-label="返回债务账户"
+  <section class="desktop-workspace">
+    <PageHeader title="已结清账户"><template #right></template></PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[{ label: '已结清账户', value: settledAccountCount }]"
+    />
+    <DesktopTable
+      :rows="debtGroups"
+      :loading="isLoading"
+      title="已结清账户"
+      search-placeholder="搜索账户或联系人"
+      searchable
+    >
+      <el-table-column
+        prop="name"
+        label="账户 / 联系人"
+        min-width="240"
+        sortable="custom"
+        show-overflow-tooltip
       />
-    </header>
-    <p v-if="pageError" class="debt-history-message debt-history-message-error">
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" text="已结清明细加载中..." />
-    <template v-else>
-      <div class="debt-history-summary">
-        <strong>{{ settledAccountCount }} 个已结清账户</strong>
-      </div>
-      <p v-if="debtGroups.length === 0" class="debt-history-empty">
-        暂无已结清债务账户
-      </p>
-      <section
-        v-else
-        class="pc-grid debt-history-list"
-        aria-label="已结清债务账户"
-      >
-        <el-card
-          v-for="group in debtGroups"
-          :key="group.accountId"
-          class="pc-record-card debt-history-card"
-          role="button"
-          tabindex="0"
-          @click="openDebtDetail(group.accountId)"
-          @keydown="handleGroupKeydown($event, group.accountId)"
-          shadow="never"
-        >
-          <div class="debt-history-card-head">
-            <div class="debt-history-person">
-              <span class="debt-history-avatar" :class="group.avatarClass">
-                {{ group.avatarText }}
-              </span>
-              <strong>{{ group.name }}</strong>
-            </div>
-            <span class="debt-history-settled-badge">已结清</span>
-          </div>
-        </el-card>
-      </section>
-    </template>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="状态" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          <el-tag type="success">已结清</el-tag>
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column fixed="right" label="操作" width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          <el-button link type="primary" @click="openDebtDetail(row.accountId)">
+            查看往来
+          </el-button>
+        </template>
+      </el-table-column>
+    </DesktopTable>
   </section>
 </template>

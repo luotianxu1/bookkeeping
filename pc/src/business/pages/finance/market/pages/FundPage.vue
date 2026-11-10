@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import {
@@ -13,7 +16,7 @@ import { useRoute, useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import { useAsyncSection } from '@/business/composables/useAsyncSection'
 import {
   getFundRanking,
@@ -96,9 +99,7 @@ const search = useAsyncSection(
   },
   '基金搜索失败',
 )
-const periodLabel = computed(
-  () => periods.find((p) => p.value === sort.value)?.label,
-)
+
 const lastPage = computed(() =>
   Math.max(1, Math.ceil((ranking.value?.total ?? 0) / 20)),
 )
@@ -168,157 +169,176 @@ onDeactivated(() => {
   list.reset()
   search.reset()
 })
-</script>
 
+type FundRow = NonNullable<typeof ranking.value>['items'][number]
+type SearchRow = NonNullable<typeof searchResult.value>['items'][number]
+</script>
 <template>
-  <section class="pc-page fund-page" aria-label="基金行情">
-    <el-form
-      class="fund-search"
-      role="search"
-      @submit.prevent="submitSearch"
-      label-position="top"
-    >
-      <DesktopInput
-        v-model="draft"
-        type="search"
-        maxlength="60"
-        placeholder="搜索基金代码、名称或拼音"
-        aria-label="搜索基金"
-      />
-      <CommonButton type="submit" size="sm">搜索</CommonButton>
-    </el-form>
+  <section class="desktop-workspace">
+    <PagePanel title="基金查询">
+      <el-form
+        class="fund-search"
+        role="search"
+        @submit.prevent="submitSearch"
+        label-position="top"
+      >
+        <DesktopInput
+          v-model="draft"
+          type="search"
+          maxlength="60"
+          placeholder="搜索基金代码、名称或拼音"
+          aria-label="搜索基金"
+        />
+        <CommonButton type="submit" size="sm">搜索</CommonButton>
+      </el-form>
+    </PagePanel>
     <template v-if="keyword">
-      <div class="fund-heading">
-        <h2>基金搜索</h2>
-        <el-button class="text-button" @click="clearSearch">
-          返回基金排行
-        </el-button>
-      </div>
-      <p v-if="search.error.value" class="fund-error" role="alert">
-        {{ search.error.value }}
-        <el-button @click="search.run">重试搜索</el-button>
-      </p>
-      <CommonLoading v-if="search.loading.value" />
-      <template v-else-if="search.ready.value">
-        <p class="fund-note">
-          “{{ keyword }}”共 {{ searchResult?.total ?? 0 }} 只{{
-            (searchResult?.total ?? 0) > 30 ? '，显示前30只，请细化关键词' : ''
-          }}
-        </p>
-        <p v-if="!searchResult?.items.length" class="fund-empty">
-          未找到匹配的净值型基金，试试基金代码或其他关键词。
-        </p>
-        <div v-else class="pc-grid fund-list" aria-label="基金搜索结果">
-          <RouterLink
-            v-for="fund in searchResult?.items"
-            :key="fund.code"
-            class="fund-result"
-            :to="`/finance/global-market/funds/${fund.code}`"
-          >
-            <div>
-              <strong>{{ fund.name }}</strong>
-              <small>{{ fund.code }} · {{ fund.type }}</small>
-            </div>
-            <span aria-hidden="true">›</span>
-          </RouterLink>
-        </div>
-      </template>
+      <el-alert
+        v-if="search.error.value"
+        :title="search.error.value"
+        type="error"
+        :closable="false"
+        show-icon
+      >
+        <el-button link type="primary" @click="search.run">重试</el-button>
+      </el-alert>
+      <DesktopTable
+        :rows="searchResult?.items || []"
+        :loading="search.loading.value"
+        title="搜索结果"
+      >
+        <template #toolbar>
+          <el-button @click="clearSearch">返回排行</el-button>
+        </template>
+        <!-- @vue-generic {{ name: string; code: string }} -->
+        <el-table-column label="基金" min-width="260">
+          <template #default="{ row }: { row: { name: string; code: string } }">
+            <RouterLink :to="'/finance/global-market/funds/' + row.code">
+              {{ row.name }}
+            </RouterLink>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="code"
+          label="代码"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="type"
+          label="类型"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {SearchRow} -->
+        <el-table-column fixed="right" label="操作" width="150">
+          <template #default="{ row }: { row: SearchRow }">
+            <RouterLink :to="'/finance/global-market/funds/' + row.code">
+              <el-button link type="primary">查看基金</el-button>
+            </RouterLink>
+          </template>
+        </el-table-column>
+      </DesktopTable>
     </template>
     <template v-else>
-      <nav class="fund-types" aria-label="基金类型">
-        <el-button
-          v-for="t in types"
-          :key="t.value"
-          :aria-pressed="type === t.value"
-          :class="{ active: type === t.value }"
-          @click="change({ type: t.value })"
-        >
-          {{ t.label }}
-        </el-button>
-      </nav>
-      <div class="pc-toolbar fund-toolbar">
+      <div class="desktop-filter-bar">
         <CommonSelect
-          :model-value="sort"
-          label="涨幅周期"
-          :options="periods"
-          @update:model-value="change({ sort: $event })"
+          :model-value="type"
+          label="基金类型"
+          :options="types"
+          @update:model-value="change({ type: $event })"
         />
-        <el-button
-          class="sort-order"
-          :aria-label="`当前${order === 'desc' ? '降序' : '升序'}，切换排序`"
-          @click="change({ order: order === 'desc' ? 'asc' : 'desc' })"
-        >
-          {{ order === 'desc' ? '从高到低 ↓' : '从低到高 ↑' }}
-        </el-button>
-        <CommonHeaderRefreshButton
-          label="刷新基金行情"
-          :loading="list.loading.value"
-          @click="list.run"
+        <div class="pc-toolbar fund-toolbar">
+          <CommonSelect
+            :model-value="sort"
+            label="涨幅周期"
+            :options="periods"
+            @update:model-value="change({ sort: $event })"
+          />
+          <el-button
+            class="sort-order"
+            :aria-label="`当前${order === 'desc' ? '降序' : '升序'}，切换排序`"
+            @click="change({ order: order === 'desc' ? 'asc' : 'desc' })"
+          >
+            {{ order === 'desc' ? '从高到低 ↓' : '从低到高 ↑' }}
+          </el-button>
+          <CommonHeaderRefreshButton
+            label="刷新基金行情"
+            :loading="list.loading.value"
+            @click="list.run"
+          />
+        </div>
+      </div>
+      <el-alert
+        v-if="list.error.value"
+        :title="list.error.value"
+        type="error"
+        :closable="false"
+        show-icon
+      >
+        <el-button link type="primary" @click="list.run">重试</el-button>
+      </el-alert>
+      <DesktopTable
+        :paginate="false"
+        :rows="ranking?.items || []"
+        :loading="list.loading.value"
+        title="基金排行"
+      >
+        <!-- @vue-generic {{ name: string; code: string }} -->
+        <el-table-column label="基金" min-width="260">
+          <template #default="{ row }: { row: { name: string; code: string } }">
+            <RouterLink :to="'/finance/global-market/funds/' + row.code">
+              {{ row.name }}
+            </RouterLink>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="code"
+          label="代码"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="navDate"
+          label="净值日期"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {FundRow} -->
+        <el-table-column label="单位净值" min-width="150">
+          <template #default="{ row }: { row: FundRow }">
+            {{ nav(row.nav) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {FundRow} -->
+        <el-table-column label="区间涨幅" min-width="150">
+          <template #default="{ row }: { row: FundRow }">
+            <span :class="dirClass(row[sort])">{{ pct(row[sort]) }}</span>
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {FundRow} -->
+        <el-table-column fixed="right" label="操作" width="150">
+          <template #default="{ row }: { row: FundRow }">
+            <RouterLink :to="'/finance/global-market/funds/' + row.code">
+              <el-button link type="primary">查看基金</el-button>
+            </RouterLink>
+          </template>
+        </el-table-column>
+      </DesktopTable>
+      <div class="desktop-pagination">
+        <span>共 {{ ranking?.total || 0 }} 只</span>
+        <el-pagination
+          :current-page="page"
+          :page-count="lastPage"
+          layout="prev, pager, next"
+          :disabled="list.loading.value"
+          @current-change="change({ page: $event })"
         />
       </div>
-      <p class="fund-note">
-        净值型公募基金 · 按披露净值更新，货币基金不参与此排行
-      </p>
-      <p v-if="list.error.value" class="fund-error" role="alert">
-        {{ list.error.value }}
-        <el-button @click="list.run">重试行情</el-button>
-      </p>
-      <CommonLoading v-if="list.loading.value && !list.ready.value" />
-      <template v-else-if="ranking">
-        <div class="fund-heading">
-          <h2>基金排行</h2>
-          <span>{{ ranking.total.toLocaleString('zh-CN') }} 只</span>
-        </div>
-        <div
-          class="pc-grid fund-list"
-          aria-label="基金排行"
-          :aria-busy="list.loading.value"
-        >
-          <div class="fund-columns">
-            <span>基金 / 净值日期</span>
-            <span>单位净值</span>
-            <span>{{ periodLabel }}</span>
-          </div>
-          <RouterLink
-            v-for="fund in ranking.items"
-            :key="fund.code"
-            class="fund-row"
-            :to="`/finance/global-market/funds/${fund.code}`"
-          >
-            <div class="fund-name">
-              <strong>{{ fund.name }}</strong>
-              <small>{{ fund.code }} · {{ fund.navDate }}</small>
-            </div>
-            <span class="num">{{ nav(fund.nav) }}</span>
-            <strong class="num" :class="dirClass(fund[sort])">
-              {{ pct(fund[sort]) }}
-            </strong>
-          </RouterLink>
-          <p v-if="!ranking.items.length" class="fund-empty">
-            当前条件下暂无基金
-          </p>
-        </div>
-        <div class="fund-pagination">
-          <CommonButton
-            size="sm"
-            variant="secondary"
-            :disabled="page <= 1 || list.loading.value"
-            @click="change({ page: page - 1 })"
-          >
-            上一页
-          </CommonButton>
-          <span>{{ page }} / {{ lastPage }}</span>
-          <CommonButton
-            size="sm"
-            variant="secondary"
-            :disabled="page >= lastPage || list.loading.value"
-            @click="change({ page: page + 1 })"
-          >
-            下一页
-          </CommonButton>
-        </div>
-        <p class="fund-note">获取时间 {{ fetchedAt }} · 各基金净值日期见列表</p>
-      </template>
     </template>
   </section>
 </template>

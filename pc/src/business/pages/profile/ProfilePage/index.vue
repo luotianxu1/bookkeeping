@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import PageHeader from '@/business/components/common/PageHeader/index.vue'
 
 // 我的页：展示用户信息和个人设置入口。
 import { computed, onMounted, ref } from 'vue'
@@ -7,7 +8,7 @@ import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
+
 import {
   deleteCurrentAccount,
   getCurrentUser,
@@ -185,61 +186,61 @@ function showFeedback(message: string, type: 'success' | 'error') {
 }
 </script>
 <template>
-  <section class="pc-page">
-    <header class="pc-page-header">
-      <h1>账号设置</h1>
-      <el-button type="primary" @click="goMenu('/profile/edit')">
-        编辑资料
-      </el-button>
-    </header>
-    <el-card shadow="never">
-      <div class="pc-toolbar">
-        <el-avatar :src="currentUser?.avatarUrl || undefined" :size="56">
-          {{ avatarText }}
-        </el-avatar>
-        <div>
-          <h2>{{ displayName }}</h2>
-          <p class="muted">{{ currentUser?.username }}</p>
+  <section class="desktop-workspace">
+    <PageHeader title="账号设置">
+      <template #right>
+        <el-button type="primary" @click="goMenu('/profile/edit')">
+          编辑资料
+        </el-button>
+      </template>
+    </PageHeader>
+    <div class="desktop-main-aside">
+      <PagePanel title="个人资料">
+        <div class="desktop-profile-identity">
+          <el-avatar :src="currentUser?.avatarUrl || undefined" :size="56">
+            {{ avatarText }}
+          </el-avatar>
+          <div>
+            <h2>{{ displayName }}</h2>
+            <p class="desktop-note">{{ currentUser?.username }}</p>
+          </div>
         </div>
-      </div>
-      <el-descriptions :column="3" border class="profile-details">
-        <el-descriptions-item label="手机号">
-          {{ currentUser?.phone || '未设置' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="邮箱">
-          {{ currentUser?.email || '未设置' }}
-        </el-descriptions-item>
-        <el-descriptions-item label="家庭成员">
-          {{ familyMeta }}
-        </el-descriptions-item>
-      </el-descriptions>
-    </el-card>
-    <div class="pc-grid">
-      <el-card
-        v-for="menu in profileMenus.filter((item) => item.path)"
-        :key="menu.path"
-        shadow="never"
-      >
-        <div class="pc-toolbar">
-          <h2>{{ menu.label }}</h2>
-          <el-button link type="primary" @click="goMenu(menu.path)">
-            打开
+        <el-descriptions :column="3" border class="profile-details">
+          <el-descriptions-item label="手机号">
+            {{ currentUser?.phone || '未设置' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="邮箱">
+            {{ currentUser?.email || '未设置' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="家庭成员">
+            {{ familyMeta }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </PagePanel>
+      <PagePanel title="偏好与会话">
+        <div class="desktop-setting-row">
+          <span>深色模式</span>
+          <el-switch v-model="darkModeEnabled" aria-label="深色模式" />
+        </div>
+        <div class="desktop-bottom-actions">
+          <el-button @click="logout">退出登录</el-button>
+          <el-button type="danger" plain @click="openDeleteAccountModal">
+            注销账号
           </el-button>
         </div>
-      </el-card>
+      </PagePanel>
     </div>
-    <el-card shadow="never">
-      <div class="pc-toolbar">
-        <h2>深色模式</h2>
-        <el-switch v-model="darkModeEnabled" aria-label="深色模式" />
+    <PagePanel title="账号管理">
+      <div class="desktop-settings-links">
+        <el-button
+          v-for="menu in profileMenus.filter((item) => item.path)"
+          :key="menu.path"
+          @click="goMenu(menu.path)"
+        >
+          {{ menu.label }}
+        </el-button>
       </div>
-    </el-card>
-    <div class="pc-toolbar">
-      <el-button @click="logout">退出登录</el-button>
-      <el-button type="danger" plain @click="openDeleteAccountModal">
-        注销账号
-      </el-button>
-    </div>
+    </PagePanel>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"

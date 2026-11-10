@@ -5,18 +5,16 @@ import { formatAmount } from '@/business/utils/format'
 // 黄金账户页：展示黄金账户汇总，并支持黄金账户列表增删改查。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import AccountIcon from '@/business/components/common/AccountIcon/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import {
   createAccount,
   deleteAccount,
@@ -83,9 +81,7 @@ const accountModalTitle = computed(() =>
   editingAccountId.value ? '修改黄金账户' : '新增黄金账户',
 )
 const realtimeGoldPrice = computed(() => Number(goldPrice.value?.price ?? 0))
-const realtimeGoldUpdatedAt = computed(() =>
-  formatGoldUpdatedAt(goldPrice.value?.updatedAt),
-)
+
 const holdingsByAccountId = computed(() =>
   displayHoldings.value.reduce<Record<number, GoldAccountHolding>>(
     (result, item) => {
@@ -137,15 +133,10 @@ const accountRows = computed(() =>
       return left.orderIndex - right.orderIndex
     }),
 )
-const hasAccounts = computed(() => accountRows.value.length > 0)
 
 onMounted(() => {
   void loadGoldAccount()
 })
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
-}
 
 function openCreateModal() {
   editingAccountId.value = null
@@ -484,70 +475,11 @@ function buildSummary(
   }
 }
 
-function formatCompactWeight(value: number | null | undefined) {
-  return Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })
-}
-
-function formatHoldingMeta(
-  weight: number | null | undefined,
-  amount: number | null | undefined,
-) {
-  return `${formatCompactWeight(weight)}克 ${formatAmount(amount)}元`
-}
-
-function formatGoldUpdatedAt(value: string | null | undefined) {
-  if (!value) {
-    return '等待刷新'
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return '刚刚更新'
-  }
-
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${month}-${day} ${hour}:${minute}`
-}
-
-function formatCreatedDate(value: string | null | undefined) {
-  if (!value) {
-    return '--'
-  }
-
-  const matched = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (matched) {
-    return `${matched[1]}.${matched[2]}.${matched[3]}`
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}.${month}.${day}`
-}
-
 function formatSummaryWeight(value: number | null | undefined) {
   return Number(value ?? 0).toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
-}
-
-function formatRate(value: number | null | undefined) {
-  return `${Number(value ?? 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}%`
 }
 
 function formatSignedAmount(value: number | null | undefined) {
@@ -558,7 +490,7 @@ function formatSignedAmount(value: number | null | undefined) {
 type DesktopRow = (typeof accountRows.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="黄金账户">
       <template #right>
         <el-button :loading="isRefreshingGold" @click="refreshGoldData">
@@ -596,11 +528,18 @@ type DesktopRow = (typeof accountRows.value)[number]
         </strong>
       </el-card>
     </div>
-    <DesktopTable :rows="accountRows" :loading="isLoading">
+    <DesktopTable
+      title="黄金账户列表"
+      searchable
+      search-placeholder="账户名称"
+      :rows="accountRows"
+      :loading="isLoading"
+    >
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column
         label="账户"
         prop="name"
+        sortable="custom"
         min-width="200"
         show-overflow-tooltip
       />

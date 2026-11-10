@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+
 import DesktopTable from '@/business/components/DesktopTable.vue'
 type CashRow = SalaryCashPage['monthItems'][number]
 import { onMounted, ref } from 'vue'
@@ -7,7 +9,7 @@ import {
   type SalaryCashPage,
 } from '@/business/api/modules/finance'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
@@ -58,98 +60,76 @@ function handleYearChange(value: string) {
   void loadPage()
 }
 </script>
-
 <template>
-  <section class="pc-page salary-page" aria-label="现金账户">
-    <PageHeader
-      title="现金账户"
-      back-to="/finance/salary"
-      :prefer-back-to="true"
-    >
-      <CommonSelect
-        class="salary-year-select"
-        label=""
-        :model-value="selectedYear"
-        :options="yearOptions"
-        @update:model-value="handleYearChange"
-      />
+  <section class="desktop-workspace">
+    <PageHeader title="工资到账">
+      <template #right>
+        <CommonSelect
+          label="年份"
+          aria-label="年份"
+          :model-value="selectedYear"
+          :options="yearOptions"
+          @update:model-value="handleYearChange"
+        />
+      </template>
     </PageHeader>
-    <div v-if="isLoading" class="salary-loading-wrap">
-      <CommonLoading text="现金账户加载中..." />
-    </div>
-    <p v-else-if="pageError" class="salary-error-text">{{ pageError }}</p>
-    <template v-else-if="pageData">
-      <el-card class="pc-record-card salary-summary-card" shadow="never">
-        <div class="salary-summary-head">
-          <p class="salary-summary-eyebrow">{{ pageData.year }} 年工资到账</p>
-          <div class="salary-summary-main">
-            <div class="salary-summary-main-top">
-              <strong>
-                {{ formatSalaryCurrency(pageData.annualCashIncome) }}
-              </strong>
-              <span class="salary-pill">
-                已发 {{ pageData.paidMonths }} 个月
-              </span>
-            </div>
-            <div class="salary-summary-sub">
-              <span>
-                本月到手
-                {{ formatSalaryCurrency(pageData.currentMonthCashIncome) }}
-              </span>
-              <span class="highlight">扣款后可支配现金</span>
-            </div>
-          </div>
-        </div>
-        <div class="pc-grid salary-metric-grid salary-cash-metric-grid">
-          <el-card
-            v-for="metric in pageData.metrics"
-            :key="metric.label"
-            class="pc-record-card salary-metric-card"
-            shadow="never"
-          >
-            <span>{{ metric.label }}</span>
-            <strong>{{ formatSalaryCurrency(metric.value) }}</strong>
-          </el-card>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head">
-          <strong>月度到账明细</strong>
-          <span class="salary-pill">扣款后</span>
-        </div>
-        <DesktopTable :rows="pageData.monthItems">
-          <el-table-column prop="monthLabel" label="月份" min-width="120" />
-          <!-- @vue-generic {CashRow} -->
-          <el-table-column label="税前工资" min-width="160" align="right">
-            <template #default="{ row }: { row: CashRow }">
-              {{ formatSalaryCurrency(row.grossIncome) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {CashRow} -->
-          <el-table-column
-            label="五险一金个人扣款"
-            min-width="160"
-            align="right"
-          >
-            <template #default="{ row }: { row: CashRow }">
-              {{ formatSalaryCurrency(row.personalDeduction) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {CashRow} -->
-          <el-table-column label="个人所得税" min-width="160" align="right">
-            <template #default="{ row }: { row: CashRow }">
-              {{ formatSalaryCurrency(row.taxAmount) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {CashRow} -->
-          <el-table-column label="实际到账" min-width="160" align="right">
-            <template #default="{ row }: { row: CashRow }">
-              {{ formatSalaryCurrency(row.cashIncome) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="statusText" label="状态" min-width="100" />
-        </DesktopTable>
-      </el-card>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="pageData">
+      <MetricStrip
+        :items="[
+          {
+            label: '年度到账',
+            value: formatSalaryCurrency(pageData.annualCashIncome),
+          },
+          {
+            label: '本月到账',
+            value: formatSalaryCurrency(pageData.currentMonthCashIncome),
+          },
+          { label: '已发月数', value: pageData.paidMonths },
+        ]"
+      />
+      <MetricStrip
+        :items="
+          pageData.metrics.map((metric) => ({
+            label: metric.label,
+            value: formatSalaryCurrency(metric.value),
+          }))
+        "
+      />
+      <DesktopTable title="月度到账明细" :rows="pageData.monthItems">
+        <el-table-column prop="monthLabel" label="月份" min-width="120" />
+        <!-- @vue-generic {CashRow} -->
+        <el-table-column label="税前工资" min-width="160" align="right">
+          <template #default="{ row }: { row: CashRow }">
+            {{ formatSalaryCurrency(row.grossIncome) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {CashRow} -->
+        <el-table-column label="五险一金个人扣款" min-width="160" align="right">
+          <template #default="{ row }: { row: CashRow }">
+            {{ formatSalaryCurrency(row.personalDeduction) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {CashRow} -->
+        <el-table-column label="个人所得税" min-width="160" align="right">
+          <template #default="{ row }: { row: CashRow }">
+            {{ formatSalaryCurrency(row.taxAmount) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {CashRow} -->
+        <el-table-column label="实际到账" min-width="160" align="right">
+          <template #default="{ row }: { row: CashRow }">
+            {{ formatSalaryCurrency(row.cashIncome) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="statusText" label="状态" min-width="100" />
+      </DesktopTable>
     </template>
     <CommonFeedback
       v-model="feedbackVisible"

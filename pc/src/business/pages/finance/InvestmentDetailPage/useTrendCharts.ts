@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 // 投资详情页两张 echarts（走势/累计收益）的生命周期与渲染逻辑。
 import {
   nextTick,
@@ -112,7 +113,7 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
     if (percent === null) {
       return '--'
     }
-    return `${percent > 0 ? '+' : ''}${formatNumber(percent)}%`
+    return formatPercentage(percent, true)
   }
 
   function formatPriceWithChange(
@@ -129,7 +130,7 @@ export function useTrendCharts(options: UseTrendChartsOptions) {
     if (percent === null) {
       return priceText
     }
-    return `${priceText}（${percent > 0 ? '+' : ''}${formatNumber(percent)}%）`
+    return `${priceText}（${formatPercentage(percent, true)}）`
   }
 
   function formatValueWithBaselinePercent(

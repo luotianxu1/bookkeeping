@@ -38,7 +38,6 @@ const paymentIconKeys = new Set(
 const brokerIconKeys = new Set(
   brokerAccountIconOptions.map((item) => item.value),
 )
-const collapsedGroups = ref<Set<string>>(new Set())
 
 const accountIcons = createIconItems(
   accountIconModules,
@@ -73,87 +72,43 @@ function createIconItems(
     .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'))
 }
 
-function isGroupCollapsed(title: string) {
-  return collapsedGroups.value.has(title)
-}
-
-function toggleGroup(title: string) {
-  const nextGroups = new Set(collapsedGroups.value)
-  if (nextGroups.has(title)) {
-    nextGroups.delete(title)
-  } else {
-    nextGroups.add(title)
-  }
-  collapsedGroups.value = nextGroups
-}
+const desktopIconQuery = ref('')
 </script>
-
 <template>
-  <section class="pc-page icon-management-page" aria-label="图标管理">
-    <PageHeader
-      title="图标管理"
-      back-to="/profile"
-      back-label="返回我的"
-      :prefer-back-to="true"
-    />
-    <section
-      v-for="group in iconGroups"
-      :key="group.title"
-      class="icon-catalog-section"
-      :aria-label="group.title"
-    >
-      <header class="icon-catalog-heading">
-        <h2>{{ group.title }}</h2>
-        <div class="pc-toolbar icon-catalog-heading-actions">
-          <span class="icon-catalog-count">{{ group.items.length }}</span>
-          <el-button
-            class="icon-catalog-toggle"
-            native-type="button"
-            :title="
-              isGroupCollapsed(group.title)
-                ? `展开${group.title}`
-                : `收起${group.title}`
-            "
-            :aria-label="
-              isGroupCollapsed(group.title)
-                ? `展开${group.title}`
-                : `收起${group.title}`
-            "
-            :aria-expanded="!isGroupCollapsed(group.title)"
-            @click="toggleGroup(group.title)"
-          >
-            <span
-              :class="[
-                'icon-catalog-toggle-chevron',
-                { collapsed: isGroupCollapsed(group.title) },
-              ]"
-              aria-hidden="true"
-            ></span>
-          </el-button>
-        </div>
-      </header>
-      <div
-        v-show="!isGroupCollapsed(group.title)"
-        class="pc-grid icon-catalog-grid"
+  <section class="desktop-workspace">
+    <PageHeader title="图标目录">
+      <template #right>
+        <el-input
+          v-model="desktopIconQuery"
+          placeholder="搜索图标名称"
+          aria-label="搜索图标名称"
+          clearable
+          style="width: 240px"
+        />
+      </template>
+    </PageHeader>
+    <el-tabs class="desktop-tabs">
+      <el-tab-pane
+        v-for="group in iconGroups"
+        :key="group.title"
+        :label="group.title"
       >
-        <el-card
-          v-for="item in group.items"
-          :key="item.key"
-          class="pc-record-card icon-catalog-item"
-          shadow="never"
-        >
-          <div class="icon-preview">
-            <img
-              :src="item.source"
-              :alt="`${item.label}图标`"
-              width="30"
-              height="30"
-            />
+        <div class="desktop-icon-library">
+          <div
+            v-for="item in group.items.filter((item) =>
+              (item.label + item.key)
+                .toLowerCase()
+                .includes(desktopIconQuery.toLowerCase()),
+            )"
+            :key="item.key"
+            class="desktop-icon-entry"
+          >
+            <el-image :src="item.source" :alt="item.label" fit="contain" />
+            <strong>{{ item.label }}</strong>
+            <code>{{ item.key }}</code>
           </div>
-          <strong>{{ item.label }}</strong>
-          <code>{{ item.key }}</code>
-        </el-card>
-      </div>
-    </section>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
   </section>
 </template>

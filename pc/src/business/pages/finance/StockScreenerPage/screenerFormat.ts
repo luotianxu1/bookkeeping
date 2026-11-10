@@ -1,3 +1,4 @@
+import { formatPercentage } from '@/business/utils/percentage'
 import type {
   StockScreenItem,
   StockScreenRun,
@@ -27,14 +28,11 @@ export function formatPrice(value?: number | null) {
 }
 
 export function formatSignedPercent(value?: number | null) {
-  const normalized = Number(value)
-  if (!Number.isFinite(normalized)) return '--'
-  return `${normalized > 0 ? '+' : ''}${normalized.toFixed(2)}%`
+  return formatPercentage(value, true)
 }
 
 export function formatPercent(value?: number | null) {
-  const normalized = Number(value)
-  return Number.isFinite(normalized) ? `${normalized.toFixed(0)}%` : '--'
+  return formatPercentage(value)
 }
 
 export function formatIndexValue(value?: number | null) {

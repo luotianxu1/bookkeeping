@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, onMounted, ref } from 'vue'
-import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonEmpty from '@/business/components/common/CommonEmpty/index.vue'
+
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   executeTodayScheduledTask,
@@ -104,93 +105,97 @@ async function executeTask(task: ScheduledTask) {
     executingTaskKey.value = ''
   }
 }
-</script>
 
+type TaskRow = (typeof tasks.value)[number]
+</script>
 <template>
-  <section class="pc-page task-management-page" aria-label="任务管理">
+  <section class="desktop-workspace">
+    <PageHeader title="任务管理">
+      <template #right>
+        <el-button :loading="isRefreshing" @click="loadTasks(true)">
+          刷新状态
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        { label: '今日计划任务', value: tasks.length },
+        { label: '已完成', value: summary.completed },
+        { label: '待执行', value: summary.pending },
+      ]"
+    />
+    <DesktopTable
+      :rows="tasks"
+      :loading="isLoading"
+      title="今日计划任务"
+      search-placeholder="搜索任务"
+      searchable
+    >
+      <el-table-column
+        prop="taskLabel"
+        label="任务"
+        min-width="220"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="scheduleLabel"
+        label="计划"
+        min-width="180"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="statusLabel"
+        label="状态"
+        min-width="140"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {TaskRow} -->
+      <el-table-column label="结果" min-width="260">
+        <template #default="{ row }: { row: TaskRow }">
+          {{ detailText(row) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {TaskRow} -->
+      <el-table-column label="开始时间" min-width="170">
+        <template #default="{ row }: { row: TaskRow }">
+          {{ row.startedAt ? formatTime(row.startedAt) : '—' }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {TaskRow} -->
+      <el-table-column label="完成时间" min-width="170">
+        <template #default="{ row }: { row: TaskRow }">
+          {{ row.finishedAt ? formatTime(row.finishedAt) : '—' }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {TaskRow} -->
+      <el-table-column fixed="right" label="操作" width="150">
+        <template #default="{ row }: { row: TaskRow }">
+          <el-button
+            link
+            type="primary"
+            :disabled="!row.executable || isExecutingTask(row)"
+            :loading="isExecutingTask(row)"
+            @click="executeTask(row)"
+          >
+            执行
+          </el-button>
+        </template>
+      </el-table-column>
+    </DesktopTable>
     <CommonFeedback
       v-model="showFeedback"
       :message="feedbackMessage"
       :type="feedbackType"
     />
-    <PageHeader
-      title="任务管理"
-      back-to="/profile"
-      back-label="返回我的"
-      :prefer-back-to="true"
-    >
-      <template #right>
-        <CommonHeaderRefreshButton
-          label="刷新任务状态"
-          :loading="isRefreshing"
-          @click="loadTasks(true)"
-        />
-      </template>
-    </PageHeader>
-    <section class="task-summary" aria-label="今日任务摘要">
-      <div>
-        <span>今日计划任务</span>
-        <strong>{{ tasks.length }}</strong>
-      </div>
-      <div>
-        <span>已完成</span>
-        <strong class="success">{{ summary.completed }}</strong>
-      </div>
-      <div>
-        <span>待执行</span>
-        <strong :class="{ danger: summary.pending > 0 }">
-          {{ summary.pending }}
-        </strong>
-      </div>
-    </section>
-    <p v-if="pageError" class="task-message task-message--error">
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" text="正在加载今日任务..." />
-    <section v-else class="pc-grid task-list" aria-label="今日任务列表">
-      <el-card
-        v-for="task in tasks"
-        :key="taskKey(task)"
-        class="pc-record-card task-card"
-        shadow="never"
-      >
-        <div class="pc-toolbar task-card-top">
-          <div>
-            <h2>{{ task.taskLabel }}</h2>
-            <p>{{ task.scheduleLabel }}</p>
-          </div>
-          <span :class="['task-status', `task-status--${task.status}`]">
-            {{ task.statusLabel }}
-          </span>
-        </div>
-        <p
-          v-if="detailText(task)"
-          :class="['task-detail', { 'task-detail--error': task.errorMessage }]"
-        >
-          {{ detailText(task) }}
-        </p>
-        <footer class="task-card-footer">
-          <span v-if="task.startedAt">
-            开始 {{ formatTime(task.startedAt) }}
-          </span>
-          <span v-if="task.finishedAt">
-            完成 {{ formatTime(task.finishedAt) }}
-          </span>
-          <CommonButton
-            class="task-execute-button"
-            size="sm"
-            :disabled="!task.executable || isExecutingTask(task)"
-            @click="executeTask(task)"
-          >
-            {{ isExecutingTask(task) ? '执行中...' : '执行' }}
-          </CommonButton>
-        </footer>
-      </el-card>
-      <CommonEmpty
-        v-if="tasks.length === 0"
-        title="暂无今日计划任务"
-        description="在财务页设置的周期任务会在当天出现在这里。"
-      />
-    </section>
   </section>
 </template>

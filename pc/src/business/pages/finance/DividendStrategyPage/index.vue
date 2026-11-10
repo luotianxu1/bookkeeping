@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+
 // 红利策略页：红利低波ETF（512890）年线（MA250）择时策略。
 // 每次进入页面拉取最新前复权日K并在本地重算：当前状态、触发价、信号事件与三策略回测对比。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   getQfqDailyKline,
@@ -86,7 +89,7 @@ const deviationText = computed(() => {
     return '--'
   }
   const pct = position.value.deviation * 100
-  return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
 })
 
 const chartRange = computed(() => {
@@ -283,149 +286,77 @@ watch([klineRows, band, confirmDays, isDark], () => {
   renderChart()
 })
 </script>
-
 <template>
-  <section class="pc-page dividend-strategy-page" aria-label="红利策略">
-    <header class="page-head">
-      <PageHeader
-        title="红利策略"
-        back-to="/finance/more-features"
-        back-label="返回更多功能"
-        :prefer-back-to="true"
-      >
-        <template #right>
-          <CommonHeaderRefreshButton
-            label="重新计算"
-            :loading="isRefreshing"
-            @click="loadKline({ silent: true })"
-          />
-        </template>
-      </PageHeader>
-    </header>
-    <el-card
-      class="pc-record-card target-card"
-      aria-label="标的与数据口径"
-      shadow="never"
-    >
-      <div class="target-info">
-        <strong>{{ TARGET_NAME }}</strong>
-        <span>{{ TARGET_CODE }}</span>
+  <section class="desktop-workspace">
+    <PageHeader title="红利策略">
+      <template #right>
+        <el-button :loading="isRefreshing" @click="loadKline({ silent: true })">
+          刷新行情
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="loadError"
+      :title="loadError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="klineRows.length">
+      <MetricStrip
+        :items="[
+          { label: '最新收盘', value: formatPrice(position.price) },
+          { label: '年线 MA250', value: formatPrice(position.ma) },
+          { label: '年线偏离', value: deviationText },
+          { label: '当前状态', value: zoneText },
+        ]"
+      />
+      <div class="desktop-main-aside">
+        <PagePanel title="价格与年线走势">
+          <div ref="chartRef" class="desktop-chart" style="height: 420px" />
+        </PagePanel>
+        <PagePanel title="策略参数">
+          <el-form label-position="top">
+            <el-form-item label="缓冲带">
+              <el-radio-group v-model="band">
+                <el-radio-button
+                  v-for="option in BAND_OPTIONS"
+                  :key="option"
+                  :value="option"
+                >
+                  {{ (option * 100).toFixed(1) }}%
+                </el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="确认天数">
+              <el-radio-group v-model="confirmDays">
+                <el-radio-button
+                  v-for="option in CONFIRM_OPTIONS"
+                  :key="option"
+                  :value="option"
+                >
+                  {{ option }} 日
+                </el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-form>
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="标的">
+              {{ TARGET_NAME }} {{ TARGET_CODE }}
+            </el-descriptions-item>
+            <el-descriptions-item label="买入触发">
+              {{ formatPrice(position.buyLine) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="卖出触发">
+              {{ formatPrice(position.sellLine) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="交易日">
+              {{ lastTradeDate }}
+            </el-descriptions-item>
+          </el-descriptions>
+          <p class="desktop-note">{{ zoneHint }}</p>
+        </PagePanel>
       </div>
-      <p class="target-meta">
-        每次进入页面拉取最新前复权日K并本地重算 · 数据 {{ lastTradeDate }}
-      </p>
-    </el-card>
-    <p v-if="isLoading && klineRows.length === 0" class="page-message">
-      正在拉取行情并计算年线信号…
-    </p>
-    <p v-if="loadError" class="page-message page-message-error">
-      {{ loadError }}
-    </p>
-    <template v-if="klineRows.length > 0">
-      <el-card
-        class="pc-record-card status-card"
-        :class="`zone-${position.zone}`"
-        aria-label="当前状态"
-        shadow="never"
-      >
-        <header class="card-head">
-          <p>当前状态</p>
-          <span class="zone-badge">{{ zoneText }}</span>
-        </header>
-        <div class="pc-grid metric-grid">
-          <el-card class="pc-record-card metric-item" shadow="never">
-            <p class="metric-label">最新收盘</p>
-            <strong>{{ formatPrice(position.price) }}</strong>
-          </el-card>
-          <el-card class="pc-record-card metric-item" shadow="never">
-            <p class="metric-label">年线 MA250</p>
-            <strong>{{ formatPrice(position.ma) }}</strong>
-          </el-card>
-          <el-card class="pc-record-card metric-item" shadow="never">
-            <p class="metric-label">相对年线偏离</p>
-            <strong>{{ deviationText }}</strong>
-          </el-card>
-        </div>
-        <p class="zone-hint">{{ zoneHint }}</p>
-      </el-card>
-      <el-card
-        class="pc-record-card trigger-card"
-        aria-label="触发价"
-        shadow="never"
-      >
-        <header class="card-head">
-          <p>
-            触发价（缓冲带 {{ (band * 100).toFixed(0) }}% · 确认
-            {{ confirmDays }} 日）
-          </p>
-        </header>
-        <div class="pc-grid trigger-grid">
-          <el-card
-            class="pc-record-card trigger-item trigger-buy"
-            shadow="never"
-          >
-            <p class="metric-label">买入触发线（年线下方）</p>
-            <strong>{{ formatPrice(position.buyLine) }}</strong>
-          </el-card>
-          <el-card
-            class="pc-record-card trigger-item trigger-sell"
-            shadow="never"
-          >
-            <p class="metric-label">卖出触发线（年线上方）</p>
-            <strong>{{ formatPrice(position.sellLine) }}</strong>
-          </el-card>
-        </div>
-        <p class="zone-hint">
-          年线±{{ (band * 100).toFixed(0) }}% 区间内视为中性，不做操作
-        </p>
-      </el-card>
-      <el-card
-        class="pc-record-card param-card"
-        aria-label="策略参数"
-        shadow="never"
-      >
-        <header class="card-head"><p>策略参数</p></header>
-        <div class="param-row">
-          <span class="param-label">缓冲带</span>
-          <div class="param-options">
-            <el-button
-              v-for="option in BAND_OPTIONS"
-              :key="option"
-              native-type="button"
-              :class="{ active: band === option }"
-              @click="band = option"
-            >
-              {{ (option * 100).toFixed(0) }}%
-            </el-button>
-          </div>
-        </div>
-        <div class="param-row">
-          <span class="param-label">确认天数</span>
-          <div class="param-options">
-            <el-button
-              v-for="option in CONFIRM_OPTIONS"
-              :key="option"
-              native-type="button"
-              :class="{ active: confirmDays === option }"
-              @click="confirmDays = option"
-              type="primary"
-            >
-              {{ option }} 日
-            </el-button>
-          </div>
-        </div>
-      </el-card>
-      <el-card
-        class="pc-record-card chart-card"
-        aria-label="价格与年线走势"
-        shadow="never"
-      >
-        <p class="card-title">价格与年线走势（前复权）</p>
-        <div ref="chartRef" class="pc-chart strategy-chart" />
-      </el-card>
-      <p class="page-footnote">
-        数据口径：前复权日K（腾讯行情，经行情中心代理）；策略计算在本机浏览器完成。本页仅为量化参考，不构成投资建议。
-      </p>
     </template>
   </section>
 </template>

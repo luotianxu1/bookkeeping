@@ -1,12 +1,16 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { formatAmount as formatNumberAmount } from '@/business/utils/format'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import {
@@ -53,7 +57,7 @@ const pageData = ref<InvestmentDividendIncomePage | null>(null)
 const currentUserId = ref<number | null>(null)
 const investmentExpenseItems = ref<FixedExpenseItem[]>([])
 const renewalExpenseItems = ref<FixedExpenseItem[]>([])
-const isExpenseEditing = ref(false)
+
 const showExpenseModal = ref(false)
 const editingExpenseId = ref<number | null>(null)
 const expenseName = ref('')
@@ -72,10 +76,7 @@ const summary = computed(
 )
 
 const holdings = computed(() => pageData.value?.items ?? [])
-const updateText = computed(() => {
-  const updatedAt = pageData.value?.updatedAt
-  return updatedAt ? `数据更新于 ${formatDateTime(updatedAt)}` : ''
-})
+
 const estimatedMonthlyIncome = computed(
   () => summary.value.estimatedDividendAmount / 12,
 )
@@ -116,9 +117,7 @@ const incomeCoveragePercent = computed(() => {
   }
   return (estimatedMonthlyIncome.value / totalMonthlyExpense.value) * 100
 })
-const incomeCoverageProgress = computed(() =>
-  Math.max(0, Math.min(100, incomeCoveragePercent.value)),
-)
+
 onMounted(() => {
   void loadPageData()
 })
@@ -206,12 +205,6 @@ async function refreshExpenseItems() {
   )
 }
 
-function amountTone(value: number) {
-  if (value > 0) return 'positive'
-  if (value < 0) return 'negative'
-  return 'neutral'
-}
-
 function formatSignedCurrency(value: number) {
   if (!Number.isFinite(value) || value === 0) {
     return '¥0.00'
@@ -220,10 +213,7 @@ function formatSignedCurrency(value: number) {
 }
 
 function formatSignedPercent(value: number) {
-  if (!Number.isFinite(value) || value === 0) {
-    return '0.00%'
-  }
-  return `${value > 0 ? '+' : '-'}${formatAmount(value)}%`
+  return formatPercentage(value, true)
 }
 
 function formatPlainCurrency(value: number) {
@@ -234,10 +224,7 @@ function formatPlainCurrency(value: number) {
 }
 
 function formatPlainPercent(value: number) {
-  if (!Number.isFinite(value) || value === 0) {
-    return '0.00%'
-  }
-  return `${value < 0 ? '-' : ''}${formatAmount(value)}%`
+  return formatPercentage(value)
 }
 
 function formatHoldingQuantityText(quantity: number, unitName?: string | null) {
@@ -257,18 +244,6 @@ function formatMonthlyIncome(value: number) {
     return '¥0.00'
   }
   return `¥${formatAmount(value)}`
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${month}/${day} ${hour}:${minute}`
 }
 
 function openHoldingDetail(item: InvestmentDividendIncomeItem) {
@@ -450,20 +425,11 @@ async function submitExpenseItem() {
 }
 
 function getCoveragePercentText(item: ExpenseCoverageItem) {
-  return `${formatAmount(item.coveredPercent)}%`
-}
-
-function getCoverageLevelClass(item: ExpenseCoverageItem) {
-  const percent = Math.round(Math.max(0, Math.min(100, item.coveredPercent)))
-  return `coverage-level-${percent}`
+  return formatPercentage(item.coveredPercent)
 }
 
 function getIncomeCoveragePercentText() {
-  return `${formatAmount(incomeCoveragePercent.value)}%`
-}
-
-function toggleExpenseEditing() {
-  isExpenseEditing.value = !isExpenseEditing.value
+  return formatPercentage(incomeCoveragePercent.value)
 }
 
 function deleteExpenseItem(id: number) {
@@ -481,229 +447,154 @@ async function removeExpenseItem(id: number) {
     pageError.value = getErrorMessage(error, '删除固定支出失败')
   }
 }
-</script>
 
+type HoldingRow = (typeof holdings.value)[number]
+type ExpenseRow = (typeof expenseCoverageItems.value)[number]
+</script>
 <template>
-  <section class="pc-page dividend-income-page" aria-label="攒股收息">
-    <PageHeader title="攒股收息" back-label="返回更多功能">
+  <section class="desktop-workspace">
+    <PageHeader title="攒股收息">
       <template #right>
-        <CommonHeaderRefreshButton
-          label="刷新攒股收息"
+        <el-button type="primary" @click="openCreateExpenseModal">
+          新增固定支出
+        </el-button>
+        <el-button
           :loading="isRefreshing"
           :disabled="isLoading"
           @click="refreshDividendIncomeData"
-        />
+        >
+          刷新
+        </el-button>
       </template>
     </PageHeader>
-    <p v-if="pageError" class="dividend-message dividend-message-error">
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <el-card
-        class="pc-record-card summary-card"
-        aria-label="收息总览"
-        shadow="never"
-      >
-        <div class="summary-row">
-          <AmountText
-            tag="strong"
-            :value="formatSignedCurrency(summary.estimatedDividendAmount)"
-            :tone="amountTone(summary.estimatedDividendAmount)"
-          />
-          <AmountText
-            tag="span"
-            :value="`预计 ${formatSignedPercent(summary.estimatedDividendRate)}`"
-            :tone="amountTone(summary.estimatedDividendRate)"
-          />
-        </div>
-        <p class="summary-monthly">
-          预估月薪 {{ formatMonthlyIncome(estimatedMonthlyIncome) }}
-        </p>
-        <p v-if="updateText" class="summary-footnote">
-          仅展示历史稳定分红且股息率不低于 3% 的标的，{{ updateText }}
-        </p>
-        <p v-else class="summary-footnote">
-          仅展示历史稳定分红且股息率不低于 3% 的标的
-        </p>
-      </el-card>
-      <el-card
-        class="pc-record-card expense-card"
-        aria-label="固定支出覆盖"
-        shadow="never"
-      >
-        <header class="expense-card-head">
-          <div />
-          <div class="pc-toolbar expense-card-actions">
-            <CommonButton
-              variant="secondary"
-              size="sm"
-              @click="toggleExpenseEditing"
-            >
-              {{ isExpenseEditing ? '完成' : '编辑' }}
-            </CommonButton>
-            <CommonButton
-              variant="secondary"
-              size="sm"
-              @click="openCreateExpenseModal"
-            >
-              新增支出
-            </CommonButton>
-          </div>
-        </header>
-        <p v-if="expenseCoverageItems.length === 0" class="dividend-message">
-          暂未设置固定支出，点击右上角新增后即可查看覆盖进度
-        </p>
-        <div v-else class="pc-grid expense-coverage-list">
-          <el-card
-            v-for="item in expenseCoverageItems"
-            :key="item.itemKey"
-            :class="[
-              'expense-coverage-item',
-              `is-${item.status}`,
-              getCoverageLevelClass(item),
-              { 'is-editing': isExpenseEditing },
-            ]"
-            shadow="never"
-            class="pc-record-card"
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        {
+          label: '预计分红',
+          value: formatSignedCurrency(summary.estimatedDividendAmount),
+        },
+        {
+          label: '预计股息率',
+          value: formatSignedPercent(summary.estimatedDividendRate),
+        },
+        {
+          label: '预估月薪',
+          value: formatMonthlyIncome(estimatedMonthlyIncome),
+        },
+        { label: '支出覆盖', value: getIncomeCoveragePercentText() },
+      ]"
+    />
+    <DesktopTable
+      :rows="holdings"
+      :loading="isLoading"
+      title="持仓分红计划"
+      search-placeholder="搜索产品"
+      searchable
+    >
+      <el-table-column
+        prop="productName"
+        label="产品"
+        min-width="220"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {HoldingRow} -->
+      <el-table-column label="持有金额 / 数量" min-width="220">
+        <template #default="{ row }: { row: HoldingRow }">
+          {{
+            formatHoldingMetaText(
+              row.marketValue,
+              row.holdingQuantity,
+              row.unitName,
+            )
+          }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {HoldingRow} -->
+      <el-table-column label="股息率" min-width="150">
+        <template #default="{ row }: { row: HoldingRow }">
+          {{ formatPlainPercent(row.estimatedDividendRate) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {HoldingRow} -->
+      <el-table-column label="预计分红" min-width="150">
+        <template #default="{ row }: { row: HoldingRow }">
+          {{ formatPlainCurrency(row.estimatedDividendAmount) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {HoldingRow} -->
+      <el-table-column label="预估月薪" min-width="150">
+        <template #default="{ row }: { row: HoldingRow }">
+          {{ formatMonthlyIncome(row.estimatedDividendAmount / 12) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {HoldingRow} -->
+      <el-table-column fixed="right" label="操作" width="150">
+        <template #default="{ row }: { row: HoldingRow }">
+          <el-button
+            link
+            type="primary"
+            :disabled="!row.positionId"
+            @click="openHoldingDetail(row)"
           >
-            <div class="expense-coverage-main">
-              <div class="expense-coverage-top">
-                <strong>{{ item.name }}</strong>
-                <span>{{ formatMonthlyIncome(item.amount) }}</span>
-              </div>
-              <p class="expense-coverage-note">
-                {{ getCoveragePercentText(item) }}
-              </p>
-              <div
-                v-if="isExpenseEditing && item.editable"
-                class="pc-toolbar expense-coverage-actions"
-              >
-                <el-button
-                  native-type="button"
-                  class="expense-action-icon"
-                  aria-label="修改"
-                  @click="openEditExpenseModal(item)"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M4 20h4.75L19 9.75 14.25 5 4 15.25V20Zm3.5-1.5H5.5v-2l8.75-8.75 2 2L7.5 18.5ZM18.3 4.95l.75-.75a1.5 1.5 0 0 1 2.12 0l.63.63a1.5 1.5 0 0 1 0 2.12l-.75.75-2.75-2.75Z"
-                    />
-                  </svg>
-                </el-button>
-                <el-button
-                  native-type="button"
-                  class="expense-action-icon danger"
-                  aria-label="删除"
-                  @click="deleteExpenseItem(item.id)"
-                  type="danger"
-                  plain
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M9 3.75h6a1.25 1.25 0 0 1 1.25 1.25V6H20a.75.75 0 0 1 0 1.5h-1.03l-.72 10.12A2.5 2.5 0 0 1 15.76 20H8.24a2.5 2.5 0 0 1-2.49-2.38L5.03 7.5H4a.75.75 0 0 1 0-1.5h3.75V5A1.25 1.25 0 0 1 9 3.75Zm1.5 2.25h3V5.25h-3V6Zm-3.24 1.5.68 9.99c.03.53.47.95 1 .95h7.52c.53 0 .97-.42 1-.95l.68-9.99H7.26Zm2.49 2.25a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75Zm4.5 0a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75Z"
-                    />
-                  </svg>
-                </el-button>
-              </div>
-            </div>
-          </el-card>
-        </div>
-        <div
-          v-if="expenseCoverageItems.length > 0"
-          class="income-coverage-progress"
-          aria-label="月收息覆盖月支出"
-        >
-          <div class="income-coverage-progress-head">
-            <span>月收息覆盖月支出</span>
-            <strong>{{ getIncomeCoveragePercentText() }}</strong>
-          </div>
-          <div
-            class="income-coverage-progress-track"
-            role="progressbar"
-            aria-label="月收息覆盖月支出进度"
-            :aria-valuenow="incomeCoverageProgress"
-            aria-valuemin="0"
-            aria-valuemax="100"
+            持仓详情
+          </el-button>
+        </template>
+      </el-table-column>
+    </DesktopTable>
+    <DesktopTable
+      :rows="expenseCoverageItems"
+      :loading="false"
+      title="固定支出覆盖"
+    >
+      <el-table-column
+        prop="name"
+        label="支出项目"
+        min-width="200"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {ExpenseRow} -->
+      <el-table-column label="月支出" min-width="150">
+        <template #default="{ row }: { row: ExpenseRow }">
+          {{ formatMonthlyIncome(row.amount) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {ExpenseRow} -->
+      <el-table-column label="覆盖率" min-width="150">
+        <template #default="{ row }: { row: ExpenseRow }">
+          {{ getCoveragePercentText(row) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {ExpenseRow} -->
+      <el-table-column fixed="right" label="操作" width="150">
+        <template #default="{ row }: { row: ExpenseRow }">
+          <el-button
+            v-if="row.editable"
+            link
+            type="primary"
+            @click="openEditExpenseModal(row)"
           >
-            <span
-              :style="{ transform: `scaleX(${incomeCoverageProgress / 100})` }"
-            />
-          </div>
-          <p>
-            {{ formatMonthlyIncome(estimatedMonthlyIncome) }} /
-            {{ formatMonthlyIncome(totalMonthlyExpense) }}
-          </p>
-        </div>
-      </el-card>
-      <el-card
-        class="pc-record-card holding-card"
-        aria-label="持仓分红计划"
-        shadow="never"
-      >
-        <header class="holding-header">
-          <span class="holding-spacer" />
-          <div class="holding-header-right">
-            <span>股息率</span>
-            <span>预估分红</span>
-            <span>预估月薪</span>
-          </div>
-        </header>
-        <p v-if="holdings.length === 0" class="dividend-message">
-          暂无符合条件的稳定分红且股息率不低于 3% 的股票或基金持仓
-        </p>
-        <el-card
-          v-for="item in holdings"
-          :key="item.productId"
-          :class="['holding-row', { clickable: !!item.positionId }]"
-          @click="openHoldingDetail(item)"
-          shadow="never"
-          class="pc-record-card"
-        >
-          <div class="holding-main">
-            <div class="holding-top">
-              <p class="holding-name">{{ item.productName }}</p>
-              <div class="holding-right">
-                <div class="value-column">
-                  <AmountText
-                    tag="strong"
-                    :value="formatPlainPercent(item.estimatedDividendRate)"
-                    :tone="amountTone(item.estimatedDividendRate)"
-                  />
-                </div>
-                <div class="value-column">
-                  <AmountText
-                    tag="strong"
-                    :value="formatPlainCurrency(item.estimatedDividendAmount)"
-                    :tone="amountTone(item.estimatedDividendAmount)"
-                  />
-                </div>
-                <div class="value-column">
-                  <AmountText
-                    tag="strong"
-                    :value="
-                      formatMonthlyIncome(item.estimatedDividendAmount / 12)
-                    "
-                    :tone="amountTone(item.estimatedDividendAmount)"
-                  />
-                </div>
-              </div>
-            </div>
-            <div class="holding-left">
-              <small>
-                {{
-                  formatHoldingMetaText(
-                    item.marketValue,
-                    item.holdingQuantity,
-                    item.unitName,
-                  )
-                }}
-              </small>
-            </div>
-          </div>
-        </el-card>
-      </el-card>
-    </template>
+            修改
+          </el-button>
+          <el-button
+            v-if="row.editable"
+            link
+            type="danger"
+            @click="deleteExpenseItem(row.id)"
+          >
+            删除
+          </el-button>
+        </template>
+      </el-table-column>
+    </DesktopTable>
     <CommonModal
       v-model="showExpenseModal"
       :title="expenseModalTitle"

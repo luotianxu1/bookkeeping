@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
 // 三大财务报表（A股）：利润表/资产负债表/现金流量表，自 DetailPage 抽出。
 // 报表 tab 状态与「无数据自动切换」逻辑内聚在本组件。
 import { computed, ref, watch } from 'vue'
@@ -74,7 +75,9 @@ function isKeyRow(label: string): boolean {
               {{
                 v === null
                   ? '—'
-                  : v.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+                  : /[%％]|增长率|利润率|比重/.test(r.label)
+                    ? formatPercentage(v)
+                    : v.toLocaleString('zh-CN', { maximumFractionDigits: 2 })
               }}
             </span>
           </template>

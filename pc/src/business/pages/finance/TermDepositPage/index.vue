@@ -1,16 +1,20 @@
 <script setup lang="ts">
+import {
+  formatPercentage,
+  formatPercentageText,
+} from '@/business/utils/percentage'
+
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
+
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import CommonEmpty from '@/business/components/common/CommonEmpty/index.vue'
+
 import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import SavingsAllocationFields, {
@@ -649,7 +653,7 @@ useVisibilityPolling(
 type DesktopRow = (typeof visible.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="定期存款">
       <template #right>
         <el-button :loading="list.loading.value" @click="refresh">
@@ -665,7 +669,13 @@ type DesktopRow = (typeof visible.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="visible" :loading="list.loading.value">
+    <DesktopTable
+      title="存单列表"
+      searchable
+      search-placeholder="名称 / 账户"
+      :rows="visible"
+      :loading="list.loading.value"
+    >
       <template #toolbar>
         <el-select v-model="accountFilter" placeholder="全部账户">
           <el-option label="全部账户" value="" />
@@ -686,6 +696,7 @@ type DesktopRow = (typeof visible.value)[number]
       <el-table-column
         label="存单名称"
         prop="name"
+        sortable="custom"
         min-width="180"
         show-overflow-tooltip
       />
@@ -693,6 +704,7 @@ type DesktopRow = (typeof visible.value)[number]
       <el-table-column
         label="账户"
         prop="accountName"
+        sortable="custom"
         min-width="150"
         show-overflow-tooltip
       />
@@ -705,13 +717,14 @@ type DesktopRow = (typeof visible.value)[number]
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column label="年利率" min-width="100">
         <template #default="{ row }: { row: DesktopRow }">
-          {{ Number(row.annualRate) }}%
+          {{ formatPercentage(row.annualRate) }}
         </template>
       </el-table-column>
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column
         label="起息日"
         prop="startDate"
+        sortable="custom"
         min-width="130"
         show-overflow-tooltip
       />
@@ -719,6 +732,7 @@ type DesktopRow = (typeof visible.value)[number]
       <el-table-column
         label="到期日"
         prop="maturityDate"
+        sortable="custom"
         min-width="130"
         show-overflow-tooltip
       />
@@ -850,6 +864,7 @@ type DesktopRow = (typeof visible.value)[number]
               :disabled="busy || !!editing"
             />
             <CommonInput
+              percentage
               v-model="form.annualRate"
               label="年利率（%）"
               input-mode="decimal"
@@ -991,6 +1006,7 @@ type DesktopRow = (typeof visible.value)[number]
             </p>
             <div class="field-pair">
               <CommonInput
+                percentage
                 v-model="settlement.annualRate"
                 label="新年利率（%）"
                 input-mode="decimal"
@@ -1034,7 +1050,7 @@ type DesktopRow = (typeof visible.value)[number]
             <p class="hint">
               {{ detail.deposit.startDate }} →
               {{ detail.deposit.maturityDate }} · 年利率
-              {{ Number(detail.deposit.annualRate) }}%
+              {{ formatPercentage(detail.deposit.annualRate) }}
             </p>
             <p class="hint">
               预计本息
@@ -1092,7 +1108,9 @@ type DesktopRow = (typeof visible.value)[number]
                 {{ op.cashAccountName }} · 现金变动
                 {{ money(op.cashDelta, detail.deposit.currencyCode) }}
               </p>
-              <p v-if="op.detail" class="hint">{{ op.detail }}</p>
+              <p v-if="op.detail" class="hint">
+                {{ formatPercentageText(op.detail) }}
+              </p>
               <div class="pc-toolbar history-actions">
                 <el-button
                   v-if="op.childDepositId"

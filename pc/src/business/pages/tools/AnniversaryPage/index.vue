@@ -7,9 +7,9 @@ import { computed, onMounted, ref } from 'vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import {
@@ -104,19 +104,6 @@ const displayAnniversaries = computed<DisplayAnniversary[]>(() =>
     ),
 )
 
-const upcomingCount = computed(
-  () =>
-    displayAnniversaries.value.filter(
-      (item) => !item.isExpiredThisYear || item.daysValue === 0,
-    ).length,
-)
-const monthCount = computed(
-  () =>
-    displayAnniversaries.value.filter((item) =>
-      isCurrentMonth(item.anniversaryDate),
-    ).length,
-)
-
 const visibleItems = computed(() =>
   displayAnniversaries.value.filter((item) => {
     if (activeTab.value === 'month') {
@@ -125,13 +112,6 @@ const visibleItems = computed(() =>
     return true
   }),
 )
-
-const emptyMessage = computed(() => {
-  if (activeTab.value === 'month') {
-    return '本月还没有纪念日'
-  }
-  return '还没有记录纪念日'
-})
 
 onMounted(() => {
   void loadAnniversaries()
@@ -191,11 +171,6 @@ function resetForm() {
   formDate.value = buildTodayDate()
   formRemark.value = ''
   formError.value = ''
-}
-
-function toggleExpandedAnniversary(itemId: number) {
-  expandedAnniversaryId.value =
-    expandedAnniversaryId.value === itemId ? null : itemId
 }
 
 function openDeleteModal(item: Anniversary) {
@@ -304,11 +279,6 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
-function formatCreatedHint(dateText: string) {
-  const date = parseDate(dateText)
-  return `纪念于 ${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
 function isCurrentMonth(dateText: string) {
   const date = parseDate(dateText)
   return date.getMonth() === getToday().getMonth()
@@ -408,7 +378,7 @@ function pad(value: number) {
 type DesktopRow = (typeof visibleItems.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="纪念日">
       <template #right>
         <el-button type="primary" @click="openCreateModal">
@@ -423,7 +393,13 @@ type DesktopRow = (typeof visibleItems.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="visibleItems" :loading="isLoading">
+    <DesktopTable
+      title="纪念日列表"
+      searchable
+      search-placeholder="名称 / 日期 / 备注"
+      :rows="visibleItems"
+      :loading="isLoading"
+    >
       <template #toolbar>
         <SegmentedControl
           v-model="activeTab"
@@ -435,6 +411,7 @@ type DesktopRow = (typeof visibleItems.value)[number]
       <el-table-column
         label="纪念日"
         prop="title"
+        sortable="custom"
         min-width="220"
         show-overflow-tooltip
       />
@@ -442,6 +419,7 @@ type DesktopRow = (typeof visibleItems.value)[number]
       <el-table-column
         label="日期"
         prop="anniversaryDate"
+        sortable="custom"
         min-width="160"
         show-overflow-tooltip
       />
@@ -455,6 +433,7 @@ type DesktopRow = (typeof visibleItems.value)[number]
       <el-table-column
         label="备注"
         prop="remark"
+        sortable="custom"
         min-width="240"
         show-overflow-tooltip
       />

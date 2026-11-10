@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PagePanel from '@/business/components/PagePanel.vue'
+
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import { computed, onMounted, ref } from 'vue'
@@ -213,98 +215,108 @@ async function submitCreate() {
   }
 }
 </script>
-
 <template>
-  <section class="pc-page travel-create-page">
-    <PageHeader
-      :title="isEditMode ? '修改旅行' : '新增旅行'"
-      back-to="/tools/travel-plans"
-      back-label="返回旅行列表"
-    />
-    <CommonSkeleton v-if="isLoadingDetail" variant="card" />
-    <div v-else class="pc-form-grid travel-form">
-      <label class="pc-field travel-field">
-        <span class="travel-field-label">名称</span>
-        <DesktopInput
-          v-model="formName"
-          class="travel-input"
-          type="text"
-          placeholder="给这趟出行起个名字"
-        />
-      </label>
-      <div class="travel-field">
-        <span class="travel-field-label">旅行日期</span>
-        <div class="travel-date-row">
-          <DesktopInput
-            v-model="formStartDate"
-            class="travel-input"
-            type="date"
-          />
-          <span class="date-separator">-</span>
-          <DesktopInput
-            v-model="formEndDate"
-            class="travel-input"
-            type="date"
-          />
+  <section class="desktop-workspace">
+    <PageHeader :title="isEditMode ? '修改旅行' : '新增旅行'">
+      <template #right>
+        <el-button
+          type="primary"
+          :loading="isSaving"
+          :disabled="isLoadingDetail"
+          @click="submitCreate"
+        >
+          保存旅行
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="saveError"
+      :title="saveError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <CommonSkeleton v-if="isLoadingDetail" />
+    <div v-else class="desktop-main-aside">
+      <PagePanel title="基本信息">
+        <div class="desktop-form-grid travel-form">
+          <label class="pc-field travel-field">
+            <span class="travel-field-label">名称</span>
+            <DesktopInput
+              v-model="formName"
+              class="travel-input"
+              type="text"
+              placeholder="给这趟出行起个名字"
+            />
+          </label>
+          <div class="travel-field">
+            <span class="travel-field-label">旅行日期</span>
+            <div class="travel-date-row">
+              <DesktopInput
+                v-model="formStartDate"
+                class="travel-input"
+                type="date"
+              />
+              <span class="date-separator">-</span>
+              <DesktopInput
+                v-model="formEndDate"
+                class="travel-input"
+                type="date"
+              />
+            </div>
+          </div>
+          <div class="travel-field">
+            <div class="travel-field-head">
+              <span class="travel-field-label">同行人</span>
+              <el-button
+                class="travel-link-button"
+                native-type="button"
+                @click="openCompanionModal"
+              >
+                + 新增同行人
+              </el-button>
+            </div>
+            <div class="companion-chip-row">
+              <el-button
+                v-for="companion in selectedCompanions"
+                :key="companion.value"
+                class="companion-chip"
+                native-type="button"
+                @click="removeCompanion(companion.value)"
+              >
+                <span class="companion-avatar">
+                  {{ companion.label.slice(0, 1) }}
+                </span>
+                <span>{{ companion.label }}</span>
+              </el-button>
+            </div>
+            <p v-if="companionOptions.length === 0" class="travel-tip">
+              {{ loadError || '还没有可关联的联系人，先去联系人页面新增。' }}
+            </p>
+          </div>
+          <label class="pc-field travel-field">
+            <span class="travel-field-label">备注</span>
+            <DesktopInput
+              v-model="remark"
+              class="travel-textarea"
+              rows="4"
+              type="textarea"
+            ></DesktopInput>
+          </label>
         </div>
-      </div>
-      <div class="travel-field">
-        <div class="travel-field-head">
-          <span class="travel-field-label">同行人</span>
-          <el-button
-            class="travel-link-button"
-            native-type="button"
-            @click="openCompanionModal"
-          >
-            + 新增同行人
-          </el-button>
-        </div>
-        <div class="companion-chip-row">
-          <el-button
-            v-for="companion in selectedCompanions"
-            :key="companion.value"
-            class="companion-chip"
-            native-type="button"
-            @click="removeCompanion(companion.value)"
-          >
-            <span class="companion-avatar">
-              {{ companion.label.slice(0, 1) }}
-            </span>
-            <span>{{ companion.label }}</span>
-          </el-button>
-        </div>
-        <p v-if="companionOptions.length === 0" class="travel-tip">
-          {{ loadError || '还没有可关联的联系人，先去联系人页面新增。' }}
-        </p>
-      </div>
-      <label class="pc-field travel-field">
-        <span class="travel-field-label">备注</span>
-        <DesktopInput
-          v-model="remark"
-          class="travel-textarea"
-          rows="4"
-          type="textarea"
-        ></DesktopInput>
-      </label>
+      </PagePanel>
+      <PagePanel title="同行人">
+        <el-tag
+          v-for="companion in selectedCompanions"
+          :key="companion.value"
+          closable
+          @close="removeCompanion(companion.value)"
+        >
+          {{ companion.label }}
+        </el-tag>
+        <el-button @click="openCompanionModal">添加同行人</el-button>
+      </PagePanel>
     </div>
-    <p v-if="saveError" class="travel-error">{{ saveError }}</p>
-    <el-button
-      class="travel-submit"
-      native-type="button"
-      :disabled="isSaving"
-      @click="submitCreate"
-      type="primary"
-    >
-      {{
-        isSaving
-          ? isEditMode
-            ? '保存中...'
-            : '创建中...'
-          : isEditMode
-            ? '保存修改'
-            : '创建旅行'
-      }}
-    </el-button>
     <CommonModal v-model="showCompanionModal" title="新增同行人" size="compact">
       <div class="companion-modal-body">
         <DesktopInput

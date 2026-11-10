@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { confirmAction } from '@/business/utils/confirm'
-import DesktopInput from '@/business/components/DesktopInput.vue'
 
 import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   createFamily,
@@ -15,7 +18,6 @@ import {
 import { ApiError } from '@/business/api/request'
 
 const joinInviteCode = ref('')
-const pageMessage = ref('')
 const errorMessage = ref('')
 const isLoading = ref(true)
 const isCreating = ref(false)
@@ -33,19 +35,6 @@ const members = computed(() => familyOverview.value.members)
 const hasFamily = computed(() => familyOverview.value.hasFamily)
 const inviteCode = computed(() => familyOverview.value.inviteCode || '')
 
-function getAvatarText(name: string) {
-  const normalizedName = name.trim()
-  if (!normalizedName) {
-    return '--'
-  }
-
-  return normalizedName.slice(0, 2).toUpperCase()
-}
-
-function getMemberTone(member: FamilyMember) {
-  return member.canUnbind ? 'success' : 'brand'
-}
-
 onMounted(() => {
   void fetchFamilyOverview()
 })
@@ -55,9 +44,6 @@ async function fetchFamilyOverview() {
   errorMessage.value = ''
   try {
     familyOverview.value = await getFamilyOverview()
-    pageMessage.value = familyOverview.value.hasFamily
-      ? '家庭成员已绑定成功，可以在这里查看邀请码和管理成员。'
-      : '你还没有加入家庭，可以先创建自己的家庭邀请码，或者输入邀请码加入已有家庭。'
   } catch (error) {
     errorMessage.value =
       error instanceof ApiError ? error.message : '获取家庭信息失败，请稍后再试'
@@ -75,7 +61,7 @@ async function handleCreateFamily() {
   errorMessage.value = ''
   try {
     familyOverview.value = await createFamily()
-    pageMessage.value = '家庭邀请码已生成，现在可以让家人输入邀请码加入。'
+    ElMessage.success('家庭已创建')
   } catch (error) {
     errorMessage.value =
       error instanceof ApiError ? error.message : '创建家庭失败，请稍后再试'
@@ -103,7 +89,7 @@ async function submitJoin() {
       inviteCode: normalizedCode,
     })
     joinInviteCode.value = ''
-    pageMessage.value = '已成功加入家庭，当前页面仅展示已绑定成员。'
+    ElMessage.success('已加入家庭')
   } catch (error) {
     errorMessage.value =
       error instanceof ApiError ? error.message : '加入家庭失败，请稍后再试'
@@ -119,7 +105,7 @@ async function handleCopyInviteCode() {
 
   try {
     await navigator.clipboard.writeText(inviteCode.value)
-    pageMessage.value = '家庭邀请码已复制，可以发给要加入的家庭成员。'
+    ElMessage.success('邀请码已复制')
   } catch {
     errorMessage.value = '复制失败，请手动复制邀请码'
   }
@@ -130,7 +116,7 @@ async function handleMemberAction(member: FamilyMember) {
     return
   }
 
-  if (!await confirmAction(`确认解绑 ${member.displayName} 吗？`)) {
+  if (!(await confirmAction(`确认解绑 ${member.displayName} 吗？`))) {
     return
   }
 
@@ -138,7 +124,7 @@ async function handleMemberAction(member: FamilyMember) {
   errorMessage.value = ''
   try {
     familyOverview.value = await unbindFamilyMember(member.userId)
-    pageMessage.value = '已解绑该家庭成员，当前列表仅展示已绑定成员。'
+    ElMessage.success('已解绑家庭成员')
   } catch (error) {
     errorMessage.value =
       error instanceof ApiError ? error.message : '解绑失败，请稍后再试'
@@ -146,129 +132,87 @@ async function handleMemberAction(member: FamilyMember) {
     unbindingMemberId.value = null
   }
 }
-</script>
 
+type MemberRow = (typeof members.value)[number]
+</script>
 <template>
-  <section class="pc-page profile-family-page" aria-label="家庭成员页面">
-    <PageHeader title="绑定家庭成员" back-to="/profile" prefer-back-to />
-    <el-card
-      v-if="isLoading"
-      class="pc-record-card family-card"
-      aria-label="家庭信息加载中"
-      shadow="never"
-    >
-      <div class="family-card-header"><h2>家庭邀请码</h2></div>
-      <div class="family-empty">正在加载家庭信息...</div>
-    </el-card>
-    <el-card
-      v-else-if="hasFamily"
-      class="pc-record-card family-card"
-      aria-label="家庭信息"
-      shadow="never"
-    >
-      <div class="family-card-header">
-        <h2>家庭邀请码</h2>
-        <span class="family-badge">已绑定 {{ joinedCount }} 人</span>
-      </div>
-      <el-card class="pc-record-card invite-card" shadow="never">
-        <div>
-          <strong>{{ inviteCode }}</strong>
-        </div>
-        <el-button
-          native-type="button"
-          class="copy-btn"
-          @click="handleCopyInviteCode"
-        >
-          复制
-        </el-button>
-      </el-card>
-    </el-card>
-    <el-card
-      v-else
-      class="pc-record-card family-card"
-      aria-label="创建家庭"
-      shadow="never"
-    >
-      <div class="family-card-header"><h2>家庭邀请码</h2></div>
-      <p>
-        还没有加入家庭时，可以先创建自己的家庭邀请码，再把邀请码发给家人加入。
-      </p>
-      <el-button
-        class="join-entry-btn"
-        native-type="button"
-        :disabled="isCreating"
-        @click="handleCreateFamily"
-      >
-        {{ isCreating ? '创建中...' : '创建我的家庭邀请码' }}
-      </el-button>
-    </el-card>
-    <el-card
-      v-if="!isLoading && !hasFamily"
-      class="pc-record-card family-card"
-      aria-label="加入家庭"
-      shadow="never"
-    >
-      <div class="family-card-header"><h2>输入邀请码加入家庭</h2></div>
-      <p>{{ pageMessage }}</p>
-      <label class="pc-field join-field">
-        <span>家庭邀请码</span>
-        <DesktopInput
-          v-model="joinInviteCode"
-          type="text"
-          inputmode="text"
-          autocomplete="off"
-          placeholder="例如 FAMILY-2048"
+  <section class="desktop-workspace">
+    <PageHeader title="家庭成员"><template #right></template></PageHeader>
+    <el-alert
+      v-if="errorMessage"
+      :title="errorMessage"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <div class="desktop-main-aside">
+      <DesktopTable :rows="members" :loading="isLoading" title="家庭成员">
+        <el-table-column
+          prop="displayName"
+          label="成员"
+          min-width="220"
+          sortable="custom"
+          show-overflow-tooltip
         />
-      </label>
-      <p v-if="errorMessage" class="join-error">{{ errorMessage }}</p>
-      <el-button
-        class="join-entry-btn"
-        native-type="button"
-        :disabled="isJoining"
-        @click="submitJoin"
-      >
-        {{ isJoining ? '加入中...' : '输入邀请码并加入' }}
-      </el-button>
-    </el-card>
-    <el-card
-      class="pc-record-card family-card"
-      aria-label="成员列表"
-      shadow="never"
-    >
-      <div class="family-card-header"><h2>家庭成员</h2></div>
-      <p v-if="!errorMessage && pageMessage">{{ pageMessage }}</p>
-      <p v-if="errorMessage && hasFamily" class="join-error">
-        {{ errorMessage }}
-      </p>
-      <div v-if="isLoading" class="family-empty">正在加载家庭信息...</div>
-      <div v-else-if="!members.length" class="family-empty">
-        当前还没有已绑定成员。
-      </div>
-      <template v-else>
-        <div v-for="member in members" :key="member.userId" class="member-row">
-          <div :class="['member-avatar', `tone-${getMemberTone(member)}`]">
-            {{ getAvatarText(member.displayName) }}
-          </div>
-          <div class="member-info">
-            <strong>{{ member.displayName }}</strong>
-            <span>{{ member.role }}</span>
-          </div>
-          <div class="pc-toolbar member-actions">
-            <span :class="['member-tag', `tone-${getMemberTone(member)}`]">
-              {{ member.status }}
-            </span>
+        <el-table-column
+          prop="role"
+          label="角色"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="status"
+          label="状态"
+          min-width="140"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {MemberRow} -->
+        <el-table-column fixed="right" label="操作" width="150">
+          <template #default="{ row }: { row: MemberRow }">
             <el-button
-              v-if="member.canUnbind"
-              class="member-action-btn"
-              native-type="button"
-              :disabled="unbindingMemberId === member.userId"
-              @click="handleMemberAction(member)"
+              v-if="row.canUnbind"
+              link
+              type="danger"
+              :loading="unbindingMemberId === row.userId"
+              @click="handleMemberAction(row)"
             >
-              {{ unbindingMemberId === member.userId ? '解绑中...' : '解绑' }}
+              解绑
+            </el-button>
+          </template>
+        </el-table-column>
+      </DesktopTable>
+      <div class="desktop-results">
+        <PagePanel title="家庭邀请码">
+          <template v-if="hasFamily">
+            <strong class="desktop-invite-code">{{ inviteCode }}</strong>
+            <p class="desktop-note">已绑定 {{ joinedCount }} 人</p>
+            <el-button @click="handleCopyInviteCode">复制邀请码</el-button>
+          </template>
+          <template v-else>
+            <el-button
+              :loading="isCreating"
+              type="primary"
+              @click="handleCreateFamily"
+            >
+              创建家庭
+            </el-button>
+          </template>
+        </PagePanel>
+        <PagePanel title="加入家庭" v-if="!isLoading && !hasFamily">
+          <el-input
+            v-model="joinInviteCode"
+            aria-label="家庭邀请码"
+            placeholder="输入家庭邀请码"
+          />
+          <div class="desktop-bottom-actions">
+            <el-button :loading="isJoining" type="primary" @click="submitJoin">
+              加入家庭
             </el-button>
           </div>
-        </div>
-      </template>
-    </el-card>
+        </PagePanel>
+      </div>
+    </div>
   </section>
 </template>

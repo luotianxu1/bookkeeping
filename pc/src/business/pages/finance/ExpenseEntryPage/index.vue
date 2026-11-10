@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
-
-import DesktopInput from '@/business/components/DesktopInput.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
 
 import { useIdempotentSubmit } from '@/business/composables/useIdempotentSubmit'
 // 记一笔-支出页：还原 Pencil「记一笔-支出」页面结构与交互。
@@ -9,9 +7,9 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
 import CommonDateTimePicker from '@/business/components/common/CommonDateTimePicker/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import CategoryIcon from '@/business/components/common/CategoryIcon/index.vue'
+
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import SavingsAllocationFields, {
   type SavingsAllocationDraft,
@@ -36,14 +34,6 @@ import {
 import { ApiError } from '@/business/api/request'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
 
-type PrimaryCategoryOption = {
-  id: number
-  icon: string
-  color?: string | null
-  label: string
-  manage: boolean
-}
-
 // 记账类型：顶部支出/收入/转账切换。
 const submission = useIdempotentSubmit()
 
@@ -63,16 +53,7 @@ const activeCategoryId = ref<number | null>(null)
 const rootCategories = computed(() =>
   categories.value.filter((category) => !category.parentId),
 )
-const primaryCategoryOptions = computed<PrimaryCategoryOption[]>(() => [
-  ...rootCategories.value.map((category) => ({
-    id: category.id,
-    icon: category.icon,
-    color: category.color,
-    label: category.name,
-    manage: false,
-  })),
-  { id: -1, icon: '⚙', label: '管理分类', manage: true },
-])
+
 const secondaryCategoryOptions = computed(() =>
   categories.value
     .filter((category) => category.parentId === activeParentCategoryId.value)
@@ -140,14 +121,7 @@ const feedbackMessage = ref('')
 const feedbackType = ref<'success' | 'error'>('success')
 
 // 数字键盘：用于金额输入的按钮布局。
-const keypadRows = [
-  ['1', '2', '3', '删'],
-  ['4', '5', '6', '清空'],
-  ['7', '8', '9', '再记'],
-  ['.', '0', '+', '保存'],
-]
 
-const amountDisplay = computed(() => `${amountInput.value}`)
 const transactionType = computed<TransactionType>(() => {
   if (entryType.value === '收入') return 'income'
   if (entryType.value === '转账') return 'transfer'
@@ -256,39 +230,6 @@ function selectCategory(item: { id: number; manage: boolean }) {
 
   activeParentCategoryId.value = item.id
   syncActiveLeafCategory(item.id, activeCategoryId.value)
-}
-
-function selectSecondaryCategory(categoryId: number) {
-  activeCategoryId.value = categoryId
-}
-
-async function onKeypadPress(key: string) {
-  if (key === '删') {
-    amountInput.value =
-      amountInput.value.length > 1 ? amountInput.value.slice(0, -1) : '0'
-    return
-  }
-
-  if (key === '清空') {
-    amountInput.value = '0.00'
-    return
-  }
-
-  if (key === '保存' || key === '再记') {
-    await saveTransaction()
-    return
-  }
-
-  if (key === '+') return
-
-  if (amountInput.value === '0.00') {
-    amountInput.value = key === '.' ? '0.' : key
-    return
-  }
-
-  if (key === '.' && amountInput.value.includes('.')) return
-
-  amountInput.value += key
 }
 
 async function loadEntryOptions() {
@@ -666,114 +607,136 @@ function syncActiveLeafCategory(
 }
 </script>
 <template>
-  <section class="pc-page">
-    <PageHeader :title="isEditing ? '修改记录' : '记一笔'" />
-    <el-card shadow="never" class="pc-form-panel">
-      <el-form label-position="top" @submit.prevent="saveTransaction">
-        <div class="pc-toolbar">
-          <SegmentedControl
-            v-model="entryType"
-            :options="entryTypeOptions"
-            label="记账类型"
-          />
-        </div>
-        <el-skeleton v-if="loading" :rows="5" animated />
-        <div v-else class="pc-form-grid">
-          <el-form-item label="金额" required>
-            <el-input
-              v-model="amountInput"
-              inputmode="decimal"
-              placeholder="0.00"
-              aria-label="金额"
+  <section class="desktop-workspace">
+    <PageHeader :title="isEditing ? '修改记录' : '记一笔'">
+      <template #right></template>
+    </PageHeader>
+    <div class="desktop-main-aside">
+      <PagePanel title="收支信息">
+        <el-form label-position="top" @submit.prevent="saveTransaction">
+          <div class="pc-toolbar">
+            <SegmentedControl
+              v-model="entryType"
+              :options="entryTypeOptions"
+              label="记账类型"
             />
-          </el-form-item>
-          <CommonDateTimePicker v-model="entryTime" label="时间" />
-          <template v-if="entryType !== '转账'">
-            <el-form-item label="一级分类">
-              <el-select
-                :model-value="activeParentCategoryId"
-                @update:model-value="
-                  selectCategory({ id: $event, manage: false })
-                "
-                filterable
+          </div>
+          <el-skeleton v-if="loading" :rows="5" animated />
+          <div v-else class="desktop-form-grid">
+            <el-form-item label="金额" required>
+              <el-input
+                v-model="amountInput"
+                inputmode="decimal"
+                placeholder="0.00"
+                aria-label="金额"
+              />
+            </el-form-item>
+            <CommonDateTimePicker v-model="entryTime" label="时间" />
+            <template v-if="entryType !== '转账'">
+              <el-form-item label="一级分类">
+                <el-select
+                  :model-value="activeParentCategoryId"
+                  @update:model-value="
+                    selectCategory({ id: $event, manage: false })
+                  "
+                  filterable
+                >
+                  <el-option
+                    v-for="item in rootCategories"
+                    :key="item.id"
+                    :value="item.id"
+                    :label="item.name"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item
+                v-if="secondaryCategoryOptions.length"
+                label="二级分类"
               >
-                <el-option
-                  v-for="item in rootCategories"
-                  :key="item.id"
-                  :value="item.id"
-                  :label="item.name"
-                />
-              </el-select>
+                <el-select v-model="activeCategoryId" filterable>
+                  <el-option
+                    v-for="item in secondaryCategoryOptions"
+                    :key="item.id"
+                    :value="item.id"
+                    :label="item.label"
+                  />
+                </el-select>
+              </el-form-item>
+              <ExpenseInlineSelect
+                v-model="accountSelectValue"
+                label="账户"
+                :options="accountSelectOptions"
+              />
+              <p v-if="currentReserved > 0">
+                可用余额 {{ formatAccountBalance(currentAvailable) }} · 目标预留
+                {{ formatAccountBalance(currentReserved) }}
+              </p>
+            </template>
+            <template v-else>
+              <ExpenseInlineSelect
+                v-model="transferOutSelectValue"
+                label="转出账户"
+                :options="accountSelectOptions"
+              />
+              <ExpenseInlineSelect
+                v-model="transferInSelectValue"
+                label="转入账户"
+                :options="accountSelectOptions"
+              />
+            </template>
+            <el-form-item label="备注">
+              <el-input v-model="note" type="textarea" :rows="2" />
             </el-form-item>
-            <el-form-item
-              v-if="secondaryCategoryOptions.length"
-              label="二级分类"
+            <SavingsAllocationFields
+              v-if="entryType !== '收入'"
+              v-model="outgoingAllocations"
+              :goals="eligibleOutgoingGoals"
+              label="扣减储蓄目标"
+              :disabled="saving"
+            />
+            <SavingsAllocationFields
+              v-if="entryType !== '支出'"
+              v-model="incomingAllocations"
+              :goals="eligibleIncomingGoals"
+              label="计入储蓄目标"
+              :disabled="saving"
+            />
+          </div>
+          <div class="pc-form-footer">
+            <el-button
+              type="primary"
+              native-type="submit"
+              :loading="saving"
+              :disabled="!canSave"
             >
-              <el-select v-model="activeCategoryId" filterable>
-                <el-option
-                  v-for="item in secondaryCategoryOptions"
-                  :key="item.id"
-                  :value="item.id"
-                  :label="item.label"
-                />
-              </el-select>
-            </el-form-item>
-            <ExpenseInlineSelect
-              v-model="accountSelectValue"
-              label="账户"
-              :options="accountSelectOptions"
-            />
-            <p v-if="currentReserved > 0">
-              可用余额 {{ formatAccountBalance(currentAvailable) }} · 目标预留
-              {{ formatAccountBalance(currentReserved) }}
-            </p>
-          </template>
-          <template v-else>
-            <ExpenseInlineSelect
-              v-model="transferOutSelectValue"
-              label="转出账户"
-              :options="accountSelectOptions"
-            />
-            <ExpenseInlineSelect
-              v-model="transferInSelectValue"
-              label="转入账户"
-              :options="accountSelectOptions"
-            />
-          </template>
-          <el-form-item label="备注">
-            <el-input v-model="note" type="textarea" :rows="2" />
-          </el-form-item>
-          <SavingsAllocationFields
-            v-if="entryType !== '收入'"
-            v-model="outgoingAllocations"
-            :goals="eligibleOutgoingGoals"
-            label="扣减储蓄目标"
-            :disabled="saving"
-          />
-          <SavingsAllocationFields
-            v-if="entryType !== '支出'"
-            v-model="incomingAllocations"
-            :goals="eligibleIncomingGoals"
-            label="计入储蓄目标"
-            :disabled="saving"
-          />
-        </div>
-        <div class="pc-form-footer">
-          <el-button
-            type="primary"
-            native-type="submit"
-            :loading="saving"
-            :disabled="!canSave"
-          >
-            保存
-          </el-button>
-          <el-button :disabled="saving" @click="router.push(backTo)">
-            返回
-          </el-button>
+              保存
+            </el-button>
+            <el-button :disabled="saving" @click="router.push(backTo)">
+              返回
+            </el-button>
+            <RouterLink to="/finance/categories">管理分类</RouterLink>
+          </div>
+        </el-form>
+      </PagePanel>
+      <PagePanel title="账户与分配">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="记账类型">
+            {{ entryType }}
+          </el-descriptions-item>
+          <el-descriptions-item label="可用余额">
+            {{ formatAccountBalance(currentAvailable) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="目标预留">
+            {{ formatAccountBalance(currentReserved) }}
+          </el-descriptions-item>
+        </el-descriptions>
+        <div class="desktop-link-list">
+          <RouterLink to="/finance/accounts">管理账户</RouterLink>
           <RouterLink to="/finance/categories">管理分类</RouterLink>
+          <RouterLink to="/finance/savings-goals">储蓄目标</RouterLink>
         </div>
-      </el-form>
-    </el-card>
+      </PagePanel>
+    </div>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"

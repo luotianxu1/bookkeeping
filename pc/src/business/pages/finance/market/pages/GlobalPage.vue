@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// 全球 tab：六大模块行情（移植自 investment GlobalPage，数据来自 ModuleGrid 组件）。
+// 全球行情按市场模块切换，数据由 ModuleGrid 统一展示。
 import ModuleGrid from '../components/ModuleGrid.vue'
 </script>
-
 <template>
-  <div class="pc-page global-page"><ModuleGrid /></div>
+  <section class="desktop-workspace"><ModuleGrid /></section>
 </template>

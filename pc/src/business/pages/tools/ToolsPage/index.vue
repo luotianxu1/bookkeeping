@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PageHeader from '@/business/components/common/PageHeader/index.vue'
+
 // 工具页：展示常用工具入口卡片。
 import { RouterLink } from 'vue-router'
 type ToolItem = {
@@ -69,22 +71,20 @@ const toolItems: ToolItem[] = [
   },
 ]
 </script>
-
 <template>
-  <section class="pc-page tools-page stagger-in" aria-label="工具页面">
-    <section class="pc-grid tools-grid" aria-label="工具入口">
-      <component
-        v-for="item in toolItems"
+  <section class="desktop-workspace">
+    <PageHeader title="生活工具"><template #right></template></PageHeader>
+    <div class="desktop-tool-catalog">
+      <RouterLink
+        v-for="item in toolItems.filter((item) => item.to)"
         :key="item.key"
-        :is="item.to ? RouterLink : 'button'"
-        v-bind="item.to ? { to: item.to } : { type: 'button' }"
-        :class="['tool-card', `tone-${item.tone}`, { featured: item.featured }]"
+        :to="item.to!"
+        class="desktop-tool-entry"
       >
-        <span :class="['tool-icon', `tone-${item.tone}`]">
-          {{ item.short }}
-        </span>
-        <span class="tool-title">{{ item.title }}</span>
-      </component>
-    </section>
+        <span class="desktop-tool-symbol">{{ item.short }}</span>
+        <strong>{{ item.title }}</strong>
+        <span aria-hidden="true">→</span>
+      </RouterLink>
+    </div>
   </section>
 </template>

@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { formatPercentageText } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
@@ -6,9 +12,7 @@ import {
   type SalaryOverview,
 } from '@/business/api/modules/finance'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
-import CommonHeaderLinkButton from '@/business/components/common/CommonHeaderLinkButton/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import { getStoredCurrentUser } from '@/business/utils/current-user'
 import { formatSalaryCurrency, formatSalaryPercent } from '../salary-shared'
@@ -51,169 +55,103 @@ function openFeedback(message: string, type: 'success' | 'error') {
   feedbackType.value = type
   feedbackVisible.value = true
 }
-</script>
 
+type SalaryDetailRow = NonNullable<typeof pageData.value>['details'][number]
+</script>
 <template>
-  <section class="pc-page salary-page" aria-label="工资管理">
-    <PageHeader
-      title="工资管理"
-      back-to="/finance/more-features"
-      :prefer-back-to="true"
-    >
-      <div class="pc-toolbar salary-inline-actions">
-        <CommonHeaderLinkButton to="/finance/salary/records" label="工资明细">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M7 4.5H17C18.1 4.5 19 5.4 19 6.5V17.5C19 18.6 18.1 19.5 17 19.5H7C5.9 19.5 5 18.6 5 17.5V6.5C5 5.4 5.9 4.5 7 4.5Z"
-              stroke="currentColor"
-              stroke-width="1.8"
-            />
-            <path
-              d="M8.5 9H15.5M8.5 12H15.5M8.5 15H13"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-          </svg>
-        </CommonHeaderLinkButton>
-        <RouterLink v-slot="{ navigate }" to="/finance/salary/settings" custom>
-          <CommonHeaderActionButton label="工资设置" @click="navigate">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-              />
-              <path
-                d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </CommonHeaderActionButton>
+  <section class="desktop-workspace">
+    <PageHeader title="工资管理">
+      <template #right>
+        <RouterLink to="/finance/salary/records">
+          <el-button>工资明细</el-button>
         </RouterLink>
-      </div>
+        <RouterLink to="/finance/salary/settings">
+          <el-button type="primary">工资设置</el-button>
+        </RouterLink>
+      </template>
     </PageHeader>
-    <p v-if="pageError" class="salary-error-text">{{ pageError }}</p>
-    <div v-else-if="isLoading" class="salary-loading-wrap">
-      <CommonLoading text="工资数据加载中..." />
-    </div>
-    <template v-else-if="pageData">
-      <el-card class="pc-record-card salary-summary-card" shadow="never">
-        <div class="salary-summary-head">
-          <div class="salary-summary-eyebrow-row">
-            <p class="salary-summary-eyebrow">
-              {{ pageData.monthKey }} 工资测算
-            </p>
-            <span class="salary-pill">{{ pageData.payDay }} 日发薪</span>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <el-skeleton v-if="isLoading" :rows="8" animated />
+    <template v-if="pageData">
+      <MetricStrip
+        :items="[
+          {
+            label: '本月到手',
+            value: formatSalaryCurrency(pageData.netIncome),
+          },
+          {
+            label: '全年总收入',
+            value: formatSalaryCurrency(pageData.annualIncome),
+          },
+          { label: '到手率', value: formatSalaryPercent(pageData.netRate) },
+          { label: '已发月数', value: pageData.paidMonths },
+        ]"
+      />
+      <MetricStrip
+        :items="
+          pageData.metrics.map((metric) => ({
+            label: metric.label,
+            value: formatSalaryCurrency(metric.value),
+          }))
+        "
+      />
+      <div class="desktop-main-aside">
+        <DesktopTable
+          :rows="pageData.details"
+          :loading="false"
+          title="缴纳明细"
+        >
+          <el-table-column
+            prop="label"
+            label="项目"
+            min-width="160"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+          <!-- @vue-generic {SalaryDetailRow} -->
+          <el-table-column label="金额" min-width="150">
+            <template #default="{ row }: { row: SalaryDetailRow }">
+              {{ formatSalaryCurrency(row.value) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="detail"
+            :formatter="
+              (row: SalaryDetailRow) => formatPercentageText(row.detail ?? '')
+            "
+            label="说明"
+            min-width="200"
+            sortable="custom"
+            show-overflow-tooltip
+          />
+        </DesktopTable>
+        <PagePanel title="关联账户">
+          <div class="desktop-link-list">
+            <RouterLink
+              v-for="account in pageData.linkedAccounts"
+              :key="account.accountType"
+              :to="account.routePath"
+            >
+              <span>{{ account.title }}</span>
+              <strong>
+                {{ formatSalaryCurrency(account.currentBalance) }}
+              </strong>
+            </RouterLink>
+            <RouterLink :to="pageData.taxSummary.routePath">
+              <span>年度个税</span>
+              <strong>
+                {{ formatSalaryCurrency(pageData.taxSummary.annualTax) }}
+              </strong>
+            </RouterLink>
           </div>
-          <div class="salary-summary-main">
-            <div class="salary-summary-main-top">
-              <strong>{{ formatSalaryCurrency(pageData.netIncome) }}</strong>
-              <div class="salary-summary-sub">
-                <span class="highlight">
-                  到手率 {{ formatSalaryPercent(pageData.netRate) }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="salary-summary-banner">
-          <div>
-            <p class="salary-summary-banner-title">全年总收入</p>
-            <p class="salary-summary-banner-desc">
-              已发 {{ pageData.paidMonths }} 个月，按最新配置滚动计算
-            </p>
-          </div>
-          <div class="salary-linked-amount">
-            <strong>{{ formatSalaryCurrency(pageData.annualIncome) }}</strong>
-          </div>
-        </div>
-        <div class="pc-grid salary-metric-grid">
-          <el-card
-            v-for="metric in pageData.metrics"
-            :key="metric.label"
-            class="pc-record-card salary-metric-card"
-            shadow="never"
-          >
-            <span>{{ metric.label }}</span>
-            <strong>{{ formatSalaryCurrency(metric.value) }}</strong>
-          </el-card>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>缴纳明细</strong></div>
-        <div class="pc-grid salary-list">
-          <el-card
-            v-for="item in pageData.details"
-            :key="item.label"
-            class="pc-record-card salary-row"
-            shadow="never"
-          >
-            <div>
-              <p class="salary-row-label">{{ item.label }}</p>
-              <p class="salary-row-desc">{{ item.detail }}</p>
-            </div>
-            <div class="salary-row-value">
-              <strong>{{ formatSalaryCurrency(item.value) }}</strong>
-            </div>
-          </el-card>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>关联账户</strong></div>
-        <div class="pc-grid salary-linked-list">
-          <RouterLink
-            v-for="account in pageData.linkedAccounts"
-            :key="account.accountType"
-            :to="account.routePath"
-            class="salary-linked-card"
-          >
-            <div class="salary-linked-top">
-              <div>
-                <p class="salary-linked-title">{{ account.title }}</p>
-              </div>
-              <div class="salary-linked-amount">
-                <strong>
-                  {{ formatSalaryCurrency(account.currentBalance) }}
-                </strong>
-              </div>
-            </div>
-          </RouterLink>
-        </div>
-      </el-card>
-      <el-card class="pc-record-card salary-card" shadow="never">
-        <div class="salary-card-head"><strong>税务服务</strong></div>
-        <div class="pc-grid salary-linked-list">
-          <RouterLink
-            class="salary-linked-card"
-            :to="pageData.taxSummary.routePath"
-          >
-            <div class="salary-linked-top">
-              <div>
-                <p class="salary-linked-title">工资税务</p>
-                <p class="salary-linked-note">
-                  年度收入
-                  {{ formatSalaryCurrency(pageData.taxSummary.annualIncome) }}
-                </p>
-              </div>
-              <div class="salary-linked-amount">
-                <strong>
-                  {{ formatSalaryCurrency(pageData.taxSummary.annualTax) }}
-                </strong>
-                <span>
-                  本月
-                  {{
-                    formatSalaryCurrency(pageData.taxSummary.currentMonthTax)
-                  }}
-                </span>
-              </div>
-            </div>
-          </RouterLink>
-        </div>
-      </el-card>
+        </PagePanel>
+      </div>
     </template>
     <CommonFeedback
       v-model="feedbackVisible"

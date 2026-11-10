@@ -1,30 +1,25 @@
 <script setup lang="ts">
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { formatAmount } from '@/business/utils/format'
 // 黄金账户持仓页：对接黄金聚合查询接口，并补充持仓新增、修改、删除能力。
 import { onMounted } from 'vue'
-import AccountIcon from '@/business/components/common/AccountIcon/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import { useFeedback } from '@/business/composables/useFeedback'
 import { allAccountIconOptions } from '@/business/data/account-icons'
-import {
-  formatAveragePriceTag,
-  formatCreatedDate,
-  formatHoldingMeta,
-  formatRate,
-  formatSummaryWeight,
-  getProfitToneClass,
-} from './goldPositionFormat'
+import { formatRate, formatSummaryWeight } from './goldPositionFormat'
 import { useGoldPositionData } from './useGoldPositionData'
 import { useGoldPositionActions } from './useGoldPositionActions'
 
@@ -121,300 +116,174 @@ onMounted(() => {
 
 type DetailTableRow = (typeof filteredHoldings.value)[number]
 </script>
-
 <template>
-  <section class="pc-page gold-position-page" aria-label="黄金账户持仓">
+  <section class="desktop-workspace">
+    <PageHeader :title="scopedAccount?.name || '黄金持仓'">
+      <template #right>
+        <el-button @click="openLiquidationList">清仓明细</el-button>
+        <el-button :loading="isRefreshingGold" @click="refreshGoldData">
+          刷新金价
+        </el-button>
+        <el-button v-if="scopedAccount" @click="openAccountSettingsModal">
+          账户设置
+        </el-button>
+        <el-button type="primary" @click="openCreateModal">新增持仓</el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        {
+          label: '持有克重',
+          value: formatSummaryWeight(visibleSummary.totalWeight),
+        },
+        {
+          label: '持仓估值',
+          value: formatAmount(visibleSummary.estimatedValue),
+        },
+        {
+          label: '预估收益',
+          value: formatAmount(visibleSummary.estimatedProfit),
+        },
+        { label: '收益率', value: formatRate(visibleSummary.profitRate) },
+      ]"
+    />
+    <div class="desktop-main-aside">
+      <DesktopTable :rows="filteredHoldings" title="黄金持仓" searchable>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column
+          label="产品"
+          prop="productName"
+          min-width="180"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="克重" min-width="130">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatSummaryWeight(row.weight) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="成本均价" min-width="130">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatAmount(row.avgCostPrice) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="买入金额" min-width="150">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatAmount(row.purchaseAmount) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="收益" min-width="140">
+          <template #default="{ row }: { row: DetailTableRow }">
+            {{ formatAmount(row.holdingProfit) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column
+          label="买入时间"
+          prop="createdAt"
+          min-width="170"
+          show-overflow-tooltip
+        />
+        <!-- @vue-generic {DetailTableRow} -->
+        <el-table-column label="操作" width="220" fixed="right">
+          <template #default="{ row }: { row: DetailTableRow }">
+            <div class="pc-row-actions">
+              <el-button
+                link
+                :disabled="
+                  isLoadingPositionDetail ||
+                  isSavingPosition ||
+                  isDeletingPosition ||
+                  isSellingPosition
+                "
+                type="primary"
+                @click="
+                  () => {
+                    selectedHolding = row
+                    openEditModalFromAction()
+                  }
+                "
+              >
+                修改
+              </el-button>
+              <el-button
+                link
+                :disabled="
+                  isLoadingPositionDetail ||
+                  isSavingPosition ||
+                  isDeletingPosition ||
+                  isSellingPosition
+                "
+                type="primary"
+                @click="
+                  () => {
+                    selectedHolding = row
+                    openSellModalFromAction()
+                  }
+                "
+              >
+                卖出
+              </el-button>
+              <el-button
+                link
+                :disabled="
+                  isLoadingPositionDetail ||
+                  isSavingPosition ||
+                  isDeletingPosition ||
+                  isSellingPosition
+                "
+                type="danger"
+                @click="
+                  () => {
+                    selectedHolding = row
+                    openDeleteConfirmModalFromAction()
+                  }
+                "
+              >
+                删除
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </DesktopTable>
+      <PagePanel title="价格与成本">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="实时金价">
+            {{
+              realtimeGoldPrice > 0
+                ? formatAmount(realtimeGoldPrice) + ' 元/克'
+                : '—'
+            }}
+          </el-descriptions-item>
+          <el-descriptions-item label="更新时间">
+            {{ realtimeGoldUpdatedAt }}
+          </el-descriptions-item>
+          <el-descriptions-item label="平均成本">
+            {{ formatAmount(visibleSummary.averagePrice) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="购入总价">
+            {{ formatAmount(visibleSummary.purchaseTotal) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="累计收益">
+            {{ formatAmount(visibleSummary.cumulativeProfit) }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </PagePanel>
+    </div>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
       :type="feedbackType"
-    />
-    <PageHeader
-      title="黄金账户持仓"
-      back-to="/finance/accounts/gold"
-      back-label="返回黄金账户"
-    >
-      <template #right>
-        <div class="pc-toolbar gold-position-header-actions">
-          <CommonHeaderActionButton
-            label="清仓明细"
-            @click="openLiquidationList"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M8 6H21"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              />
-              <path
-                d="M8 12H21"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              />
-              <path
-                d="M8 18H21"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              />
-              <path
-                d="M3.5 6H4.5"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-              />
-              <path
-                d="M3.5 12H4.5"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-              />
-              <path
-                d="M3.5 18H4.5"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </CommonHeaderActionButton>
-          <CommonHeaderRefreshButton
-            label="刷新黄金信息"
-            :loading="isRefreshingGold"
-            @click="refreshGoldData"
-          />
-          <CommonHeaderActionButton
-            v-if="scopedAccount"
-            label="修改黄金账户"
-            @click="openAccountSettingsModal"
-          >
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M12 15.2A3.2 3.2 0 1 0 12 8.8A3.2 3.2 0 0 0 12 15.2Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-              />
-              <path
-                d="M19.4 15A1.65 1.65 0 0 0 19.73 16.82L19.79 16.88A2 2 0 1 1 16.96 19.71L16.9 19.65A1.65 1.65 0 0 0 15.08 19.32A1.65 1.65 0 0 0 14.08 20.83V21A2 2 0 1 1 10.08 21V20.91A1.65 1.65 0 0 0 9 19.4A1.65 1.65 0 0 0 7.18 19.73L7.12 19.79A2 2 0 1 1 4.29 16.96L4.35 16.9A1.65 1.65 0 0 0 4.68 15.08A1.65 1.65 0 0 0 3.17 14.08H3A2 2 0 1 1 3 10.08H3.09A1.65 1.65 0 0 0 4.6 9A1.65 1.65 0 0 0 4.27 7.18L4.21 7.12A2 2 0 1 1 7.04 4.29L7.1 4.35A1.65 1.65 0 0 0 8.92 4.68H9A1.65 1.65 0 0 0 10 3.17V3A2 2 0 1 1 14 3V3.09A1.65 1.65 0 0 0 15 4.6A1.65 1.65 0 0 0 16.82 4.27L16.88 4.21A2 2 0 1 1 19.71 7.04L19.65 7.1A1.65 1.65 0 0 0 19.32 8.92V9A1.65 1.65 0 0 0 20.83 10H21A2 2 0 1 1 21 14H20.91A1.65 1.65 0 0 0 19.4 15Z"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </CommonHeaderActionButton>
-        </div>
-      </template>
-    </PageHeader>
-    <p
-      v-if="pageError"
-      class="gold-position-message gold-position-message-error"
-    >
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <section class="gold-position-summary">
-        <div class="summary-head">
-          <div class="summary-head-main">
-            <div v-if="scopedAccount" class="summary-account-identity">
-              <AccountIcon
-                :icon="scopedAccount.icon"
-                :account-type-code="scopedAccount.accountTypeCode"
-                :color="scopedAccount.color"
-                :name="scopedAccount.name"
-                :size="28"
-              />
-              <div class="summary-account-copy">
-                <strong>{{ scopedAccount.name }}</strong>
-              </div>
-            </div>
-            <div class="summary-main">
-              <strong class="summary-weight-value">
-                {{ formatSummaryWeight(visibleSummary.totalWeight) }}
-              </strong>
-            </div>
-          </div>
-          <div class="gold-price-chip" aria-label="当前实时金价">
-            <span class="gold-price-chip-label">实时金价</span>
-            <strong class="gold-price-chip-value">
-              {{
-                realtimeGoldPrice > 0
-                  ? `${formatAmount(realtimeGoldPrice)} 元/克`
-                  : '--'
-              }}
-            </strong>
-            <span class="gold-price-chip-time">
-              {{ realtimeGoldUpdatedAt }}
-            </span>
-          </div>
-        </div>
-        <div class="pc-grid summary-grid">
-          <el-card shadow="never" class="pc-record-card">
-            <span>平均克价(元)</span>
-            <AmountText
-              tag="strong"
-              class="summary-static-amount"
-              tone="inherit"
-              :value="formatAmount(visibleSummary.averagePrice)"
-            />
-          </el-card>
-          <el-card shadow="never" class="pc-record-card">
-            <span>购入总价(元)</span>
-            <AmountText
-              tag="strong"
-              class="summary-static-amount"
-              tone="inherit"
-              :value="formatAmount(visibleSummary.purchaseTotal)"
-            />
-          </el-card>
-          <el-card shadow="never" class="pc-record-card">
-            <span>预估价值(元)</span>
-            <AmountText
-              tag="strong"
-              class="summary-static-amount"
-              tone="inherit"
-              :value="formatAmount(visibleSummary.estimatedValue)"
-            />
-          </el-card>
-          <el-card shadow="never" class="pc-record-card">
-            <span>预估收益(元)</span>
-            <AmountText
-              tag="strong"
-              :value="formatAmount(visibleSummary.estimatedProfit)"
-            />
-          </el-card>
-          <el-card shadow="never" class="pc-record-card">
-            <span>收益率(%)</span>
-            <AmountText
-              tag="strong"
-              :value="formatRate(visibleSummary.profitRate)"
-            />
-          </el-card>
-          <el-card shadow="never" class="pc-record-card">
-            <span>累计收益(元)</span>
-            <AmountText
-              tag="strong"
-              :value="formatAmount(visibleSummary.cumulativeProfit)"
-            />
-          </el-card>
-        </div>
-      </section>
-      <p class="position-section-title">持仓明细</p>
-      <section class="pc-grid position-list">
-        <template v-if="hasHoldings">
-          <el-table :data="filteredHoldings" stripe>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column
-              label="产品"
-              prop="productName"
-              min-width="180"
-              show-overflow-tooltip
-            />
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="克重" min-width="130">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatSummaryWeight(row.weight) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="成本均价" min-width="130">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatAmount(row.avgCostPrice) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="买入金额" min-width="150">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatAmount(row.purchaseAmount) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="收益" min-width="140">
-              <template #default="{ row }: { row: DetailTableRow }">
-                {{ formatAmount(row.holdingProfit) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column
-              label="买入时间"
-              prop="createdAt"
-              min-width="170"
-              show-overflow-tooltip
-            />
-            <!-- @vue-generic {DetailTableRow} -->
-            <el-table-column label="操作" width="220" fixed="right">
-              <template #default="{ row }: { row: DetailTableRow }">
-                <div class="pc-row-actions">
-                  <el-button
-                    link
-                    :disabled="
-                      isLoadingPositionDetail ||
-                      isSavingPosition ||
-                      isDeletingPosition ||
-                      isSellingPosition
-                    "
-                    type="primary"
-                    @click="
-                      () => {
-                        selectedHolding = row
-                        openEditModalFromAction()
-                      }
-                    "
-                  >
-                    修改
-                  </el-button>
-                  <el-button
-                    link
-                    :disabled="
-                      isLoadingPositionDetail ||
-                      isSavingPosition ||
-                      isDeletingPosition ||
-                      isSellingPosition
-                    "
-                    type="primary"
-                    @click="
-                      () => {
-                        selectedHolding = row
-                        openSellModalFromAction()
-                      }
-                    "
-                  >
-                    卖出
-                  </el-button>
-                  <el-button
-                    link
-                    :disabled="
-                      isLoadingPositionDetail ||
-                      isSavingPosition ||
-                      isDeletingPosition ||
-                      isSellingPosition
-                    "
-                    type="danger"
-                    @click="
-                      () => {
-                        selectedHolding = row
-                        openDeleteConfirmModalFromAction()
-                      }
-                    "
-                  >
-                    删除
-                  </el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </template>
-        <p v-else class="gold-position-empty">
-          {{ isScopedToAccount ? '该黄金账户暂无持仓' : '暂无黄金持仓' }}
-        </p>
-      </section>
-    </template>
-    <FloatingAddButton
-      aria-label="新增黄金持仓"
-      storage-key="gold-position"
-      @click="openCreateModal"
     />
     <CommonModal
       v-model="showAccountSettingsModal"

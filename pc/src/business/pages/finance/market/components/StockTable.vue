@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
 // A 股快照表：成交额前 20，行点击进个股详情。
 import { useRouter } from 'vue-router'
 import type { SpotRow } from '@/business/api/modules/market'
@@ -52,7 +54,7 @@ function open(code: number | string): void {
         <el-table-column label="涨跌幅" min-width="120">
           <template #default="{ row: s }">
             <span :class="dirClass(s['涨跌幅'])">
-              {{ s['涨跌幅'] !== null ? fmt(s['涨跌幅']) + '%' : '—' }}
+              {{ formatPercentage(s['涨跌幅'], true) }}
             </span>
           </template>
         </el-table-column>

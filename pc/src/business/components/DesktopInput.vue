@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
+import { formatPercentageInput } from '@/business/utils/percentage'
 import type { InputInstance } from 'element-plus'
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{
   modelValue?: string | number | null
   value?: string | number | null
   type?: string
+  percentage?: boolean
   modelModifiers?: { number?: boolean; trim?: boolean; lazy?: boolean }
 }>()
 const emit = defineEmits<{
@@ -15,6 +17,19 @@ const emit = defineEmits<{
   search: [event: Event]
 }>()
 const control = ref<InputInstance>()
+const focused = ref(false)
+const displayValue = computed(() => {
+  const value = props.modelValue ?? props.value
+  return props.percentage && !focused.value
+    ? formatPercentageInput(value)
+    : value
+})
+function focus(event: FocusEvent) {
+  focused.value = true
+  // 恢复完整精度后选中数值，避免格式切换导致替换输入变为追加。
+  if (props.percentage)
+    nextTick(() => (event.target as HTMLInputElement).select())
+}
 const dateType = computed(() =>
   ['date', 'datetime-local', 'month'].includes(props.type || ''),
 )
@@ -69,7 +84,9 @@ defineExpose({ focus: () => control.value?.focus() })
         ? (($attrs.step as string | number | undefined) ?? 'any')
         : undefined
     "
-    :model-value="modelValue ?? value"
+    :model-value="displayValue"
+    @focus="focus"
+    @blur="focused = false"
     @update:model-value="update"
     @input="emit('input', eventFor($event, 'input'))"
     @change="emit('change', eventFor($event, 'change'))"

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-// 港股/美股/ETF/黄金 tab：核心行情方块阵 + 市场概况/榜单/行业板块（移植自 investment MarketPage）。
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
+// 港股、美股、ETF 和黄金工作台：报价表、市场概况与板块排名。
 import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getErrorMessage } from '@/business/api/request'
@@ -74,44 +76,63 @@ function openQuote(code: string): void {
   void router.push(detailRoute(kind, code))
 }
 </script>
-
 <template>
-  <div class="pc-page group-page">
-    <!-- 核心行情方块阵置顶 -->
-    <p v-if="error" class="error-box" role="alert">
-      行情加载失败：{{ error }}
-      <el-button class="retry" native-type="button" @click="load">
-        重试
-      </el-button>
-    </p>
-    <div v-else-if="loading" class="mkt-tiles" aria-busy="true">
-      <div v-for="n in 9" :key="n" class="mkt-tile mkt-tile-skel"></div>
+  <section class="desktop-workspace">
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button link type="primary" @click="load">重试</el-button>
+    </el-alert>
+    <DesktopTable
+      :rows="quotes"
+      :loading="loading"
+      title="市场报价"
+      search-placeholder="搜索代码或名称"
+      searchable
+    >
+      <el-table-column
+        prop="代码"
+        label="代码"
+        min-width="140"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="名称"
+        label="名称"
+        min-width="200"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {QuoteRow} -->
+      <el-table-column label="最新价" min-width="150">
+        <template #default="{ row }: { row: QuoteRow }">
+          <span :class="dirClass(row['涨跌幅'])">{{ f2(row['最新价']) }}</span>
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {QuoteRow} -->
+      <el-table-column label="涨跌幅" min-width="150">
+        <template #default="{ row }: { row: QuoteRow }">
+          <span :class="dirClass(row['涨跌幅'])">{{ pct(row['涨跌幅']) }}</span>
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {QuoteRow} -->
+      <el-table-column fixed="right" label="操作" width="150">
+        <template #default="{ row }: { row: QuoteRow }">
+          <el-button link type="primary" @click="openQuote(row['代码'])">
+            查看行情
+          </el-button>
+        </template>
+      </el-table-column>
+    </DesktopTable>
+    <div class="desktop-columns">
+      <MarketOverview v-if="group === 'hk' || group === 'us'" :market="group" />
+      <LimitPanel v-if="group === 'hk' || group === 'us'" :market="group" />
     </div>
-    <!-- 紧凑方块阵：名称 → 价格 → 涨跌幅；全部分组可点击进详情 -->
-    <div v-else-if="quotes.length" class="mkt-tiles">
-      <el-button
-        v-for="(q, idx) in quotes"
-        :key="q['代码']"
-        class="mkt-tile"
-        :style="{ '--rise-delay': `${Math.min(idx, 12) * 40}ms` }"
-        :aria-label="`${q['名称']} 详情`"
-        @click="openQuote(q['代码'])"
-      >
-        <span class="mkt-tile-name">{{ q['名称'] }}</span>
-        <span class="num mkt-tile-price" :class="dirClass(q['涨跌幅'])">
-          {{ f2(q['最新价']) }}
-        </span>
-        <span class="num mkt-tile-pct" :class="dirClass(q['涨跌幅'])">
-          {{ pct(q['涨跌幅']) }}
-        </span>
-      </el-button>
-    </div>
-    <p v-else class="empty">暂无数据</p>
-    <!-- 港股 / 美股页的市场概况（全市场口径涨跌分布） -->
-    <MarketOverview v-if="group === 'hk' || group === 'us'" :market="group" />
-    <!-- 港股/美股涨跌幅榜（对应 A股 tab 的涨跌停模块） -->
-    <LimitPanel v-if="group === 'hk' || group === 'us'" :market="group" />
-    <!-- 美股行业板块（对应 A股 tab 的概念板块模块；港股无行业分类数据源） -->
     <SectorHighlight
       v-if="group === 'us'"
       kind="industry"
@@ -123,5 +144,5 @@ function openQuote(code: string): void {
       :error="usSectorError"
       @retry="loadUsSectors"
     />
-  </div>
+  </section>
 </template>

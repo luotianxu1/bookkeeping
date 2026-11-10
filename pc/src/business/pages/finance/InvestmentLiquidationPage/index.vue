@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { formatAmount } from '@/business/utils/format'
 // 投资清仓明细页：展示指定投资账户已清仓的股票和基金持仓。
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AmountText from '@/business/components/common/AmountText/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   getAccounts,
@@ -33,11 +38,7 @@ const transactions = ref<InvestmentTransaction[]>([])
 let requestVersion = 0
 
 const selectedAccountId = computed(() => parseAccountId(route.params.accountId))
-const backTo = computed(() =>
-  selectedAccountId.value
-    ? `/finance/accounts/investment/${selectedAccountId.value}`
-    : '/finance/accounts/investment',
-)
+
 const sellTransactionsByPositionId = computed(() => {
   const result = new Map<number, InvestmentTransaction[]>()
   for (const transaction of transactions.value) {
@@ -252,8 +253,7 @@ function formatSignedCurrency(value: number | null | undefined) {
 }
 
 function formatSignedRate(value: number | null | undefined) {
-  const amount = Number(value ?? 0)
-  return `${amount >= 0 ? '+' : '-'}${formatAmount(Math.abs(amount))}%`
+  return formatPercentage(value ?? 0, true)
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -272,87 +272,85 @@ function formatDateTime(value: string | null | undefined) {
     minute: '2-digit',
   }).format(date)
 }
-</script>
 
+type DesktopRow = (typeof rows.value)[number]
+</script>
 <template>
-  <section
-    class="pc-page investment-liquidation-page"
-    aria-label="投资清仓明细"
-  >
-    <PageHeader title="清仓明细" :back-to="backTo" back-label="返回投资详情" />
-    <p
+  <section class="desktop-workspace">
+    <PageHeader title="清仓明细"><template #right></template></PageHeader>
+    <el-alert
       v-if="pageError"
-      class="investment-liquidation-message investment-liquidation-message-error"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        { label: '累计收益', value: formatSignedCurrency(totalProfit) },
+        { label: '收益率', value: formatSignedRate(totalProfitRate) },
+        { label: '基金数量', value: fundCount },
+        { label: '股票数量', value: stockCount },
+      ]"
+    />
+    <DesktopTable
+      :rows="rows"
+      :loading="isLoading"
+      title="清仓记录"
+      search-placeholder="搜索产品"
+      searchable
     >
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <section class="investment-liquidation-summary" aria-label="清仓汇总">
-        <div class="liquidation-summary-main">
-          <span>{{ account?.name || '投资账户' }}</span>
+      <el-table-column
+        prop="position.productName"
+        label="产品"
+        min-width="220"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="代码" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ getProductCode(row.position) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="类型" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ getProductTypeLabel(row.position) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="卖出金额" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ formatCurrency(row.sellAmount) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="累计收益" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
           <AmountText
-            tag="strong"
-            class="liquidation-summary-profit"
-            :value="formatSignedCurrency(totalProfit)"
+            :value="formatSignedCurrency(row.position.cumulativeProfit)"
           />
-          <em>{{ fundCount }} 个基金 · {{ stockCount }} 个A股</em>
-        </div>
-        <div class="liquidation-summary-side">
-          <span>收益率</span>
-          <AmountText
-            tag="strong"
-            class="liquidation-summary-rate"
-            :value="formatSignedRate(totalProfitRate)"
-          />
-        </div>
-      </section>
-      <section
-        class="pc-grid investment-liquidation-list"
-        aria-label="清仓产品列表"
-      >
-        <el-card
-          v-for="row in rows"
-          :key="row.position.id"
-          class="pc-record-card investment-liquidation-card"
-          @click="openPositionDetail(row.position.id)"
-          shadow="never"
-        >
-          <div class="pc-toolbar liquidation-card-top">
-            <div class="liquidation-product-main">
-              <strong>{{ row.position.productName || '未命名产品' }}</strong>
-              <span>{{ getProductCode(row.position) }}</span>
-            </div>
-            <div class="liquidation-profit">
-              <span>累计收益</span>
-              <AmountText
-                tag="strong"
-                class="liquidation-profit-value"
-                :value="formatSignedCurrency(row.position.cumulativeProfit)"
-              />
-            </div>
-          </div>
-          <div class="pc-grid liquidation-detail-grid">
-            <div>
-              <span>类型</span>
-              <strong>{{ getProductTypeLabel(row.position) }}</strong>
-            </div>
-            <div>
-              <span>卖出金额</span>
-              <strong>{{ formatCurrency(row.sellAmount) }}</strong>
-            </div>
-          </div>
-          <div class="liquidation-card-bottom">
-            <span>清仓时间</span>
-            <strong>
-              {{ formatDateTime(row.lastSellAt || row.position.updatedAt) }}
-            </strong>
-          </div>
-        </el-card>
-        <p v-if="rows.length === 0" class="investment-liquidation-empty">
-          暂无清仓投资产品
-        </p>
-      </section>
-    </template>
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="清仓时间" min-width="180">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ formatDateTime(row.lastSellAt || row.position.updatedAt) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column fixed="right" label="操作" width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          <el-button
+            link
+            type="primary"
+            @click="openPositionDetail(row.position.id)"
+          >
+            查看详情
+          </el-button>
+        </template>
+      </el-table-column>
+    </DesktopTable>
   </section>
 </template>

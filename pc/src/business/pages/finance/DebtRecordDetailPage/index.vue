@@ -1,9 +1,15 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import {
   getAccount,
   getDebtRecords,
@@ -42,17 +48,11 @@ const remainingAmount = computed(() =>
 const isSettled = computed(() => remainingAmount.value <= 0)
 const progressPercent = computed(() =>
   principalAmount.value > 0
-    ? Math.min(
-        100,
-        Math.round((settledAmount.value / principalAmount.value) * 100),
-      )
+    ? Math.min(100, (settledAmount.value / principalAmount.value) * 100)
     : 0,
 )
 const detailTitle = computed(() =>
   isReceivable.value ? '借出详情' : '借入详情',
-)
-const detailSubtitle = computed(() =>
-  principalRecord.value ? formatDate(principalRecord.value.occurredAt) : '',
 )
 
 watch(
@@ -154,108 +154,69 @@ function formatDate(value: string) {
 function formatRecordAmount(record: DebtRecord) {
   return `${actionLabel.value} ${formatCurrency(Number(record.amount ?? 0))}`
 }
-</script>
 
+type DesktopRow = (typeof repaymentRecords.value)[number]
+</script>
 <template>
-  <section class="pc-page debt-record-detail-page" aria-label="债务项详情">
-    <header class="debt-record-detail-header">
-      <PageHeader
-        :title="detailTitle"
-        :back-to="`/finance/accounts/debt/${accountId}`"
-        :back-label="`返回债务详情`"
-      />
-    </header>
-    <p
+  <section class="desktop-workspace">
+    <PageHeader :title="detailTitle"><template #right></template></PageHeader>
+    <el-alert
       v-if="pageError"
-      class="debt-record-detail-message debt-record-detail-message-error"
-    >
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else-if="principalRecord">
-      <section class="debt-record-detail-summary" aria-label="债务项汇总">
-        <div class="debt-record-detail-summary-top">
-          <div>
-            <h2>{{ account?.name || '债务账户' }}</h2>
-            <p>{{ detailSubtitle }}</p>
-          </div>
-          <span
-            class="debt-record-detail-status"
-            :class="{ 'is-settled': isSettled }"
-          >
-            {{ isSettled ? '已结清' : `待${actionLabel}` }}
-          </span>
-        </div>
-        <AmountText
-          tag="p"
-          class="debt-record-detail-remaining"
-          :value="formatCurrency(remainingAmount)"
-          tone="inherit"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <template v-if="principalRecord">
+      <MetricStrip
+        :items="[
+          { label: '本金', value: formatCurrency(principalAmount) },
+          { label: '已结算', value: formatCurrency(settledAmount) },
+          { label: '待结算', value: formatCurrency(remainingAmount) },
+          { label: '还款记录', value: repaymentRecords.length },
+        ]"
+      />
+      <PagePanel title="结清进度">
+        <el-progress
+          :format="formatPercentage"
+          :percentage="progressPercent"
+          :status="isSettled ? 'success' : undefined"
         />
-        <p class="debt-record-detail-caption">
-          {{
-            isSettled
-              ? '本笔债务已全部结清'
-              : `还可${actionLabel} ${formatCurrency(remainingAmount)}`
-          }}
-        </p>
-        <div class="debt-record-detail-metrics">
-          <div>
-            <span>总金额</span>
-            <strong>{{ formatCurrency(principalAmount) }}</strong>
-          </div>
-          <div>
-            <span>已{{ actionLabel }}</span>
-            <strong>{{ formatCurrency(settledAmount) }}</strong>
-          </div>
-          <div>
-            <span>记录数</span>
-            <strong>{{ repaymentRecords.length }} 笔</strong>
-          </div>
-        </div>
-        <div class="debt-record-detail-progress" aria-label="结清进度">
-          <div class="debt-record-detail-progress-track">
-            <span :style="{ width: `${progressPercent}%` }"></span>
-          </div>
-          <span>{{ progressPercent }}% 已结清</span>
-        </div>
-      </section>
-      <section
-        class="pc-grid debt-record-detail-list"
-        aria-label="还款收款记录"
+      </PagePanel>
+      <DesktopTable
+        :rows="repaymentRecords"
+        :loading="isLoading"
+        title="结算记录"
+        search-placeholder="搜索账户、备注"
+        searchable
       >
-        <div class="debt-record-detail-list-head">
-          <strong>全部{{ actionLabel }}记录</strong>
-          <span>{{ repaymentRecords.length }} 笔</span>
-        </div>
-        <p
-          v-if="repaymentRecords.length === 0"
-          class="debt-record-detail-empty"
-        >
-          暂无{{ actionLabel }}记录
-        </p>
-        <el-card
-          v-for="record in repaymentRecords"
-          v-else
-          :key="record.id"
-          class="pc-record-card debt-record-detail-item"
-          shadow="never"
-        >
-          <div>
-            <strong>{{ actionLabel }}</strong>
-            <span>{{ formatDate(record.occurredAt) }}</span>
-            <p v-if="record.remark?.trim()">{{ record.remark.trim() }}</p>
-            <small>
-              现金账户：{{
-                record.fundingAccountName?.trim() || '未关联现金账户'
-              }}
-            </small>
-          </div>
-          <strong class="debt-record-detail-item-amount">
-            {{ formatRecordAmount(record) }}
-          </strong>
-        </el-card>
-      </section>
+        <!-- @vue-generic {DesktopRow} -->
+        <el-table-column label="发生时间" min-width="180">
+          <template #default="{ row }: { row: DesktopRow }">
+            {{ formatDate(row.occurredAt) }}
+          </template>
+        </el-table-column>
+        <!-- @vue-generic {DesktopRow} -->
+        <el-table-column label="金额" min-width="150">
+          <template #default="{ row }: { row: DesktopRow }">
+            {{ formatRecordAmount(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="fundingAccountName"
+          label="现金账户"
+          min-width="200"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="remark"
+          label="备注"
+          min-width="220"
+          sortable="custom"
+          show-overflow-tooltip
+        />
+      </DesktopTable>
     </template>
   </section>
 </template>

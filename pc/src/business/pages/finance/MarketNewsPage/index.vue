@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 import { computed, onMounted, ref, watch } from 'vue'
-import BackToTopButton from '@/business/components/common/BackToTopButton/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
   getMarketNews,
@@ -33,30 +33,7 @@ const isRefreshing = ref(false)
 const pageError = ref('')
 let requestId = 0
 
-const currentCategoryLabel = computed(
-  () =>
-    categoryOptions.find((option) => option.value === activeCategory.value)
-      ?.label ?? '7x24',
-)
 const newsItems = computed(() => marketNews.value?.items ?? [])
-const summaryText = computed(() =>
-  newsItems.value.length > 0
-    ? `最近 ${newsItems.value.length} 条 ${marketNews.value?.categoryLabel || currentCategoryLabel.value}快讯`
-    : `${marketNews.value?.categoryLabel || currentCategoryLabel.value}快讯加载中`,
-)
-const updatedAtText = computed(() => {
-  const value = marketNews.value?.updatedAt
-  if (!value) {
-    return ''
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return ''
-  }
-
-  return `更新于 ${formatDateTime(date)}`
-})
 
 onMounted(() => {
   void loadMarketNews()
@@ -114,84 +91,70 @@ function formatPublishedAt(value: string | null) {
 
   return formatDateTime(date)
 }
-</script>
 
+type NewsRow = (typeof newsItems.value)[number]
+</script>
 <template>
-  <section class="pc-page market-news-page" aria-label="市场快讯">
-    <BackToTopButton />
-    <header class="market-news-header">
-      <PageHeader
-        title="市场快讯"
-        back-to="/finance/more-features"
-        back-label="返回更多功能"
-      >
-        <template #right>
-          <CommonHeaderRefreshButton
-            label="刷新市场快讯"
-            :loading="isRefreshing"
-            @click="loadMarketNews(true)"
-          />
-        </template>
-      </PageHeader>
-    </header>
-    <el-card
-      class="pc-record-card market-news-summary-card"
-      aria-label="市场快讯概览"
-      shadow="never"
+  <section class="desktop-workspace">
+    <PageHeader title="市场快讯"><template #right></template></PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <DesktopTable
+      :rows="newsItems"
+      :loading="isLoading"
+      title="实时快讯"
+      search-placeholder="搜索新闻标题"
+      searchable
     >
-      <div class="market-news-summary-main">
-        <p>{{ marketNews?.categoryLabel || currentCategoryLabel }}市场快讯</p>
-        <strong>{{ summaryText }}</strong>
-        <span>{{ updatedAtText || '等待最新快讯更新' }}</span>
-      </div>
-      <div class="market-news-summary-side">
-        <span>来源</span>
-        <strong>{{ marketNews?.source || '东方财富' }}</strong>
-      </div>
-    </el-card>
-    <section class="market-news-category-bar" aria-label="快讯分类">
-      <el-button
-        v-for="option in categoryOptions"
-        :key="option.value"
-        :class="[
-          'market-news-category-chip',
-          { active: option.value === activeCategory },
-        ]"
-        native-type="button"
-        @click="activeCategory = option.value"
-      >
-        {{ option.label }}
-      </el-button>
-    </section>
-    <p v-if="pageError" class="market-news-message market-news-message-error">
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" text="市场快讯加载中..." />
-    <section v-else class="pc-grid market-news-list" aria-label="快讯列表">
-      <a
-        v-for="item in newsItems"
-        :key="item.code"
-        class="market-news-card"
-        :href="item.url"
-        target="_blank"
-        rel="noreferrer"
-      >
-        <div class="pc-toolbar market-news-card-top">
-          <span class="market-news-time">
-            {{ formatPublishedAt(item.publishedAt) }}
-          </span>
-          <span v-if="item.relatedStockCount > 0" class="market-news-related">
-            关联 {{ item.relatedStockCount }} 个标的
-          </span>
-        </div>
-        <strong :class="{ highlight: item.highlight }">{{ item.title }}</strong>
-        <p>{{ item.summary }}</p>
-        <div class="market-news-card-bottom">
-          <span>{{ item.commentCount }} 评论</span>
-          <span>查看原文</span>
-        </div>
-      </a>
-      <p v-if="newsItems.length === 0" class="market-news-message">暂无快讯</p>
-    </section>
+      <template #toolbar>
+        <el-select v-model="activeCategory" aria-label="快讯分类">
+          <el-option
+            v-for="option in categoryOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
+      </template>
+      <!-- @vue-generic {NewsRow} -->
+      <el-table-column label="发布时间" min-width="180">
+        <template #default="{ row }: { row: NewsRow }">
+          {{ formatPublishedAt(row.publishedAt) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {NewsRow} -->
+      <el-table-column label="标题" min-width="500">
+        <template #default="{ row }: { row: NewsRow }">
+          <a
+            :href="row.url"
+            target="_blank"
+            rel="noreferrer"
+            class="desktop-news-title"
+          >
+            {{ row.title }}
+          </a>
+          <p class="desktop-note">{{ row.summary }}</p>
+        </template>
+      </el-table-column>
+      <el-table-column
+        prop="relatedStockCount"
+        label="关联标的"
+        min-width="110"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="commentCount"
+        label="评论"
+        min-width="90"
+        sortable="custom"
+        show-overflow-tooltip
+      />
+    </DesktopTable>
   </section>
 </template>

@@ -1,10 +1,16 @@
 <script setup lang="ts">
+import { formatPercentage } from '@/business/utils/percentage'
+
+import MetricStrip from '@/business/components/MetricStrip.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
+import DesktopTable from '@/business/components/DesktopTable.vue'
+
 // 按月管理总预算和分类预算。
 import { computed, onMounted, ref, watch } from 'vue'
 import CategoryBudgets from './CategoryBudgets.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
@@ -79,15 +85,6 @@ function getProgressPercent(budget: MonthlyBudget | null) {
   }
 
   return Math.min(Math.max(Number(budget.usagePercent || 0), 0), 100)
-}
-
-function getBudgetMeta(budget: MonthlyBudget) {
-  const usedText = `已使用 ${formatCurrency(budget.usedAmount)}`
-  if (budget.remainingAmount >= 0) {
-    return `${usedText}，剩余 ${formatCurrency(budget.remainingAmount)}`
-  }
-
-  return `${usedText}，超出 ${formatCurrency(Math.abs(budget.remainingAmount))}`
 }
 
 function openBudgetModal() {
@@ -231,104 +228,100 @@ function showFeedback(message: string, type: 'success' | 'error') {
   feedbackType.value = type
   showFeedbackModal.value = true
 }
-</script>
 
+type DesktopRow = (typeof historyBudgets.value)[number]
+</script>
 <template>
-  <section class="pc-page budget-management-page" aria-label="预算管理">
+  <section class="desktop-workspace">
+    <PageHeader title="预算管理">
+      <template #right>
+        <CommonInput
+          v-model="selectedMonth"
+          label="查看月份"
+          aria-label="查看月份"
+          input-type="month"
+        />
+        <el-button
+          type="danger"
+          plain
+          :disabled="!currentBudget"
+          @click="openDeleteConfirmModal"
+        >
+          删除预算
+        </el-button>
+        <el-button type="primary" @click="openBudgetModal">
+          {{ currentBudget ? '修改预算' : '新增预算' }}
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="pageError"
+      :title="pageError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <MetricStrip
+      :items="[
+        {
+          label: '月总预算',
+          value: currentBudget
+            ? formatCurrency(currentBudget.amount)
+            : '未设置',
+        },
+        {
+          label: '已使用',
+          value: currentBudget ? formatCurrency(currentBudget.usedAmount) : '—',
+        },
+        {
+          label: '剩余预算',
+          value: currentBudget
+            ? formatCurrency(currentBudget.remainingAmount)
+            : '—',
+        },
+      ]"
+    />
+    <PagePanel title="预算执行">
+      <el-progress
+        :format="formatPercentage"
+        :percentage="getProgressPercent(currentBudget)"
+      />
+      <p class="desktop-note">
+        退款和报销按到账月份冲减支出；分类预算单独统计。
+      </p>
+    </PagePanel>
+    <CategoryBudgets :month="currentMonthDate" />
+    <DesktopTable :rows="historyBudgets" :loading="isLoading" title="历史预算">
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="月份" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ formatMonth(row.budgetMonth) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="预算" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ formatCurrency(row.amount) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="已使用" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ formatCurrency(row.usedAmount) }}
+        </template>
+      </el-table-column>
+      <!-- @vue-generic {DesktopRow} -->
+      <el-table-column label="剩余" min-width="150">
+        <template #default="{ row }: { row: DesktopRow }">
+          {{ formatCurrency(row.remainingAmount) }}
+        </template>
+      </el-table-column>
+    </DesktopTable>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
       :type="feedbackType"
     />
-    <PageHeader
-      title="预算管理"
-      back-to="/finance/more-features"
-      back-label="返回更多功能"
-    />
-    <CommonInput v-model="selectedMonth" label="查看月份" input-type="month" />
-    <p v-if="pageError" class="budget-message budget-message-error">
-      {{ pageError }}
-    </p>
-    <CommonLoading v-else-if="isLoading" />
-    <template v-else>
-      <el-card
-        class="pc-record-card budget-summary-card"
-        aria-label="本月预算"
-        shadow="never"
-      >
-        <div class="budget-summary-top">
-          <span>
-            {{
-              currentBudget
-                ? formatMonth(currentBudget.budgetMonth)
-                : formatMonth(currentMonthDate)
-            }}预算
-          </span>
-          <strong>月总预算</strong>
-        </div>
-        <strong class="budget-amount">
-          {{ currentBudget ? formatCurrency(currentBudget.amount) : '未设置' }}
-        </strong>
-        <p class="budget-meta">
-          {{
-            currentBudget
-              ? getBudgetMeta(currentBudget)
-              : '设置本月预算后，可查看已使用和剩余金额'
-          }}
-        </p>
-        <div class="budget-progress" aria-hidden="true">
-          <span
-            :style="{ width: `${getProgressPercent(currentBudget)}%` }"
-          ></span>
-        </div>
-        <div class="pc-toolbar budget-actions">
-          <el-button
-            native-type="button"
-            class="budget-action-primary"
-            @click="openBudgetModal"
-            type="primary"
-          >
-            {{ currentBudget ? '修改预算' : '新增预算' }}
-          </el-button>
-          <el-button
-            native-type="button"
-            class="budget-action-danger"
-            :disabled="!currentBudget"
-            @click="openDeleteConfirmModal"
-            type="danger"
-            plain
-          >
-            删除预算
-          </el-button>
-        </div>
-      </el-card>
-      <p class="budget-rule-tip">
-        总预算包含现金账户支出；退款和报销到账在到账月份冲减支出。分类预算单独统计，不会重复叠加到总预算。
-      </p>
-      <CategoryBudgets :month="currentMonthDate" />
-      <h2 class="budget-section-title">历史预算</h2>
-      <section
-        v-if="historyBudgets.length > 0"
-        class="pc-grid budget-history-list"
-        aria-label="历史预算"
-      >
-        <el-card
-          v-for="item in historyBudgets"
-          :key="item.id"
-          class="pc-record-card budget-history-item"
-          shadow="never"
-        >
-          <div class="budget-history-top">
-            <strong>{{ formatMonth(item.budgetMonth) }}</strong>
-            <span>{{ formatCurrency(item.amount) }}</span>
-          </div>
-          <p :class="{ over: item.remainingAmount < 0 }">
-            {{ getBudgetMeta(item) }}
-          </p>
-        </el-card>
-      </section>
-      <p v-else class="budget-message">暂无历史预算</p>
-    </template>
     <CommonModal v-model="showBudgetModal" :title="budgetModalTitle">
       <el-form
         class="budget-form"

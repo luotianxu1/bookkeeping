@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import DesktopInput from '@/business/components/DesktopInput.vue'
+import CommonInput from '@/business/components/common/CommonInput/index.vue'
+import PagePanel from '@/business/components/PagePanel.vue'
 
 // 汇率换算页：输入支付金额并进行币种换算展示。
 import { computed, onMounted, ref, watch } from 'vue'
 import { getExchangeRate } from '@/business/api/modules/finance'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonSelect, {
   type CommonSelectOption,
 } from '@/business/components/common/CommonSelect/index.vue'
@@ -109,60 +110,46 @@ async function loadExchangeRate() {
   }
 }
 </script>
-
 <template>
-  <section class="pc-page exchange-rate-page" aria-label="汇率换算">
-    <PageHeader title="汇率换算" back-label="返回更多功能" />
-    <el-card
-      class="pc-record-card converter-card"
-      aria-label="汇率转换器"
-      shadow="never"
-    >
-      <el-card class="pc-record-card currency-card" shadow="never">
-        <p>支付币种</p>
-        <div class="currency-row">
-          <div class="currency-select">
+  <section class="desktop-workspace">
+    <PageHeader title="汇率换算">
+      <template #right>
+        <el-button @click="swapCurrencies">交换币种</el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="exchangeRateError"
+      :title="exchangeRateError"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <div class="desktop-columns">
+      <PagePanel title="支付金额">
+        <el-form label-position="top">
+          <div class="desktop-form-grid">
             <CommonSelect
               v-model="fromCurrency"
               label="支付币种"
               :options="currencySelectOptions"
             />
-          </div>
-          <DesktopInput
-            v-model="fromAmount"
-            type="text"
-            inputmode="decimal"
-            aria-label="支付金额"
-          />
-        </div>
-      </el-card>
-      <div class="mid-row">
-        <span>{{ rateText }}</span>
-        <el-button native-type="button" @click="swapCurrencies">切换</el-button>
-      </div>
-      <el-card class="pc-record-card currency-card" shadow="never">
-        <p>到账币种</p>
-        <div class="currency-row">
-          <div class="currency-select">
-            <CommonSelect
-              v-model="toCurrency"
-              label="到账币种"
-              :options="currencySelectOptions"
+            <CommonInput
+              v-model="fromAmount"
+              label="金额"
+              input-mode="decimal"
             />
           </div>
-          <strong>{{ convertedAmount }}</strong>
-        </div>
-      </el-card>
-      <p
-        v-if="exchangeRateError"
-        class="exchange-message exchange-message-error"
-      >
-        {{ exchangeRateError }}
-      </p>
-      <CommonLoading v-else-if="isLoadingRate" text="汇率加载中..." />
-      <p v-else-if="updatedAtText" class="exchange-message">
-        {{ updatedAtText }}
-      </p>
-    </el-card>
+        </el-form>
+      </PagePanel>
+      <PagePanel title="换算结果">
+        <CommonSelect
+          v-model="toCurrency"
+          label="到账币种"
+          :options="currencySelectOptions"
+        />
+        <div class="desktop-converted-amount">{{ convertedAmount }}</div>
+        <p class="desktop-note">{{ rateText }} · {{ updatedAtText }}</p>
+      </PagePanel>
+    </div>
   </section>
 </template>

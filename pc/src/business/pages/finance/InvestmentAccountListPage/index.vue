@@ -6,16 +6,14 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonHeaderActionButton from '@/business/components/common/CommonHeaderActionButton/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
-import AccountIcon from '@/business/components/common/AccountIcon/index.vue'
-import FloatingAddButton from '@/business/components/common/FloatingAddButton/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
+
 import {
   createAccount,
   deleteAccount,
@@ -159,39 +157,6 @@ const investmentAccountCards = computed<InvestmentAccountCard[]>(() =>
   }),
 )
 
-const totalSummaryProfit = computed(
-  () =>
-    Number(summary.value.cumulativeProfit ?? 0) +
-    Number(summary.value.holdingProfit ?? 0),
-)
-const totalSummaryProfitRate = computed(() => {
-  const currentCostAmount =
-    Number(summary.value.totalMarketValue ?? 0) -
-    Number(summary.value.holdingProfit ?? 0)
-  if (!Number.isFinite(currentCostAmount) || currentCostAmount <= 0) {
-    return 0
-  }
-  return (totalSummaryProfit.value / currentCostAmount) * 100
-})
-const summaryDayProfitText = computed(() =>
-  summary.value.dayProfit === null || summary.value.dayProfit === undefined
-    ? '--'
-    : formatMetricAmount(summary.value.dayProfit),
-)
-const summaryDayProfitRateText = computed(() =>
-  summary.value.dayProfitRate === null ||
-  summary.value.dayProfitRate === undefined
-    ? '--'
-    : `${formatMetricAmount(summary.value.dayProfitRate)}%`,
-)
-
-const summaryMetrics = computed(() => [
-  { label: '持仓盈亏', value: summary.value.holdingProfit, isRate: false },
-  { label: '持仓盈亏率', value: summary.value.holdingProfitRate, isRate: true },
-  { label: '累计总收益', value: totalSummaryProfit.value, isRate: false },
-  { label: '累计总收益率', value: totalSummaryProfitRate.value, isRate: true },
-])
-
 onMounted(() => {
   void loadInvestmentAccounts()
 })
@@ -253,10 +218,6 @@ function shouldDisplayHolding(position: InvestmentPosition) {
   return (
     hasConfirmedHoldingQuantity(position) || isPendingSubscription(position)
   )
-}
-
-function toggleManageMode() {
-  isManageMode.value = !isManageMode.value
 }
 
 function openCreateAccountModal() {
@@ -392,23 +353,6 @@ async function confirmDelete() {
   }
 }
 
-function formatMetricValue(value: number | null | undefined, isRate: boolean) {
-  if (value === null || value === undefined) {
-    return '--'
-  }
-  if (isRate) {
-    return `${formatMetricAmount(value)}%`
-  }
-  return formatMetricAmount(value)
-}
-
-function formatMetricAmount(value: number, digits = 2) {
-  return new Intl.NumberFormat('zh-CN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(value)
-}
-
 function formatCurrency(value: number) {
   return `¥${formatAmount(value)}`
 }
@@ -433,7 +377,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof investmentAccountCards.value)[number]
 </script>
 <template>
-  <section class="pc-page">
+  <section class="desktop-workspace desktop-list-workspace">
     <PageHeader title="投资账户">
       <template #right>
         <el-button type="primary" @click="openCreateAccountModal">
@@ -448,11 +392,18 @@ type DesktopRow = (typeof investmentAccountCards.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable :rows="investmentAccountCards" :loading="isLoading">
+    <DesktopTable
+      title="投资账户列表"
+      searchable
+      search-placeholder="账户名称"
+      :rows="investmentAccountCards"
+      :loading="isLoading"
+    >
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column
         label="账户"
         prop="name"
+        sortable="custom"
         min-width="200"
         show-overflow-tooltip
       />
@@ -478,6 +429,7 @@ type DesktopRow = (typeof investmentAccountCards.value)[number]
       <el-table-column
         label="股票数"
         prop="stockCount"
+        sortable="custom"
         min-width="100"
         show-overflow-tooltip
       />
@@ -485,6 +437,7 @@ type DesktopRow = (typeof investmentAccountCards.value)[number]
       <el-table-column
         label="基金数"
         prop="fundCount"
+        sortable="custom"
         min-width="100"
         show-overflow-tooltip
       />

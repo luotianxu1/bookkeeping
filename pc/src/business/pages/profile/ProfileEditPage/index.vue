@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import PagePanel from '@/business/components/PagePanel.vue'
+
 import { onMounted, ref } from 'vue'
-import CommonButton from '@/business/components/common/CommonButton/index.vue'
+
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonFeedback from '@/business/components/common/CommonFeedback/index.vue'
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
+
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import { getCurrentUser, updateProfile } from '@/business/api/modules/auth'
 import { getErrorMessage } from '@/business/api/request'
@@ -49,34 +51,44 @@ async function save() {
   }
 }
 </script>
-
 <template>
-  <section class="pc-page account-settings-page" aria-label="个人资料">
-    <PageHeader title="个人资料" back-to="/profile" prefer-back-to />
-    <CommonLoading v-if="loading" text="正在加载个人资料..." />
-    <div v-else class="settings-content">
-      <el-form
-        class="settings-card settings-form"
-        @submit.prevent="save"
-        label-position="top"
-      >
-        <CommonInput
-          :model-value="user?.username ?? ''"
-          label="用户名"
-          readonly
-        />
-        <CommonInput
-          v-model="displayName"
-          label="昵称"
-          placeholder="请输入昵称"
-          :disabled="saving"
-        />
-        <p v-if="error" class="security-error" role="alert">{{ error }}</p>
-        <CommonButton type="submit" :disabled="saving">
-          {{ saving ? '保存中...' : '保存' }}
-        </CommonButton>
+  <section class="desktop-workspace">
+    <PageHeader title="个人资料">
+      <template #right>
+        <el-button
+          type="primary"
+          :loading="saving"
+          :disabled="loading"
+          @click="save"
+        >
+          保存资料
+        </el-button>
+      </template>
+    </PageHeader>
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      :closable="false"
+      show-icon
+    ></el-alert>
+    <PagePanel title="基本信息">
+      <el-form label-position="top">
+        <div class="desktop-form-grid">
+          <CommonInput
+            :model-value="user?.username ?? ''"
+            label="用户名"
+            readonly
+          />
+          <CommonInput
+            v-model="displayName"
+            label="昵称"
+            placeholder="请输入昵称"
+            :disabled="saving"
+          />
+        </div>
       </el-form>
-    </div>
+    </PagePanel>
     <CommonFeedback v-model="saved" message="个人资料已保存" type="success" />
   </section>
 </template>
