@@ -12,4 +12,9 @@ import router from './router'
 import { initTheme } from '@/business/utils/theme'
 initTheme()
 const app = createApp(App)
+// 全局兜底：布局层（AdminLayout）内有页面级错误边界负责展示重试 UI，
+// 这里兜住布局之外的错误（登录页等），保证有日志可查、不静默失败
+app.config.errorHandler = (err, _instance, info) => {
+  console.error(`[Life Hub] 未处理错误（${info}）`, err)
+}
 app.use(router).mount('#app')

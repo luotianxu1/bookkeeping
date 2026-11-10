@@ -48,6 +48,7 @@ const parsedAmount = computed(() => {
 })
 
 const convertedAmount = computed(() => {
+  if (!Number.isFinite(rate.value) || rate.value <= 0) return '—'
   const value = parsedAmount.value * rate.value
   return value.toLocaleString('en-US', {
     minimumFractionDigits: 2,
@@ -58,6 +59,9 @@ const convertedAmount = computed(() => {
 const rateText = computed(() => {
   if (isLoadingRate.value && !rate.value) {
     return '汇率加载中...'
+  }
+  if (!Number.isFinite(rate.value) || rate.value <= 0) {
+    return '汇率暂不可用'
   }
   return `1 ${fromCode.value} = ${rate.value.toFixed(4)} ${toCode.value}`
 })
@@ -95,6 +99,7 @@ async function loadExchangeRate() {
       return
     }
     rate.value = Number(result.rate)
+    if (!Number.isFinite(rate.value)) rate.value = 0
     updatedAt.value = result.updatedAt
   } catch (error) {
     if (currentRequestId !== requestId) {
@@ -111,7 +116,7 @@ async function loadExchangeRate() {
 }
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace desktop-workspace--form">
     <PageHeader title="汇率换算">
       <template #right>
         <el-button @click="swapCurrencies">交换币种</el-button>

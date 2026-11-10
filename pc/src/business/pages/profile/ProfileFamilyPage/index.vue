@@ -136,7 +136,7 @@ async function handleMemberAction(member: FamilyMember) {
 type MemberRow = (typeof members.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace desktop-workspace--form">
     <PageHeader title="家庭成员"><template #right></template></PageHeader>
     <el-alert
       v-if="errorMessage"

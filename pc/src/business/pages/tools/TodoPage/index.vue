@@ -53,22 +53,26 @@ const feedbackType = ref<'success' | 'error'>('success')
 const expandedTodoId = ref<number | null>(reminderTargetId)
 const editingTodo = ref<TodoItem | null>(null)
 const deletingTodo = ref<TodoItem | null>(null)
+// 接口异常返回非数组时按空列表兜底，避免指标与列表渲染出 NaN 或整页报错
+const safeTodoItems = computed(() =>
+  Array.isArray(todoItems.value) ? todoItems.value : [],
+)
 const formTitle = ref('')
 const formDueAt = ref(buildDefaultDateTimeLocal())
 const formRemark = ref('')
 
 const pendingItems = computed(() =>
-  todoItems.value.filter((item) => !isCompleted(item)),
+  safeTodoItems.value.filter((item) => !isCompleted(item)),
 )
 const completedCount = computed(
-  () => todoItems.value.length - pendingItems.value.length,
+  () => safeTodoItems.value.length - pendingItems.value.length,
 )
 const dueTodayCount = computed(
   () => pendingItems.value.filter((item) => isToday(item.dueAt)).length,
 )
 
 const visibleItems = computed(() => {
-  const filtered = todoItems.value.filter((item) => {
+  const filtered = safeTodoItems.value.filter((item) => {
     if (activeTab.value === 'today') {
       return isToday(item.dueAt)
     }

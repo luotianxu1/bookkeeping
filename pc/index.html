@@ -3,8 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#4f46e5" />
+    <meta name="theme-color" content="#141a29" />
     <title>Life Hub · 管理工作台</title>
+    <script>
+      // 主题预应用：与 theme.ts 同逻辑，避免暗色用户冷启动时白闪
+      ;(function () {
+        try {
+          var mode = localStorage.getItem('pc-theme-mode')
+          if (mode !== 'light' && mode !== 'dark') {
+            mode = window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+          }
+          var root = document.documentElement
+          root.classList.toggle('dark', mode === 'dark')
+          root.dataset.theme = mode
+          root.style.colorScheme = mode
+        } catch (e) {
+          /* ignore */
+        }
+      })()
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&display=swap"
+    />
   </head>
   <body>
     <div id="app"></div>

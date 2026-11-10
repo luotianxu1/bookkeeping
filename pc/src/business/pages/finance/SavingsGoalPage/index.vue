@@ -4,14 +4,15 @@ import { formatPercentage } from '@/business/utils/percentage'
 import DesktopTable from '@/business/components/DesktopTable.vue'
 
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
+import AmountText from '@/business/components/common/AmountText/index.vue'
 
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 
-import CommonLoading from '@/business/components/common/CommonLoading/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import {
   getAccounts,
@@ -19,7 +20,6 @@ import {
   createSavingsGoal,
   updateSavingsGoal,
   deleteSavingsGoal,
-  getSavingsGoalEntries,
   addSavingsGoalEntry,
   type Account,
   type SavingsGoal,
@@ -31,6 +31,7 @@ import { useAsyncSection } from '@/business/composables/useAsyncSection'
 import { useIdempotentSubmit } from '@/business/composables/useIdempotentSubmit'
 import { useVisibilityPolling } from '@/business/composables/useVisibilityPolling'
 
+const router = useRouter()
 const goals = ref<SavingsGoal[]>([])
 const accounts = ref<Account[]>([])
 const selectedFilter = ref('all')
@@ -133,24 +134,6 @@ const entryOpen = computed({
 const entryTitle = computed(() =>
   entryType.value === 'deposit' ? '存入' : '取出',
 )
-const showHistory = ref(false),
-  historyGoal = ref<SavingsGoal | null>(null)
-const historyRows = ref<SavingsGoalEntry[]>([]),
-  historyCursor = ref<number | null>(null),
-  historyNext = ref<number | null>(null)
-const history = useAsyncSection(
-  (signal) =>
-    getSavingsGoalEntries(historyGoal.value!.id, historyCursor.value, signal),
-  (page) => {
-    historyRows.value =
-      historyCursor.value === null
-        ? page.entries
-        : [...historyRows.value, ...page.entries]
-    historyNext.value = page.nextBeforeId
-  },
-  '存取记录加载失败',
-)
-
 function openEntry(goal: SavingsGoal, type: SavingsGoalEntry['type']) {
   entryGoal.value = goal
   entryType.value = type
@@ -214,18 +197,7 @@ async function saveEntry() {
   }
 }
 function openHistory(goal: SavingsGoal) {
-  history.reset()
-  historyGoal.value = goal
-  historyRows.value = []
-  historyCursor.value = null
-  historyNext.value = null
-  showHistory.value = true
-  void history.run()
-}
-function loadMoreHistory() {
-  if (!historyNext.value || history.loading.value) return
-  historyCursor.value = historyNext.value
-  void history.run()
+  void router.push({ name: 'finance-savings-goal-entries', params: { id: goal.id } })
 }
 
 function money(value: number | null, currency: string) {
@@ -381,7 +353,7 @@ type DesktopRow = (typeof visibleGoals.value)[number]
       <!-- @vue-generic {DesktopRow} -->
       <el-table-column label="已存金额" min-width="140">
         <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.currentAmount, row.currencyCode) }}
+          <AmountText :value="money(row.currentAmount, row.currencyCode)" />
         </template>
       </el-table-column>
       <!-- @vue-generic {DesktopRow} -->
@@ -431,7 +403,7 @@ type DesktopRow = (typeof visibleGoals.value)[number]
               取出
             </el-button>
             <el-button link type="primary" @click="openHistory(row)">
-              记录
+              存取记录
             </el-button>
             <el-button link type="primary" @click="openForm(row)">
               编辑
@@ -612,44 +584,6 @@ type DesktopRow = (typeof visibleGoals.value)[number]
           </CommonButton>
         </div>
       </template>
-    </CommonModal>
-    <CommonModal
-      v-model="showHistory"
-      :title="`${historyGoal?.name ?? ''} · 存取记录`"
-      @close="history.reset"
-    >
-      <div class="pc-form-grid savings-form">
-        <CommonLoading v-if="history.loading.value && !historyRows.length" />
-        <p v-if="history.error.value" class="error" role="alert">
-          {{ history.error.value }}
-          <el-button @click="history.run">重试</el-button>
-        </p>
-        <p v-if="history.ready.value && !historyRows.length" class="empty">
-          暂无存取记录
-        </p>
-        <div v-for="entry in historyRows" :key="entry.id" class="entry-row">
-          <div class="entry-summary">
-            <strong>{{ entry.type === 'deposit' ? '存入' : '取出' }}</strong>
-            <span :class="entry.type">
-              {{ entry.type === 'deposit' ? '+' : '−'
-              }}{{ money(entry.amount, historyGoal?.currencyCode ?? 'CNY') }}
-            </span>
-          </div>
-          <span class="hint">
-            {{ entry.occurredOn
-            }}{{ entry.transactionId ? ' · 关联记账' : ' · 手动分配' }}
-          </span>
-          <p v-if="entry.remark" class="remark">{{ entry.remark }}</p>
-        </div>
-        <CommonButton
-          v-if="historyNext"
-          variant="secondary"
-          :disabled="history.loading.value"
-          @click="loadMoreHistory"
-        >
-          {{ history.loading.value ? '加载中…' : '加载更多' }}
-        </CommonButton>
-      </div>
     </CommonModal>
   </section>
 </template>

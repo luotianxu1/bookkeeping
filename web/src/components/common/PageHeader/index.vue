@@ -28,7 +28,10 @@ const parentRoutePath = computed(() => {
 
 function goBack() {
   if (props.preferBackTo && props.backTo) {
-    router.push(props.backTo)
+    const target = router.resolve(props.backTo).fullPath
+    // 层级返回优先复用上一条历史；直达或来自其他页面时替换当前地址，避免返回形成循环。
+    if (router.options.history.state.back === target) router.back()
+    else router.replace(target)
     return
   }
 

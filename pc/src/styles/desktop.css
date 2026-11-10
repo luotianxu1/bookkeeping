@@ -9,6 +9,12 @@
 .desktop-workspace > * {
   min-width: 0;
 }
+/* Sparse form workspaces (profile, currency exchange): cap the column so a
+   handful of fields doesn't stretch across the full viewport. Left-aligned
+   on the same axis as the page header. */
+.desktop-workspace--form {
+  max-width: 880px;
+}
 .desktop-workspace .pc-page-header {
   min-height: 38px;
   padding: 0 0 4px;
@@ -22,8 +28,9 @@
 .desktop-data-panel,
 .desktop-metrics {
   border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--el-bg-color);
+  box-shadow: var(--shadow-1);
 }
 .desktop-panel {
   min-width: 0;
@@ -40,10 +47,22 @@
 }
 .desktop-panel-header h2,
 .desktop-data-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
   margin: 0;
   white-space: nowrap;
+}
+.desktop-panel-header h2::before,
+.desktop-data-heading h2::before {
+  content: '';
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  flex-shrink: 0;
 }
 .desktop-panel-actions,
 .desktop-bottom-actions {
@@ -113,9 +132,11 @@
   color: var(--el-text-color-secondary);
 }
 .desktop-metric > strong {
-  font-size: 24px;
-  line-height: 30px;
-  font-weight: 650;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 .desktop-metric small {

@@ -10,8 +10,12 @@ export const session = reactive<{
 }>({ data: null, ready: false, denied: false })
 let pending: Promise<void> | null = null
 let generation = 0
+// 会话缓存有效期：路由守卫不再每次导航都强刷，
+// 过期后的下一次导航才重新校验（权限变更仍走 permissions-changed 事件即时失效）
+const SESSION_TTL_MS = 60_000
+let loadedAt = 0
 export const can = (permission: string) =>
-  session.data?.permissions.includes(permission) ?? false
+  session.data?.permissions?.includes(permission) ?? false
 export const isSuper = () => session.data?.user.roleCode === 'super_admin'
 export function clearSession() {
   generation++
@@ -19,13 +23,16 @@ export function clearSession() {
   session.ready = false
   session.denied = false
   pending = null
+  loadedAt = 0
 }
 export function invalidatePermissions() {
   session.ready = false
+  loadedAt = 0
 }
 export async function loadSession(force = false): Promise<void> {
   if (pending) return pending
-  if (session.ready && !force) return
+  const stale = Date.now() - loadedAt > SESSION_TTL_MS
+  if (session.ready && !force && !stale) return
   const current = generation
   pending = (async () => {
     try {
@@ -34,6 +41,7 @@ export async function loadSession(force = false): Promise<void> {
         session.data = data
         session.denied = false
         session.ready = true
+        loadedAt = Date.now()
       }
     } catch (error) {
       if (current !== generation) return
@@ -41,6 +49,7 @@ export async function loadSession(force = false): Promise<void> {
         session.data = null
         session.ready = true
         session.denied = error.status === 403
+        loadedAt = Date.now()
       } else throw error
     } finally {
       if (current === generation) pending = null

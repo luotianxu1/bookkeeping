@@ -5,27 +5,11 @@ button { font: inherit; cursor: pointer; }
 .header-actions, .card-actions { display: flex; align-items: center; gap: 6px; }
 .header-actions svg, .card-actions svg { width: 18px; height: 18px; }
 .savings-list { min-height: 0; flex: 1; overflow-y: auto; display: grid; align-content: start; gap: 8px; overscroll-behavior-y: contain; }
-.savings-card { min-width: 0; display: grid; gap: 6px; padding: 10px; border: 1px solid var(--color-bg-soft-2); border-radius: 12px; background: var(--color-bg-card); }
-.card-heading { display: flex; align-items: center; gap: 6px; }
-.card-heading h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
-.goal-status { flex-shrink: 0; padding: 2px 6px; border-radius: 6px; font-size: 11px; color: var(--color-brand); background: var(--color-bg-brand-soft); }
-.goal-status.overdue, .goal-status.unavailable { color: var(--color-warning-strong); background: var(--color-warning-soft); }
 .card-actions button { display: grid; place-items: center; width: 28px; height: 28px; padding: 4px; background: transparent; border: 0; color: var(--color-text-muted); }
 .card-actions .danger, .error { color: var(--color-danger); }
 .card-actions { gap: 2px; flex-shrink: 0; }
 .card-actions button:disabled { opacity: .35; cursor: default; }
-.account-link, .goal-meta, .goal-plan { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; color: var(--color-text-muted); }
-.account-link { color: var(--color-brand); overflow-wrap: anywhere; text-decoration: none; }
-.goal-amount { overflow-wrap: anywhere; }.goal-amount strong { font-size: 20px; }.goal-amount > span { font-size: 12px; color: var(--color-text-muted); }
-.goal-progress { height: 6px; border-radius: 6px; overflow: hidden; background: var(--color-bg-soft-2); }
-.goal-progress > span { display: block; height: 100%; background: var(--color-brand); border-radius: inherit; }
-.goal-plan { border-top: 1px solid var(--color-bg-soft-2); padding-top: 6px; }.goal-plan strong { color: var(--color-text-secondary); font-weight: 500; }
-.overdue { color: var(--color-warning-strong); }
 .remark, .hint, .empty { font-size: 12px; color: var(--color-text-muted); overflow-wrap: anywhere; }.empty { padding: 20px 0; text-align: center; }
 .error { font-size: 12px; }.error button { border: 0; background: transparent; padding: 0 4px; color: var(--color-brand); }
 .savings-form { display: grid; gap: 8px; font-size: 13px; line-height: 1.5; }.hint a { color: var(--color-brand); }
 .modal-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.entry-row { display: grid; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--color-bg-soft-2); }
-.entry-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.entry-summary .deposit { color: var(--color-brand); }
-.entry-summary .withdrawal { color: var(--color-danger); }

@@ -1,32 +1,68 @@
 # Life Hub
 
-个人生活管理项目：记账、投资行情、实用工具（待办/摄影/旅行/健康）、餐饮管理。包含 Vue 3 移动端前端、Spring Boot 三服务后端（认证 + 业务 + 行情）和 MySQL 初始化脚本。
+个人生活管理项目：记账、投资行情、实用工具（待办/摄影/旅行/健康）、餐饮管理。包含 Vue 3 移动端 H5 前端（`web/`）、Vue 3 + Element Plus 桌面管理端（`pc/`）、Spring Boot 三服务后端（认证 + 业务 + 行情）和 MySQL 初始化脚本。
 
 ## 项目结构
 
 ```text
 .
-├── web/                         # Vue 3 + TypeScript 前端
+├── web/                         # Vue 3 + TypeScript 移动端 H5 前端（端口 5173）
 │   ├── src/
-│   │   ├── api/                 # Axios 请求封装（request.ts 含 withCredentials/401 处理）与业务 API
+│   │   ├── api/                 # Axios 请求封装（request.ts 含 withCredentials/401 处理）；业务 API 在 api/modules/
 │   │   ├── components/          # 通用组件与 App Shell
-│   │   ├── pages/               # 页面：登录、财务、工具、餐饮等；大型页面拆分为目录（如 InvestmentDetailPage/）
+│   │   ├── composables/         # 组合式函数（useVisibilityPolling / useAsyncSection / useIdempotentSubmit / useRequestAbort 等）
+│   │   ├── pages/               # 页面按域分目录：finance（财务/投资/行情/工资/储蓄/定期）、food（餐饮）、
+│   │   │                        #   tools（待办/联系人/纪念日/日历/摄影/旅行/健康）、profile（我的/安全/提醒）、login；
+│   │   │                        #   finance/market/ 为全球行情（全球指数/美股/板块/基金），大型页面拆分为目录（如 InvestmentDetailPage/）
 │   │   ├── router/              # 路由模块（全部懒加载 + prefetch.ts 空闲预取）
-│   │   ├── styles/              # 全局样式
+│   │   ├── styles/              # design token（base.css）与全局样式
 │   │   ├── types/               # TypeScript 类型
-│   │   └── utils/               # 工具函数（format.ts 金额格式化、transaction-day-groups.ts 等）
+│   │   └── utils/               # 工具函数（format.ts 金额格式化、rem.ts、echarts*.ts 按需引入入口等）
+│   ├── e2e/ e2e-live/           # Playwright 浏览器回归 / 真实 HTTP 联通测试
 │   ├── package.json
 │   ├── pnpm-lock.yaml
 │   └── vite.config.ts
+├── pc/                          # Vue 3 + TypeScript + Element Plus 桌面管理端（开发 5174 / 预览 4174）
+│   ├── src/business/pages/      # 桌面业务视图：按 权限/财务/资产/行情/工具/餐饮/家庭 分组，复用 H5 API 契约
+│   ├── src/router/business.ts   # 业务路由；src/data/modules.ts 分组菜单
+│   └── docs/FEATURES.md         # PC 功能盘点
 ├── life-hub/                    # Spring Boot 后端 Maven 多模块
-│   ├── common/                  # 公共 DTO、JWT、安全组件与通用逻辑
+│   ├── common/                  # 公共 DTO、JWT、安全组件、KeyedTtlCache 与通用逻辑
 │   │   └── src/main/resources/config/common-base.yml   # 各服务共享的基础配置
-│   ├── auth-service/            # 认证、用户、家庭管理，端口 8081
-│   ├── app-service/             # 全部业务：财务（含投资/选股）、工具、餐饮，端口 8082
-│   ├── market-service/          # 行情中心（可独立部署）：A股/港股/美股/ETF/黄金/全球指数/要闻，端口 8083
+│   ├── auth-service/            # 认证中心，端口 8081：登录/JWT/会话与设备管理/用户/家庭/RBAC 管理端（admin 包）
+│   ├── app-service/             # 全部业务，端口 8082（包 com.example.app，主类 AppServiceApplication）：
+│   │                            #   finance（账户/记账/预算/投资/选股/储蓄/定期/工资）+ tool（/api/tools/*）+ food（/api/tools/food/*）
+│   ├── market-service/          # 行情中心，端口 8083（包 com.example.market，无数据库依赖）：
+│   │                            #   market（全球行情/K线/涨跌停/要闻/美股）+ gold（金投网金价）+ fund（基金报价）+ forex（汇率）
+│   ├── live-tests/              # 仅供 e2e:live 的测试夹具模块（Maven live-e2e profile 构建，不随部署发布）
+│   ├── data/                    # 本地数据文件（如 us-turnover.json）
 │   └── pom.xml
-└── database/                    # MySQL 完整建表与基础初始化脚本，按数字顺序执行
+├── database/                    # MySQL 完整建表与基础初始化脚本（36 个文件，001–051），按数字顺序执行
+└── AGENTS.md                    # 仓库结构与开发/测试约定速览
 ```
+
+## 功能模块总览
+
+各模块的详细规则见后文对应章节；下表为 H5 端主要功能入口速查（路由均在登录态下访问）。
+
+| 模块 | 入口路由 | 说明 |
+| --- | --- | --- |
+| 记账与流水 | `/finance` | 账户管理、收支记账/转账、流水检索与筛选 |
+| 分析与预算 | `/finance/analysis`、`/finance/budgets` | 月/年统计分析、月总预算与分类预算 |
+| 投资 | `/finance/accounts/investment` | 基金/股票/黄金持仓、交易历史、清算、定投计划、分红 |
+| 债务与人情 | 财务 → 更多功能 | 借还款账户、人情往来账户、负债记录 |
+| 储蓄目标 | `/finance/savings-goals` | 目标存取、账户预留保护 |
+| 定期存款 | `/finance/term-deposits` | 存单登记、到期/续存/结算 |
+| 工资模块 | 财务 → 更多功能 | 工资账户、月度记录、税务与现金流 |
+| 退款报销 | `/finance/expense-recoveries` | 报销计划、分次到账、逾期提醒 |
+| 全球行情 | `/finance/global-market` | 全球指数/美股/板块/基金排行，详情页 `/finance/global-market/detail/:kind/:code` |
+| 金价与汇率 | `/finance/gold-price`、`/finance/exchange-rate` | 金投网金价（含品牌首饰）、主要货币汇率 |
+| 统一提醒 | `/profile/reminders` | 待办/纪念日/账单/定投/预算/报销聚合提醒 |
+| 生活工具 | `/tools` | 待办、联系人、纪念日、日历、摄影订单、旅行计划、健康记录 |
+| 餐饮管理 | `/food` | 食材、菜品、菜单与订单 |
+| 账号安全 | `/profile/security` | 改密、恢复码、登录设备管理 |
+
+PC 管理端按 权限管理/财务管理/资产管理/投资行情/生活工具/家庭餐饮 分组复用同一套接口，功能盘点见 [pc/docs/FEATURES.md](pc/docs/FEATURES.md)。
 
 ## 统一提醒
 
@@ -79,10 +115,11 @@
 
 | 服务 | 模块 | 端口 | 说明 |
 | --- | --- | --- | --- |
-| 认证服务 | `auth-service` | `8081` | 登录、注册、JWT、用户/家庭管理 |
-| 业务服务 | `app-service` | `8082` | 财务（账户/记账/预算/投资/选股/工资）+ 工具（联系人/待办/摄影/旅行/健康）+ 餐饮（`/api/tools/food/*`） |
-| 行情中心 | `market-service` | `8083` | A股/港股/美股/ETF/黄金/全球指数实时行情与 K 线、涨跌停、市场状态、要闻、美股盘前；JWT 与 app-service 同套认证 |
-| 前端 | `web` | `5173` | Vite 开发服务 |
+| 认证服务 | `auth-service` | `8081` | 登录、注册、JWT、会话/设备管理、用户/家庭管理、RBAC 管理端（`/api/admin/**`） |
+| 业务服务 | `app-service` | `8082` | 财务（账户/记账/预算/投资/选股/储蓄/定期/工资）+ 工具（联系人/待办/纪念日/日历/摄影/旅行/健康）+ 餐饮（`/api/tools/food/*`） |
+| 行情中心 | `market-service` | `8083` | A股/港股/美股/ETF/黄金/全球指数实时行情与 K 线、涨跌停、市场状态、要闻、美股盘前、基金报价、汇率；JWT 与 app-service 同套认证 |
+| H5 前端 | `web` | `5173` | Vite 开发服务（preview 4173，Cloudflare Tunnel 入口） |
+| PC 管理端 | `pc` | `5174` | Element Plus 桌面工作台（preview 4174） |
 
 每个后端服务启动后，Knife4j 文档地址为：
 

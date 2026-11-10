@@ -52,7 +52,7 @@ async function save() {
 }
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace desktop-workspace--form">
     <PageHeader title="个人资料">
       <template #right>
         <el-button

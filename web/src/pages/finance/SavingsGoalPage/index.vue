@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import SavingsGoalCard from '@/components/finance/SavingsGoalCard/index.vue'
 import PageHeader from '@/components/common/PageHeader/index.vue'
 import CommonHeaderActionButton from '@/components/common/CommonHeaderActionButton/index.vue'
 import CommonButton from '@/components/common/CommonButton/index.vue'
@@ -10,7 +12,7 @@ import CommonEmpty from '@/components/common/CommonEmpty/index.vue'
 import CommonLoading from '@/components/common/CommonLoading/index.vue'
 import SegmentedControl from '@/components/common/SegmentedControl/index.vue'
 import { getAccounts, getSavingsGoals, createSavingsGoal, updateSavingsGoal, deleteSavingsGoal,
-  getSavingsGoalEntries, addSavingsGoalEntry,
+  addSavingsGoalEntry,
   type Account, type SavingsGoal, type SavingsGoalEntry } from '@/api/modules/finance'
 import { getErrorMessage } from '@/api/request'
 import { getStoredCurrentUser } from '@/utils/current-user'
@@ -18,6 +20,7 @@ import { useAsyncSection } from '@/composables/useAsyncSection'
 import { useIdempotentSubmit } from '@/composables/useIdempotentSubmit'
 import { useVisibilityPolling } from '@/composables/useVisibilityPolling'
 
+const router = useRouter()
 const goals = ref<SavingsGoal[]>([])
 const accounts = ref<Account[]>([])
 const selectedFilter = ref('all')
@@ -50,13 +53,6 @@ const entryAmount = ref(''), entryDate = ref(''), entryRemark = ref(''), entryEr
 const entrySubmission = useIdempotentSubmit()
 const entryOpen = computed({ get: () => showEntry.value, set: value => { if (!entrySaving.value) showEntry.value = value } })
 const entryTitle = computed(() => entryType.value === 'deposit' ? '存入' : '取出')
-const showHistory = ref(false), historyGoal = ref<SavingsGoal | null>(null)
-const historyRows = ref<SavingsGoalEntry[]>([]), historyCursor = ref<number | null>(null), historyNext = ref<number | null>(null)
-const history = useAsyncSection(signal => getSavingsGoalEntries(historyGoal.value!.id, historyCursor.value, signal), page => {
-  historyRows.value = historyCursor.value === null ? page.entries : [...historyRows.value, ...page.entries]
-  historyNext.value = page.nextBeforeId
-}, '存取记录加载失败')
-
 function openEntry(goal: SavingsGoal, type: SavingsGoalEntry['type']) {
   entryGoal.value = goal; entryType.value = type; entryAmount.value = ''; entryDate.value = goal.asOfDate
   entryRemark.value = ''; entryError.value = ''; entrySubmission.reset(); showEntry.value = true
@@ -85,21 +81,13 @@ async function saveEntry() {
   finally { entrySaving.value = false }
 }
 function openHistory(goal: SavingsGoal) {
-  history.reset(); historyGoal.value = goal; historyRows.value = []; historyCursor.value = null; historyNext.value = null
-  showHistory.value = true; void history.run()
-}
-function loadMoreHistory() {
-  if (!historyNext.value || history.loading.value) return
-  historyCursor.value = historyNext.value; void history.run()
+  void router.push({ name: 'finance-savings-goal-entries', params: { id: goal.id } })
 }
 
 function money(value: number | null, currency: string) {
   if (value === null) return '--'
   try { return new Intl.NumberFormat('zh-CN', { style: 'currency', currency, minimumFractionDigits: 2 }).format(value) }
   catch { return `${currency} ${Number(value).toFixed(2)}` }
-}
-function statusText(goal: SavingsGoal) {
-  return { saving: '储蓄中', completed: '已达成', overdue: '已逾期' }[goal.status]
 }
 function openForm(goal: SavingsGoal | null = null) {
   editing.value = goal
@@ -148,7 +136,7 @@ async function remove() {
 
 <template>
   <section class="savings-page" aria-label="储蓄目标">
-    <PageHeader title="储蓄目标" back-to="/finance/more-features" back-label="返回更多功能">
+    <PageHeader title="储蓄目标" back-to="/finance/more-features" back-label="返回更多功能" prefer-back-to>
       <template #right>
         <div class="header-actions">
           <CommonHeaderActionButton label="刷新储蓄目标" :disabled="list.loading.value" @click="list.run">
@@ -166,10 +154,8 @@ async function remove() {
     <div v-else-if="list.ready.value" class="savings-list" :aria-busy="list.loading.value">
       <CommonEmpty v-if="!goals.length" title="暂无储蓄目标" description="关联一个现金账户，开始为应急金、旅行或买车存钱。" action-text="新建目标" @action="openForm()" />
       <p v-else-if="!visibleGoals.length" class="empty">暂无{{ selectedFilter === 'completed' ? '已达成' : '储蓄中' }}的目标</p>
-      <article v-for="goal in visibleGoals" :key="goal.id" class="savings-card" :aria-label="goal.name">
-        <div class="card-heading">
-          <h2>{{ goal.name }}</h2>
-          <span class="goal-status" :class="goal.status">{{ statusText(goal) }}</span>
+      <SavingsGoalCard v-for="goal in visibleGoals" :key="goal.id" :goal="goal">
+        <template #actions>
           <div class="card-actions">
             <button :aria-label="`存入${goal.name}`" title="存入" @click="openEntry(goal, 'deposit')"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7" /><path d="M12 7v10M7 12h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg></button>
             <button :aria-label="`取出${goal.name}`" title="取出" :disabled="goal.currentAmount <= 0" @click="openEntry(goal, 'withdrawal')"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7" /><path d="M7 12h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" /></svg></button>
@@ -177,22 +163,8 @@ async function remove() {
             <button :aria-label="`修改${goal.name}`" title="修改" @click="openForm(goal)"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14 5 5 5M4 20l5-1L20 8a2 2 0 0 0-5-5L4 14v6Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
             <button class="danger" :aria-label="`删除${goal.name}`" title="删除" @click="openDelete(goal)"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
           </div>
-        </div>
-        <RouterLink class="account-link" :to="`/finance/accounts/cash/${goal.accountId}`">{{ goal.accountName || '关联账户' }} <span>查看账户 ›</span></RouterLink>
-        <p v-if="goal.accountAvailable" class="hint">账户可分配 {{ money(goal.accountAvailableAmount, goal.currencyCode) }} · 目标合计预留 {{ money(goal.accountReservedAmount, goal.currencyCode) }}</p>
-        <div class="goal-amount"><span>已存 </span><strong>{{ money(goal.currentAmount, goal.currencyCode) }}</strong><span> / {{ money(goal.targetAmount, goal.currencyCode) }}</span></div>
-        <div class="goal-progress" role="progressbar" :aria-label="`${goal.name}完成进度`" :aria-valuenow="Number(goal.progressPercent)" :aria-valuemin="0" :aria-valuemax="100">
-          <span :style="{ width: `${goal.progressPercent}%` }"></span>
-        </div>
-        <div class="goal-meta"><span>{{ goal.progressPercent }}%</span><span>{{ goal.status === 'completed' ? '已达到目标金额' : `还差 ${money(goal.remainingAmount, goal.currencyCode)}` }}</span></div>
-        <p v-if="!goal.accountAvailable" class="error">关联账户不可用，请重新选择现金账户。已存金额和存取记录仍保留。</p>
-        <div class="goal-plan">
-          <span>{{ goal.targetDate ? `截止 ${goal.targetDate}` : '未设置截止日期' }}</span>
-          <strong v-if="goal.status !== 'completed' && goal.monthlyNeeded !== null">每月建议 {{ money(goal.monthlyNeeded, goal.currencyCode) }}</strong>
-          <span v-else-if="goal.status === 'overdue'" class="overdue">调整截止日期后可重新规划</span>
-        </div>
-        <p v-if="goal.remark" class="remark">{{ goal.remark }}</p>
-      </article>
+        </template>
+      </SavingsGoalCard>
     </div>
 
     <CommonModal v-model="formOpen" :title="editing ? '修改储蓄目标' : '新增储蓄目标'" :close-on-overlay="!saving" :show-close="!saving">
@@ -223,18 +195,6 @@ async function remove() {
         <p v-if="entryError" class="error" role="alert">{{ entryError }}</p>
       </form>
       <template #footer><div class="modal-actions"><CommonButton variant="secondary" :disabled="entrySaving" @click="showEntry = false">取消</CommonButton><CommonButton type="submit" form="savings-entry-form" :disabled="entrySaving">{{ entrySaving ? '保存中…' : '确认记录' }}</CommonButton></div></template>
-    </CommonModal>
-    <CommonModal v-model="showHistory" :title="`${historyGoal?.name ?? ''} · 存取记录`" @close="history.reset">
-      <div class="savings-form">
-        <CommonLoading v-if="history.loading.value && !historyRows.length" />
-        <p v-if="history.error.value" class="error" role="alert">{{ history.error.value }} <button @click="history.run">重试</button></p>
-        <p v-if="history.ready.value && !historyRows.length" class="empty">暂无存取记录</p>
-        <div v-for="entry in historyRows" :key="entry.id" class="entry-row">
-          <div class="entry-summary"><strong>{{ entry.type === 'deposit' ? '存入' : '取出' }}</strong><span :class="entry.type">{{ entry.type === 'deposit' ? '+' : '−' }}{{ money(entry.amount, historyGoal?.currencyCode ?? 'CNY') }}</span></div>
-          <span class="hint">{{ entry.occurredOn }}{{ entry.transactionId ? ' · 关联记账' : ' · 手动分配' }}</span><p v-if="entry.remark" class="remark">{{ entry.remark }}</p>
-        </div>
-        <CommonButton v-if="historyNext" variant="secondary" :disabled="history.loading.value" @click="loadMoreHistory">{{ history.loading.value ? '加载中…' : '加载更多' }}</CommonButton>
-      </div>
     </CommonModal>
   </section>
 </template>

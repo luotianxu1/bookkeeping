@@ -54,7 +54,7 @@ export function mergeAssetTrendResults(
     endDate = pickLaterDate(endDate, result.endDate)
     lastSyncedAt = pickLaterDateTime(lastSyncedAt, result.lastSyncedAt)
 
-    result.trendPoints.forEach((item) => {
+    ;(result.trendPoints ?? []).forEach((item) => {
       if (!trendPointMap.has(item.key)) {
         pointOrder.push(item.key)
         trendPointMap.set(item.key, {
@@ -67,7 +67,7 @@ export function mergeAssetTrendResults(
       current.value += Number(item.value ?? 0)
     })
 
-    result.allocations.forEach((item) => {
+    ;(result.allocations ?? []).forEach((item) => {
       const key = `${item.accountTypeCode ?? 'unknown'}:${item.label}`
       if (!allocationMap.has(key)) {
         allocationOrder.push(key)
@@ -82,7 +82,7 @@ export function mergeAssetTrendResults(
       current.balance += Number(item.balance ?? 0)
     })
 
-    result.contributors.forEach((item) => {
+    ;(result.contributors ?? []).forEach((item) => {
       const key = `${item.accountTypeCode ?? 'unknown'}:${item.accountName}`
       const current = contributorMap.get(key) ?? {
         accountId: item.accountId,
@@ -184,7 +184,7 @@ export function mergeLatestAssetSnapshots(
     const ownerLabel =
       results.length > 1 ? (viewerNameByUserId.get(result.userId) ?? '') : ''
 
-    result.accounts.forEach((item) => {
+    ;(result.accounts ?? []).forEach((item) => {
       accounts.push({
         ...item,
         ownerLabel,

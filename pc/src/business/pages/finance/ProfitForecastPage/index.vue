@@ -129,10 +129,11 @@ async function loadForecast() {
 }
 
 function formatNumber(value: number, digits = 2) {
+  const safe = Number.isFinite(value) ? value : 0
   return new Intl.NumberFormat('zh-CN', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  }).format(Math.abs(value))
+  }).format(Math.abs(safe))
 }
 
 function formatSignedCurrency(value: number) {

@@ -59,9 +59,9 @@ test('PC cookie login, expense posting, idempotent retry and foreign user isolat
   ).toBeVisible()
 })
 
-test('PC savings dialog creates and reserves funds without changing cash', async ({
+test('PC savings reserves funds and opens records in a standalone page', async ({
   page,
-}) => {
+}, testInfo) => {
   await login(page)
   const initial = await balance(page.request)
   await page.goto('/finance/savings-goals')
@@ -86,4 +86,16 @@ test('PC savings dialog creates and reserves funds without changing cash', async
     ),
   ).toBe(100)
   expect(await balance(page.request)).toBe(initial)
+  const goal = goals.data.find((x: { name: string }) => x.name === '桌面储蓄目标')
+  await row.getByRole('button', { name: '存取记录', exact: true }).click()
+  await expect(page).toHaveURL(`/finance/savings-goals/${goal.id}/entries`)
+  await expect(page.getByRole('heading', { name: '存取记录', exact: true })).toBeVisible()
+  await expect(dialog).not.toBeVisible()
+  await expect(page.getByRole('row').filter({ hasText: '手动分配' })).toContainText('+¥100.00')
+  await page.reload()
+  await expect(page.getByRole('row').filter({ hasText: '手动分配' })).toContainText('+¥100.00')
+  await page.screenshot({ path: testInfo.outputPath('savings-history.png'), animations: 'disabled' })
+  await page.getByRole('button', { name: '返回储蓄目标', exact: true }).click()
+  await expect(page).toHaveURL('/finance/savings-goals')
+  await expect(row).toBeVisible()
 })

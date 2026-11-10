@@ -15,6 +15,7 @@ import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import { useFinanceFamilyView } from '@/business/composables/useFinanceFamilyView'
 import { useTheme } from '@/business/utils/theme'
+import { readChartToken } from '@/business/utils/chart-theme'
 import {
   getLatestAssetAccountSnapshots,
   getAssetTrend,
@@ -158,7 +159,7 @@ const previousPointRateText = computed(() => {
   })}%`
 })
 const hasTrendPoints = computed(
-  () => (trend.value?.trendPoints.length ?? 0) > 0,
+  () => (trend.value?.trendPoints?.length ?? 0) > 0,
 )
 
 const allocations = computed(() => trend.value?.allocations ?? [])
@@ -242,30 +243,25 @@ const chartOption = computed<EChartsCoreOption>(() => {
     0,
   )
   const isSinglePoint = points.length === 1
-  const rootStyle = getComputedStyle(document.documentElement)
-  const axisText = rootStyle.getPropertyValue('--color-chart-axis').trim()
-  const axisLine = rootStyle
-    .getPropertyValue('--color-chart-axis-strong')
-    .trim()
-  const splitLine = rootStyle.getPropertyValue('--color-bg-soft-2').trim()
-  const areaStart = rootStyle
-    .getPropertyValue('--color-chart-brand-area-start')
-    .trim()
-  const areaEnd = rootStyle
-    .getPropertyValue('--color-chart-brand-area-end')
-    .trim()
-  const tooltipBg = rootStyle
-    .getPropertyValue('--color-chart-tooltip-bg')
-    .trim()
-  const tooltipBorder = rootStyle
-    .getPropertyValue('--color-chart-tooltip-border')
-    .trim()
-  const tooltipText = rootStyle
-    .getPropertyValue('--color-chart-tooltip-text')
-    .trim()
-  const brandColor = rootStyle.getPropertyValue('--color-brand').trim()
-  const positiveColor = rootStyle.getPropertyValue('--color-danger').trim()
-  const negativeColor = rootStyle.getPropertyValue('--color-success').trim()
+  // 图表取色统一走带兜底的 readChartToken，token 缺失时回退默认值，
+  // 避免空字符串传给 echarts 渐变 addColorStop 直接抛 SyntaxError
+  const axisText = readChartToken('--color-chart-axis', '#94a3b8')
+  const axisLine = readChartToken('--color-chart-axis-strong', '#cbd5e1')
+  const splitLine = readChartToken('--color-bg-soft-2', '#eef2f8')
+  const areaStart = readChartToken(
+    '--color-chart-brand-area-start',
+    'rgba(29, 78, 216, 0.2)',
+  )
+  const areaEnd = readChartToken(
+    '--color-chart-brand-area-end',
+    'rgba(29, 78, 216, 0.02)',
+  )
+  const tooltipBg = readChartToken('--color-chart-tooltip-bg', '#ffffff')
+  const tooltipBorder = readChartToken('--color-chart-tooltip-border', '#e2e8f0')
+  const tooltipText = readChartToken('--color-chart-tooltip-text', '#0f172a')
+  const brandColor = readChartToken('--color-brand', '#1d4ed8')
+  const positiveColor = readChartToken('--color-danger', '#dc2626')
+  const negativeColor = readChartToken('--color-success', '#16a34a')
 
   return {
     animation: false,
@@ -543,8 +539,15 @@ function applyYesterdaySnapshots(
   yesterdaySnapshotDate.value = merged.snapshotDate
   yesterdaySnapshotCurrentTotal.value = merged.currentTotalAssets
   yesterdaySnapshotChangeAmount.value = merged.changeAmount
+  // 仅当有快照账户但全部账户昨日→今日无变动时提示，
+  // 有变动账户时表格已展示对比，不再显示该提示
+  const hasChangedAccount = merged.accounts.some(
+    (item) => Math.abs(Number(item.changeAmount ?? 0)) > 0,
+  )
   snapshotError.value =
-    merged.accounts.length > 0 ? '所有账户与今日一致' : '暂无昨日账户快照'
+    merged.accounts.length > 0 && !hasChangedAccount
+      ? '所有账户与今日一致'
+      : ''
 }
 
 function resetYesterdaySnapshots() {
@@ -704,7 +707,7 @@ type SnapshotRow = (typeof visibleYesterdaySnapshots.value)[number]
         <el-alert
           v-if="snapshotError"
           :title="snapshotError"
-          type="error"
+          type="info"
           :closable="false"
           show-icon
         ></el-alert>

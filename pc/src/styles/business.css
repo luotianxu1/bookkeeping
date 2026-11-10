@@ -7,13 +7,14 @@
   --color-brand: var(--el-color-primary);
   --color-brand-strong: var(--el-color-primary-dark-2);
   --color-brand-soft: var(--el-color-primary-light-7);
-  --color-success: #249c78;
-  --color-success-strong: #1b7a5d;
-  --color-danger: #d65365;
-  --color-danger-soft: #fcecef;
-  --color-warning: #e6a23c;
-  --color-warning-strong: #b98130;
-  --color-warning-soft: #fff7e8;
+  /* Success/danger/warning follow web/src/styles/base.css */
+  --color-success: #16a34a;
+  --color-success-strong: #15803d;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-warning: #f59e0b;
+  --color-warning-strong: #d97706;
+  --color-warning-soft: #fff7ed;
   --color-teal: #0f766e;
   --color-purple: #7c3aed;
   --color-orange: #c2410c;
@@ -30,12 +31,29 @@
   --color-border: var(--el-border-color);
   --color-border-soft: var(--el-border-color-light);
   --color-chart-axis: var(--el-text-color-secondary);
+  --color-chart-axis-strong: var(--el-border-color);
   --color-chart-grid: var(--el-border-color-lighter);
   --color-chart-line: var(--el-color-primary);
-  --color-chart-blue: #6155d9;
-  --color-chart-green: #249c78;
-  --color-chart-red: #d65365;
-  --color-ring-focus: #afa8ee;
+  --color-chart-blue: #1d4ed8;
+  --color-chart-green: #16a34a;
+  --color-chart-red: #dc2626;
+  --color-chart-gold: #eab308;
+  --color-chart-gold-area-start: rgba(234, 179, 8, 0.24);
+  --color-chart-gold-area-end: rgba(234, 179, 8, 0.04);
+  --color-chart-brand-area-start: rgba(29, 78, 216, 0.2);
+  --color-chart-brand-area-end: rgba(29, 78, 216, 0.02);
+  --color-chart-tooltip-bg: var(--el-bg-color);
+  --color-chart-tooltip-border: var(--el-border-color-light);
+  --color-chart-tooltip-text: var(--el-text-color-primary);
+  --color-ring-focus: #93c5fd;
+  --font-mono:
+    'IBM Plex Mono',
+    ui-monospace,
+    'SF Mono',
+    'JetBrains Mono',
+    Menlo,
+    Consolas,
+    monospace;
 }
 .business-content,
 .pc-business-dialog {
@@ -69,8 +87,20 @@
   min-height: 32px;
 }
 .pc-page-header h1 {
-  font-size: 20px;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.pc-page-header h1::before {
+  content: '';
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  flex-shrink: 0;
 }
 .pc-page-actions {
   justify-content: flex-end;

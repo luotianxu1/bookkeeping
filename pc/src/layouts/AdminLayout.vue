@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onErrorCaptured, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   LayoutGrid,
@@ -12,17 +12,23 @@ import {
   ShieldCheck,
   KeyRound,
   LogOut,
+  Moon,
   PanelsTopLeft,
   PanelLeftClose,
   PanelLeftOpen,
+  RotateCw,
+  Sun,
+  TriangleAlert,
 } from '@lucide/vue'
 import { ElMessageBox, type MenuInstance } from 'element-plus'
 import { api } from '@/api/admin'
 import { modules, findMenu } from '@/data/modules'
 import { can, clearSession, session } from '@/stores/session'
 import { showError } from '@/utils/feedback'
+import { useTheme } from '@/business/utils/theme'
 const route = useRoute()
 const router = useRouter()
+const { isDark, toggleTheme } = useTheme()
 const collapsed = ref(false)
 const compactScreen = window.matchMedia('(max-width: 960px)')
 const narrow = ref(compactScreen.matches)
@@ -92,6 +98,20 @@ async function logout() {
   } finally {
     loggingOut.value = false
   }
+}
+
+// 页面级错误边界：某个页面渲染/脚本崩溃时原地展示重试卡片，
+// 而不是整个工作台白屏（上一轮审查发现部分页面缺数据形状防御）
+const pageCrashed = ref(false)
+const pageRenderKey = ref(0)
+onErrorCaptured((error) => {
+  console.error('[Life Hub] 页面渲染错误', error)
+  pageCrashed.value = true
+  return false
+})
+function retryPage() {
+  pageCrashed.value = false
+  pageRenderKey.value++
 }
 </script>
 
@@ -186,6 +206,18 @@ async function logout() {
           </el-breadcrumb-item>
           <el-breadcrumb-item>{{ route.meta.title }}</el-breadcrumb-item>
         </el-breadcrumb>
+        <div class="topbar-actions">
+          <el-tooltip :content="isDark ? '切换到浅色模式' : '切换到深色模式'">
+            <el-button
+              text
+              class="icon-button"
+              :aria-label="isDark ? '切换到浅色模式' : '切换到深色模式'"
+              @click="toggleTheme"
+            >
+              <component :is="isDark ? Sun : Moon" :size="18" />
+            </el-button>
+          </el-tooltip>
+        </div>
       </el-header>
       <el-main
         ref="content"
@@ -193,7 +225,15 @@ async function logout() {
         :class="{ 'business-content': route.meta.business }"
         aria-label="功能区"
       >
-        <RouterView />
+        <div v-if="pageCrashed" class="page-crash-fallback">
+          <TriangleAlert :size="34" />
+          <h2>页面出了点问题</h2>
+          <p>页面渲染时发生错误，其他功能不受影响。可以尝试重新加载这个页面。</p>
+          <el-button type="primary" :icon="RotateCw" @click="retryPage">
+            重新加载页面
+          </el-button>
+        </div>
+        <RouterView v-else :key="pageRenderKey" />
       </el-main>
     </el-container>
   </el-container>

@@ -1,27 +1,71 @@
+/* ---------------------------------------------------------------------------
+   Design tokens — Industrial / utilitarian direction.
+   Display/numeric face: IBM Plex Mono (loaded in index.html, swap + mono
+   fallback). Body stays on the CJK system stack: webfonts for Chinese are too
+   heavy for a daily-use admin, so the display personality lives in the mono
+   numerals, the ink sidebar and hairline rules instead.
+--------------------------------------------------------------------------- */
 :root {
-  font-family:
-    Inter,
+  /* Typography */
+  --font-body:
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
     'PingFang SC',
+    'Hiragino Sans GB',
     'Microsoft YaHei',
+    'Source Han Sans SC',
     sans-serif;
+  --font-mono:
+    'IBM Plex Mono',
+    ui-monospace,
+    'SF Mono',
+    'JetBrains Mono',
+    Menlo,
+    Consolas,
+    monospace;
+
+  /* Ink surfaces (sidebar) — deep navy, matching the H5 brand-blue family */
+  --surface-ink: #141a29;
+  --surface-ink-deep: #10141f;
+  --ink-line: rgba(255, 255, 255, 0.07);
+  --ink-text: #a3adbf;
+  --ink-text-strong: #f2f5fa;
+  --ink-accent: #3b82f6;
+
+  /* Elevation — shadows carry a slate-navy ambient tint, not pure black */
+  --shadow-1:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-2:
+    0 2px 6px rgba(15, 23, 42, 0.06),
+    0 10px 28px rgba(15, 23, 42, 0.1);
+  --shadow-3:
+    0 8px 24px rgba(15, 23, 42, 0.12),
+    0 24px 64px rgba(15, 23, 42, 0.14);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 160ms;
+  --dur-base: 320ms;
+
+  font-family: var(--font-body);
   color: #252a3d;
   background: #f6f7fb;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --el-color-primary: #6155d9;
-  --el-color-primary-light-3: #8b82e4;
-  --el-color-primary-light-5: #afa8ee;
-  --el-color-primary-light-7: #d4cff6;
-  --el-color-primary-light-8: #e5e1fa;
-  --el-color-primary-light-9: #f2f0fc;
-  --el-color-primary-dark-2: #4b3ec2;
-  --el-color-success: #249c78;
-  --el-color-danger: #d65365;
+  /* Element Plus palette — aligned with the H5 base.css brand blue */
+  --el-color-primary: #1d4ed8;
+  --el-color-primary-light-3: #6183e4;
+  --el-color-primary-light-5: #8ea7ec;
+  --el-color-primary-light-7: #bbcaf3;
+  --el-color-primary-light-8: #d2dcf7;
+  --el-color-primary-light-9: #e8edfb;
+  --el-color-primary-dark-2: #173ead;
+  --el-color-success: #16a34a;
+  --el-color-danger: #dc2626;
   --el-border-radius-base: 6px;
   --el-text-color-primary: #252a3d;
   --el-text-color-regular: #586174;
@@ -53,7 +97,7 @@ button:disabled {
 }
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #aaa3ed;
+  outline: 2px solid #93c5fd;
   outline-offset: 2px;
 }
 h1,
@@ -91,12 +135,14 @@ svg {
   height: 100dvh;
   overflow: hidden;
 }
+/* The ink sidebar is the shell's signature: dark violet-tinted column,
+   mono brand mark, glowing active state. */
 .sidebar {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  background: white;
-  border-right: 1px solid #e9ecf3;
+  background: linear-gradient(180deg, var(--surface-ink), var(--surface-ink-deep));
+  border-right: 1px solid var(--ink-line);
   overflow-x: hidden;
 }
 .brand {
@@ -105,6 +151,7 @@ svg {
   gap: 10px;
   min-height: 64px;
   padding: 12px 18px;
+  border-bottom: 1px solid var(--ink-line);
 }
 .brand-symbol {
   display: inline-flex;
@@ -113,14 +160,23 @@ svg {
   width: 32px;
   height: 32px;
   flex-shrink: 0;
-  color: white;
-  background: var(--el-color-primary);
-  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  border-radius: 9px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 4px 14px rgba(29, 78, 216, 0.5);
 }
 .brand-text {
-  font-size: 20px;
-  font-weight: 650;
+  font-family: var(--font-mono);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   white-space: nowrap;
+}
+/* Ink sidebar variant: near-white on the dark surface. */
+.sidebar .brand-text {
+  color: var(--ink-text-strong);
 }
 .sidebar nav {
   flex: 1;
@@ -129,18 +185,33 @@ svg {
 }
 .sidebar .el-menu {
   border-right: none;
+  background: transparent;
   --el-menu-item-height: 40px;
   --el-menu-base-level-padding: 16px;
-  --el-menu-text-color: #626c80;
-  --el-menu-hover-bg-color: #f7f6fc;
+  --el-menu-text-color: var(--ink-text);
+  --el-menu-hover-bg-color: rgba(255, 255, 255, 0.06);
+  --el-menu-active-color: #cfe0ff;
+  --el-menu-border-color: transparent;
 }
-.sidebar .el-menu-item {
+.sidebar .el-menu-item,
+.sidebar .el-sub-menu__title {
   margin: 3px 8px;
-  border-radius: 6px;
+  border-radius: 8px;
+  transition:
+    background var(--dur-fast) ease-out,
+    color var(--dur-fast) ease-out;
+}
+.sidebar .el-sub-menu.is-active > .el-sub-menu__title {
+  color: var(--ink-text-strong);
 }
 .sidebar .el-menu-item.is-active {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  color: #cfe0ff;
+  background: linear-gradient(
+    90deg,
+    rgba(59, 130, 246, 0.34),
+    rgba(59, 130, 246, 0.1)
+  );
+  box-shadow: inset 2px 0 0 var(--ink-accent);
   font-weight: 600;
 }
 .sidebar .el-menu-item .el-icon {
@@ -150,14 +221,15 @@ svg {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-top: 1px solid #edf0f5;
+  border-top: 1px solid var(--ink-line);
   padding: 12px;
   flex-shrink: 0;
+  color: var(--ink-text);
 }
 .identity .el-avatar,
 .avatar-admin {
-  background: #efecfc;
-  color: #7060d3;
+  background: rgba(59, 130, 246, 0.26);
+  color: #bcd4ff;
   flex-shrink: 0;
 }
 .identity-text {
@@ -174,10 +246,11 @@ svg {
 .identity-text strong {
   font-size: 12px;
   font-weight: 600;
+  color: var(--ink-text-strong);
 }
 .identity-text span {
   font-size: 11px;
-  color: #818a9c;
+  color: var(--ink-text);
   margin-top: 3px;
 }
 .el-button.icon-button {
@@ -187,21 +260,95 @@ svg {
   color: #7b8497;
   flex-shrink: 0;
 }
+/* Hover treatment only on the ink sidebar; the topbar stays light. */
+.sidebar .el-button.icon-button {
+  color: #8d88a1;
+}
+.sidebar .el-button.icon-button:hover {
+  color: var(--ink-text-strong);
+  background: rgba(255, 255, 255, 0.08);
+}
 .workspace {
+  position: relative;
   min-width: 0;
   height: 100%;
 }
+/* Atmosphere: two soft radial washes over the page base — the workspace
+   never sits on flat color. Content scrolls inside .page-container, so an
+   absolutely positioned layer stays aligned. */
+.workspace::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      56rem 36rem at 88% -12%,
+      rgba(29, 78, 216, 0.07),
+      transparent 62%
+    ),
+    radial-gradient(
+      42rem 30rem at -6% 110%,
+      rgba(22, 163, 74, 0.04),
+      transparent 55%
+    ),
+    linear-gradient(180deg, #f7f6fb, #f1f1f6);
+}
+.workspace > * {
+  position: relative;
+}
 .el-header.topbar {
-  background: white;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px) saturate(1.35);
+  -webkit-backdrop-filter: blur(10px) saturate(1.35);
   border-bottom: 1px solid #e9ecf3;
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 0 16px;
   flex-shrink: 0;
+  z-index: 1;
 }
 .topbar .el-breadcrumb {
   font-size: 12px;
+}
+.topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.topbar-actions .el-button.icon-button:hover {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.page-crash-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 320px;
+  text-align: center;
+  color: var(--el-text-color-secondary);
+}
+.page-crash-fallback svg {
+  color: var(--el-color-warning);
+}
+.page-crash-fallback h2 {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+.page-crash-fallback p {
+  max-width: 420px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.page-crash-fallback .el-button {
+  margin-top: 10px;
 }
 .el-main.page-container {
   min-height: 0;
@@ -221,9 +368,19 @@ svg {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 20px;
+  font-size: 21px;
   line-height: 1.5;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+/* Anchor bar: the recurring brand mark of every page heading. */
+.page-heading h1::before {
+  content: '';
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  flex-shrink: 0;
 }
 .heading-actions {
   display: flex;
@@ -233,9 +390,10 @@ svg {
   gap: 6px;
 }
 .panel {
-  border: 1px solid #e5e9f1;
+  border: 1px solid #e7e8f0;
   background: white;
-  border-radius: 8px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-1);
   overflow: hidden;
 }
 .panel-heading {
@@ -247,6 +405,15 @@ svg {
   gap: 8px;
   font-size: 14px;
   font-weight: 600;
+}
+.panel-heading h2::before,
+.permission-header h2::before {
+  content: '';
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  flex-shrink: 0;
 }
 .filter-bar {
   padding: 12px 16px;
@@ -274,7 +441,7 @@ svg {
 .el-table.data-table {
   --el-table-header-bg-color: #f8f9fc;
   --el-table-header-text-color: #687387;
-  --el-table-row-hover-bg-color: #fcfbff;
+  --el-table-row-hover-bg-color: #f8fbff;
   --el-table-border-color: #edf0f5;
 }
 .data-table .el-table__header th {
@@ -308,8 +475,8 @@ svg {
   color: #64748b;
 }
 .user-cell .avatar-admin {
-  background: #efecfc;
-  color: #7060d3;
+  background: #e3edff;
+  color: #2f5fd0;
 }
 .user-cell strong {
   display: block;
@@ -329,8 +496,8 @@ svg {
   display: inline-block;
   font-size: 11px;
   border-radius: 3px;
-  color: #8e83cf;
-  background: #f4f1fe;
+  color: #3b6fd4;
+  background: #eef4ff;
   padding: 0 4px;
   margin-left: 6px;
   font-weight: 400;
@@ -418,7 +585,9 @@ svg {
   font-size: 12px;
 }
 .number-cell {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
 }
 .permission-count,
 .builtin-label {
@@ -518,9 +687,11 @@ svg {
   white-space: nowrap;
 }
 .permission-total strong {
+  font-family: var(--font-mono);
   font-size: 20px;
   color: var(--el-color-primary);
-  font-weight: 550;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 .permission-toolbar {
   display: flex;
@@ -579,8 +750,8 @@ svg {
   gap: 8px;
 }
 .permission-item.checked {
-  border-color: #e5dff7;
-  background: #fdfcff;
+  border-color: #d5e2fb;
+  background: #fcfdff;
 }
 .permission-item .el-checkbox {
   height: 28px;
@@ -632,8 +803,19 @@ svg {
   gap: 14px;
 }
 .el-card.feature-card {
-  --el-card-border-radius: 8px;
+  --el-card-border-radius: 10px;
   --el-card-padding: 16px;
+  border-color: #e7e8f0;
+  box-shadow: var(--shadow-1);
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-fast) ease-out;
+}
+.el-card.feature-card:hover {
+  transform: translateY(-3px);
+  border-color: #c3d5f7;
+  box-shadow: var(--shadow-2);
 }
 .feature-card .el-card__header {
   padding: 12px 16px;
@@ -659,8 +841,8 @@ svg {
   border-radius: 7px;
 }
 .lavender {
-  background: #f0edfe;
-  color: #8774d9;
+  background: #f3e8ff;
+  color: #7c3aed;
 }
 .mint {
   background: #eaf7f1;
@@ -701,7 +883,7 @@ svg {
   padding: 32px;
 }
 .status-page > svg {
-  color: #9688d9;
+  color: #5b8def;
 }
 .status-page .eyebrow {
   font-size: 12px;
@@ -778,6 +960,35 @@ svg {
     padding-left: 22px;
   }
 }
+/* Orchestrated page entrance: every route change replays a short staggered
+   rise (60ms steps, capped so long lists don't cascade forever). */
+@media (prefers-reduced-motion: no-preference) {
+  .page-container > * {
+    animation: page-rise var(--dur-base) var(--ease-out) backwards;
+  }
+  .page-container > *:nth-child(2) {
+    animation-delay: 60ms;
+  }
+  .page-container > *:nth-child(3) {
+    animation-delay: 120ms;
+  }
+  .page-container > *:nth-child(4) {
+    animation-delay: 180ms;
+  }
+  .page-container > *:nth-child(n + 5) {
+    animation-delay: 240ms;
+  }
+}
+@keyframes page-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+/* Primary actions get a violet-tinted lift; quiet by default. */
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
+  box-shadow: 0 1px 3px rgba(29, 78, 216, 0.35);
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -802,18 +1013,33 @@ html.dark {
   --el-border-color: #393c46;
   --el-border-color-light: #30333b;
   --el-border-color-lighter: #2b2d35;
-  --el-color-primary-light-9: #25213d;
-  --el-color-primary-light-8: #30294e;
+  --el-color-primary-light-9: #1a2440;
+  --el-color-primary-light-8: #223055;
   color: var(--el-text-color-primary);
   background: var(--el-bg-color-page);
 }
-html.dark :is(.sidebar, .topbar, .login-form-card, .panel, .identity) {
+/* Sidebar and identity keep their ink surfaces in dark mode. */
+html.dark :is(.topbar, .login-form-card, .panel) {
   background: var(--el-bg-color);
   border-color: var(--el-border-color-light);
 }
 html.dark :is(.workspace, .page-container, .login-page, .status-page) {
   background: var(--el-bg-color-page);
   color: var(--el-text-color-primary);
+}
+html.dark .workspace::before {
+  background:
+    radial-gradient(
+      56rem 36rem at 88% -12%,
+      rgba(59, 130, 246, 0.1),
+      transparent 62%
+    ),
+    radial-gradient(
+      42rem 30rem at -6% 110%,
+      rgba(22, 163, 74, 0.05),
+      transparent 55%
+    ),
+    linear-gradient(180deg, #16171c, #121318);
 }
 html.dark
   :is(.brand-text, .page-heading h1, .feature-card h2, .identity strong) {

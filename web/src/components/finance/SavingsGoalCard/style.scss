@@ -1,0 +1,15 @@
+p, h2 { margin: 0; }
+.savings-card { min-width: 0; display: grid; gap: 6px; padding: 10px; border: 1px solid var(--color-bg-soft-2); border-radius: 12px; background: var(--color-bg-card); }
+.card-heading { display: flex; align-items: center; gap: 6px; }
+.card-heading h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.goal-status { flex-shrink: 0; padding: 2px 6px; border-radius: 6px; font-size: 11px; color: var(--color-brand); background: var(--color-bg-brand-soft); }
+.goal-status.overdue, .goal-status.unavailable { color: var(--color-warning-strong); background: var(--color-warning-soft); }
+.account-link, .goal-meta, .goal-plan { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; color: var(--color-text-muted); }
+.account-link { color: var(--color-brand); overflow-wrap: anywhere; text-decoration: none; }
+.goal-amount { overflow-wrap: anywhere; }.goal-amount strong { font-size: 20px; }.goal-amount > span { font-size: 12px; color: var(--color-text-muted); }
+.goal-progress { height: 6px; border-radius: 6px; overflow: hidden; background: var(--color-bg-soft-2); }
+.goal-progress > span { display: block; height: 100%; background: var(--color-brand); border-radius: inherit; }
+.goal-plan { border-top: 1px solid var(--color-bg-soft-2); padding-top: 6px; }.goal-plan strong { color: var(--color-text-secondary); font-weight: 500; }
+.overdue { color: var(--color-warning-strong); }
+.remark, .hint { font-size: 12px; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.error { font-size: 12px; color: var(--color-danger); }
