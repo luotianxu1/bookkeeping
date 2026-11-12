@@ -3,6 +3,7 @@ package com.example.app.service;
 import com.example.common.security.FamilyScopeChecker;
 import com.example.common.security.SecurityUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.app.client.MarketQuoteClient;
 import com.example.app.dto.InvestmentDividendResponse;
@@ -1132,6 +1133,33 @@ public class InvestmentService {
         return quoteSyncService.fetchTencentQuoteFields(symbol);
     }
 
+    /**
+     * 校验活跃基金持仓的净值是否已覆盖今日：仅交易日判定（市场日历），逐产品取最新净值日期。
+     * 夜间 21:30 主同步与后续补抓任务据此判断新浪通道当日净值是否已发布。
+     */
+    public boolean hasStaleFundNavForToday() {
+        LocalDate today = LocalDate.now();
+        if (!marketCalendarService.isTradingDay(today)) {
+            return false;
+        }
+        Map<Long, InvestmentProductEntity> fundProducts = loadFundProducts(loadActiveInvestmentPositions(null, null));
+        if (fundProducts.isEmpty()) {
+            return false;
+        }
+        for (Long productId : fundProducts.keySet()) {
+            InvestmentPriceQuoteEntity row = priceQuoteMapper.selectOne(new QueryWrapper<InvestmentPriceQuoteEntity>()
+                .select("MAX(quote_date) AS quote_date")
+                .eq("product_id", productId));
+            LocalDate latestQuoteDate = row == null ? null : row.getQuoteDate();
+            if (latestQuoteDate == null || latestQuoteDate.isBefore(today)) {
+                log.warn("基金净值未覆盖今日，数据源当日净值可能尚未发布：productId={}, latestQuoteDate={}, today={}",
+                    productId, latestQuoteDate, today);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public Map<String, Object> runNightlyInvestmentSyncCycle(String trigger) {
         return runInvestmentSyncCycle(trigger, null, null, true);
     }
@@ -1169,6 +1197,14 @@ public class InvestmentService {
         summary.put("syncedDividendPlans", syncedDividendPlans);
         summary.put("syncedStockDividendProfiles", syncedStockDividendProfiles);
         summary.put("settledCount", settledCount);
+        // 夜间主同步：校验净值是否覆盖今日（新浪通道常晚于 21:30 发布），未覆盖时由补抓任务自动重跑
+        if (evaluateDividendIncomeEligibility) {
+            boolean fundNavUpToDate = !hasStaleFundNavForToday();
+            summary.put("fundNavUpToDate", fundNavUpToDate);
+            if (!fundNavUpToDate) {
+                log.warn("夜间同步完成但基金净值未覆盖今日，等待补抓任务重试：trigger={}", trigger);
+            }
+        }
         return summary;
     }
 
@@ -2943,6 +2979,13 @@ public class InvestmentService {
         response.setIncludeInNetWorth(entity.getIncludeInNetWorth());
         response.setStatus(entity.getStatus());
         response.setLastSyncedAt(entity.getLastSyncedAt());
+        InvestmentPriceQuoteEntity latestQuote = entity.getProductId() == null
+            ? null
+            : quoteSyncService.findLatestQuoteByProductId(entity.getProductId());
+        if (latestQuote != null) {
+            response.setQuoteDate(latestQuote.getQuoteDate());
+            response.setQuoteTime(latestQuote.getQuoteTime());
+        }
         applyRecentDividendPlanSummary(response, recentDividendPlan);
         response.setSubscriptionStatus(entity.getSubscriptionStatus());
         response.setSubscriptionAppliedDate(entity.getSubscriptionAppliedDate());

@@ -37,6 +37,8 @@ public class InvestmentQuoteSyncService {
     private static final String FUND_QUOTE_SOURCE = "EASTMONEY_FUND_DAILY";
     private static final String STOCK_QUOTE_SOURCE = "TENCENT_STOCK_LATEST";
     private static final LocalTime FUND_CONFIRM_READY_TIME = LocalTime.of(9, 5);
+    /** 交易日该时刻之后抓到的净值仍滞后于当日，视为数据源未更新（新浪通道常晚于 21:30 发布当日净值） */
+    private static final LocalTime FUND_NAV_EXPECTED_TIME = LocalTime.of(19, 0);
 
     // 基金估值缓存：估值盘中为分钟级更新，30s TTL 足够新鲜；失败降级 60s 内回吐旧值（或负缓存），
     // 避免预测页/详情页高频回源打挂行情中心（KeyedTtlCache 自带 single-flight 串行）
@@ -45,15 +47,18 @@ public class InvestmentQuoteSyncService {
 
     private final InvestmentPriceQuoteMapper priceQuoteMapper;
     private final MarketQuoteClient marketQuoteClient;
+    private final MarketCalendarService marketCalendarService;
     private final ObjectMapper objectMapper;
 
     public InvestmentQuoteSyncService(
         InvestmentPriceQuoteMapper priceQuoteMapper,
         MarketQuoteClient marketQuoteClient,
+        MarketCalendarService marketCalendarService,
         ObjectMapper objectMapper
     ) {
         this.priceQuoteMapper = priceQuoteMapper;
         this.marketQuoteClient = marketQuoteClient;
+        this.marketCalendarService = marketCalendarService;
         this.objectMapper = objectMapper;
     }
 
@@ -111,6 +116,7 @@ public class InvestmentQuoteSyncService {
             log.warn("基金净值同步跳过：symbol={} 未返回有效净值或净值日期", product.getSymbol());
             return null;
         }
+        warnIfFundNavStale(product.getSymbol(), quoteDate);
 
         InvestmentPriceQuoteEntity existingQuote = priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
             .eq(InvestmentPriceQuoteEntity::getProductId, product.getId())
@@ -244,6 +250,17 @@ public class InvestmentQuoteSyncService {
         }
     }
 
+    /** 校验抓回的净值日期是否覆盖今日：交易日收盘发布窗口后仍返回历史净值 = 数据源尚未更新，留痕告警 */
+    private void warnIfFundNavStale(String symbol, LocalDate quoteDate) {
+        LocalDate today = LocalDate.now();
+        if (quoteDate.isBefore(today)
+            && marketCalendarService.isTradingDay(today)
+            && LocalTime.now().isAfter(FUND_NAV_EXPECTED_TIME)) {
+            log.warn("基金净值未覆盖今日，数据源可能尚未更新当日净值：symbol={}, quoteDate={}, 当日净值应晚于{}发布",
+                symbol, quoteDate, FUND_NAV_EXPECTED_TIME);
+        }
+    }
+
     // ---------- 行情应用与结算报价 ----------
 
         public void applyFundQuoteToPosition(
@@ -310,6 +327,17 @@ public class InvestmentQuoteSyncService {
         position.setHoldingProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
         position.setMarketValue(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         position.setLastSyncedAt(syncedAt);
+    }
+
+        public InvestmentPriceQuoteEntity findLatestQuoteByProductId(Long productId) {
+        if (productId == null) {
+            return null;
+        }
+        return priceQuoteMapper.selectOne(new LambdaQueryWrapper<InvestmentPriceQuoteEntity>()
+            .eq(InvestmentPriceQuoteEntity::getProductId, productId)
+            .orderByDesc(InvestmentPriceQuoteEntity::getQuoteDate)
+            .orderByDesc(InvestmentPriceQuoteEntity::getQuoteTime)
+            .last("LIMIT 1"));
     }
 
         public InvestmentPriceQuoteEntity findSettlementQuoteByProductAndDate(Long productId, LocalDate quoteDate) {

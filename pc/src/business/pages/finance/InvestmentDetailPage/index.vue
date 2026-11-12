@@ -164,14 +164,16 @@ const showTodayMetrics = computed(() => {
   if (currentPosition.value?.subscriptionStatus === 'pending') {
     return false
   }
-  return isTodayMarketData(currentPosition.value?.lastSyncedAt)
+  // 以净值归属日期为准：同步任务跑过不代表当日净值已发布（数据源常滞后）
+  return isTodayMarketData(currentPosition.value?.quoteDate ?? currentPosition.value?.lastSyncedAt)
 })
 const displayUpdatedAt = computed(() => {
   if (currentPosition.value?.subscriptionStatus === 'pending') {
     return '待确认'
   }
-  const syncedAt = formatDateTimeLabel(currentPosition.value?.lastSyncedAt)
-  return syncedAt === '--' ? '同步于 --' : `同步于 ${syncedAt}`
+  // 展示净值/行情快照自身的更新时间，而非本地同步时间
+  const updatedAt = formatDateTimeLabel(currentPosition.value?.quoteTime ?? currentPosition.value?.lastSyncedAt)
+  return updatedAt === '--' ? '净值更新于 --' : `净值更新于 ${updatedAt}`
 })
 const showFundCumulativeProfitChart = computed(() => {
   const holdingQuantity = Number(currentPosition.value?.holdingQuantity ?? 0)

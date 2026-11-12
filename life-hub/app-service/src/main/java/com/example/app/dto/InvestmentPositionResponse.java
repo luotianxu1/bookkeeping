@@ -35,6 +35,10 @@ public class InvestmentPositionResponse {
     private Boolean includeInNetWorth;
     private String status;
     private LocalDateTime lastSyncedAt;
+    /** 最新行情/净值快照的归属日期（净值即 FSRQ），用于前端展示"净值更新于"而非同步时间 */
+    private LocalDate quoteDate;
+    /** 最新行情快照的落库时间，即该净值在本系统可用的时刻 */
+    private LocalDateTime quoteTime;
     private Boolean hasRecentDividendPlan;
     private String recentDividendStatus;
     private LocalDate recentDividendDate;

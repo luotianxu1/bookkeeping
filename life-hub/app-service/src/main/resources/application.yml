@@ -43,6 +43,9 @@ finance:
       cron: 0 5 9 * * *
     profit-sync:
       cron: 0 30 21 * * *
+      # 新浪通道当日净值常晚于 21:30 发布：主同步后按该 cron 补抓，
+      # 每次先校验当日净值是否已落库（交易日 + 逐产品最新净值日期），已覆盖则跳过
+      retry-cron: 0 5,35 22,23 * * *
     trade-settlement:
       cron: 0 6 9 * * *
     # 休市日静态兜底清单（仅当节假日 API 全部不可用时使用，正常判定走 MarketCalendarService + CalendarService 节假日源）

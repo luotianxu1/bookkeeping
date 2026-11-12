@@ -31,3 +31,9 @@
 - `KeyedTtlCache` 实现位于 common，固定 256 段锁，按 LRU 逐条淘汰，TTL 从回源完成计时；保留旧值/负缓存失败降级。market 的旧类型为兼容别名。
 - `useVisibilityPolling` 支持 KeepAlive 停用/激活和异步防重入；回调必须返回 Promise。详情各区域 `useAsyncSection` 独立加载/重试，分页与行情必须拒绝过期响应。
 - 后端 `mvn -B -ntp clean verify`，前端 `pnpm test` + `pnpm build`；GitHub Actions 使用 Java 17 / Node 22 / pnpm 9.12.1。账务测试仅使用独立 H2，不接开发 MySQL。
+
+## 查持仓/收益类数据的工作流约定（2026-11-11 起，用户明确要求）
+- **查任何持仓的"今日收益"前，必须先校验最新净值/行情日期是否覆盖今天**：看 `investment_price_quotes.quote_date` 最大值或 internal nav-history 最新条目；若最新日期 < 今天，当前显示的是历史日涨幅，必须明确标注"这是 X 日数据"并另行核对真实当日数据，禁止把旧净值涨幅当"今日收益"报给用户。
+- **权威核对源**：基金净值用东财 lsjz `https://api.fund.eastmoney.com/f10/lsjz?fundCode=<code>&pageIndex=1&pageSize=3`（需 Referer `http://fundf10.eastmoney.com/jjjz_<code>.html`，返回 FSRQ/DWJZ/JZZZL）。系统净值源（新浪通道）通常比东财晚几小时，当日 21:30 的 profit-sync 跑完也可能拿不到当日净值。
+- 源未更新时可手动触发同步：`POST http://localhost:8082/api/finance/investments/tasks/quote-sync?userId=1`（异步）。调用鉴权：自签 JWT（HS256 + JWT_SECRET，claims sub='1'、userId=1、jti=user_sessions 表活跃会话 id、iat/exp）写 `access_token` cookie；DB 密码在 `life-hub/.idea/runConfigurations/*.xml` 的 env 里。同步后重查 DB 确认 quote_date 已到当天，没到就按权威源口径报告并说明系统稍后自动回填。
+- 快捷查库：`mysql -u root -p'<见运行配置>' bookkeeping_app`；持仓联查 `investment_positions p JOIN investment_products pr ON p.product_id=pr.id`（持仓数量字段是 holding_quantity）。

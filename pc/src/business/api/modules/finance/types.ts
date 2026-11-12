@@ -983,6 +983,10 @@ export interface InvestmentPosition {
   includeInNetWorth: boolean
   status: string
   lastSyncedAt?: string | null
+  /** 最新行情/净值快照归属日期（基金即净值日期 FSRQ） */
+  quoteDate?: string | null
+  /** 最新行情快照落库时间 */
+  quoteTime?: string | null
   hasRecentDividendPlan?: boolean | null
   recentDividendStatus?: string | null
   recentDividendDate?: string | null

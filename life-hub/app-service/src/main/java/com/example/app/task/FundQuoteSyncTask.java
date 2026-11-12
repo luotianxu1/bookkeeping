@@ -30,6 +30,24 @@ public class FundQuoteSyncTask {
         });
     }
 
+    /**
+     * 夜间净值补抓：新浪通道当日净值常晚于 21:30 发布，主同步后按补抓 cron 自动重跑。
+     * 每次执行前先校验当日净值是否已落库（hasStaleFundNavForToday：交易日 + 逐产品最新净值日期），
+     * 已覆盖则直接跳过，未覆盖才重跑整个夜间同步周期。
+     */
+    @Scheduled(cron = "${finance.investment.profit-sync.retry-cron:0 5,35 22,23 * * *}", zone = "Asia/Shanghai")
+    public void retryStaleFundNavSync() {
+        if (!investmentService.hasStaleFundNavForToday()) {
+            return;
+        }
+        scheduledTaskRunService.run("investment-night-sync", "scheduled-nav-retry", () -> {
+            log.info("基金净值补抓任务开始：trigger=scheduled-nav-retry");
+            var summary = investmentService.runNightlyInvestmentSyncCycle("scheduled-nav-retry");
+            log.info("基金净值补抓任务完成：trigger=scheduled-nav-retry, summary={}", summary);
+            return String.valueOf(summary);
+        });
+    }
+
     @Scheduled(cron = "${finance.investment.auto-invest.cron:0 5 9 * * *}", zone = "Asia/Shanghai")
     public void executeAutoInvestPlans() {
         scheduledTaskRunService.run("investment-auto-invest", "scheduled-09:05", () -> {
