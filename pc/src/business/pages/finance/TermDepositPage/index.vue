@@ -4,7 +4,7 @@ import {
   formatPercentageText,
 } from '@/business/utils/percentage'
 
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -651,9 +651,26 @@ useVisibilityPolling(
 )
 
 type DesktopRow = (typeof visible.value)[number]
+
+function depositTagType(d: TermDeposit) {
+  if (d.status === 'due') return 'warning'
+  if (d.status === 'active') return 'success'
+  return 'info'
+}
+
+function maturityCountdown(d: TermDeposit) {
+  if (d.status === 'closed' || d.status === 'voided') return ''
+  const days = Math.ceil(
+    (Date.parse(d.maturityDate) - Date.parse(today())) / 86400000,
+  )
+  if (!Number.isFinite(days)) return ''
+  if (days < 0) return `已到期 ${-days} 天`
+  if (days === 0) return '今日到期'
+  return `距到期 ${days} 天`
+}
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="定期存款">
       <template #right>
         <el-button :loading="list.loading.value" @click="refresh">
@@ -669,12 +686,14 @@ type DesktopRow = (typeof visible.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="存单列表"
       searchable
       search-placeholder="名称 / 账户"
+      :search-keys="['name', 'accountName']"
       :rows="visible"
       :loading="list.loading.value"
+      row-key="id"
     >
       <template #toolbar>
         <el-select v-model="accountFilter" placeholder="全部账户">
@@ -692,99 +711,80 @@ type DesktopRow = (typeof visible.value)[number]
           label="存单状态"
         />
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="存单名称"
-        prop="name"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="账户"
-        prop="accountName"
-        sortable="custom"
-        min-width="150"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="本金" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.principal, row.currencyCode) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="年利率" min-width="100">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatPercentage(row.annualRate) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="起息日"
-        prop="startDate"
-        sortable="custom"
-        min-width="130"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="到期日"
-        prop="maturityDate"
-        sortable="custom"
-        min-width="130"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="预计利息" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.expectedInterest, row.currencyCode) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="状态" min-width="110">
-        <template #default="{ row }: { row: DesktopRow }">
-          <el-tag :type="row.status === 'due' ? 'warning' : 'info'">
-            {{ statusText(row) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="300" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card term-card"
+          :class="{ 'term-card-due': row.status === 'due' }"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside term-card-aside">
+              <span
+                v-if="maturityCountdown(row)"
+                class="term-card-countdown"
+                :class="{ urgent: row.status === 'due' }"
+              >
+                {{ maturityCountdown(row) }}
+              </span>
+              <el-tag size="small" :type="depositTagType(row)">
+                {{ statusText(row) }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="term-card-figures">
+            <div class="term-card-principal">
+              <span class="term-card-label">本金</span>
+              <strong>{{ money(row.principal, row.currencyCode) }}</strong>
+            </div>
+            <div class="term-card-rate">
+              <strong>{{ formatPercentage(row.annualRate) }}</strong>
+              <span class="term-card-label">年利率</span>
+            </div>
+          </div>
+          <dl class="record-card-body">
+            <div>
+              <dt>存期</dt>
+              <dd>{{ row.startDate }} → {{ row.maturityDate }}</dd>
+            </div>
+            <div>
+              <dt>预计利息</dt>
+              <dd>{{ money(row.expectedInterest, row.currencyCode) }}</dd>
+            </div>
+          </dl>
+          <div class="record-card-foot">
             <el-button link type="primary" @click="openHistory(row.id)">
               详情
             </el-button>
             <el-button
+              v-if="isOpen(row)"
               link
               type="primary"
-              v-if="isOpen(row)"
               @click="openForm(row)"
             >
               修改
             </el-button>
             <el-button
+              v-if="isOpen(row)"
               link
               type="primary"
-              v-if="isOpen(row)"
               @click="openSettle(row)"
             >
               支取 / 续存
             </el-button>
             <el-button
+              v-if="isOpen(row)"
               link
               type="danger"
-              v-if="isOpen(row)"
               @click="confirm(row)"
             >
               删除
             </el-button>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonModal
       v-model="opened"
       :title="title"
@@ -1211,3 +1211,73 @@ type DesktopRow = (typeof visible.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 存单卡：到期倒计时徽标 + 本金/年利率双大数字 */
+.term-card-aside {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.term-card-countdown {
+  padding: 2px 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.term-card-countdown.urgent {
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+  font-weight: 600;
+}
+
+.term-card-due {
+  border-color: var(--el-color-warning-light-5);
+}
+
+.term-card-figures {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.term-card-principal,
+.term-card-rate {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.term-card-principal {
+  align-items: flex-start;
+}
+
+.term-card-rate {
+  align-items: flex-end;
+}
+
+.term-card-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.term-card-principal strong {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.term-card-rate strong {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-color-primary);
+}
+</style>

@@ -9,6 +9,31 @@
 .desktop-workspace > * {
   min-width: 0;
 }
+/* 对齐手机端的入场编排：根节点加 .stagger-in，子元素错峰浮现。 */
+@keyframes desktop-stagger-rise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .desktop-workspace.stagger-in > * {
+    opacity: 0;
+    transform: translateY(14px);
+    animation: desktop-stagger-rise 0.56s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .desktop-workspace.stagger-in > *:nth-child(2) { animation-delay: 60ms; }
+  .desktop-workspace.stagger-in > *:nth-child(3) { animation-delay: 120ms; }
+  .desktop-workspace.stagger-in > *:nth-child(4) { animation-delay: 180ms; }
+  .desktop-workspace.stagger-in > *:nth-child(n + 5) { animation-delay: 240ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .desktop-workspace.stagger-in > * {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
 /* Sparse form workspaces (profile, currency exchange): cap the column so a
    handful of fields doesn't stretch across the full viewport. Left-aligned
    on the same axis as the page header. */
@@ -20,17 +45,17 @@
   padding: 0 0 4px;
 }
 .desktop-workspace .pc-page-header h1 {
-  font-size: 22px;
-  line-height: 30px;
+  font-size: 24px;
+  line-height: 32px;
   letter-spacing: -0.4px;
 }
 .desktop-panel,
 .desktop-data-panel,
 .desktop-metrics {
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 10px;
+  border: 1px solid var(--color-border-soft, var(--el-border-color-light));
+  border-radius: 14px;
   background: var(--el-bg-color);
-  box-shadow: var(--shadow-1);
+  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.2);
 }
 .desktop-panel {
   min-width: 0;
@@ -177,7 +202,7 @@
   background: var(--el-bg-color);
   padding: 14px 18px;
   border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
+  border-radius: 12px;
 }
 .desktop-filter-bar .el-form-item {
   margin: 0;
@@ -266,7 +291,7 @@
   padding: 20px;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
+  border-radius: 14px;
 }
 .desktop-detail-title {
   display: grid;
@@ -319,7 +344,7 @@
   background: var(--el-bg-color);
   padding: 0 20px;
   border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
+  border-radius: 12px;
 }
 .desktop-tabs .el-tabs__item {
   height: 48px;
@@ -344,7 +369,7 @@
   gap: 0;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 16px 0;
 }
 .desktop-workspace .pc-statistics > .el-card {

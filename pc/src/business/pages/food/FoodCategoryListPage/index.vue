@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -247,7 +247,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof filteredCategories.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="菜品分类">
       <template #right>
         <el-button type="primary" @click="openCreateModal">新增分类</el-button>
@@ -260,10 +260,12 @@ type DesktopRow = (typeof filteredCategories.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="菜品分类"
       :rows="filteredCategories"
       :loading="isLoading"
+      empty-title="没有菜品分类"
+      empty-hint="点击右上角新增第一个分类"
     >
       <template #toolbar>
         <el-input
@@ -273,52 +275,48 @@ type DesktopRow = (typeof filteredCategories.value)[number]
           style="width: 260px"
         />
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="分类名称"
-        prop="name"
-        sortable="custom"
-        min-width="200"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="描述"
-        prop="description"
-        sortable="custom"
-        min-width="320"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="数量"
-        prop="itemCount"
-        sortable="custom"
-        min-width="120"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="210" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button link type="primary" @click="openCategory(row.id)">
-              查看
-            </el-button>
-            <el-button link type="primary" @click="openEditModal(row)">
-              编辑
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              :disabled="!canDeleteCategory(row)"
-              @click="openDeleteConfirmModal(row)"
-            >
-              删除
-            </el-button>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <CategoryIcon
+                :icon="row.iconText"
+                :color="row.iconTone"
+                :size="34"
+                :name="row.name"
+              />
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" type="primary" effect="plain">
+                {{ row.itemCount }} 项
+              </el-tag>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <p v-if="row.description" class="record-card-note">
+            {{ row.description }}
+          </p>
+          <div class="record-card-foot">
+            <div class="pc-row-actions">
+              <el-button link type="primary" @click="openCategory(row.id)">
+                查看
+              </el-button>
+              <el-button link type="primary" @click="openEditModal(row)">
+                编辑
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                :disabled="!canDeleteCategory(row)"
+                @click="openDeleteConfirmModal(row)"
+              >
+                删除
+              </el-button>
+            </div>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonModal
       :model-value="showModal"
       :title="categoryModalTitle"

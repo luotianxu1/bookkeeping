@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { formatAmount } from '@/business/utils/format'
 // 黄金账户页：展示黄金账户汇总，并支持黄金账户列表增删改查。
@@ -488,9 +488,17 @@ function formatSignedAmount(value: number | null | undefined) {
 }
 
 type DesktopRow = (typeof accountRows.value)[number]
+
+function goldProfitToneClass(value: number | null | undefined) {
+  const amount = Number(value ?? 0)
+  if (!Number.isFinite(amount) || amount === 0) {
+    return ''
+  }
+  return amount > 0 ? 'tone-up' : 'tone-down'
+}
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="黄金账户">
       <template #right>
         <el-button :loading="isRefreshingGold" @click="refreshGoldData">
@@ -528,49 +536,57 @@ type DesktopRow = (typeof accountRows.value)[number]
         </strong>
       </el-card>
     </div>
-    <DesktopTable
+    <DesktopRecordList
       title="黄金账户列表"
       searchable
       search-placeholder="账户名称"
+      :search-keys="['name']"
       :rows="accountRows"
       :loading="isLoading"
+      row-key="id"
     >
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="账户"
-        prop="name"
-        sortable="custom"
-        min-width="200"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="重量（克）" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatSummaryWeight(row.weight) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="均价" min-width="130">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatAmount(row.avgCostPrice) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="买入金额" min-width="160">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatAmount(row.purchaseAmount) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="持有收益" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatSignedAmount(row.holdingProfit) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="210" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card gold-account-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag
+                v-if="realtimeGoldPrice > 0"
+                size="small"
+                effect="plain"
+                class="gold-account-price-tag"
+              >
+                实时金价 {{ formatAmount(realtimeGoldPrice) }}/克
+              </el-tag>
+            </div>
+          </div>
+          <div class="gold-account-weight">
+            <span class="gold-account-weight-label">持有克重</span>
+            <strong class="gold-account-weight-value">
+              {{ formatSummaryWeight(row.weight) }}
+            </strong>
+            <span class="gold-account-weight-unit">克</span>
+          </div>
+          <dl class="record-card-body">
+            <div>
+              <dt>成本均价</dt>
+              <dd>{{ formatAmount(row.avgCostPrice) }} 元/克</dd>
+            </div>
+            <div>
+              <dt>买入金额</dt>
+              <dd>{{ formatAmount(row.purchaseAmount) }}</dd>
+            </div>
+          </dl>
+          <div
+            class="gold-account-profit"
+            :class="goldProfitToneClass(row.holdingProfit)"
+          >
+            <span>持有收益</span>
+            <strong>{{ formatSignedAmount(row.holdingProfit) }}</strong>
+          </div>
+          <div class="record-card-foot">
             <el-button link type="primary" @click="handleAccountClick(row.id)">
               持仓
             </el-button>
@@ -585,9 +601,9 @@ type DesktopRow = (typeof accountRows.value)[number]
               删除
             </el-button>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -671,3 +687,77 @@ type DesktopRow = (typeof accountRows.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 黄金账户卡：金色左侧饰条 + 克重大数字金色渐变（红涨绿跌收益） */
+.gold-account-card::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #e2b64f, #b8860b);
+}
+
+.gold-account-price-tag {
+  color: #8a6417;
+  border-color: rgba(184, 134, 11, 0.35);
+  background: rgba(226, 182, 79, 0.12);
+}
+
+.gold-account-weight {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.gold-account-weight-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.gold-account-weight-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(120deg, #b8860b, #e2b64f);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-account-weight-unit {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.gold-account-profit {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.gold-account-profit strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 中国市场惯例：盈利红、亏损绿 */
+.gold-account-profit.tone-up strong {
+  color: var(--color-danger);
+}
+
+.gold-account-profit.tone-down strong {
+  color: var(--color-success);
+}
+</style>

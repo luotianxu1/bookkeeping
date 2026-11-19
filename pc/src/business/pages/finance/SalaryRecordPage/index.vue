@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
+import AmountText from '@/business/components/common/AmountText/index.vue'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
 
@@ -179,7 +180,7 @@ function openFeedback(message: string, type: 'success' | 'error') {
 type DetailTableRow = NonNullable<typeof pageData.value>['records'][number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="工资明细">
       <template #right>
         <CommonSelect
@@ -208,38 +209,44 @@ type DetailTableRow = NonNullable<typeof pageData.value>['records'][number]
           }))
         "
       />
-      <DesktopTable :rows="pageData.records" title="工资记录" searchable>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column
-          label="月份"
-          prop="monthLabel"
-          min-width="160"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="税前工资" min-width="180">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatSalaryCurrency(row.grossSalary) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column
-          label="备注"
-          prop="note"
-          min-width="320"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="操作" width="100" fixed="right">
-          <template #default="{ row }: { row: DetailTableRow }">
-            <div class="pc-row-actions">
+      <DesktopRecordList
+        :rows="pageData.records"
+        :loading="isLoading"
+        title="工资记录"
+        search-placeholder="搜索月份或备注"
+        searchable
+        :search-keys="['monthLabel', 'note']"
+        row-key="id"
+        empty-title="还没有工资记录"
+        empty-hint="点击右上角新增第一个月工资"
+      >
+        <template #default="{ row }: { row: DetailTableRow }">
+          <article class="record-card salary-slip-card">
+            <div class="record-card-head">
+              <div class="record-card-title">
+                <span>{{ row.monthLabel }}</span>
+              </div>
+              <div class="record-card-aside">
+                <el-tag size="small" effect="plain">工资条</el-tag>
+              </div>
+            </div>
+            <div class="salary-slip-amount">
+              <span class="salary-slip-amount-label">税前工资</span>
+              <AmountText
+                class="salary-slip-amount-value"
+                :value="formatSalaryCurrency(row.grossSalary)"
+                font-size="26px"
+              />
+            </div>
+            <p v-if="row.note" class="record-card-note">{{ row.note }}</p>
+            <div class="record-card-foot">
               <el-button link type="primary" @click="openRecordModal(row)">
                 修改
               </el-button>
             </div>
-          </template>
-        </el-table-column>
-      </DesktopTable>
+          </article>
+        </template>
+      </DesktopRecordList>
     </template>
     <CommonModal
       v-model="showRecordModal"
@@ -300,3 +307,21 @@ type DetailTableRow = NonNullable<typeof pageData.value>['records'][number]
     />
   </section>
 </template>
+<style scoped>
+/* 工资条卡片：月份标题 + 税前工资大数字 + 备注明细 */
+.salary-slip-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.salary-slip-amount-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.salary-slip-amount-value {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+</style>

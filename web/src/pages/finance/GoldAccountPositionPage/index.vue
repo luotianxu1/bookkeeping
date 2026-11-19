@@ -57,14 +57,17 @@ const {
   isDeletingPosition,
   isLoadingPositionDetail,
   isSellingPosition,
+  isBuyingPosition,
   isSavingAccountSettings,
   actionError,
   positionFormError,
   deleteError,
   sellError,
+  buyError,
   showPositionModal,
   showDeleteConfirmModal,
   showSellModal,
+  showBuyModal,
   showAccountSettingsModal,
   editingPosition,
   selectedHolding,
@@ -78,6 +81,12 @@ const {
   sellPrice,
   sellFee,
   sellRemark,
+  buyFundingAccountId,
+  buyWeight,
+  buyPrice,
+  buyFee,
+  buyRemark,
+  buyFundingAccountOptions,
   accountSettingsName,
   accountSettingsIcon,
   accountSettingsRemark,
@@ -85,8 +94,10 @@ const {
   accountSettingsError,
   positionModalTitle,
   sellModalTitle,
+  buyModalTitle,
   sellAvailableQuantityText,
   sellAmountPreview,
+  buyAmountPreview,
   openAccountSettingsModal,
   closeAccountSettingsModal,
   saveAccountSettings,
@@ -98,10 +109,13 @@ const {
   savePosition,
   openDeleteConfirmModalFromAction,
   openSellModalFromAction,
+  openBuyModalFromAction,
   closeDeleteConfirmModal,
   closeSellModal,
+  closeBuyModal,
   confirmDeletePosition,
   submitSellPosition,
+  submitBuyPosition,
 } = useGoldPositionActions({
   goldAccounts,
   isScopedToAccount,
@@ -109,6 +123,7 @@ const {
   realtimeGoldPrice,
   formAccountId,
   formFundingAccountId,
+  fundingAccountOptions,
   syncFormSelections,
   loadGoldPosition,
   showFeedback,
@@ -232,7 +247,7 @@ onMounted(() => {
           >
             <div
               class="position-card-main"
-              :class="{ 'is-disabled': isLoadingPositionDetail || isSavingPosition || isDeletingPosition || isSellingPosition }"
+              :class="{ 'is-disabled': isLoadingPositionDetail || isSavingPosition || isDeletingPosition || isSellingPosition || isBuyingPosition }"
               role="button"
               tabindex="0"
               @click="toggleHoldingActions(item)"
@@ -268,7 +283,7 @@ onMounted(() => {
                 variant="secondary"
                 class="gold-position-button-danger"
                 type="button"
-                :disabled="isLoadingPositionDetail || isSellingPosition"
+                :disabled="isLoadingPositionDetail || isSellingPosition || isBuyingPosition"
                 @click="openDeleteConfirmModalFromAction"
               >
                 删除
@@ -276,7 +291,15 @@ onMounted(() => {
               <CommonButton
                 variant="primary"
                 type="button"
-                :disabled="isLoadingPositionDetail || isSellingPosition"
+                :disabled="isLoadingPositionDetail || isSellingPosition || isBuyingPosition"
+                @click="void openBuyModalFromAction()"
+              >
+                买入
+              </CommonButton>
+              <CommonButton
+                variant="primary"
+                type="button"
+                :disabled="isLoadingPositionDetail || isSellingPosition || isBuyingPosition"
                 @click="void openSellModalFromAction()"
               >
                 卖出
@@ -473,6 +496,62 @@ onMounted(() => {
           </CommonButton>
           <CommonButton variant="primary" type="button" :disabled="isSellingPosition" @click="submitSellPosition">
             {{ isSellingPosition ? '卖出中...' : '确认卖出' }}
+          </CommonButton>
+        </div>
+      </template>
+    </CommonModal>
+
+    <CommonModal
+      v-model="showBuyModal"
+      :title="buyModalTitle"
+      :close-on-overlay="!isBuyingPosition"
+      @close="closeBuyModal"
+    >
+      <form class="gold-position-form" @submit.prevent="submitBuyPosition">
+        <CommonSelect
+          v-model="buyFundingAccountId"
+          label="资金账户"
+          :options="buyFundingAccountOptions"
+          :disabled="isBuyingPosition"
+        />
+        <p class="gold-position-form-hint gold-position-form-hint-warning">
+          买入会加仓当前持仓，并同步从所选资金账户扣减相应金额
+        </p>
+        <CommonInput
+          v-model="buyWeight"
+          label="买入克数(克)"
+          placeholder="请输入买入克数"
+          input-type="number"
+          input-mode="decimal"
+        />
+        <CommonInput
+          v-model="buyPrice"
+          label="买入价格(元/克)"
+          placeholder="请输入买入价格"
+          input-type="number"
+          input-mode="decimal"
+        />
+        <CommonInput
+          v-model="buyFee"
+          label="手续费(元)"
+          placeholder="请输入手续费"
+          input-type="number"
+          input-mode="decimal"
+        />
+        <p class="gold-position-form-hint">
+          预计支出：{{ buyAmountPreview }}
+        </p>
+        <CommonInput v-model="buyRemark" label="备注" placeholder="例如：逢低加仓" />
+        <p v-if="buyError" class="gold-position-form-error">{{ buyError }}</p>
+      </form>
+
+      <template #footer>
+        <div class="gold-position-actions">
+          <CommonButton variant="secondary" type="button" :disabled="isBuyingPosition" @click="closeBuyModal">
+            取消
+          </CommonButton>
+          <CommonButton variant="primary" type="button" :disabled="isBuyingPosition" @click="submitBuyPosition">
+            {{ isBuyingPosition ? '买入中...' : '确认买入' }}
           </CommonButton>
         </div>
       </template>

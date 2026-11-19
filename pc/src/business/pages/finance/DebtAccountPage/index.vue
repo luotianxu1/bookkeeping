@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -32,13 +32,15 @@ import { getErrorMessage } from '@/business/api/request'
 type DebtCardView = {
   account: Account
   displayName: string
-  avatarText: string
-  avatarClass: string
   noteText: string
   netAmount: number
   netAmountText: string
   netTagText: string
   netTagClass: 'is-positive' | 'is-negative' | 'is-settled'
+  lentTotalText: string
+  returnedTotalText: string
+  progressPercent: number
+  progressLabel: string
 }
 
 type DeleteTarget = {
@@ -133,23 +135,35 @@ const recordsByAccountId = computed(() => {
 
 const debtCards = computed<DebtCardView[]>(() =>
   accounts.value
-    .map((account, index) => {
+    .map((account) => {
       const contact = account.contactId
         ? (contactMap.value.get(account.contactId) ?? null)
         : null
       const records = recordsByAccountId.value.get(account.id) ?? []
       const netAmount = sumDebtBalance(records)
+      const lentTotal = records
+        .filter((record) => record.recordType !== 'repayment')
+        .reduce((total, record) => total + Number(record.amount ?? 0), 0)
+      const returnedTotal = records
+        .filter((record) => record.recordType === 'repayment')
+        .reduce((total, record) => total + Number(record.amount ?? 0), 0)
 
       return {
         account,
         displayName: contact?.name?.trim() || account.name,
-        avatarText: (contact?.name?.trim() || account.name || '债').slice(0, 1),
-        avatarClass: `debt-avatar-${index % 4}`,
         noteText: contact?.remark?.trim() || account.remark?.trim() || '',
         netAmount,
         netAmountText: formatSignedCurrency(netAmount),
         netTagText: formatDebtStatusText(netAmount),
         netTagClass: formatDebtStatusClass(netAmount),
+        lentTotalText: formatCurrency(lentTotal),
+        returnedTotalText: formatCurrency(returnedTotal),
+        progressPercent:
+          lentTotal > 0
+            ? Math.min(100, Math.round((returnedTotal / lentTotal) * 100))
+            : 0,
+        progressLabel:
+          netAmount > 0 ? '回款进度' : netAmount < 0 ? '还款进度' : '结清进度',
       }
     })
     .filter((card) => {
@@ -390,6 +404,17 @@ function formatDebtStatusClass(amount: number): DebtCardView['netTagClass'] {
   return 'is-settled'
 }
 
+// 收=红、支=绿：待收（对方欠我）用 danger，待还用 success。
+function statusTagType(amount: number): 'danger' | 'success' | 'info' {
+  if (amount > 0) {
+    return 'danger'
+  }
+  if (amount < 0) {
+    return 'success'
+  }
+  return 'info'
+}
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat('zh-CN', {
     minimumFractionDigits: 2,
@@ -415,7 +440,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof debtCards.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="债权账户">
       <template #right>
         <el-button type="primary" @click="openCreateAccountModal">
@@ -430,47 +455,50 @@ type DesktopRow = (typeof debtCards.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="债权账户列表"
       searchable
       search-placeholder="联系人 / 备注"
+      :search-keys="['displayName', 'noteText']"
       :rows="debtCards"
       :loading="isLoading"
+      row-key="account.id"
+      empty-title="没有债权账户"
+      empty-hint="点击右上角新增第一个债权账户"
     >
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="联系人"
-        prop="displayName"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="净额" min-width="160">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ row.netAmountText }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="状态"
-        prop="netTagText"
-        sortable="custom"
-        min-width="120"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="备注"
-        prop="noteText"
-        sortable="custom"
-        min-width="220"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="210" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card debt-account-card" :class="row.netTagClass">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span class="debt-account-avatar" aria-hidden="true">{{
+                row.displayName.slice(0, 1)
+              }}</span>
+              <span>{{ row.displayName }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" effect="light" :type="statusTagType(row.netAmount)">
+                {{ row.netTagText }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="debt-account-net">
+            <span class="debt-account-net-label">往来净额</span>
+            <strong class="debt-account-net-value">{{ row.netAmountText }}</strong>
+          </div>
+          <div class="debt-account-progress">
+            <div class="debt-account-progress-meta">
+              <span>{{ row.progressLabel }}</span>
+              <span>{{ row.returnedTotalText }} / {{ row.lentTotalText }}</span>
+            </div>
+            <el-progress
+              :percentage="row.progressPercent"
+              :show-text="false"
+              :stroke-width="8"
+              :status="row.netAmount === 0 ? 'success' : undefined"
+            />
+          </div>
+          <p v-if="row.noteText" class="record-card-note">{{ row.noteText }}</p>
+          <div class="record-card-foot">
             <el-button
               link
               type="primary"
@@ -478,20 +506,22 @@ type DesktopRow = (typeof debtCards.value)[number]
             >
               明细
             </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="openEditAccountModal(row.account)"
-            >
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="openDeleteModal(row.account)">
-              删除
-            </el-button>
+            <div class="pc-row-actions">
+              <el-button
+                link
+                type="primary"
+                @click="openEditAccountModal(row.account)"
+              >
+                编辑
+              </el-button>
+              <el-button link type="danger" @click="openDeleteModal(row.account)">
+                删除
+              </el-button>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -571,3 +601,56 @@ type DesktopRow = (typeof debtCards.value)[number]
     </CommonModal>
   </section>
 </template>
+<style scoped>
+/* 债权账户卡：方向色 + 大数字净额 + 回款/还款进度条。收=红、支=绿。 */
+.debt-account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.debt-account-net {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.debt-account-net-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.debt-account-net-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.debt-account-card.is-positive .debt-account-net-value {
+  color: var(--el-color-danger);
+}
+.debt-account-card.is-negative .debt-account-net-value {
+  color: var(--el-color-success);
+}
+.debt-account-card.is-settled .debt-account-net-value {
+  color: var(--el-text-color-secondary);
+}
+.debt-account-progress {
+  display: grid;
+  gap: 6px;
+}
+.debt-account-progress-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+</style>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MetricStrip from '@/business/components/MetricStrip.vue'
 
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
@@ -203,7 +203,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof contacts.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="联系人">
       <template #right>
         <el-button type="primary" @click="openCreateModal">
@@ -231,51 +231,44 @@ type DesktopRow = (typeof contacts.value)[number]
         },
       ]"
     />
-    <DesktopTable
+    <DesktopRecordList
       title="通讯录"
       searchable
       search-placeholder="姓名 / 电话 / 备注"
       :rows="contacts"
       :loading="isLoading"
+      empty-title="还没有联系人"
+      empty-hint="点击右上角新增第一位联系人"
     >
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="姓名"
-        prop="name"
-        sortable="custom"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="电话"
-        prop="phone"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="备注"
-        prop="remark"
-        sortable="custom"
-        min-width="260"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="140" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button link type="primary" @click="openEditModal(row)">
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="openDeleteModal(row)">
-              删除
-            </el-button>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside pc-row-actions">
+              <el-button link type="primary" @click="openEditModal(row)">
+                编辑
+              </el-button>
+              <el-button link type="danger" @click="openDeleteModal(row)">
+                删除
+              </el-button>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <dl class="record-card-body">
+            <div>
+              <dt>电话</dt>
+              <dd class="num">
+                {{ row.phone || '未填写' }}
+              </dd>
+            </div>
+          </dl>
+          <p v-if="row.remark" class="record-card-note">
+            {{ row.remark }}
+          </p>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"

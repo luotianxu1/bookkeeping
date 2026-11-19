@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { formatPercentage } from '@/business/utils/percentage'
 
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
-import AmountText from '@/business/components/common/AmountText/index.vue'
 
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
@@ -295,10 +294,57 @@ async function remove() {
   }
 }
 
+function progressPercent(goal: SavingsGoal) {
+  return Math.min(100, Math.max(0, Number(goal.progressPercent) || 0))
+}
+
+function isNearComplete(goal: SavingsGoal) {
+  return goal.status === 'saving' && progressPercent(goal) >= 80
+}
+
+function daysUntil(dateStr: string | null) {
+  if (!dateStr) return null
+  const target = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(target.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - today.getTime()) / 86_400_000)
+}
+
+function deadlineText(goal: SavingsGoal) {
+  if (goal.status === 'overdue') return '已逾期'
+  if (goal.status === 'completed') return null
+  const days = daysUntil(goal.targetDate)
+  if (days === null) return null
+  if (days <= 0) return '今日截止'
+  return `剩 ${days} 天`
+}
+
+function deadlineTone(goal: SavingsGoal) {
+  const days = daysUntil(goal.targetDate)
+  return goal.status === 'overdue' || (days !== null && days <= 7)
+    ? 'danger'
+    : 'info'
+}
+
+function statusTagType(goal: SavingsGoal) {
+  return goal.status === 'completed'
+    ? 'success'
+    : goal.status === 'overdue'
+      ? 'danger'
+      : 'primary'
+}
+
+function progressColor(goal: SavingsGoal) {
+  if (goal.status === 'overdue') return 'var(--el-color-danger)'
+  if (goal.status === 'completed') return 'var(--el-color-success)'
+  return undefined
+}
+
 type DesktopRow = (typeof visibleGoals.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="储蓄目标">
       <template #right>
         <el-button :loading="list.loading.value" @click="list.run">
@@ -320,12 +366,16 @@ type DesktopRow = (typeof visibleGoals.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="储蓄计划"
       searchable
       search-placeholder="目标名称 / 账户"
       :rows="visibleGoals"
       :loading="list.loading.value"
+      :search-keys="['name', 'accountName']"
+      row-key="id"
+      empty-title="还没有储蓄目标"
+      empty-hint="点击右上角新增第一个储蓄目标"
     >
       <template #toolbar>
         <SegmentedControl
@@ -334,63 +384,71 @@ type DesktopRow = (typeof visibleGoals.value)[number]
           label="储蓄目标状态"
         />
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="目标"
-        prop="name"
-        sortable="custom"
-        min-width="170"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="关联账户"
-        prop="accountName"
-        sortable="custom"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="已存金额" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          <AmountText :value="money(row.currentAmount, row.currencyCode)" />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="目标金额" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.targetAmount, row.currencyCode) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="进度" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card goal-card"
+          :class="{
+            'goal-card--near': isNearComplete(row),
+            'goal-card--completed': row.status === 'completed',
+            'goal-card--overdue': row.status === 'overdue',
+          }"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <span
+                v-if="deadlineText(row)"
+                class="goal-deadline"
+                :class="`goal-deadline--${deadlineTone(row)}`"
+              >
+                {{ deadlineText(row) }}
+              </span>
+              <el-tag size="small" effect="plain" :type="statusTagType(row)">
+                {{ statusText(row) }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="goal-amount">
+            <span class="goal-amount-current">
+              {{ money(row.currentAmount, row.currencyCode) }}
+            </span>
+            <span class="goal-amount-target">
+              / {{ money(row.targetAmount, row.currencyCode) }}
+            </span>
+            <span class="goal-amount-percent">
+              {{ formatPercentage(row.progressPercent) }}
+            </span>
+          </div>
           <el-progress
-            :format="formatPercentage"
-            :percentage="
-              Math.min(100, (row.currentAmount / row.targetAmount) * 100)
-            "
+            class="goal-progress"
+            :percentage="progressPercent(row)"
+            :stroke-width="8"
+            :show-text="false"
+            :color="progressColor(row)"
           />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="截止日期"
-        prop="targetDate"
-        sortable="custom"
-        min-width="130"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="状态" min-width="100">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ statusText(row) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="310" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
+          <div class="record-card-body goal-meta">
+            <div>
+              <dt>关联账户</dt>
+              <dd>{{ row.accountName || '—' }}</dd>
+            </div>
+            <div v-if="row.status !== 'completed' && row.remainingAmount > 0">
+              <dt>还差</dt>
+              <dd>{{ money(row.remainingAmount, row.currencyCode) }}</dd>
+            </div>
+            <div
+              v-if="row.status !== 'completed' && row.monthlyNeeded !== null"
+            >
+              <dt>每月建议</dt>
+              <dd>{{ money(row.monthlyNeeded, row.currencyCode) }}</dd>
+            </div>
+            <div v-if="row.remark">
+              <dt>备注</dt>
+              <dd>{{ row.remark }}</dd>
+            </div>
+          </div>
+          <div class="record-card-foot">
             <el-button link type="primary" @click="openEntry(row, 'deposit')">
               存入
             </el-button>
@@ -412,9 +470,9 @@ type DesktopRow = (typeof visibleGoals.value)[number]
               删除
             </el-button>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonModal
       v-model="formOpen"
       :title="editing ? '修改储蓄目标' : '新增储蓄目标'"
@@ -587,3 +645,69 @@ type DesktopRow = (typeof visibleGoals.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 接近达成的目标：暖色渐变高亮，鼓励用户冲刺。 */
+.goal-card--near {
+  background: linear-gradient(
+    150deg,
+    var(--el-color-warning-light-9),
+    var(--el-bg-color) 55%
+  );
+  border-color: var(--el-color-warning-light-5);
+}
+.goal-card--completed {
+  background: linear-gradient(
+    150deg,
+    var(--el-color-success-light-9),
+    var(--el-bg-color) 55%
+  );
+  border-color: var(--el-color-success-light-5);
+}
+.goal-card--overdue {
+  border-color: var(--el-color-danger-light-5);
+}
+.goal-deadline {
+  font-size: 12px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.goal-deadline--danger {
+  font-weight: 600;
+  color: var(--el-color-danger);
+}
+.goal-deadline--info {
+  color: var(--el-text-color-secondary);
+}
+.goal-amount {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.goal-amount-current {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.goal-amount-target {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.goal-amount-percent {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  font-variant-numeric: tabular-nums;
+}
+.goal-progress {
+  margin-top: -2px;
+}
+.goal-meta {
+  margin-top: 2px;
+}
+</style>

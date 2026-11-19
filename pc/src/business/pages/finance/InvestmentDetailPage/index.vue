@@ -3,7 +3,7 @@ import { formatPercentage } from '@/business/utils/percentage'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { confirmAction } from '@/business/utils/confirm'
 // 投资详情页：负责数据加载与页面编排，行情/图表/弹窗/交易列表拆分至同目录子模块。
@@ -553,9 +553,30 @@ watch(
 
 type DividendRow = (typeof dividendRecords.value)[number]
 type PlanRow = (typeof autoInvestPlans.value)[number]
+
+function dividendTagType(status?: string | null) {
+  if (status === 'cancelled') return 'info'
+  if (status === 'planned') return 'primary'
+  return 'success'
+}
+
+function planTagType(status: string) {
+  if (status === 'active') return 'success'
+  if (status === 'paused') return 'warning'
+  return 'info'
+}
+
+function planCountdown(value: string | null | undefined) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const days = Math.ceil((date.getTime() - Date.now()) / 86400000)
+  if (days <= 0) return '今日执行'
+  return `${days} 天后`
+}
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader
       :title="detail?.name || detail?.position.productName || '投资详情'"
     >
@@ -814,40 +835,43 @@ type PlanRow = (typeof autoInvestPlans.value)[number]
           label="分红计划"
           name="dividends"
         >
-          <DesktopTable
+          <DesktopRecordList
             :rows="dividendRecords"
             :loading="false"
             title="近一年分红与计划"
+            :paginate="false"
           >
-            <!-- @vue-generic {DividendRow} -->
-            <el-table-column label="分红日期" min-width="150">
-              <template #default="{ row }: { row: DividendRow }">
-                {{ formatDividendDate(row.payDate) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DividendRow} -->
-            <el-table-column label="状态" min-width="150">
-              <template #default="{ row }: { row: DividendRow }">
-                {{ getDividendStatusLabel(row.status, row.actualAmount) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DividendRow} -->
-            <el-table-column label="每单位分红" min-width="150">
-              <template #default="{ row }: { row: DividendRow }">
-                {{ formatDividendPerUnit(row.dividendPerUnit) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {DividendRow} -->
-            <el-table-column label="预计 / 到账分红" min-width="150">
-              <template #default="{ row }: { row: DividendRow }">
-                {{
-                  formatCurrency(
-                    Number(row.actualAmount ?? row.expectedAmount ?? 0),
-                  )
-                }}
-              </template>
-            </el-table-column>
-          </DesktopTable>
+            <template #default="{ row }: { row: DividendRow }">
+              <article class="record-card dividend-card">
+                <div class="record-card-head">
+                  <div class="record-card-title">
+                    <span>{{ formatDividendDate(row.payDate) }}</span>
+                  </div>
+                  <div class="record-card-aside">
+                    <el-tag size="small" effect="plain" :type="dividendTagType(row.status)">
+                      {{ getDividendStatusLabel(row.status, row.actualAmount) }}
+                    </el-tag>
+                  </div>
+                </div>
+                <div class="dividend-card-amounts">
+                  <div>
+                    <span>每单位分红</span>
+                    <strong>{{ formatDividendPerUnit(row.dividendPerUnit) }}</strong>
+                  </div>
+                  <div>
+                    <span>预计 / 到账分红</span>
+                    <strong>
+                      {{
+                        formatCurrency(
+                          Number(row.actualAmount ?? row.expectedAmount ?? 0),
+                        )
+                      }}
+                    </strong>
+                  </div>
+                </div>
+              </article>
+            </template>
+          </DesktopRecordList>
         </el-tab-pane>
         <el-tab-pane
           v-if="showAutoInvestPlansSection"
@@ -865,78 +889,82 @@ type PlanRow = (typeof autoInvestPlans.value)[number]
               重试
             </el-button>
           </el-alert>
-          <DesktopTable
+          <DesktopRecordList
             :rows="autoInvestPlans"
             :loading="plansLoading"
             title="定投计划"
+            :paginate="false"
+            row-key="id"
           >
-            <!-- @vue-generic {PlanRow} -->
-            <el-table-column label="金额" min-width="150">
-              <template #default="{ row }: { row: PlanRow }">
-                {{ formatCurrency(Number(row.amount)) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {PlanRow} -->
-            <el-table-column label="频率" min-width="150">
-              <template #default="{ row }: { row: PlanRow }">
-                {{ formatAutoInvestFrequency(row.frequency) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {PlanRow} -->
-            <el-table-column label="状态" min-width="150">
-              <template #default="{ row }: { row: PlanRow }">
-                {{ formatAutoInvestStatus(row.status) }}
-              </template>
-            </el-table-column>
-            <el-table-column
-              prop="nextExecuteDate"
-              label="下次执行"
-              min-width="160"
-              sortable="custom"
-              show-overflow-tooltip
-            />
-            <el-table-column
-              prop="fundingAccountName"
-              label="扣款账户"
-              min-width="170"
-              sortable="custom"
-              show-overflow-tooltip
-            />
-            <!-- @vue-generic {PlanRow} -->
-            <el-table-column fixed="right" label="操作" width="180">
-              <template #default="{ row }: { row: PlanRow }">
-                <el-button
-                  link
-                  type="primary"
-                  :disabled="isSavingAutoInvest || !accountsReady"
-                  @click="autoInvestModalRef?.open(row)"
-                >
-                  修改
-                </el-button>
-                <el-button
-                  link
-                  type="primary"
-                  :disabled="isSavingAutoInvest"
-                  @click="
-                    updateAutoInvestPlanStatus(
-                      row,
-                      row.status === 'active' ? 'paused' : 'active',
-                    )
-                  "
-                >
-                  {{ row.status === 'active' ? '暂停' : '恢复' }}
-                </el-button>
-                <el-button
-                  link
-                  type="danger"
-                  :disabled="isSavingAutoInvest"
-                  @click="removeAutoInvestPlan(row)"
-                >
-                  删除
-                </el-button>
-              </template>
-            </el-table-column>
-          </DesktopTable>
+            <template #default="{ row }: { row: PlanRow }">
+              <article class="record-card auto-invest-card">
+                <div class="record-card-head">
+                  <div class="record-card-title">
+                    <strong class="auto-invest-card-amount">
+                      {{ formatCurrency(Number(row.amount)) }}
+                    </strong>
+                    <span class="auto-invest-card-frequency">
+                      / {{ formatAutoInvestFrequency(row.frequency) }}
+                    </span>
+                  </div>
+                  <div class="record-card-aside">
+                    <el-tag size="small" effect="plain" :type="planTagType(row.status)">
+                      {{ formatAutoInvestStatus(row.status) }}
+                    </el-tag>
+                  </div>
+                </div>
+                <dl class="record-card-body">
+                  <div>
+                    <dt>下次执行</dt>
+                    <dd>
+                      {{ row.nextExecuteDate || '--' }}
+                      <span
+                        v-if="planCountdown(row.nextExecuteDate)"
+                        class="auto-invest-card-countdown"
+                      >
+                        {{ planCountdown(row.nextExecuteDate) }}
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>扣款账户</dt>
+                    <dd>{{ row.fundingAccountName || '--' }}</dd>
+                  </div>
+                </dl>
+                <div class="record-card-foot">
+                  <el-button
+                    link
+                    type="primary"
+                    :disabled="isSavingAutoInvest || !accountsReady"
+                    @click="autoInvestModalRef?.open(row)"
+                  >
+                    修改
+                  </el-button>
+                  <el-button
+                    link
+                    type="primary"
+                    :disabled="isSavingAutoInvest"
+                    @click="
+                      updateAutoInvestPlanStatus(
+                        row,
+                        row.status === 'active' ? 'paused' : 'active',
+                      )
+                    "
+                  >
+                    {{ row.status === 'active' ? '暂停' : '恢复' }}
+                  </el-button>
+                  <el-button
+                    link
+                    type="danger"
+                    :disabled="isSavingAutoInvest"
+                    @click="removeAutoInvestPlan(row)"
+                  >
+                    删除
+                  </el-button>
+                </div>
+              </article>
+            </template>
+          </DesktopRecordList>
         </el-tab-pane>
       </el-tabs>
     </template>
@@ -1009,3 +1037,52 @@ type PlanRow = (typeof autoInvestPlans.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 分红卡：日期 + 状态徽标 + 双列金额 */
+.dividend-card-amounts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.dividend-card-amounts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.dividend-card-amounts strong {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 定投卡：金额大数字 + 倒计时徽标 */
+.auto-invest-card-amount {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.auto-invest-card-frequency {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+}
+
+.auto-invest-card-countdown {
+  margin-left: 6px;
+  padding: 1px 8px;
+  font-size: 12px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-radius: 999px;
+}
+</style>

@@ -3,7 +3,7 @@ import { formatPercentage } from '@/business/utils/percentage'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
@@ -173,7 +173,7 @@ onMounted(loadEstimate)
 type ScenarioRow = (typeof scenarios.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="财务自由测算">
       <template #right>
         <el-button @click="resetAssumptions">恢复默认</el-button>
@@ -287,40 +287,57 @@ type ScenarioRow = (typeof scenarios.value)[number]
           </p>
         </PagePanel>
         <div class="desktop-results">
-          <DesktopTable :rows="scenarios" :loading="false" title="方案对比">
-            <el-table-column
-              prop="label"
-              label="方案"
-              min-width="140"
-              sortable="custom"
-              show-overflow-tooltip
-            />
-            <!-- @vue-generic {ScenarioRow} -->
-            <el-table-column label="年化回报" min-width="150">
-              <template #default="{ row }: { row: ScenarioRow }">
-                {{ formatPercent(row.annualReturn) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {ScenarioRow} -->
-            <el-table-column label="达标时间" min-width="150">
-              <template #default="{ row }: { row: ScenarioRow }">
-                {{ formatDuration(row.monthsToFreedom) }}
-              </template>
-            </el-table-column>
-            <!-- @vue-generic {ScenarioRow} -->
-            <el-table-column fixed="right" label="操作" width="150">
-              <template #default="{ row }: { row: ScenarioRow }">
-                <el-button
-                  link
-                  type="primary"
-                  :aria-label="row.label + '方案'"
-                  @click="selectedScenarioId = row.id"
-                >
-                  {{ row.id === selectedScenarioId ? '已选择' : '选择方案' }}
-                </el-button>
-              </template>
-            </el-table-column>
-          </DesktopTable>
+          <DesktopRecordList
+            :rows="scenarios"
+            :loading="false"
+            title="方案对比"
+            :paginate="false"
+            empty-title="暂无测算方案"
+            empty-hint="填写测算参数后生成方案"
+          >
+            <template #default="{ row }: { row: ScenarioRow }">
+              <article
+                class="record-card scenario-card"
+                :class="{ 'is-selected': row.id === selectedScenarioId }"
+              >
+                <div class="record-card-head">
+                  <div class="record-card-title">
+                    <span>{{ row.label }}</span>
+                  </div>
+                  <div class="record-card-aside">
+                    <el-tag
+                      v-if="row.id === selectedScenarioId"
+                      size="small"
+                      type="primary"
+                      effect="light"
+                    >
+                      当前方案
+                    </el-tag>
+                  </div>
+                </div>
+                <div class="scenario-duration">
+                  <span class="scenario-duration-label">预计达标时间</span>
+                  <strong>{{ formatDuration(row.monthsToFreedom) }}</strong>
+                </div>
+                <dl class="record-card-body">
+                  <div>
+                    <dt>年化回报</dt>
+                    <dd>{{ formatPercent(row.annualReturn) }}</dd>
+                  </div>
+                </dl>
+                <div class="record-card-foot">
+                  <el-button
+                    link
+                    type="primary"
+                    :aria-label="row.label + '方案'"
+                    @click="selectedScenarioId = row.id"
+                  >
+                    {{ row.id === selectedScenarioId ? '已选择' : '选择方案' }}
+                  </el-button>
+                </div>
+              </article>
+            </template>
+          </DesktopRecordList>
           <PagePanel title="资产与目标趋势">
             <template #actions>
               <SegmentedControl
@@ -373,3 +390,29 @@ type ScenarioRow = (typeof scenarios.value)[number]
     </template>
   </section>
 </template>
+<style scoped>
+/* 方案对比卡：达标时间大数字 + 当前方案高亮描边 */
+.scenario-card.is-selected {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 8px 20px rgba(64, 128, 255, 0.16);
+}
+
+.scenario-duration {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.scenario-duration-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.scenario-duration strong {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--el-color-primary);
+  font-variant-numeric: tabular-nums;
+}
+</style>

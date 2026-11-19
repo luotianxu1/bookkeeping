@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AmountText from '@/business/components/common/AmountText/index.vue'
 import { amountTone } from '@/business/utils/amount-tone'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -299,10 +299,16 @@ async function cancelPlan() {
   }
 }
 
+function recoveryTagType(status: ExpenseRecovery['reimbursementStatus']) {
+  if (status === 'received') return 'success'
+  if (status === 'pending' || status === 'partial') return 'warning'
+  return 'info'
+}
+
 type DesktopRow = (typeof items.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="退款与报销">
       <template #right>
         <el-button :loading="loading" @click="load">刷新</el-button>
@@ -343,78 +349,84 @@ type DesktopRow = (typeof items.value)[number]
         ]"
       />
     </div>
-    <DesktopTable
+    <DesktopRecordList
+      class="recovery-list"
       :paginate="false"
       title="报销与退款明细"
       :rows="items"
       :loading="loading"
+      row-key="id"
+      empty-title="暂无报销与退款"
+      empty-hint="标记可报销或可退款后，对应支出的记录会出现在这里"
     >
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="支出"
-        prop="title"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="支出日期" min-width="180">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ date(row.occurredAt) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="金额" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          <AmountText
-            :value="money(row.amount, row.currencyCode)"
-            :tone="amountTone(-row.amount)"
-          />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="已退款" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          <AmountText
-            :value="money(row.refundedAmount, row.currencyCode)"
-            :tone="amountTone(row.refundedAmount)"
-          />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="已报销" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          <AmountText
-            :value="money(row.reimbursedAmount, row.currencyCode)"
-            :tone="amountTone(row.reimbursedAmount)"
-          />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="待报销" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.pendingAmount, row.currencyCode) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="预计报销日期"
-        prop="expectedReimbursementDate"
-        sortable="custom"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="170" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card recovery-card"
+          :class="{ 'recovery-card--overdue': isOverdue(row) }"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.title }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" :type="recoveryTagType(row.reimbursementStatus)">
+                {{ statusLabels[row.reimbursementStatus] }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="recovery-amount">
+            <span class="recovery-amount-label">支出金额</span>
+            <AmountText
+              tag="strong"
+              :value="money(row.amount, row.currencyCode)"
+              :tone="amountTone(-row.amount)"
+            />
+          </div>
+          <div class="record-card-body recovery-meta">
+            <div>
+              <dt>支出日期</dt>
+              <dd>{{ date(row.occurredAt) }}</dd>
+            </div>
+            <div>
+              <dt>已退款</dt>
+              <dd>
+                <AmountText
+                  :value="money(row.refundedAmount, row.currencyCode)"
+                  :tone="amountTone(row.refundedAmount)"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>已报销</dt>
+              <dd>
+                <AmountText
+                  :value="money(row.reimbursedAmount, row.currencyCode)"
+                  :tone="amountTone(row.reimbursedAmount)"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>待报销</dt>
+              <dd>{{ money(row.pendingAmount, row.currencyCode) }}</dd>
+            </div>
+            <div v-if="row.expectedReimbursementDate">
+              <dt>预计报销日期</dt>
+              <dd :class="{ 'recovery-overdue-text': isOverdue(row) }">
+                {{ row.expectedReimbursementDate }}{{ isOverdue(row) ? ' · 已逾期' : '' }}
+              </dd>
+            </div>
+          </div>
+          <div class="record-card-foot">
+            <span class="recovery-category">
+              {{ row.categoryName }} · {{ row.accountName }}
+            </span>
             <el-button link type="primary" @click="openDetail(row.id)">
               详情 / 登记到账
             </el-button>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+        </article>
+      </template>
+    </DesktopRecordList>
     <div class="pc-pagination">
       <el-pagination
         v-model:current-page="page"
@@ -710,3 +722,36 @@ type DesktopRow = (typeof items.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 报销状态卡：支绿回红，逾期红边提示。 */
+.recovery-card--overdue {
+  border-color: var(--el-color-danger-light-5);
+}
+.recovery-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.recovery-amount-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.recovery-amount :deep(strong) {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.recovery-overdue-text {
+  color: var(--el-color-danger);
+  font-weight: 600;
+}
+.recovery-category {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

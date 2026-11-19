@@ -10,6 +10,8 @@ const props = withDefaults(
     searchPlaceholder?: string
     searchKeys?: string[]
     paginate?: boolean
+    rowKey?: string
+    defaultExpandAll?: boolean
   }>(),
   {
     loading: false,
@@ -118,6 +120,8 @@ watch([size, keyword], () => {
     <el-table
       v-else
       :data="paged"
+      :row-key="rowKey"
+      :default-expand-all="defaultExpandAll"
       stripe
       highlight-current-row
       empty-text="暂无数据"

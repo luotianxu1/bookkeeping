@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -33,8 +33,6 @@ import { getErrorMessage } from '@/business/api/request'
 type HumanRelationCardView = {
   account: Account
   displayName: string
-  avatarText: string
-  avatarClass: string
   secondaryText: string
   noteText: string
   outgoingTotal: number
@@ -133,7 +131,7 @@ const recordsByAccountId = computed(() => {
 })
 
 const relationCards = computed<HumanRelationCardView[]>(() =>
-  accounts.value.map((account, index) => {
+  accounts.value.map((account) => {
     const contact = account.contactId
       ? (contactMap.value.get(account.contactId) ?? null)
       : null
@@ -145,8 +143,6 @@ const relationCards = computed<HumanRelationCardView[]>(() =>
     return {
       account,
       displayName: contact?.name?.trim() || account.name,
-      avatarText: (contact?.name?.trim() || account.name || '礼').slice(0, 1),
-      avatarClass: `human-relation-avatar-${index % 4}`,
       secondaryText: contact?.phone?.trim()
         ? `手机号 ${contact.phone.trim()}`
         : '未填写联系人手机号',
@@ -367,6 +363,17 @@ function formatSignedCurrency(value: number) {
   return `${sign}¥${formatNumber(value)}`
 }
 
+// 人情方向色：净送出=绿（支出多）、净收到=红（收入多）。
+function netTagType(amount: number): 'success' | 'danger' | 'info' {
+  if (amount > 0) {
+    return 'success'
+  }
+  if (amount < 0) {
+    return 'danger'
+  }
+  return 'info'
+}
+
 function showFeedback(message: string, type: 'success' | 'error') {
   feedbackMessage.value = message
   feedbackType.value = type
@@ -376,7 +383,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof relationCards.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="人情往来">
       <template #right>
         <el-button type="primary" @click="openCreateAccountModal">
@@ -391,53 +398,57 @@ type DesktopRow = (typeof relationCards.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="往来账户列表"
       searchable
       search-placeholder="联系人 / 备注"
+      :search-keys="['displayName', 'noteText']"
       :rows="relationCards"
       :loading="isLoading"
+      row-key="account.id"
+      empty-title="没有人情账户"
+      empty-hint="点击右上角新增第一个人情账户"
     >
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="联系人"
-        prop="displayName"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="累计送出" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatCurrency(row.outgoingTotal) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="累计收到" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatCurrency(row.incomingTotal) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="结余"
-        prop="netAmountText"
-        sortable="custom"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="备注"
-        prop="noteText"
-        sortable="custom"
-        min-width="220"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="210" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card human-relation-card"
+          :class="
+            row.netAmount > 0
+              ? 'is-outgoing'
+              : row.netAmount < 0
+                ? 'is-incoming'
+                : 'is-even'
+          "
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span class="human-relation-avatar" aria-hidden="true">{{
+                row.displayName.slice(0, 1)
+              }}</span>
+              <span>{{ row.displayName }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" effect="light" :type="netTagType(row.netAmount)">
+                {{ row.netAmount > 0 ? '净送出' : row.netAmount < 0 ? '净收到' : '礼尚往来' }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="human-relation-net">
+            <span class="human-relation-net-label">往来结余</span>
+            <strong class="human-relation-net-value">{{ row.netAmountText }}</strong>
+          </div>
+          <div class="human-relation-dual">
+            <div class="is-outgoing">
+              <span>累计送出</span>
+              <strong>{{ formatCurrency(row.outgoingTotal) }}</strong>
+            </div>
+            <div class="is-incoming">
+              <span>累计收到</span>
+              <strong>{{ formatCurrency(row.incomingTotal) }}</strong>
+            </div>
+          </div>
+          <p v-if="row.noteText" class="record-card-note">{{ row.noteText }}</p>
+          <div class="record-card-foot">
             <el-button
               link
               type="primary"
@@ -445,20 +456,22 @@ type DesktopRow = (typeof relationCards.value)[number]
             >
               明细
             </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="openEditAccountModal(row.account)"
-            >
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="openDeleteModal(row.account)">
-              删除
-            </el-button>
+            <div class="pc-row-actions">
+              <el-button
+                link
+                type="primary"
+                @click="openEditAccountModal(row.account)"
+              >
+                编辑
+              </el-button>
+              <el-button link type="danger" @click="openDeleteModal(row.account)">
+                删除
+              </el-button>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -540,3 +553,75 @@ type DesktopRow = (typeof relationCards.value)[number]
     </CommonModal>
   </section>
 </template>
+<style scoped>
+/* 人情往来卡：结余大数字 + 送出/收到双列统计，收=红、送=绿。 */
+.human-relation-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+}
+.human-relation-net {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.human-relation-net-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.human-relation-net-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.human-relation-card.is-outgoing .human-relation-net-value {
+  color: var(--el-color-success);
+}
+.human-relation-card.is-incoming .human-relation-net-value {
+  color: var(--el-color-danger);
+}
+.human-relation-card.is-even .human-relation-net-value {
+  color: var(--el-text-color-secondary);
+}
+.human-relation-dual {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.human-relation-dual > div {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+}
+.human-relation-dual > div.is-outgoing {
+  background: var(--el-color-success-light-9);
+}
+.human-relation-dual > div.is-incoming {
+  background: var(--el-color-danger-light-9);
+}
+.human-relation-dual span {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.human-relation-dual strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.human-relation-dual > div.is-outgoing strong {
+  color: var(--el-color-success);
+}
+.human-relation-dual > div.is-incoming strong {
+  color: var(--el-color-danger);
+}
+</style>

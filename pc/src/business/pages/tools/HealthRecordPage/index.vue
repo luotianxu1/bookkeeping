@@ -7,7 +7,7 @@ import PagePanel from '@/business/components/PagePanel.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ECharts, EChartsCoreOption } from 'echarts'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 import CommonInput from '@/business/components/common/CommonInput/index.vue'
 
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
@@ -229,30 +229,43 @@ async function onSubmit() {
         />
       </PagePanel>
     </div>
-    <DesktopTable
+    <DesktopRecordList
       title="历史体重"
       searchable
       :rows="records"
       :loading="isLoading"
-      aria-label="历史记录"
+      empty-title="还没有体重记录"
+      empty-hint="完成一次打卡后，记录会出现在这里"
     >
-      <template #toolbar><h2>最近记录</h2></template>
-      <el-table-column prop="recordDate" label="日期" min-width="140" />
-      <el-table-column prop="weight" label="体重（kg）" min-width="140" />
-      <!-- @vue-generic {WeightRecord} -->
-      <el-table-column label="体脂率" min-width="120">
-        <template #default="{ row }: { row: WeightRecord }">
-          {{
-            row.bodyFatRate == null ? '—' : formatPercentage(row.bodyFatRate)
-          }}
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="remark"
-        label="备注"
-        min-width="220"
-        show-overflow-tooltip
-      />
-    </DesktopTable>
+      <template #default="{ row }: { row: WeightRecord }">
+        <article class="record-card weight-record-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.recordDate }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" type="primary" effect="plain">
+                {{ row.weight }} kg
+              </el-tag>
+            </div>
+          </div>
+          <dl class="record-card-body">
+            <div>
+              <dt>体脂率</dt>
+              <dd>
+                {{
+                  row.bodyFatRate == null
+                    ? '—'
+                    : formatPercentage(row.bodyFatRate)
+                }}
+              </dd>
+            </div>
+          </dl>
+          <p v-if="row.remark" class="record-card-note">
+            {{ row.remark }}
+          </p>
+        </article>
+      </template>
+    </DesktopRecordList>
   </section>
 </template>

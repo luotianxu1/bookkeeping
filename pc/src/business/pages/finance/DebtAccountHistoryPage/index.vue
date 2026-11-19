@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import MetricStrip from '@/business/components/MetricStrip.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -19,8 +19,6 @@ import { getErrorMessage } from '@/business/api/request'
 type DebtHistoryGroup = {
   accountId: number
   name: string
-  avatarText: string
-  avatarClass: string
   records: DebtRecord[]
   balance: number
   settled: boolean
@@ -48,7 +46,7 @@ const debtGroups = computed<DebtHistoryGroup[]>(() => {
 
   return accounts.value
     .filter((account) => DEBT_ACCOUNT_CODES.has(account.accountTypeCode ?? ''))
-    .map((account, index) => {
+    .map((account) => {
       const records = (recordsByAccountId.get(account.id) ?? [])
         .slice()
         .sort(
@@ -65,8 +63,6 @@ const debtGroups = computed<DebtHistoryGroup[]>(() => {
       return {
         accountId: account.id,
         name,
-        avatarText: (name || '债').slice(0, 1),
-        avatarClass: `debt-history-avatar-${index % 4}`,
         records,
         balance,
         settled: Math.round(balance * 100) === 0,
@@ -134,10 +130,42 @@ function getDebtRecordBalanceDelta(
   return record.recordType === 'repayment' ? amount : -amount
 }
 
+function formatDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+}
+
+function formatRecordLabel(record: DebtRecord) {
+  if (record.direction === 'receivable') {
+    return record.recordType === 'repayment' ? '收款' : '借出'
+  }
+  return record.recordType === 'repayment' ? '还款' : '借入'
+}
+
+// 收款/借出（红）与还款/借入（绿）在时间线上用方向色区分。
+function formatRecordAmountText(record: DebtRecord) {
+  const amount = formatCurrency(Number(record.amount ?? 0))
+  return `${record.direction === 'receivable' ? '+' : '-'}${amount}`
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(value))
+}
+
+function formatCurrency(value: number) {
+  return `¥${formatNumber(value)}`
+}
+
 type DesktopRow = (typeof debtGroups.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="已结清账户"><template #right></template></PageHeader>
     <el-alert
       v-if="pageError"
@@ -149,34 +177,132 @@ type DesktopRow = (typeof debtGroups.value)[number]
     <MetricStrip
       :items="[{ label: '已结清账户', value: settledAccountCount }]"
     />
-    <DesktopTable
+    <DesktopRecordList
       :rows="debtGroups"
       :loading="isLoading"
       title="已结清账户"
-      search-placeholder="搜索账户或联系人"
-      searchable
+      search-placeholder="账户 / 联系人"
+      :search-keys="['name']"
+      row-key="accountId"
+      empty-title="暂无已结清账户"
+      empty-hint="往来全部结清的债权账户会自动归档到这里"
     >
-      <el-table-column
-        prop="name"
-        label="账户 / 联系人"
-        min-width="240"
-        sortable="custom"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="状态" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          <el-tag type="success">已结清</el-tag>
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column fixed="right" label="操作" width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          <el-button link type="primary" @click="openDebtDetail(row.accountId)">
-            查看往来
-          </el-button>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card debt-history-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span class="debt-history-avatar" aria-hidden="true">{{
+                row.name.slice(0, 1)
+              }}</span>
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" type="success" effect="light">已结清</el-tag>
+            </div>
+          </div>
+          <ol class="debt-history-timeline">
+            <li
+              v-for="record in row.records.slice(0, 5)"
+              :key="record.id"
+              :class="record.direction === 'receivable' ? 'is-receivable' : 'is-payable'"
+            >
+              <span class="debt-history-dot" aria-hidden="true"></span>
+              <span class="debt-history-date">{{ formatDate(record.occurredAt) }}</span>
+              <span class="debt-history-label">{{ formatRecordLabel(record) }}</span>
+              <strong class="debt-history-amount">{{
+                formatRecordAmountText(record)
+              }}</strong>
+            </li>
+          </ol>
+          <p v-if="row.records.length > 5" class="debt-history-more">
+            共 {{ row.records.length }} 笔往来，仅展示最近 5 笔
+          </p>
+          <div class="record-card-foot">
+            <span class="debt-history-count">共 {{ row.records.length }} 笔往来</span>
+            <el-button link type="primary" @click="openDebtDetail(row.accountId)">
+              查看往来
+            </el-button>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
   </section>
 </template>
+<style scoped>
+/* 已结清账户卡：账户名 + 内嵌最近往来的迷你时间线，方向色区分收/支。 */
+.debt-history-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+.debt-history-timeline {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 0 14px;
+  list-style: none;
+  border-left: 2px solid var(--el-border-color-lighter);
+}
+.debt-history-timeline li {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.debt-history-dot {
+  position: absolute;
+  top: 0.55em;
+  left: -20px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--el-text-color-placeholder);
+}
+.debt-history-timeline li.is-receivable .debt-history-dot {
+  background: var(--el-color-danger);
+}
+.debt-history-timeline li.is-payable .debt-history-dot {
+  background: var(--el-color-success);
+}
+.debt-history-date {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.debt-history-label {
+  flex-shrink: 0;
+}
+.debt-history-amount {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.debt-history-timeline li.is-receivable .debt-history-amount {
+  color: var(--el-color-danger);
+}
+.debt-history-timeline li.is-payable .debt-history-amount {
+  color: var(--el-color-success);
+}
+.debt-history-more {
+  margin: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.debt-history-count {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+</style>

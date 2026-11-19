@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { formatAmount as formatNumberAmount } from '@/business/utils/format'
 import { computed, onMounted, ref } from 'vue'
@@ -374,10 +374,18 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
+function profitToneClass(value: number | null | undefined) {
+  const amount = Number(value ?? 0)
+  if (!Number.isFinite(amount) || amount === 0) {
+    return ''
+  }
+  return amount > 0 ? 'tone-up' : 'tone-down'
+}
+
 type DesktopRow = (typeof investmentAccountCards.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="投资账户">
       <template #right>
         <el-button type="primary" @click="openCreateAccountModal">
@@ -392,59 +400,49 @@ type DesktopRow = (typeof investmentAccountCards.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="投资账户列表"
       searchable
       search-placeholder="账户名称"
+      :search-keys="['name']"
       :rows="investmentAccountCards"
       :loading="isLoading"
+      row-key="accountId"
     >
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="账户"
-        prop="name"
-        sortable="custom"
-        min-width="200"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="市值" min-width="160">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatCurrency(row.marketValue) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="当日收益" min-width="160">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatNullableSignedCurrency(row.dayProfit) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="累计收益" min-width="160">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatSignedCurrency(row.totalProfit) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="股票数"
-        prop="stockCount"
-        sortable="custom"
-        min-width="100"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="基金数"
-        prop="fundCount"
-        sortable="custom"
-        min-width="100"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="210" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card invest-account-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside invest-account-counts">
+              <el-tag size="small" effect="plain">A股 {{ row.stockCount }}</el-tag>
+              <el-tag size="small" effect="plain">基金 {{ row.fundCount }}</el-tag>
+            </div>
+          </div>
+          <div class="invest-account-market">
+            <span class="invest-account-market-label">账户市值</span>
+            <strong class="invest-account-market-value">
+              {{ formatCurrency(row.marketValue) }}
+            </strong>
+          </div>
+          <div class="invest-account-profits">
+            <div
+              class="invest-account-profit"
+              :class="profitToneClass(row.dayProfit)"
+            >
+              <span>当日收益</span>
+              <strong>{{ formatNullableSignedCurrency(row.dayProfit) }}</strong>
+            </div>
+            <div
+              class="invest-account-profit"
+              :class="profitToneClass(row.totalProfit)"
+            >
+              <span>累计收益</span>
+              <strong>{{ formatSignedCurrency(row.totalProfit) }}</strong>
+            </div>
+          </div>
+          <div class="record-card-foot">
             <el-button
               link
               type="primary"
@@ -459,13 +457,17 @@ type DesktopRow = (typeof investmentAccountCards.value)[number]
             >
               编辑
             </el-button>
-            <el-button link type="danger" @click="openDeleteModal(row.account)">
+            <el-button
+              link
+              type="danger"
+              @click="openDeleteModal(row.account)"
+            >
               删除
             </el-button>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -551,3 +553,61 @@ type DesktopRow = (typeof investmentAccountCards.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 投资账户卡：市值大数字 + 双列盈亏块（红涨绿跌） */
+.invest-account-counts {
+  display: flex;
+  gap: 6px;
+}
+
+.invest-account-market {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.invest-account-market-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.invest-account-market-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.invest-account-profits {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.invest-account-profit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.invest-account-profit strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 中国市场惯例：盈利红、亏损绿 */
+.invest-account-profit.tone-up strong {
+  color: var(--color-danger);
+}
+
+.invest-account-profit.tone-down strong {
+  color: var(--color-success);
+}
+</style>

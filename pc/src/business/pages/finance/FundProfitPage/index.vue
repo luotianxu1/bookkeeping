@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { useRouter } from 'vue-router'
 import AmountText from '@/business/components/common/AmountText/index.vue'
@@ -109,7 +109,7 @@ function openDetail(item: FundProfitDetail) {
 type ProfitRow = (typeof visibleDetails.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="基金收益">
       <template #right>
         <el-button
@@ -315,12 +315,15 @@ type ProfitRow = (typeof visibleDetails.value)[number]
           <p class="calendar-footnote">{{ calendarFootnote }}</p>
         </PagePanel>
       </div>
-      <DesktopTable
+      <DesktopRecordList
         :rows="visibleDetails"
         :loading="isDetailLoading"
         title="基金收益明细"
-        search-placeholder="搜索基金"
+        search-placeholder="搜索基金或代码"
         searchable
+        :search-keys="['productName', 'productSymbol']"
+        empty-title="暂无基金收益"
+        empty-hint="持有基金后可查看区间与累计收益"
       >
         <template #toolbar>
           <el-radio-group v-model="selectedDetailFilter">
@@ -333,56 +336,51 @@ type ProfitRow = (typeof visibleDetails.value)[number]
             </el-radio-button>
           </el-radio-group>
         </template>
-        <el-table-column
-          prop="productName"
-          label="基金"
-          min-width="240"
-          sortable="custom"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="productSymbol"
-          label="代码"
-          min-width="140"
-          sortable="custom"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {ProfitRow} -->
-        <el-table-column label="持有份额" min-width="150">
-          <template #default="{ row }: { row: ProfitRow }">
-            {{ formatHoldingQuantity(row.holdingQuantity) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {ProfitRow} -->
-        <el-table-column label="市值" min-width="150">
-          <template #default="{ row }: { row: ProfitRow }">
-            {{ formatCurrency(row.holdingAmount) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {ProfitRow} -->
-        <el-table-column label="区间收益" min-width="150">
-          <template #default="{ row }: { row: ProfitRow }">
-            <AmountText
-              :value="formatSignedCurrency(row.periodProfit)"
-              :tone="getTone(row.periodProfit)"
-            />
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {ProfitRow} -->
-        <el-table-column label="累计收益" min-width="150">
-          <template #default="{ row }: { row: ProfitRow }">
-            {{ formatSignedCurrency(getDetailAccumulatedProfit(row)) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {ProfitRow} -->
-        <el-table-column fixed="right" label="操作" width="150">
-          <template #default="{ row }: { row: ProfitRow }">
-            <el-button link type="primary" @click="openDetail(row)">
-              查看持仓
-            </el-button>
-          </template>
-        </el-table-column>
-      </DesktopTable>
+        <template #default="{ row }: { row: ProfitRow }">
+          <article class="record-card fund-profit-card">
+            <div class="record-card-head">
+              <div class="record-card-title">
+                <span>{{ row.productName }}</span>
+              </div>
+              <div class="record-card-aside">
+                <el-tag size="small" effect="plain">
+                  {{ row.productSymbol }}
+                </el-tag>
+              </div>
+            </div>
+            <div class="fund-profit-period">
+              <span class="fund-profit-period-label">区间收益</span>
+              <AmountText
+                class="fund-profit-period-value"
+                :value="formatSignedCurrency(row.periodProfit)"
+                :tone="getTone(row.periodProfit)"
+                font-size="24px"
+              />
+            </div>
+            <dl class="record-card-body">
+              <div>
+                <dt>持有份额</dt>
+                <dd>{{ formatHoldingQuantity(row.holdingQuantity) }}</dd>
+              </div>
+              <div>
+                <dt>市值</dt>
+                <dd>{{ formatCurrency(row.holdingAmount) }}</dd>
+              </div>
+              <div>
+                <dt>累计收益</dt>
+                <dd>
+                  {{ formatSignedCurrency(getDetailAccumulatedProfit(row)) }}
+                </dd>
+              </div>
+            </dl>
+            <div class="record-card-foot">
+              <el-button link type="primary" @click="openDetail(row)">
+                查看持仓
+              </el-button>
+            </div>
+          </article>
+        </template>
+      </DesktopRecordList>
     </template>
     <CommonFeedback
       v-model="showFeedbackModal"
@@ -391,3 +389,21 @@ type ProfitRow = (typeof visibleDetails.value)[number]
     />
   </section>
 </template>
+<style scoped>
+/* 基金收益明细卡：基金名 + 代码标签 + 区间收益大数字（涨红跌绿） */
+.fund-profit-period {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fund-profit-period-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.fund-profit-period-value {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+</style>

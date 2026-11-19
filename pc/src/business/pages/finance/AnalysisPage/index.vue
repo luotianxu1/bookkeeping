@@ -6,6 +6,7 @@ import AmountText from '@/business/components/common/AmountText/index.vue'
 import { amountTone } from '@/business/utils/amount-tone'
 import PagePanel from '@/business/components/PagePanel.vue'
 import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { formatAmount } from '@/business/utils/format'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -433,124 +434,108 @@ function selectDesktopPeriod(key: string) {
         </PagePanel>
       </div>
       <div class="desktop-columns">
-        <DesktopTable :rows="breakdownItems" :loading="false" title="分类明细">
-          <el-table-column
-            prop="categoryName"
-            label="分类"
-            min-width="150"
-            sortable="custom"
-            show-overflow-tooltip
-          />
-          <!-- @vue-generic {TransactionAnalysisCategoryBreakdownItem} -->
-          <el-table-column label="金额" min-width="150">
-            <template
-              #default="{
-                row,
-              }: {
-                row: TransactionAnalysisCategoryBreakdownItem
-              }"
-            >
+        <DesktopRecordList
+          :rows="breakdownItems"
+          :loading="false"
+          title="分类明细"
+          :paginate="false"
+          empty-title="该指标暂无分类数据"
+          empty-hint="切换收入 / 支出指标后可查看分类占比"
+        >
+          <template
+            #default="{
+              row,
+            }: {
+              row: TransactionAnalysisCategoryBreakdownItem
+            }"
+          >
+            <article class="record-card analysis-category-card">
+              <div class="record-card-head">
+                <div class="record-card-title">
+                  <span>{{ row.categoryName }}</span>
+                </div>
+                <div class="record-card-aside">
+                  <span class="analysis-category-count">
+                    {{ row.transactionCount }} 笔
+                  </span>
+                </div>
+              </div>
               <AmountText
+                class="analysis-category-amount"
                 :value="formatAmount(row.amount)"
-                :tone="
-                  amountTone(summaryTab === '支出' ? -row.amount : row.amount)
-                "
+                :tone="amountTone(summaryTab === '支出' ? -row.amount : row.amount)"
+                font-size="24px"
               />
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="transactionCount"
-            label="笔数"
-            min-width="90"
-            sortable="custom"
-            show-overflow-tooltip
-          />
-          <!-- @vue-generic {TransactionAnalysisCategoryBreakdownItem} -->
-          <el-table-column label="占比" min-width="150">
-            <template
-              #default="{
-                row,
-              }: {
-                row: TransactionAnalysisCategoryBreakdownItem
-              }"
-            >
               <el-progress
                 :format="formatPercentage"
                 :percentage="Math.max(0, Math.min(100, row.percent))"
               />
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {TransactionAnalysisCategoryBreakdownItem} -->
-          <el-table-column fixed="right" label="操作" width="100">
-            <template
-              #default="{
-                row,
-              }: {
-                row: TransactionAnalysisCategoryBreakdownItem
-              }"
-            >
-              <el-button link type="primary" @click="toggleBreakdownItem(row)">
-                查看流水
-              </el-button>
-            </template>
-          </el-table-column>
-        </DesktopTable>
-        <DesktopTable :rows="periodSummaries" :loading="false" title="期间汇总">
-          <el-table-column
-            prop="label"
-            label="期间"
-            min-width="100"
-            sortable="custom"
-            show-overflow-tooltip
-          />
-          <!-- @vue-generic {TransactionAnalysisPeriodSummary} -->
-          <el-table-column label="收入" min-width="150">
-            <template
-              #default="{ row }: { row: TransactionAnalysisPeriodSummary }"
-            >
-              <AmountText
-                :value="formatAmount(row.income)"
-                :tone="amountTone(row.income)"
-              />
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {TransactionAnalysisPeriodSummary} -->
-          <el-table-column label="支出" min-width="150">
-            <template
-              #default="{ row }: { row: TransactionAnalysisPeriodSummary }"
-            >
-              <AmountText
-                :value="formatAmount(row.expense)"
-                :tone="amountTone(-row.expense)"
-              />
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {TransactionAnalysisPeriodSummary} -->
-          <el-table-column label="结余" min-width="150">
-            <template
-              #default="{ row }: { row: TransactionAnalysisPeriodSummary }"
-            >
-              <AmountText
-                :value="formatAmount(row.surplus)"
-                :tone="amountTone(row.surplus)"
-              />
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {TransactionAnalysisPeriodSummary} -->
-          <el-table-column fixed="right" label="操作" width="100">
-            <template
-              #default="{ row }: { row: TransactionAnalysisPeriodSummary }"
-            >
-              <el-button
-                link
-                type="primary"
-                @click="selectDesktopPeriod(row.key)"
-              >
-                查看
-              </el-button>
-            </template>
-          </el-table-column>
-        </DesktopTable>
+              <div class="record-card-foot">
+                <el-button link type="primary" @click="toggleBreakdownItem(row)">
+                  查看流水
+                </el-button>
+              </div>
+            </article>
+          </template>
+        </DesktopRecordList>
+        <DesktopRecordList
+          :rows="periodSummaries"
+          :loading="false"
+          title="期间汇总"
+          :paginate="false"
+          empty-title="暂无期间数据"
+          empty-hint="选择月份或年份后可查看汇总"
+        >
+          <template
+            #default="{ row }: { row: TransactionAnalysisPeriodSummary }"
+          >
+            <article class="record-card analysis-period-card">
+              <div class="record-card-head">
+                <div class="record-card-title">
+                  <span>{{ row.label }}</span>
+                </div>
+              </div>
+              <dl class="record-card-body analysis-period-body">
+                <div>
+                  <dt>收入</dt>
+                  <dd>
+                    <AmountText
+                      :value="formatAmount(row.income)"
+                      :tone="amountTone(row.income)"
+                    />
+                  </dd>
+                </div>
+                <div>
+                  <dt>支出</dt>
+                  <dd>
+                    <AmountText
+                      :value="formatAmount(row.expense)"
+                      :tone="amountTone(-row.expense)"
+                    />
+                  </dd>
+                </div>
+                <div>
+                  <dt>结余</dt>
+                  <dd>
+                    <AmountText
+                      :value="formatAmount(row.surplus)"
+                      :tone="amountTone(row.surplus)"
+                    />
+                  </dd>
+                </div>
+              </dl>
+              <div class="record-card-foot">
+                <el-button
+                  link
+                  type="primary"
+                  @click="selectDesktopPeriod(row.key)"
+                >
+                  查看
+                </el-button>
+              </div>
+            </article>
+          </template>
+        </DesktopRecordList>
       </div>
       <DesktopTable
         :rows="
@@ -593,3 +578,20 @@ function selectDesktopPeriod(key: string) {
     </template>
   </section>
 </template>
+<style scoped>
+/* 分类占比卡：分类名 + 笔数 + 方向色金额大数字 + 占比进度条 */
+.analysis-category-card .analysis-category-count {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.analysis-category-card .analysis-category-amount {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* 期间汇总卡：收入红 / 支出绿 / 结余按方向着色 */
+.analysis-period-card .analysis-period-body {
+  font-size: 14px;
+}
+</style>

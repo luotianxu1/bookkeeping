@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatPercentageText } from '@/business/utils/percentage'
 
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
@@ -152,7 +152,7 @@ async function saveSettings() {
 type ReminderRow = (typeof visibleItems.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="统一提醒">
       <template #right>
         <el-button :disabled="busy" @click="openSettings">提醒设置</el-button>
@@ -169,7 +169,13 @@ type ReminderRow = (typeof visibleItems.value)[number]
       <el-button link type="primary" @click="refresh">重试</el-button>
     </el-alert>
     <p v-if="feedback" role="status">{{ feedback }}</p>
-    <DesktopTable :rows="visibleItems" :loading="loading" title="提醒列表">
+    <DesktopRecordList
+      :rows="visibleItems"
+      :loading="loading"
+      title="提醒列表"
+      empty-title="没有提醒"
+      empty-hint="所有事项都在掌控之中"
+    >
       <template #toolbar>
         <SegmentedControl
           v-model="tab"
@@ -206,74 +212,76 @@ type ReminderRow = (typeof visibleItems.value)[number]
           </el-button>
         </div>
       </template>
-      <!-- @vue-generic {ReminderRow} -->
-      <el-table-column label="类型" min-width="150">
-        <template #default="{ row }: { row: ReminderRow }">
-          {{ labels[row.type] }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {ReminderRow} -->
-      <el-table-column label="提醒" min-width="360">
-        <template #default="{ row }: { row: ReminderRow }">
-          <el-button
-            link
-            type="primary"
-            @click="openItem(row)"
-            :disabled="busy"
-          >
-            {{ row.title }}
-          </el-button>
+      <template #default="{ row }: { row: ReminderRow }">
+        <article
+          class="record-card reminder-record-card"
+          :class="{ 'is-unread': !row.read }"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span
+                class="reminder-dot"
+                :class="{ 'is-unread': !row.read }"
+                aria-hidden="true"
+              ></span>
+              <span>{{ row.title }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" effect="plain">
+                {{ labels[row.type] }}
+              </el-tag>
+            </div>
+          </div>
           <p class="desktop-note">
             {{ formatPercentageText(row.description) }}
           </p>
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {ReminderRow} -->
-      <el-table-column label="时间" min-width="180">
-        <template #default="{ row }: { row: ReminderRow }">
-          {{ formatDate(row.dueAt, row.allDay) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {ReminderRow} -->
-      <el-table-column label="紧急程度" min-width="150">
-        <template #default="{ row }: { row: ReminderRow }">
-          {{ urgencyLabels[row.urgency] }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {ReminderRow} -->
-      <el-table-column label="状态" min-width="150">
-        <template #default="{ row }: { row: ReminderRow }">
-          {{ row.read ? '已读' : '未读' }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {ReminderRow} -->
-      <el-table-column fixed="right" label="操作" width="210">
-        <template #default="{ row }: { row: ReminderRow }">
-          <el-button
-            v-if="row.snoozedUntil"
-            link
-            type="primary"
-            :disabled="busy"
-            @click="act([row.key], 'resume')"
-          >
-            恢复提醒
-          </el-button>
-          <template v-else>
-            <el-button
-              link
-              type="primary"
-              :disabled="busy"
-              @click="act([row.key], row.read ? 'unread' : 'read')"
-            >
-              {{ row.read ? '标为未读' : '标为已读' }}
-            </el-button>
-            <el-button link :disabled="busy" @click="snoozeTarget = row">
-              稍后提醒
-            </el-button>
-          </template>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <dl class="record-card-body">
+            <div>
+              <dt>时间</dt>
+              <dd>{{ formatDate(row.dueAt, row.allDay) }}</dd>
+            </div>
+            <div>
+              <dt>紧急程度</dt>
+              <dd>{{ urgencyLabels[row.urgency] }}</dd>
+            </div>
+          </dl>
+          <div class="record-card-foot">
+            <div class="pc-row-actions">
+              <el-button
+                link
+                type="primary"
+                :disabled="busy"
+                @click="openItem(row)"
+              >
+                前往处理
+              </el-button>
+              <el-button
+                v-if="row.snoozedUntil"
+                link
+                type="primary"
+                :disabled="busy"
+                @click="act([row.key], 'resume')"
+              >
+                恢复提醒
+              </el-button>
+              <template v-else>
+                <el-button
+                  link
+                  type="primary"
+                  :disabled="busy"
+                  @click="act([row.key], row.read ? 'unread' : 'read')"
+                >
+                  {{ row.read ? '标为未读' : '标为已读' }}
+                </el-button>
+                <el-button link :disabled="busy" @click="snoozeTarget = row">
+                  稍后提醒
+                </el-button>
+              </template>
+            </div>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonModal
       v-model="showSettings"
       title="提醒设置"
@@ -374,3 +382,25 @@ type ReminderRow = (typeof visibleItems.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+.reminder-record-card.is-unread {
+  border-color: var(--el-color-primary-light-7);
+  background: linear-gradient(
+    135deg,
+    var(--el-color-primary-light-9),
+    var(--el-bg-color) 58%
+  );
+}
+.reminder-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--el-border-color);
+}
+.reminder-dot.is-unread {
+  background: var(--el-color-primary);
+  box-shadow: 0 0 0 3px var(--el-color-primary-light-8);
+}
+</style>

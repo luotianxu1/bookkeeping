@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import MetricStrip from '@/business/components/MetricStrip.vue'
 
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
+import AmountText from '@/business/components/common/AmountText/index.vue'
 type CashRow = SalaryCashPage['monthItems'][number]
 import { onMounted, ref } from 'vue'
 import {
@@ -66,7 +67,7 @@ function handleYearChange(value: string) {
 }
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="工资到账">
       <template #right>
         <CommonSelect
@@ -107,34 +108,72 @@ function handleYearChange(value: string) {
           }))
         "
       />
-      <DesktopTable title="月度到账明细" :rows="pageData.monthItems">
-        <el-table-column prop="monthLabel" label="月份" min-width="120" />
-        <!-- @vue-generic {CashRow} -->
-        <el-table-column label="税前工资" min-width="160" align="right">
-          <template #default="{ row }: { row: CashRow }">
-            {{ formatSalaryCurrency(row.grossIncome) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {CashRow} -->
-        <el-table-column label="五险一金个人扣款" min-width="160" align="right">
-          <template #default="{ row }: { row: CashRow }">
-            {{ formatSalaryCurrency(row.personalDeduction) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {CashRow} -->
-        <el-table-column label="个人所得税" min-width="160" align="right">
-          <template #default="{ row }: { row: CashRow }">
-            {{ formatSalaryCurrency(row.taxAmount) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {CashRow} -->
-        <el-table-column label="实际到账" min-width="160" align="right">
-          <template #default="{ row }: { row: CashRow }">
-            {{ formatSalaryCurrency(row.cashIncome) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="statusText" label="状态" min-width="100" />
-      </DesktopTable>
+      <DesktopRecordList
+        title="月度到账明细"
+        search-placeholder="搜索月份或状态"
+        searchable
+        :search-keys="['monthLabel', 'statusText']"
+        row-key="monthKey"
+        empty-title="暂无到账记录"
+        empty-hint="发薪月份会在这里出现"
+        :rows="pageData.monthItems"
+        :loading="isLoading"
+      >
+        <template #default="{ row }: { row: CashRow }">
+          <article class="record-card salary-cash-card">
+            <div class="record-card-head">
+              <div class="record-card-title">
+                <span>{{ row.monthLabel }}</span>
+              </div>
+              <div class="record-card-aside">
+                <el-tag
+                  size="small"
+                  effect="light"
+                  :type="row.cashIncome > 0 ? 'success' : 'info'"
+                >
+                  {{ row.statusText }}
+                </el-tag>
+              </div>
+            </div>
+            <div class="salary-cash-amount">
+              <span class="salary-cash-amount-label">实际到账</span>
+              <AmountText
+                class="salary-cash-amount-value"
+                :value="formatSalaryCurrency(row.cashIncome)"
+                font-size="26px"
+              />
+            </div>
+            <dl class="record-card-body">
+              <div>
+                <dt>税前工资</dt>
+                <dd>
+                  <AmountText :value="formatSalaryCurrency(row.grossIncome)" />
+                </dd>
+              </div>
+              <div>
+                <dt>五险一金个人扣款</dt>
+                <dd>
+                  <AmountText
+                    :value="formatSalaryCurrency(row.personalDeduction)"
+                    tone="negative"
+                    show-sign
+                  />
+                </dd>
+              </div>
+              <div>
+                <dt>个人所得税</dt>
+                <dd>
+                  <AmountText
+                    :value="formatSalaryCurrency(row.taxAmount)"
+                    tone="negative"
+                    show-sign
+                  />
+                </dd>
+              </div>
+            </dl>
+          </article>
+        </template>
+      </DesktopRecordList>
     </template>
     <CommonFeedback
       v-model="feedbackVisible"
@@ -143,3 +182,21 @@ function handleYearChange(value: string) {
     />
   </section>
 </template>
+<style scoped>
+/* 到账工资条卡片：实际到账大数字 + 扣款明细行 */
+.salary-cash-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.salary-cash-amount-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.salary-cash-amount-value {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+</style>

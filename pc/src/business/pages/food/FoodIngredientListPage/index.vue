@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
@@ -258,7 +258,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof filteredIngredients.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="食材管理">
       <template #right>
         <el-button type="primary" @click="openCreateModal">新增食材</el-button>
@@ -271,10 +271,12 @@ type DesktopRow = (typeof filteredIngredients.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="食材库"
       :rows="filteredIngredients"
       :loading="isLoading"
+      empty-title="没有食材"
+      empty-hint="换个分类或关键词试试"
     >
       <template #toolbar>
         <el-input
@@ -298,44 +300,34 @@ type DesktopRow = (typeof filteredIngredients.value)[number]
           />
         </el-select>
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="食材"
-        prop="name"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="分类"
-        prop="categoryName"
-        sortable="custom"
-        min-width="140"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="备注"
-        prop="note"
-        sortable="custom"
-        min-width="300"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="140" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button link type="primary" @click="openEditModal(row)">
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="openDeleteConfirmModal(row)">
-              删除
-            </el-button>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" effect="plain">
+                {{ row.categoryName }}
+              </el-tag>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <p v-if="row.note" class="record-card-note">
+            {{ row.note }}
+          </p>
+          <div class="record-card-foot">
+            <div class="pc-row-actions">
+              <el-button link type="primary" @click="openEditModal(row)">
+                编辑
+              </el-button>
+              <el-button link type="danger" @click="openDeleteConfirmModal(row)">
+                删除
+              </el-button>
+            </div>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonModal
       v-model="showEditModal"
       :title="ingredientModalTitle"

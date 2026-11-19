@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AmountText from '@/business/components/common/AmountText/index.vue'
 import { amountTone } from '@/business/utils/amount-tone'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useReminderTarget } from '@/business/composables/useReminderTarget'
@@ -487,10 +487,34 @@ function showFeedback(message: string, type: 'success' | 'error') {
   showFeedbackModal.value = true
 }
 
+function daysUntilDate(dateStr: string) {
+  const target = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(target.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - today.getTime()) / 86_400_000)
+}
+
+function dueSuffix(subscription: RenewalSubscription) {
+  if (subscription.status !== 'active') return null
+  const days = daysUntilDate(subscription.nextBillingDate)
+  if (days === null) return null
+  if (days === 0) return '今日扣款'
+  if (days < 0) return `已过期 ${-days} 天`
+  return `${days} 天后扣款`
+}
+
+function isDueBadgeVisible(subscription: RenewalSubscription) {
+  return (
+    subscription.status === 'active' &&
+    isDueThisMonth(subscription.nextBillingDate)
+  )
+}
+
 type DesktopRow = (typeof filteredSubscriptions.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="固定支出">
       <template #right>
         <el-button type="primary" @click="openCreateModal">
@@ -523,12 +547,16 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
         />
       </el-card>
     </div>
-    <DesktopTable
+    <DesktopRecordList
       title="固定支出明细"
       searchable
       search-placeholder="名称 / 备注"
       :rows="filteredSubscriptions"
       :loading="isLoading"
+      :search-keys="['name', 'remark']"
+      row-key="id"
+      empty-title="暂无固定支出"
+      empty-hint="点击右上角新增第一笔固定支出"
     >
       <template #toolbar>
         <el-select v-model="selectedFilter">
@@ -540,57 +568,64 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
           />
         </el-select>
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="名称"
-        prop="name"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="金额" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          <AmountText
-            :value="formatCurrency(row.amount)"
-            :tone="amountTone(-row.amount)"
-          />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="周期" min-width="110">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ getBillingCycleLabel(row.billingCycle) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="下次支出日"
-        prop="nextBillingDate"
-        sortable="custom"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="状态" min-width="100">
-        <template #default="{ row }: { row: DesktopRow }">
-          <el-tag :type="row.status === 'active' ? 'success' : 'info'">
-            {{ row.status === 'active' ? '启用' : '暂停' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="备注"
-        prop="remark"
-        sortable="custom"
-        min-width="200"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="210" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card sub-card"
+          :class="{
+            'sub-card--due': isDueBadgeVisible(row),
+            'sub-card--paused': row.status === 'paused',
+          }"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span v-if="row.categoryIcon" class="sub-card-icon">
+                {{ row.categoryIcon }}
+              </span>
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <span v-if="isDueBadgeVisible(row)" class="sub-due-badge">
+                本月待扣
+              </span>
+              <el-tag size="small" effect="plain" class="sub-cycle-tag">
+                {{ getBillingCycleLabel(row.billingCycle) }}
+              </el-tag>
+              <el-tag v-if="row.status === 'paused'" size="small" type="info">
+                已暂停
+              </el-tag>
+            </div>
+          </div>
+          <div class="sub-amount">
+            <AmountText
+              tag="strong"
+              :value="formatCurrency(row.amount)"
+              :tone="amountTone(-row.amount)"
+            />
+            <span class="sub-amount-cycle">
+              / {{ getBillingCycleLabel(row.billingCycle) }}
+            </span>
+          </div>
+          <div class="record-card-body sub-meta">
+            <div>
+              <dt>下次支出</dt>
+              <dd>
+                {{ row.nextBillingDate || '—' }}
+                <span v-if="dueSuffix(row)" class="sub-due-suffix">
+                  （{{ dueSuffix(row) }}）
+                </span>
+              </dd>
+            </div>
+            <div v-if="row.categoryName">
+              <dt>扣款分类</dt>
+              <dd>{{ row.categoryName }}</dd>
+            </div>
+            <div v-if="row.fundingAccountName">
+              <dt>扣款账户</dt>
+              <dd>{{ row.fundingAccountName }}</dd>
+            </div>
+          </div>
+          <p v-if="row.remark" class="record-card-note">{{ row.remark }}</p>
+          <div class="record-card-foot">
             <el-button link type="primary" @click="openEditModal(row)">
               编辑
             </el-button>
@@ -606,9 +641,9 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
               删除
             </el-button>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -712,3 +747,59 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 订阅卡风格：即将扣款的高亮，已暂停的淡化。 */
+.sub-card--due {
+  background: linear-gradient(
+    150deg,
+    var(--el-color-warning-light-9),
+    var(--el-bg-color) 55%
+  );
+  border-color: var(--el-color-warning-light-5);
+}
+.sub-card--paused {
+  opacity: 0.78;
+}
+.sub-card-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+.sub-due-badge {
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+  border: 1px solid var(--el-color-warning-light-5);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.sub-cycle-tag {
+  white-space: nowrap;
+}
+.sub-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.sub-amount :deep(strong) {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.sub-amount-cycle {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.sub-due-suffix {
+  font-size: 12px;
+  color: var(--el-color-warning);
+  font-variant-numeric: tabular-nums;
+}
+.sub-card--due .sub-due-suffix {
+  font-weight: 600;
+}
+</style>

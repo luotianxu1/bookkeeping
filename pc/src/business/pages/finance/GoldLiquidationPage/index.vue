@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 import { formatAmount } from '@/business/utils/format'
 // 黄金清仓记录页：通过后端接口展示累计收益和清仓明细。
 import { computed, onMounted, ref } from 'vue'
@@ -110,6 +110,14 @@ function formatSignedAmount(value: number | null | undefined) {
   return `${amount >= 0 ? '+' : '-'}${formatAmount(Math.abs(amount))}`
 }
 
+function goldProfitToneClass(value: number | null | undefined) {
+  const amount = Number(value ?? 0)
+  if (!Number.isFinite(amount) || amount === 0) {
+    return ''
+  }
+  return amount > 0 ? 'tone-up' : 'tone-down'
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
     return '--'
@@ -130,7 +138,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader
       title="清仓记录"
       back-label="返回黄金账户持仓"
@@ -161,43 +169,103 @@ function formatDateTime(value: string | null | undefined) {
           </strong>
         </div>
       </section>
-      <DesktopTable
+      <DesktopRecordList
         title="黄金清仓记录"
         searchable
         search-placeholder="搜索清仓记录"
         :rows="records"
       >
-        <!-- @vue-generic {GoldLiquidationRecord} -->
-        <el-table-column label="卖出时间" min-width="160">
-          <template #default="{ row }: { row: GoldLiquidationRecord }">
-            {{ formatDateTime(row.tradeAt) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {GoldLiquidationRecord} -->
-        <el-table-column label="克重" min-width="160">
-          <template #default="{ row }: { row: GoldLiquidationRecord }">
-            {{ formatWeight(row.weight) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {GoldLiquidationRecord} -->
-        <el-table-column label="买入价" min-width="160">
-          <template #default="{ row }: { row: GoldLiquidationRecord }">
-            {{ formatAmount(row.buyPrice) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {GoldLiquidationRecord} -->
-        <el-table-column label="卖出价" min-width="160">
-          <template #default="{ row }: { row: GoldLiquidationRecord }">
-            {{ formatAmount(row.sellPrice) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {GoldLiquidationRecord} -->
-        <el-table-column label="收益" min-width="160">
-          <template #default="{ row }: { row: GoldLiquidationRecord }">
-            {{ formatSignedAmount(row.profit) }}
-          </template>
-        </el-table-column>
-      </DesktopTable>
+        <template #default="{ row }: { row: GoldLiquidationRecord }">
+          <article class="record-card gold-liquidation-card">
+            <div class="record-card-head">
+              <div class="record-card-title">
+                <span class="gold-liquidation-time">
+                  {{ formatDateTime(row.tradeAt) }}
+                </span>
+              </div>
+              <div
+                class="record-card-aside gold-liquidation-profit"
+                :class="goldProfitToneClass(row.profit)"
+              >
+                {{ formatSignedAmount(row.profit) }}
+              </div>
+            </div>
+            <div class="gold-liquidation-flow">
+              <div class="gold-liquidation-price">
+                <span>买入价</span>
+                <strong>{{ formatAmount(row.buyPrice) }}</strong>
+              </div>
+              <span class="gold-liquidation-arrow" aria-hidden="true">
+                →
+              </span>
+              <div class="gold-liquidation-price">
+                <span>卖出价</span>
+                <strong>{{ formatAmount(row.sellPrice) }}</strong>
+              </div>
+              <div class="gold-liquidation-price gold-liquidation-weight">
+                <span>克重</span>
+                <strong>{{ formatWeight(row.weight) }}</strong>
+              </div>
+            </div>
+          </article>
+        </template>
+      </DesktopRecordList>
     </template>
   </section>
 </template>
+
+<style scoped>
+/* 黄金清仓卡：时间+收益徽标首行，买入价 → 卖出价交易流 */
+.gold-liquidation-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.gold-liquidation-profit {
+  padding: 2px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: var(--el-fill-color-light);
+  border-radius: 999px;
+}
+
+/* 中国市场惯例：盈利红、亏损绿 */
+.gold-liquidation-profit.tone-up {
+  color: var(--color-danger);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.gold-liquidation-profit.tone-down {
+  color: var(--color-success);
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.gold-liquidation-flow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gold-liquidation-price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.gold-liquidation-price strong {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+}
+
+.gold-liquidation-arrow {
+  color: var(--el-text-color-placeholder);
+}
+
+.gold-liquidation-weight {
+  margin-left: auto;
+  text-align: right;
+}
+</style>

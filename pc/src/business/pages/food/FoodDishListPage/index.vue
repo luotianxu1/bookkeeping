@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
 
 import { computed, onMounted, ref, watch } from 'vue'
@@ -170,7 +170,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof filteredDishes.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="菜品管理">
       <template #right>
         <el-button type="primary" @click="router.push('/food/dishes/new')">
@@ -189,7 +189,13 @@ type DesktopRow = (typeof filteredDishes.value)[number]
       show-icon
     />
     <div :class="canCreateMenu ? 'desktop-main-aside' : 'desktop-stack'">
-      <DesktopTable title="菜品库" :rows="filteredDishes" :loading="isLoading">
+      <DesktopRecordList
+        title="菜品库"
+        :rows="filteredDishes"
+        :loading="isLoading"
+        empty-title="没有菜品"
+        empty-hint="换个分类或关键词试试，或新增一道菜"
+      >
         <template #toolbar>
           <el-input
             v-model="keyword"
@@ -212,59 +218,53 @@ type DesktopRow = (typeof filteredDishes.value)[number]
             />
           </el-select>
         </template>
-        <!-- @vue-generic {DesktopRow} -->
-        <el-table-column
-          label="菜名"
-          prop="name"
-          sortable="custom"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {DesktopRow} -->
-        <el-table-column
-          label="分类"
-          prop="categoryName"
-          sortable="custom"
-          min-width="140"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {DesktopRow} -->
-        <el-table-column label="食材" min-width="240">
-          <template #default="{ row }: { row: DesktopRow }">
-            {{ row.ingredientPreview.join(' / ') }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DesktopRow} -->
-        <el-table-column label="口味" min-width="160">
-          <template #default="{ row }: { row: DesktopRow }">
-            {{ row.tasteTags.join(' / ') }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DesktopRow} -->
-        <el-table-column label="烹饪时间" min-width="120">
-          <template #default="{ row }: { row: DesktopRow }">
-            {{ row.cookMinutes }} 分钟
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DesktopRow} -->
-        <el-table-column label="操作" width="210" fixed="right">
-          <template #default="{ row }: { row: DesktopRow }">
-            <div class="pc-row-actions">
-              <el-button link type="primary" @click="openDetail(row.id)">
-                详情
-              </el-button>
-              <el-button
-                v-if="canCreateMenu"
-                link
-                type="primary"
-                @click="toggleDish(row.id)"
-              >
-                {{ isSelected(row.id) ? '取消选择' : '选择' }}
-              </el-button>
+        <template #default="{ row }: { row: DesktopRow }">
+          <article
+            class="record-card dish-record-card"
+            :class="{ 'is-selected': isSelected(row.id) }"
+          >
+            <div class="record-card-head">
+              <div class="record-card-title">
+                <span>{{ row.name }}</span>
+              </div>
+              <div class="record-card-aside">
+                <el-tag size="small" effect="plain">
+                  {{ row.categoryName }}
+                </el-tag>
+              </div>
             </div>
-          </template>
-        </el-table-column>
-      </DesktopTable>
+            <dl class="record-card-body">
+              <div>
+                <dt>食材</dt>
+                <dd>{{ row.ingredientPreview.join(' / ') || '未填写' }}</dd>
+              </div>
+              <div>
+                <dt>口味</dt>
+                <dd>{{ row.tasteTags.join(' / ') || '未填写' }}</dd>
+              </div>
+              <div>
+                <dt>烹饪时间</dt>
+                <dd>{{ row.cookMinutes }} 分钟</dd>
+              </div>
+            </dl>
+            <div class="record-card-foot">
+              <div class="pc-row-actions">
+                <el-button link type="primary" @click="openDetail(row.id)">
+                  详情
+                </el-button>
+                <el-button
+                  v-if="canCreateMenu"
+                  link
+                  type="primary"
+                  @click="toggleDish(row.id)"
+                >
+                  {{ isSelected(row.id) ? '取消选择' : '选择' }}
+                </el-button>
+              </div>
+            </div>
+          </article>
+        </template>
+      </DesktopRecordList>
       <PagePanel
         v-if="canCreateMenu"
         title="当前菜单"
@@ -321,3 +321,10 @@ type DesktopRow = (typeof filteredDishes.value)[number]
     />
   </section>
 </template>
+
+<style scoped>
+.dish-record-card.is-selected {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 1px var(--el-color-primary);
+}
+</style>

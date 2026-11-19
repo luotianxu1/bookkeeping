@@ -2,7 +2,7 @@
 import { formatPercentage } from '@/business/utils/percentage'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { formatAmount as formatNumberAmount } from '@/business/utils/format'
 import { computed, onMounted, ref } from 'vue'
@@ -448,11 +448,21 @@ async function removeExpenseItem(id: number) {
   }
 }
 
+function coverageColor(item: ExpenseCoverageItem) {
+  if (item.status === 'covered') return 'var(--el-color-success)'
+  if (item.status === 'partial') return 'var(--el-color-warning)'
+  return 'var(--el-color-info)'
+}
+
+function coverageSourceLabel(item: ExpenseCoverageItem) {
+  return item.source === 'renewal' ? '来自固定支出' : '自定义'
+}
+
 type HoldingRow = (typeof holdings.value)[number]
 type ExpenseRow = (typeof expenseCoverageItems.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="攒股收息">
       <template #right>
         <el-button type="primary" @click="openCreateExpenseModal">
@@ -491,110 +501,138 @@ type ExpenseRow = (typeof expenseCoverageItems.value)[number]
         { label: '支出覆盖', value: getIncomeCoveragePercentText() },
       ]"
     />
-    <DesktopTable
+    <DesktopRecordList
       :rows="holdings"
       :loading="isLoading"
       title="持仓分红计划"
       search-placeholder="搜索产品"
       searchable
+      :search-keys="['productName', 'productSymbol']"
+      row-key="productId"
+      empty-title="暂无持仓分红"
+      empty-hint="建立投资持仓后，分红计划会显示在这里"
     >
-      <el-table-column
-        prop="productName"
-        label="产品"
-        min-width="220"
-        sortable="custom"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {HoldingRow} -->
-      <el-table-column label="持有金额 / 数量" min-width="220">
-        <template #default="{ row }: { row: HoldingRow }">
-          {{
-            formatHoldingMetaText(
-              row.marketValue,
-              row.holdingQuantity,
-              row.unitName,
-            )
-          }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {HoldingRow} -->
-      <el-table-column label="股息率" min-width="150">
-        <template #default="{ row }: { row: HoldingRow }">
-          {{ formatPlainPercent(row.estimatedDividendRate) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {HoldingRow} -->
-      <el-table-column label="预计分红" min-width="150">
-        <template #default="{ row }: { row: HoldingRow }">
-          {{ formatPlainCurrency(row.estimatedDividendAmount) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {HoldingRow} -->
-      <el-table-column label="预估月薪" min-width="150">
-        <template #default="{ row }: { row: HoldingRow }">
-          {{ formatMonthlyIncome(row.estimatedDividendAmount / 12) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {HoldingRow} -->
-      <el-table-column fixed="right" label="操作" width="150">
-        <template #default="{ row }: { row: HoldingRow }">
-          <el-button
-            link
-            type="primary"
-            :disabled="!row.positionId"
-            @click="openHoldingDetail(row)"
-          >
-            持仓详情
-          </el-button>
-        </template>
-      </el-table-column>
-    </DesktopTable>
-    <DesktopTable
+      <template #default="{ row }: { row: HoldingRow }">
+        <article class="record-card dividend-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.productName }}</span>
+            </div>
+            <div class="record-card-aside">
+              <span class="dividend-rate">
+                {{ formatPlainPercent(row.estimatedDividendRate) }}
+              </span>
+            </div>
+          </div>
+          <div class="dividend-amount">
+            <span class="dividend-amount-label">预计分红</span>
+            <AmountText
+              tag="strong"
+              :value="formatPlainCurrency(row.estimatedDividendAmount)"
+              tone="positive"
+            />
+          </div>
+          <div class="record-card-body dividend-meta">
+            <div>
+              <dt>预估月薪</dt>
+              <dd>{{ formatMonthlyIncome(row.estimatedDividendAmount / 12) }}</dd>
+            </div>
+            <div>
+              <dt>持有金额 / 数量</dt>
+              <dd>
+                {{
+                  formatHoldingMetaText(
+                    row.marketValue,
+                    row.holdingQuantity,
+                    row.unitName,
+                  )
+                }}
+              </dd>
+            </div>
+            <div v-if="row.actualDividendAmount > 0">
+              <dt>已实际分红</dt>
+              <dd>
+                <AmountText
+                  :value="formatPlainCurrency(row.actualDividendAmount)"
+                  tone="positive"
+                />
+              </dd>
+            </div>
+          </div>
+          <div class="record-card-foot">
+            <span v-if="row.productSymbol" class="dividend-symbol">
+              {{ row.productSymbol }}
+            </span>
+            <el-button
+              link
+              type="primary"
+              :disabled="!row.positionId"
+              @click="openHoldingDetail(row)"
+            >
+              持仓详情
+            </el-button>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
+    <DesktopRecordList
       :rows="expenseCoverageItems"
       :loading="false"
       title="固定支出覆盖"
+      row-key="itemKey"
+      empty-title="暂无固定支出"
+      empty-hint="添加固定支出后，可查看股息能覆盖多少生活成本"
     >
-      <el-table-column
-        prop="name"
-        label="支出项目"
-        min-width="200"
-        sortable="custom"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {ExpenseRow} -->
-      <el-table-column label="月支出" min-width="150">
-        <template #default="{ row }: { row: ExpenseRow }">
-          {{ formatMonthlyIncome(row.amount) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {ExpenseRow} -->
-      <el-table-column label="覆盖率" min-width="150">
-        <template #default="{ row }: { row: ExpenseRow }">
-          {{ getCoveragePercentText(row) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {ExpenseRow} -->
-      <el-table-column fixed="right" label="操作" width="150">
-        <template #default="{ row }: { row: ExpenseRow }">
-          <el-button
-            v-if="row.editable"
-            link
-            type="primary"
-            @click="openEditExpenseModal(row)"
-          >
-            修改
-          </el-button>
-          <el-button
-            v-if="row.editable"
-            link
-            type="danger"
-            @click="deleteExpenseItem(row.id)"
-          >
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+      <template #default="{ row }: { row: ExpenseRow }">
+        <article
+          class="record-card coverage-card"
+          :class="`coverage-card--${row.status}`"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" effect="plain">
+                {{ coverageSourceLabel(row) }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="coverage-amount">
+            <span class="coverage-amount-label">月支出</span>
+            <AmountText
+              tag="strong"
+              :value="formatMonthlyIncome(row.amount)"
+              tone="negative"
+            />
+            <span class="coverage-percent">
+              股息覆盖 {{ getCoveragePercentText(row) }}
+            </span>
+          </div>
+          <el-progress
+            class="coverage-progress"
+            :percentage="Math.min(100, row.coveredPercent)"
+            :stroke-width="8"
+            :show-text="false"
+            :color="coverageColor(row)"
+          />
+          <div class="record-card-body coverage-meta">
+            <div>
+              <dt>已被分红覆盖</dt>
+              <dd>{{ formatMonthlyIncome(row.coveredAmount) }}</dd>
+            </div>
+          </div>
+          <div v-if="row.editable" class="record-card-foot">
+            <el-button link type="primary" @click="openEditExpenseModal(row)">
+              修改
+            </el-button>
+            <el-button link type="danger" @click="deleteExpenseItem(row.id)">
+              删除
+            </el-button>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonModal
       v-model="showExpenseModal"
       :title="expenseModalTitle"
@@ -638,3 +676,59 @@ type ExpenseRow = (typeof expenseCoverageItems.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 分红卡：收入方向色（红），股息率角标。 */
+.dividend-rate {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-danger);
+  font-variant-numeric: tabular-nums;
+}
+.dividend-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.dividend-amount-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.dividend-amount :deep(strong) {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.dividend-symbol {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 覆盖卡：支出方向色（绿），进度条按覆盖程度着色。 */
+.coverage-amount {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.coverage-amount-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.coverage-amount :deep(strong) {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.coverage-percent {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.coverage-progress {
+  margin-top: -2px;
+}
+</style>

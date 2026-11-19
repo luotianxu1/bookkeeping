@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import MetricStrip from '@/business/components/MetricStrip.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
+import AmountText from '@/business/components/common/AmountText/index.vue'
 
 import { onMounted, ref } from 'vue'
 import {
@@ -68,7 +69,7 @@ type TaxMonthRow = NonNullable<typeof pageData.value>['monthItems'][number]
 type TaxDeductionRow = NonNullable<typeof pageData.value>['deductions'][number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="工资税务">
       <template #right>
         <CommonSelect
@@ -106,69 +107,94 @@ type TaxDeductionRow = NonNullable<typeof pageData.value>['deductions'][number]
         "
       />
       <div class="desktop-columns">
-        <DesktopTable
+        <DesktopRecordList
           :rows="pageData.monthItems"
           :loading="false"
           title="月度个税"
+          search-placeholder="搜索月份或状态"
+          searchable
+          :search-keys="['monthLabel', 'statusText']"
+          row-key="monthKey"
+          empty-title="暂无个税记录"
+          empty-hint="已发薪月份的个税会在这里出现"
         >
-          <el-table-column
-            prop="monthLabel"
-            label="月份"
-            min-width="140"
-            sortable="custom"
-            show-overflow-tooltip
-          />
-          <!-- @vue-generic {TaxMonthRow} -->
-          <el-table-column label="税前收入" min-width="150">
-            <template #default="{ row }: { row: TaxMonthRow }">
-              {{ formatSalaryCurrency(row.grossIncome) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {TaxMonthRow} -->
-          <el-table-column label="个税" min-width="150">
-            <template #default="{ row }: { row: TaxMonthRow }">
-              {{ formatSalaryCurrency(row.taxAmount) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {TaxMonthRow} -->
-          <el-table-column label="税后收入" min-width="150">
-            <template #default="{ row }: { row: TaxMonthRow }">
-              {{ formatSalaryCurrency(row.takeHomeIncome) }}
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="statusText"
-            label="状态"
-            min-width="140"
-            sortable="custom"
-            show-overflow-tooltip
-          />
-        </DesktopTable>
-        <DesktopTable
+          <template #default="{ row }: { row: TaxMonthRow }">
+            <article class="record-card salary-tax-month-card">
+              <div class="record-card-head">
+                <div class="record-card-title">
+                  <span>{{ row.monthLabel }}</span>
+                </div>
+                <div class="record-card-aside">
+                  <el-tag
+                    size="small"
+                    effect="light"
+                    :type="row.taxAmount > 0 ? 'warning' : 'info'"
+                  >
+                    {{ row.statusText }}
+                  </el-tag>
+                </div>
+              </div>
+              <div class="salary-tax-takehome">
+                <span class="salary-tax-takehome-label">税后收入</span>
+                <AmountText
+                  class="salary-tax-takehome-value"
+                  :value="formatSalaryCurrency(row.takeHomeIncome)"
+                  font-size="24px"
+                />
+              </div>
+              <dl class="record-card-body">
+                <div>
+                  <dt>税前收入</dt>
+                  <dd>
+                    <AmountText
+                      :value="formatSalaryCurrency(row.grossIncome)"
+                    />
+                  </dd>
+                </div>
+                <div>
+                  <dt>个税</dt>
+                  <dd>
+                    <AmountText
+                      :value="formatSalaryCurrency(row.taxAmount)"
+                      tone="negative"
+                      show-sign
+                    />
+                  </dd>
+                </div>
+              </dl>
+            </article>
+          </template>
+        </DesktopRecordList>
+        <DesktopRecordList
           :rows="pageData.deductions"
           :loading="false"
           title="专项附加扣除"
+          search-placeholder="搜索扣除项目"
+          searchable
+          :search-keys="['label']"
+          empty-title="暂无专项附加扣除"
+          empty-hint="在个税申报中配置后会在这里出现"
         >
-          <el-table-column
-            prop="label"
-            label="项目"
-            min-width="140"
-            sortable="custom"
-            show-overflow-tooltip
-          />
-          <!-- @vue-generic {TaxDeductionRow} -->
-          <el-table-column label="月度扣除" min-width="150">
-            <template #default="{ row }: { row: TaxDeductionRow }">
-              {{ formatSalaryCurrency(row.monthlyValue) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {TaxDeductionRow} -->
-          <el-table-column label="年度累计" min-width="150">
-            <template #default="{ row }: { row: TaxDeductionRow }">
-              {{ formatSalaryCurrency(row.annualValue) }}
-            </template>
-          </el-table-column>
-        </DesktopTable>
+          <template #default="{ row }: { row: TaxDeductionRow }">
+            <article class="record-card salary-tax-deduction-card">
+              <div class="record-card-head">
+                <div class="record-card-title">
+                  <span>{{ row.label }}</span>
+                </div>
+              </div>
+              <dl class="record-card-body">
+                <div>
+                  <dt>月度扣除</dt>
+                  <dd>{{ formatSalaryCurrency(row.monthlyValue) }}</dd>
+                </div>
+                <div>
+                  <dt>年度累计</dt>
+                  <dd>{{ formatSalaryCurrency(row.annualValue) }}</dd>
+                </div>
+              </dl>
+            </article>
+          </template>
+        </DesktopRecordList>
       </div>
     </template>
     <CommonFeedback
@@ -178,3 +204,21 @@ type TaxDeductionRow = NonNullable<typeof pageData.value>['deductions'][number]
     />
   </section>
 </template>
+<style scoped>
+/* 个税月份卡片：税后收入大数字 + 税前/个税明细 */
+.salary-tax-takehome {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.salary-tax-takehome-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.salary-tax-takehome-value {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+</style>

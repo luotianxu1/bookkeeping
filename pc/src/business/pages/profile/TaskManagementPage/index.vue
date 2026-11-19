@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import MetricStrip from '@/business/components/MetricStrip.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 
@@ -109,7 +109,7 @@ async function executeTask(task: ScheduledTask) {
 type TaskRow = (typeof tasks.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="任务管理">
       <template #right>
         <el-button :loading="isRefreshing" @click="loadTasks(true)">
@@ -131,67 +131,67 @@ type TaskRow = (typeof tasks.value)[number]
         { label: '待执行', value: summary.pending },
       ]"
     />
-    <DesktopTable
+    <DesktopRecordList
       :rows="tasks"
       :loading="isLoading"
       title="今日计划任务"
       search-placeholder="搜索任务"
       searchable
+      empty-title="今天没有计划任务"
+      empty-hint="任务会在计划时间自动执行"
     >
-      <el-table-column
-        prop="taskLabel"
-        label="任务"
-        min-width="220"
-        sortable="custom"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="scheduleLabel"
-        label="计划"
-        min-width="180"
-        sortable="custom"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="statusLabel"
-        label="状态"
-        min-width="140"
-        sortable="custom"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {TaskRow} -->
-      <el-table-column label="结果" min-width="260">
-        <template #default="{ row }: { row: TaskRow }">
-          {{ detailText(row) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {TaskRow} -->
-      <el-table-column label="开始时间" min-width="170">
-        <template #default="{ row }: { row: TaskRow }">
-          {{ row.startedAt ? formatTime(row.startedAt) : '—' }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {TaskRow} -->
-      <el-table-column label="完成时间" min-width="170">
-        <template #default="{ row }: { row: TaskRow }">
-          {{ row.finishedAt ? formatTime(row.finishedAt) : '—' }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {TaskRow} -->
-      <el-table-column fixed="right" label="操作" width="150">
-        <template #default="{ row }: { row: TaskRow }">
-          <el-button
-            link
-            type="primary"
-            :disabled="!row.executable || isExecutingTask(row)"
-            :loading="isExecutingTask(row)"
-            @click="executeTask(row)"
-          >
-            执行
-          </el-button>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+      <template #default="{ row }: { row: TaskRow }">
+        <article class="record-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.taskLabel }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag
+                size="small"
+                :type="
+                  row.status === 'success'
+                    ? 'success'
+                    : row.status === 'pending'
+                      ? 'info'
+                      : 'danger'
+                "
+              >
+                {{ row.statusLabel }}
+              </el-tag>
+            </div>
+          </div>
+          <dl class="record-card-body">
+            <div>
+              <dt>计划</dt>
+              <dd>{{ row.scheduleLabel }}</dd>
+            </div>
+            <div>
+              <dt>开始</dt>
+              <dd>{{ row.startedAt ? formatTime(row.startedAt) : '—' }}</dd>
+            </div>
+            <div>
+              <dt>完成</dt>
+              <dd>{{ row.finishedAt ? formatTime(row.finishedAt) : '—' }}</dd>
+            </div>
+          </dl>
+          <p v-if="detailText(row)" class="record-card-note">
+            {{ detailText(row) }}
+          </p>
+          <div class="record-card-foot">
+            <el-button
+              link
+              type="primary"
+              :disabled="!row.executable || isExecutingTask(row)"
+              :loading="isExecutingTask(row)"
+              @click="executeTask(row)"
+            >
+              执行
+            </el-button>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedback"
       :message="feedbackMessage"

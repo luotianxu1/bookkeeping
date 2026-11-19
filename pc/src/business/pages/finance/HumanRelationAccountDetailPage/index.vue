@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -396,7 +396,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DetailTableRow = (typeof records.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader :title="detailName">
       <template #right>
         <el-button type="primary" @click="openAddRecordModal">
@@ -420,42 +420,45 @@ type DetailTableRow = (typeof records.value)[number]
       ]"
     />
     <div class="desktop-main-aside">
-      <DesktopTable :rows="records" title="人情记录" searchable>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="发生时间" min-width="160">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatDate(row.occurredAt) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="类型" min-width="120">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatRecordDirectionLabel(row.direction) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="金额" min-width="140">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatRecordAmount(row) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="现金账户" min-width="160">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatFundingAccountName(row) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column
-          label="备注"
-          prop="remark"
-          min-width="240"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="操作" width="140" fixed="right">
-          <template #default="{ row }: { row: DetailTableRow }">
-            <div class="pc-row-actions">
+      <DesktopRecordList
+        :rows="records"
+        :loading="isLoading"
+        title="人情记录"
+        searchable
+        search-placeholder="备注 / 现金账户"
+        :search-keys="['remark', 'fundingAccountName']"
+        row-key="id"
+        empty-title="没有人情记录"
+        empty-hint="点击右上角登记第一笔人情往来"
+      >
+        <template #default="{ row }: { row: DetailTableRow }">
+          <article
+            class="record-card human-relation-record-card"
+            :class="row.direction === 'incoming' ? 'is-incoming' : 'is-outgoing'"
+          >
+            <div class="record-card-head">
+              <div class="record-card-title">
+                <span class="human-relation-record-kind">{{
+                  formatRecordDirectionLabel(row.direction)
+                }}</span>
+                <span class="human-relation-record-date">{{
+                  formatDate(row.occurredAt)
+                }}</span>
+              </div>
+              <div class="record-card-aside">
+                <strong class="human-relation-record-amount">{{
+                  formatRecordAmount(row)
+                }}</strong>
+              </div>
+            </div>
+            <div class="record-card-body">
+              <div>
+                <dt>现金账户</dt>
+                <dd>{{ formatFundingAccountName(row) }}</dd>
+              </div>
+            </div>
+            <p v-if="row.remark" class="record-card-note">{{ row.remark }}</p>
+            <div class="record-card-foot human-relation-record-foot">
               <el-button link type="primary" @click="openEditRecordModal(row)">
                 修改
               </el-button>
@@ -463,9 +466,9 @@ type DetailTableRow = (typeof records.value)[number]
                 删除
               </el-button>
             </div>
-          </template>
-        </el-table-column>
-      </DesktopTable>
+          </article>
+        </template>
+      </DesktopRecordList>
       <PagePanel title="账户资料">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="联系人">
@@ -574,3 +577,41 @@ type DetailTableRow = (typeof records.value)[number]
     </CommonModal>
   </section>
 </template>
+<style scoped>
+/* 人情记录卡：收到=红、送出=绿，方向徽标 + 方向色金额。 */
+.human-relation-record-kind {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.human-relation-record-card.is-incoming .human-relation-record-kind {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+.human-relation-record-card.is-outgoing .human-relation-record-kind {
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+.human-relation-record-date {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.human-relation-record-amount {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.human-relation-record-card.is-incoming .human-relation-record-amount {
+  color: var(--el-color-danger);
+}
+.human-relation-record-card.is-outgoing .human-relation-record-amount {
+  color: var(--el-color-success);
+}
+.human-relation-record-foot {
+  justify-content: flex-end;
+}
+</style>

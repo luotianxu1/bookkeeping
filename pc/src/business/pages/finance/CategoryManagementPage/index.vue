@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
+import CategoryIcon from '@/business/components/common/CategoryIcon/index.vue'
 
 // 分类管理页：使用财务模块分类接口完成列表、新增、修改和删除。
 import { computed, onMounted, ref, watch } from 'vue'
@@ -34,11 +35,17 @@ const ROOT_PARENT_VALUE = 'root'
 
 const isManageMode = ref(true)
 const desktopCategories = computed(() =>
-  categories.value.filter(
-    (c) =>
-      activeTab.value === '全部' ||
-      c.type === (activeTab.value === '收入' ? 'income' : 'expense'),
-  ),
+  categories.value
+    .filter(
+      (category) =>
+        !category.parentId &&
+        (activeTab.value === '全部' ||
+          category.type === (activeTab.value === '收入' ? 'income' : 'expense')),
+    )
+    .map((parent) => ({
+      ...parent,
+      children: categories.value.filter((child) => child.parentId === parent.id),
+    })),
 )
 const categories = ref<Category[]>([])
 const showCategoryModal = ref(false)
@@ -355,10 +362,10 @@ function canDeleteCategory(category: Category) {
   return canCategoryBeDeleted(category, categories.value)
 }
 
-type DesktopRow = (typeof desktopCategories.value)[number]
+type DesktopRow = Category & { children: Category[] }
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="收支分类">
       <template #right>
         <el-button type="primary" @click="openCreateModal()">
@@ -373,12 +380,15 @@ type DesktopRow = (typeof desktopCategories.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="分类目录"
       searchable
       search-placeholder="分类名称 / 上级分类"
       :rows="desktopCategories"
       :loading="isLoadingCategories"
+      row-key="id"
+      empty-title="没有分类"
+      empty-hint="点击右上角新增第一个收支分类"
     >
       <template #toolbar>
         <SegmentedControl
@@ -387,76 +397,78 @@ type DesktopRow = (typeof desktopCategories.value)[number]
           label="收支类型"
         />
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="名称"
-        prop="name"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="类型" min-width="100">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ row.type === 'income' ? '收入' : '支出' }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="上级分类" min-width="180">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{
-            categories.find((c) => c.id === row.parentId)?.name || '一级分类'
-          }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="来源" min-width="100">
-        <template #default="{ row }: { row: DesktopRow }">
-          <el-tag :type="row.system ? 'info' : 'primary'">
-            {{ row.system ? '系统' : '个人' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="备注"
-        prop="remark"
-        sortable="custom"
-        min-width="220"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="240" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button
-              link
-              type="primary"
-              v-if="!row.parentId"
-              @click="openCreateModal(row)"
-            >
-              新增二级
-            </el-button>
-            <el-button
-              link
-              type="primary"
-              :disabled="row.system"
-              @click="openEditModal(row)"
-            >
-              编辑
-            </el-button>
-            <el-button
-              link
-              type="danger"
-              :disabled="!canDeleteCategory(row)"
-              @click="openDeleteConfirmModal(row)"
-            >
-              删除
-            </el-button>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card category-record-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <CategoryIcon
+                :icon="row.icon"
+                :color="row.color"
+                :size="34"
+                :name="row.name"
+              />
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" :type="row.system ? 'info' : 'primary'">
+                {{ row.system ? '系统' : '个人' }}
+              </el-tag>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <dl class="record-card-body">
+            <div>
+              <dt>类型</dt>
+              <dd>{{ row.type === 'income' ? '收入' : '支出' }}</dd>
+            </div>
+          </dl>
+          <p v-if="row.remark" class="record-card-note">
+            {{ row.remark }}
+          </p>
+          <div v-if="row.children.length" class="category-children">
+            <span
+              v-for="child in row.children"
+              :key="child.id"
+              class="category-child-chip"
+            >
+              <CategoryIcon
+                :icon="child.icon"
+                :color="child.color"
+                :size="18"
+                :name="child.name"
+              />
+              {{ child.name }}
+            </span>
+          </div>
+          <div class="record-card-foot">
+            <div class="pc-row-actions">
+              <el-button
+                link
+                type="primary"
+                @click="openCreateModal(row)"
+              >
+                新增二级
+              </el-button>
+              <el-button
+                link
+                type="primary"
+                :disabled="row.system"
+                @click="openEditModal(row)"
+              >
+                编辑
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                :disabled="!canDeleteCategory(row)"
+                @click="openDeleteConfirmModal(row)"
+              >
+                删除
+              </el-button>
+            </div>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -559,3 +571,21 @@ type DesktopRow = (typeof desktopCategories.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+.category-children {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.category-child-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-light);
+  border-radius: 999px;
+}
+</style>

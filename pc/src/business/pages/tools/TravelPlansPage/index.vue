@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -156,7 +156,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof visiblePlans.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="旅行计划">
       <template #right>
         <el-button type="primary" @click="openCreatePage">新增旅行</el-button>
@@ -169,12 +169,14 @@ type DesktopRow = (typeof visiblePlans.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="旅行计划"
       searchable
       search-placeholder="名称 / 目的地"
       :rows="visiblePlans"
       :loading="isLoading"
+      empty-title="没有旅行计划"
+      empty-hint="当前筛选下没有可展示的旅行"
     >
       <template #toolbar>
         <SegmentedControl
@@ -186,55 +188,45 @@ type DesktopRow = (typeof visiblePlans.value)[number]
           label="旅行状态"
         />
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="名称"
-        prop="name"
-        sortable="custom"
-        min-width="200"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="目的地"
-        prop="destination"
-        sortable="custom"
-        min-width="200"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="开始日期"
-        prop="startDate"
-        sortable="custom"
-        min-width="140"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="结束日期"
-        prop="endDate"
-        sortable="custom"
-        min-width="140"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="210" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button link type="primary" @click="openDetail(row.id)">
-              详情
-            </el-button>
-            <el-button link type="primary" @click="openEditPage(row.id)">
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="openDeleteModal(row)">
-              删除
-            </el-button>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card travel-record-card"
+          @click="openDetail(row.id)"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" type="info">{{ row.destination }}</el-tag>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <dl class="record-card-body">
+            <div>
+              <dt>出发</dt>
+              <dd>{{ row.startDate || '待定' }}</dd>
+            </div>
+            <div>
+              <dt>返程</dt>
+              <dd>{{ row.endDate || '待定' }}</dd>
+            </div>
+          </dl>
+          <div class="record-card-foot">
+            <div class="pc-row-actions" @click.stop>
+              <el-button link type="primary" @click="openDetail(row.id)">
+                详情
+              </el-button>
+              <el-button link type="primary" @click="openEditPage(row.id)">
+                编辑
+              </el-button>
+              <el-button link type="danger" @click="openDeleteModal(row)">
+                删除
+              </el-button>
+            </div>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonModal
       v-model="showDeleteModal"
       title="删除旅行"
@@ -267,3 +259,9 @@ type DesktopRow = (typeof visiblePlans.value)[number]
     />
   </section>
 </template>
+
+<style scoped>
+.travel-record-card {
+  cursor: pointer;
+}
+</style>

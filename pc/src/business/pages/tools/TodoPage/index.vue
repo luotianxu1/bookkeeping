@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
@@ -428,7 +428,7 @@ function padNumber(value: number) {
 type DesktopRow = (typeof visibleItems.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="待办事项">
       <template #right>
         <el-button type="primary" @click="openCreateModal">
@@ -457,12 +457,14 @@ type DesktopRow = (typeof visibleItems.value)[number]
         <strong>{{ completedCount }}</strong>
       </el-card>
     </div>
-    <DesktopTable
+    <DesktopRecordList
       title="待办清单"
       searchable
       search-placeholder="搜索事项 / 备注"
       :rows="visibleItems"
       :loading="isLoading"
+      empty-title="没有待办事项"
+      empty-hint="当前筛选下没有可展示的事项"
     >
       <template #toolbar>
         <SegmentedControl
@@ -471,62 +473,60 @@ type DesktopRow = (typeof visibleItems.value)[number]
           label="待办筛选"
         />
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="事项"
-        prop="title"
-        sortable="custom"
-        min-width="240"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="截止时间" min-width="180">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatDueLabel(row.dueAt) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="状态" min-width="100">
-        <template #default="{ row }: { row: DesktopRow }">
-          <el-tag
-            :type="
-              isCompleted(row) ? 'success' : isOverdue(row) ? 'danger' : 'info'
-            "
-          >
-            {{ getStatusLabel(row) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="备注"
-        prop="remark"
-        sortable="custom"
-        min-width="200"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="240" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button
-              link
-              type="primary"
-              :disabled="updatingTodoId === row.id"
-              @click="toggleTodoStatus(row)"
-            >
-              {{ isCompleted(row) ? '恢复待办' : '标记完成' }}
-            </el-button>
-            <el-button link type="primary" @click="openEditModal(row)">
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="openDeleteModal(row)">
-              删除
-            </el-button>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card todo-record-card"
+          :class="{ 'is-done': isCompleted(row) }"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.title }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag
+                size="small"
+                :type="
+                  isCompleted(row)
+                    ? 'success'
+                    : isOverdue(row)
+                      ? 'danger'
+                      : 'info'
+                "
+              >
+                {{ getStatusLabel(row) }}
+              </el-tag>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <dl class="record-card-body">
+            <div>
+              <dt>截止</dt>
+              <dd>{{ formatDueLabel(row.dueAt) }}</dd>
+            </div>
+          </dl>
+          <p v-if="row.remark" class="record-card-note">
+            {{ row.remark }}
+          </p>
+          <div class="record-card-foot">
+            <div class="pc-row-actions">
+              <el-button
+                link
+                type="primary"
+                :disabled="updatingTodoId === row.id"
+                @click="toggleTodoStatus(row)"
+              >
+                {{ isCompleted(row) ? '恢复待办' : '标记完成' }}
+              </el-button>
+              <el-button link type="primary" @click="openEditModal(row)">
+                编辑
+              </el-button>
+              <el-button link type="danger" @click="openDeleteModal(row)">
+                删除
+              </el-button>
+            </div>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -609,3 +609,13 @@ type DesktopRow = (typeof visibleItems.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+.todo-record-card.is-done {
+  opacity: 0.72;
+}
+.todo-record-card.is-done .record-card-title > span {
+  text-decoration: line-through;
+  text-decoration-color: var(--el-text-color-secondary);
+}
+</style>

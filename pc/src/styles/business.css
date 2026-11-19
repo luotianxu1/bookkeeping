@@ -151,7 +151,7 @@
 }
 .business-content .pc-record-card {
   --el-card-padding: 16px;
-  border-radius: 8px;
+  border-radius: 12px;
   min-width: 0;
 }
 .business-content .pc-record-card > .el-card__body {
@@ -371,7 +371,7 @@
   padding: 16px;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
+  border-radius: 12px;
 }
 .business-content .pc-table-panel > .pc-toolbar {
   margin-bottom: 12px;
@@ -1402,5 +1402,155 @@
     border-left: 0;
     border-top: 1px solid var(--el-border-color-lighter);
     padding: 20px 0 0;
+  }
+}
+
+/* ---- DesktopRecordList 卡片列表：对齐手机端蓝调卡片语言 ---- */
+.business-content .record-list-body {
+  background: var(--el-fill-color-lighter);
+  padding: 14px;
+  border-radius: 10px;
+}
+.business-content .record-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.business-content .record-list-grid > * {
+  min-width: 0;
+}
+.business-content .record-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  transition:
+    transform 180ms ease-out,
+    box-shadow 180ms ease-out,
+    border-color 180ms ease-out;
+}
+.business-content .record-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--el-color-primary-light-7);
+  box-shadow: 0 10px 24px rgba(183, 200, 244, 0.28);
+}
+.business-content .record-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.business-content .record-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.business-content .record-card-title > :is(span, strong) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.business-content .record-card-aside {
+  flex-shrink: 0;
+}
+.business-content .record-card-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+.business-content .record-card-body > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.business-content .record-card-body dt {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.business-content .record-card-body dd {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+.business-content .record-card-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+}
+.business-content .record-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.business-content .record-list-empty {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 48px 16px;
+  color: var(--el-text-color-secondary);
+  text-align: center;
+}
+.business-content .record-list-empty strong {
+  font-size: 15px;
+  color: var(--el-text-color-regular);
+}
+.business-content .record-list-empty svg {
+  width: 36px;
+  height: 36px;
+  opacity: 0.4;
+}
+.business-content .record-list-panel > .el-skeleton {
+  padding: 20px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .business-content .record-card {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: record-card-rise 0.48s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .business-content .record-list-grid > *:nth-child(1) { animation-delay: 0ms; }
+  .business-content .record-list-grid > *:nth-child(2) { animation-delay: 50ms; }
+  .business-content .record-list-grid > *:nth-child(3) { animation-delay: 100ms; }
+  .business-content .record-list-grid > *:nth-child(4) { animation-delay: 150ms; }
+  .business-content .record-list-grid > *:nth-child(n + 5) { animation-delay: 200ms; }
+}
+@keyframes record-card-rise {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .business-content .record-card {
+    opacity: 1;
+    transform: none;
+    animation: none;
   }
 }

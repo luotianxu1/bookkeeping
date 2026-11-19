@@ -3,7 +3,7 @@ import { formatPercentage } from '@/business/utils/percentage'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 // 按月管理总预算和分类预算。
 import { computed, onMounted, ref, watch } from 'vue'
@@ -232,7 +232,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof historyBudgets.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="预算管理">
       <template #right>
         <CommonInput
@@ -291,32 +291,74 @@ type DesktopRow = (typeof historyBudgets.value)[number]
       </p>
     </PagePanel>
     <CategoryBudgets :month="currentMonthDate" />
-    <DesktopTable :rows="historyBudgets" :loading="isLoading" title="历史预算">
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="月份" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatMonth(row.budgetMonth) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="预算" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatCurrency(row.amount) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="已使用" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatCurrency(row.usedAmount) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="剩余" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatCurrency(row.remainingAmount) }}
-        </template>
-      </el-table-column>
-    </DesktopTable>
+    <DesktopRecordList
+      :rows="historyBudgets"
+      :loading="isLoading"
+      title="历史预算"
+      search-placeholder="搜索备注"
+      searchable
+      :search-keys="['remark']"
+      row-key="id"
+      empty-title="暂无历史预算"
+      empty-hint="设置过的月份预算会在这里出现"
+    >
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card budget-history-card"
+          :class="{
+            'is-over': row.usagePercent >= 100,
+            'is-warning': row.usagePercent >= 80 && row.usagePercent < 100,
+          }"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ formatMonth(row.budgetMonth) }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag
+                size="small"
+                effect="light"
+                :type="
+                  row.usagePercent >= 100
+                    ? 'danger'
+                    : row.usagePercent >= 80
+                      ? 'warning'
+                      : 'success'
+                "
+              >
+                {{ formatPercentage(row.usagePercent) }}
+              </el-tag>
+            </div>
+          </div>
+          <el-progress
+            :format="formatPercentage"
+            :percentage="getProgressPercent(row)"
+            :status="
+              row.usagePercent >= 100
+                ? 'exception'
+                : row.usagePercent >= 80
+                  ? 'warning'
+                  : undefined
+            "
+          />
+          <dl class="record-card-body">
+            <div>
+              <dt>预算</dt>
+              <dd>{{ formatCurrency(row.amount) }}</dd>
+            </div>
+            <div>
+              <dt>已使用</dt>
+              <dd>{{ formatCurrency(row.usedAmount) }}</dd>
+            </div>
+            <div>
+              <dt>剩余</dt>
+              <dd>{{ formatCurrency(row.remainingAmount) }}</dd>
+            </div>
+          </dl>
+          <p v-if="row.remark" class="record-card-note">{{ row.remark }}</p>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -403,3 +445,13 @@ type DesktopRow = (typeof historyBudgets.value)[number]
     </CommonModal>
   </section>
 </template>
+<style scoped>
+/* 历史预算卡片：进度条 + 用量徽标，正常蓝 / 接近超支橙 / 超支红 */
+.budget-history-card.is-warning {
+  border-color: var(--el-color-warning-light-5);
+}
+
+.budget-history-card.is-over {
+  border-color: var(--el-color-danger-light-5);
+}
+</style>

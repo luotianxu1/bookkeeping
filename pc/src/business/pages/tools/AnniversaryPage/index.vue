@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
@@ -378,7 +378,7 @@ function pad(value: number) {
 type DesktopRow = (typeof visibleItems.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="纪念日">
       <template #right>
         <el-button type="primary" @click="openCreateModal">
@@ -393,12 +393,14 @@ type DesktopRow = (typeof visibleItems.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="纪念日列表"
       searchable
       search-placeholder="名称 / 日期 / 备注"
       :rows="visibleItems"
       :loading="isLoading"
+      empty-title="没有纪念日"
+      empty-hint="当前筛选下没有可展示的纪念日"
     >
       <template #toolbar>
         <SegmentedControl
@@ -407,50 +409,52 @@ type DesktopRow = (typeof visibleItems.value)[number]
           label="纪念日筛选"
         />
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="纪念日"
-        prop="title"
-        sortable="custom"
-        min-width="220"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="日期"
-        prop="anniversaryDate"
-        sortable="custom"
-        min-width="160"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="距离" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          <el-tag>{{ row.badgeLabel }}</el-tag>
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="备注"
-        prop="remark"
-        sortable="custom"
-        min-width="240"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="140" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button link type="primary" @click="openEditModal(row)">
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="openDeleteModal(row)">
-              删除
-            </el-button>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card anniversary-record-card"
+          :class="`is-${row.badgeTone}`"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.title }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag
+                size="small"
+                :type="
+                  row.badgeTone === 'today'
+                    ? 'danger'
+                    : row.badgeTone === 'expired'
+                      ? 'info'
+                      : 'warning'
+                "
+              >
+                {{ row.badgeLabel }}
+              </el-tag>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <dl class="record-card-body">
+            <div>
+              <dt>日期</dt>
+              <dd>{{ row.anniversaryDate }}</dd>
+            </div>
+          </dl>
+          <p v-if="row.remark" class="record-card-note">
+            {{ row.remark }}
+          </p>
+          <div class="record-card-foot">
+            <div class="pc-row-actions">
+              <el-button link type="primary" @click="openEditModal(row)">
+                编辑
+              </el-button>
+              <el-button link type="danger" @click="openDeleteModal(row)">
+                删除
+              </el-button>
+            </div>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -529,3 +533,21 @@ type DesktopRow = (typeof visibleItems.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 今天 / 即将到来的纪念日给渐变高亮，已过日期保持低调。 */
+.anniversary-record-card.is-today {
+  border-color: var(--el-color-primary-light-7);
+  background: linear-gradient(
+    135deg,
+    var(--el-color-primary-light-9),
+    var(--el-bg-color) 62%
+  );
+}
+.anniversary-record-card.is-today .record-card-title > span {
+  color: var(--el-color-primary);
+}
+.anniversary-record-card.is-expired {
+  opacity: 0.8;
+}
+</style>

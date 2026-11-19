@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { formatAmount } from '@/business/utils/format'
 // 黄金账户持仓页：对接黄金聚合查询接口，并补充持仓新增、修改、删除能力。
@@ -19,7 +19,12 @@ import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import { useFeedback } from '@/business/composables/useFeedback'
 import { allAccountIconOptions } from '@/business/data/account-icons'
-import { formatRate, formatSummaryWeight } from './goldPositionFormat'
+import {
+  formatCreatedDate,
+  formatRate,
+  formatSummaryWeight,
+  getProfitToneClass,
+} from './goldPositionFormat'
 import { useGoldPositionData } from './useGoldPositionData'
 import { useGoldPositionActions } from './useGoldPositionActions'
 
@@ -115,9 +120,14 @@ onMounted(() => {
 })
 
 type DetailTableRow = (typeof filteredHoldings.value)[number]
+
+function formatSignedGoldProfit(value: number | null | undefined) {
+  const amount = Number(value ?? 0)
+  return `${amount >= 0 ? '+' : '-'}¥${formatAmount(Math.abs(amount))}`
+}
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader :title="scopedAccount?.name || '黄金持仓'">
       <template #right>
         <el-button @click="openLiquidationList">清仓明细</el-button>
@@ -155,49 +165,60 @@ type DetailTableRow = (typeof filteredHoldings.value)[number]
       ]"
     />
     <div class="desktop-main-aside">
-      <DesktopTable :rows="filteredHoldings" title="黄金持仓" searchable>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column
-          label="产品"
-          prop="productName"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="克重" min-width="130">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatSummaryWeight(row.weight) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="成本均价" min-width="130">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatAmount(row.avgCostPrice) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="买入金额" min-width="150">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatAmount(row.purchaseAmount) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="收益" min-width="140">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatAmount(row.holdingProfit) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column
-          label="买入时间"
-          prop="createdAt"
-          min-width="170"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="操作" width="220" fixed="right">
-          <template #default="{ row }: { row: DetailTableRow }">
-            <div class="pc-row-actions">
+      <DesktopRecordList
+        :rows="filteredHoldings"
+        title="黄金持仓"
+        searchable
+        search-placeholder="搜索持仓"
+        :search-keys="['productName']"
+        row-key="id"
+      >
+        <template #default="{ row }: { row: DetailTableRow }">
+          <article class="record-card gold-holding-card">
+            <div class="record-card-head">
+              <div class="record-card-title">
+                <span>{{ row.productName }}</span>
+              </div>
+              <div class="record-card-aside">
+                <el-tag
+                  v-if="realtimeGoldPrice > 0"
+                  size="small"
+                  effect="plain"
+                  class="gold-holding-price-tag"
+                >
+                  实时金价 {{ formatAmount(realtimeGoldPrice) }}/克
+                </el-tag>
+              </div>
+            </div>
+            <div class="gold-holding-weight">
+              <span class="gold-holding-weight-label">持有克重</span>
+              <strong class="gold-holding-weight-value">
+                {{ formatSummaryWeight(row.weight) }}
+              </strong>
+              <span class="gold-holding-weight-unit">克</span>
+            </div>
+            <div
+              class="gold-holding-profit"
+              :class="getProfitToneClass(row.holdingProfit)"
+            >
+              <span>持仓收益</span>
+              <strong>{{ formatSignedGoldProfit(row.holdingProfit) }}</strong>
+            </div>
+            <dl class="record-card-body">
+              <div>
+                <dt>成本均价</dt>
+                <dd>{{ formatAmount(row.avgCostPrice) }} 元/克</dd>
+              </div>
+              <div>
+                <dt>买入金额</dt>
+                <dd>{{ formatAmount(row.purchaseAmount) }}</dd>
+              </div>
+              <div>
+                <dt>买入时间</dt>
+                <dd>{{ formatCreatedDate(row.createdAt) }}</dd>
+              </div>
+            </dl>
+            <div class="record-card-foot">
               <el-button
                 link
                 :disabled="
@@ -253,9 +274,9 @@ type DetailTableRow = (typeof filteredHoldings.value)[number]
                 删除
               </el-button>
             </div>
-          </template>
-        </el-table-column>
-      </DesktopTable>
+          </article>
+        </template>
+      </DesktopRecordList>
       <PagePanel title="价格与成本">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="实时金价">
@@ -522,3 +543,77 @@ type DetailTableRow = (typeof filteredHoldings.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 黄金持仓卡：金色左侧饰条 + 克重大数字金色渐变（红涨绿跌收益） */
+.gold-holding-card::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #e2b64f, #b8860b);
+}
+
+.gold-holding-price-tag {
+  color: #8a6417;
+  border-color: rgba(184, 134, 11, 0.35);
+  background: rgba(226, 182, 79, 0.12);
+}
+
+.gold-holding-weight {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.gold-holding-weight-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.gold-holding-weight-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(120deg, #b8860b, #e2b64f);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-holding-weight-unit {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.gold-holding-profit {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.gold-holding-profit strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* 中国市场惯例：盈利红、亏损绿 */
+.gold-holding-profit.positive strong {
+  color: var(--color-danger);
+}
+
+.gold-holding-profit.negative strong {
+  color: var(--color-success);
+}
+</style>

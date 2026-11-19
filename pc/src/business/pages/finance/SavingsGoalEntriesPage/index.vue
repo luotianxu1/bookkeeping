@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import AmountText from '@/business/components/common/AmountText/index.vue'
 import { getSavingsGoals, getSavingsGoalEntries, type SavingsGoal, type SavingsGoalEntry } from '@/business/api/modules/finance'
@@ -53,7 +53,7 @@ watch(() => route.params.id, refresh, { immediate: true })
 </script>
 
 <template>
-  <section class="desktop-workspace desktop-list-workspace" aria-label="存取记录">
+  <section class="desktop-workspace desktop-list-workspace stagger-in" aria-label="存取记录">
     <PageHeader title="存取记录" back-to="/finance/savings-goals" back-label="返回储蓄目标">
       <template #right>
         <el-button :loading="history.loading.value" @click="refresh">刷新存取记录</el-button>
@@ -89,36 +89,43 @@ watch(() => route.params.id, refresh, { immediate: true })
       <template #title>{{ history.error.value }}</template>
       <el-button link type="primary" :disabled="history.loading.value" @click="history.run">重试</el-button>
     </el-alert>
-    <DesktopTable
+    <DesktopRecordList
       v-if="history.loading.value || history.ready.value"
+      class="entry-list"
       title="存取明细"
       :rows="rows"
       :loading="history.loading.value && !history.ready.value"
       :paginate="false"
+      row-key="id"
+      empty-title="暂无存取记录"
+      empty-hint="对该目标存入或取出的记录会显示在这里"
     >
-      <!-- @vue-generic {SavingsGoalEntry} -->
-      <el-table-column label="记录日期" prop="occurredOn" min-width="140" />
-      <!-- @vue-generic {SavingsGoalEntry} -->
-      <el-table-column label="类型" width="100">
-        <template #default="{ row }: { row: SavingsGoalEntry }">
-          {{ row.type === 'deposit' ? '存入' : '取出' }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {SavingsGoalEntry} -->
-      <el-table-column label="金额" min-width="160" align="right">
-        <template #default="{ row }: { row: SavingsGoalEntry }">
-          <AmountText :tone="row.type === 'deposit' ? 'positive' : 'negative'" :value="`${row.type === 'deposit' ? '+' : '−'}${money(row.amount)}`" />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {SavingsGoalEntry} -->
-      <el-table-column label="来源" min-width="130">
-        <template #default="{ row }: { row: SavingsGoalEntry }">
-          {{ row.transactionId ? '关联记账' : '手动分配' }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {SavingsGoalEntry} -->
-      <el-table-column label="备注" prop="remark" min-width="240" show-overflow-tooltip />
-    </DesktopTable>
+      <template #default="{ row }: { row: SavingsGoalEntry }">
+        <article
+          class="entry-strip"
+          :class="`entry-strip--${row.type}`"
+        >
+          <div class="entry-side">
+            <span class="entry-kind">
+              {{ row.type === 'deposit' ? '存入' : '取出' }}
+            </span>
+            <span class="entry-date">{{ row.occurredOn }}</span>
+          </div>
+          <div class="entry-main">
+            <span class="entry-source">
+              {{ row.transactionId ? '关联记账' : '手动分配' }}
+            </span>
+            <span v-if="row.remark" class="entry-remark">{{ row.remark }}</span>
+          </div>
+          <AmountText
+            class="entry-amount"
+            tag="strong"
+            :tone="row.type === 'deposit' ? 'positive' : 'negative'"
+            :value="`${row.type === 'deposit' ? '+' : '−'}${money(row.amount)}`"
+          />
+        </article>
+      </template>
+    </DesktopRecordList>
     <div v-if="history.ready.value" class="history-footer" :aria-busy="history.loading.value">
       <span>{{ rows.length ? `已加载 ${rows.length} 条记录` : '暂无存取记录' }}</span>
       <el-button v-if="nextCursor !== null" :loading="history.loading.value" @click="loadMore">加载更多</el-button>
@@ -140,4 +147,72 @@ watch(() => route.params.id, refresh, { immediate: true })
 .goal-plan { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding-top: 12px; border-top: 1px solid var(--el-border-color-lighter); }
 .goal-plan strong { font-weight: 500; }
 .history-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--el-text-color-secondary); font-size: 13px; }
+
+/* 存取记录：单列紧凑条目，方向色区分存入/取出。 */
+.entry-list :deep(.record-list-grid) {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.entry-strip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-left-width: 3px;
+  border-radius: 10px;
+  min-width: 0;
+}
+.entry-strip--deposit {
+  border-left-color: var(--color-danger);
+}
+.entry-strip--withdrawal {
+  border-left-color: var(--color-success);
+}
+.entry-side {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 92px;
+}
+.entry-kind {
+  font-size: 13px;
+  font-weight: 600;
+}
+.entry-strip--deposit .entry-kind {
+  color: var(--color-danger);
+}
+.entry-strip--withdrawal .entry-kind {
+  color: var(--color-success);
+}
+.entry-date {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.entry-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.entry-source {
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+}
+.entry-remark {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entry-amount {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
 </style>

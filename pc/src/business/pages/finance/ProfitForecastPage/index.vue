@@ -2,7 +2,7 @@
 import { formatPercentage } from '@/business/utils/percentage'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 // 收益预测页：展示基金盘中预估收益，并支持按投资账户查看。
 import { computed, onMounted, ref } from 'vue'
@@ -192,7 +192,7 @@ function formatDateTime(value: string | null | undefined) {
 type DesktopRow = (typeof visibleHoldings.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="收益预测">
       <template #right>
         <CommonSelect
@@ -225,48 +225,67 @@ type DesktopRow = (typeof visibleHoldings.value)[number]
         },
       ]"
     />
-    <DesktopTable
+    <DesktopRecordList
       :rows="visibleHoldings"
       :loading="isLoading"
       title="持仓收益预测"
       search-placeholder="搜索基金"
       searchable
+      :search-keys="['productName']"
+      empty-title="暂无持仓"
+      empty-hint="添加基金持仓后可查看盘中预估收益"
     >
-      <el-table-column
-        prop="productName"
-        label="基金"
-        min-width="200"
-        sortable="custom"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="持仓" min-width="180">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatHoldingMeta(row) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="预估收益" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          <AmountText
-            :value="formatSignedCurrency(row.estimateProfit)"
-            :tone="getProfitTone(row.estimateProfit)"
-          />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="预估收益率" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatSignedRate(row.estimateProfitRate) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="更新" min-width="180">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatHoldingUpdatedAt(row) }}
-        </template>
-      </el-table-column>
-    </DesktopTable>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card fund-forecast-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.productName }}</span>
+            </div>
+          </div>
+          <div class="fund-forecast-profit">
+            <span class="fund-forecast-profit-label">预估收益</span>
+            <AmountText
+              class="fund-forecast-profit-value"
+              :value="formatSignedCurrency(row.estimateProfit)"
+              :tone="getProfitTone(row.estimateProfit)"
+              font-size="24px"
+            />
+          </div>
+          <dl class="record-card-body">
+            <div>
+              <dt>预估收益率</dt>
+              <dd>{{ formatSignedRate(row.estimateProfitRate) }}</dd>
+            </div>
+            <div>
+              <dt>持仓市值</dt>
+              <dd>{{ formatHoldingMeta(row) }}</dd>
+            </div>
+            <div>
+              <dt>更新时间</dt>
+              <dd>{{ formatHoldingUpdatedAt(row) }}</dd>
+            </div>
+          </dl>
+        </article>
+      </template>
+    </DesktopRecordList>
     <p class="desktop-note">{{ summaryHint }}</p>
   </section>
 </template>
+<style scoped>
+/* 持仓预测卡：预估收益大数字（涨红跌绿）+ 持仓信息明细 */
+.fund-forecast-profit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fund-forecast-profit-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.fund-forecast-profit-value {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+</style>

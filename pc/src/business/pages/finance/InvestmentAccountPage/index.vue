@@ -2,7 +2,7 @@
 import { formatPercentage } from '@/business/utils/percentage'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
@@ -49,13 +49,21 @@ import { useRequestAbort } from '@/business/composables/useRequestAbort'
 import { useVisibilityPolling } from '@/business/composables/useVisibilityPolling'
 import {
   compareHoldingsByProfitRate,
+  getHoldingActionValue,
   getHoldingDayProfitText,
+  getHoldingDayProfitRateText,
   getHoldingDayProfitTone,
   getHoldingMarketValue,
+  getHoldingMarketValueLabel,
+  getHoldingPrimaryLabel,
+  getHoldingPrimaryValue,
   getHoldingProfitValue,
   getHoldingQuantityTag,
+  getHoldingSecondaryLabel,
+  getHoldingSecondaryValue,
   isAfterQuoteRefreshTime,
   isInitialFundSubscriptionTransaction,
+  isPendingSubscription,
   shouldDisplayHolding,
 } from './holdingDisplay'
 import { useAddAsset } from './useAddAsset'
@@ -500,7 +508,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DetailTableRow = (typeof holdings.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader :title="selectedAccount?.name || '投资持仓'">
       <template #right>
         <el-button @click="openLiquidationList">清仓明细</el-button>
@@ -541,7 +549,14 @@ type DetailTableRow = (typeof holdings.value)[number]
         }))
       "
     />
-    <DesktopTable :rows="holdings" title="持仓列表" searchable>
+    <DesktopRecordList
+      :rows="holdings"
+      title="持仓列表"
+      searchable
+      search-placeholder="搜索产品名称"
+      :search-keys="['productName']"
+      row-key="id"
+    >
       <template #toolbar>
         <SegmentedControl
           v-if="showInvestmentTabSwitch"
@@ -550,49 +565,74 @@ type DetailTableRow = (typeof holdings.value)[number]
           label="投资分类筛选"
         />
       </template>
-      <!-- @vue-generic {DetailTableRow} -->
-      <el-table-column
-        label="产品"
-        prop="productName"
-        min-width="200"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DetailTableRow} -->
-      <el-table-column label="市值 / 待确认" min-width="180">
-        <template #default="{ row }: { row: DetailTableRow }">
-          {{
-            getHoldingMarketValue(
-              row,
-              pendingAdditionalAmountsByPositionId.get(row.id) ?? 0,
-            )
-          }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DetailTableRow} -->
-      <el-table-column label="份额 / 股数" min-width="140">
-        <template #default="{ row }: { row: DetailTableRow }">
-          {{ getHoldingQuantityTag(row) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DetailTableRow} -->
-      <el-table-column label="当日收益" min-width="140">
-        <template #default="{ row }: { row: DetailTableRow }">
-          <AmountText
-            :value="getHoldingDayProfitText(row)"
-            :tone="getHoldingDayProfitTone(row)"
-          />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DetailTableRow} -->
-      <el-table-column label="持仓收益" min-width="150">
-        <template #default="{ row }: { row: DetailTableRow }">
-          <AmountText :value="getHoldingProfitValue(row)" />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DetailTableRow} -->
-      <el-table-column label="操作" width="150" fixed="right">
-        <template #default="{ row }: { row: DetailTableRow }">
-          <div class="pc-row-actions">
+      <template #default="{ row }: { row: DetailTableRow }">
+        <article class="record-card holding-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.productName }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag
+                v-if="isPendingSubscription(row)"
+                size="small"
+                type="warning"
+                effect="plain"
+              >
+                申购处理中
+              </el-tag>
+            </div>
+          </div>
+          <div class="holding-card-market">
+            <span class="holding-card-market-label">
+              {{ getHoldingMarketValueLabel(row) }}
+            </span>
+            <strong class="holding-card-market-value">
+              {{
+                getHoldingMarketValue(
+                  row,
+                  pendingAdditionalAmountsByPositionId.get(row.id) ?? 0,
+                )
+              }}
+            </strong>
+            <span class="holding-card-quantity">
+              {{ getHoldingQuantityTag(row) }}
+            </span>
+          </div>
+          <div
+            class="holding-card-day"
+            :class="`tone-${getHoldingDayProfitTone(row)}`"
+          >
+            <span class="holding-card-day-label">
+              {{ isPendingSubscription(row) ? '申购处理中' : '今日盈亏' }}
+            </span>
+            <span class="holding-card-day-value">
+              {{
+                isPendingSubscription(row)
+                  ? getHoldingActionValue(row)
+                  : getHoldingDayProfitText(row)
+              }}
+            </span>
+            <span class="holding-card-day-rate">
+              {{ getHoldingDayProfitRateText(row) }}
+            </span>
+          </div>
+          <dl class="record-card-body">
+            <div>
+              <dt>{{ getHoldingPrimaryLabel(row) }}</dt>
+              <dd>{{ getHoldingPrimaryValue(row) }}</dd>
+            </div>
+            <div>
+              <dt>{{ getHoldingSecondaryLabel(row) }}</dt>
+              <dd>{{ getHoldingSecondaryValue(row) }}</dd>
+            </div>
+            <div>
+              <dt>持仓收益</dt>
+              <dd>
+                <AmountText :value="getHoldingProfitValue(row)" />
+              </dd>
+            </div>
+          </dl>
+          <div class="record-card-foot">
             <el-button
               link
               type="primary"
@@ -601,9 +641,9 @@ type DetailTableRow = (typeof holdings.value)[number]
               详情 / 交易
             </el-button>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -795,3 +835,69 @@ type DetailTableRow = (typeof holdings.value)[number]
     </CommonModal>
   </section>
 </template>
+
+<style scoped>
+/* 持仓卡：市值大数字 + 今日盈亏色调条（红涨绿跌） */
+.holding-card-market {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.holding-card-market-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.holding-card-market-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.holding-card-quantity {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.holding-card-day {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.holding-card-day-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.holding-card-day-value {
+  margin-left: auto;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.holding-card-day-rate {
+  font-size: 12px;
+}
+
+/* 中国市场惯例：盈利红、亏损绿 */
+.holding-card-day.tone-positive :is(.holding-card-day-value, .holding-card-day-rate) {
+  color: var(--color-danger);
+}
+
+.holding-card-day.tone-negative :is(.holding-card-day-value, .holding-card-day-rate) {
+  color: var(--color-success);
+}
+
+.holding-card-day.tone-neutral .holding-card-day-value {
+  color: var(--el-text-color-regular);
+}
+</style>

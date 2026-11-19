@@ -25,6 +25,7 @@ export type UseGoldPositionActionsOptions = {
   realtimeGoldPrice: ComputedRef<number>
   formAccountId: Ref<string>
   formFundingAccountId: Ref<string>
+  fundingAccountOptions: ComputedRef<{ label: string; value: string }[]>
   syncFormSelections: () => void
   loadGoldPosition: () => Promise<void>
   showFeedback: (message: string, type: FeedbackType) => void
@@ -33,6 +34,7 @@ export type UseGoldPositionActionsOptions = {
 export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
   const positionSubmission = useIdempotentSubmit()
   const sellSubmission = useIdempotentSubmit()
+  const buySubmission = useIdempotentSubmit()
   const {
     goldAccounts,
     isScopedToAccount,
@@ -40,6 +42,7 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
     realtimeGoldPrice,
     formAccountId,
     formFundingAccountId,
+    fundingAccountOptions,
     syncFormSelections,
     loadGoldPosition,
     showFeedback,
@@ -49,19 +52,23 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
   const isDeletingPosition = ref(false)
   const isLoadingPositionDetail = ref(false)
   const isSellingPosition = ref(false)
+  const isBuyingPosition = ref(false)
   const isSavingAccountSettings = ref(false)
   const actionError = ref('')
   const positionFormError = ref('')
   const deleteError = ref('')
   const sellError = ref('')
+  const buyError = ref('')
   const showPositionModal = ref(false)
   const showDeleteConfirmModal = ref(false)
   const showSellModal = ref(false)
+  const showBuyModal = ref(false)
   const showAccountSettingsModal = ref(false)
   const editingPosition = ref<InvestmentPosition | null>(null)
   const selectedHolding = ref<GoldAccountHolding | null>(null)
   const deletingHolding = ref<GoldAccountHolding | null>(null)
   const sellingPosition = ref<InvestmentPosition | null>(null)
+  const buyingPosition = ref<InvestmentPosition | null>(null)
 
   const DEFAULT_GOLD_PRODUCT_NAME = '积存金'
   const DEFAULT_GOLD_PRODUCT_SYMBOL = 'AU9999'
@@ -75,6 +82,11 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
   const sellPrice = ref('')
   const sellFee = ref('0')
   const sellRemark = ref('')
+  const buyFundingAccountId = ref('')
+  const buyWeight = ref('')
+  const buyPrice = ref('')
+  const buyFee = ref('0')
+  const buyRemark = ref('')
   const accountSettingsName = ref('')
   const accountSettingsIcon = ref('gold')
   const accountSettingsRemark = ref('')
@@ -88,6 +100,30 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
   const sellModalTitle = computed(() => (
     selectedHolding.value?.productName || selectedHolding.value?.productSymbol || '卖出黄金'
   ))
+  const buyModalTitle = computed(() => (
+    buyingPosition.value?.productName || buyingPosition.value?.productSymbol || '买入黄金'
+  ))
+  // 买入必须关联现金资金账户（后端强制扣款），因此不提供"不关联"选项。
+  const buyFundingAccountOptions = computed(() => (
+    fundingAccountOptions.value.filter((option) => option.value !== '')
+  ))
+  const buyAmountPreview = computed(() => {
+    const quantity = Number(buyWeight.value)
+    const price = Number(buyPrice.value)
+    const fee = Number(buyFee.value)
+    const amount = quantity * price
+    if (
+      !Number.isFinite(quantity)
+      || quantity <= 0
+      || !Number.isFinite(price)
+      || price <= 0
+      || !Number.isFinite(fee)
+      || fee < 0
+    ) {
+      return '--'
+    }
+    return `${formatAmount(amount + fee)}元`
+  })
   const sellAvailableQuantityText = computed(() => {
     const amount = Number(sellingPosition.value?.availableQuantity ?? 0)
     return `${formatCompactWeight(amount)}克`
@@ -201,7 +237,7 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
   }
 
   function toggleHoldingActions(holding: GoldAccountHolding) {
-    if (isLoadingPositionDetail.value || isSavingPosition.value || isDeletingPosition.value || isSellingPosition.value) {
+    if (isLoadingPositionDetail.value || isSavingPosition.value || isDeletingPosition.value || isSellingPosition.value || isBuyingPosition.value) {
       return
     }
 
@@ -452,6 +488,121 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
     sellError.value = ''
   }
 
+  function resetBuyForm() {
+    buyFundingAccountId.value = ''
+    buyWeight.value = ''
+    buyPrice.value = realtimeGoldPrice.value > 0 ? String(realtimeGoldPrice.value) : ''
+    buyFee.value = '0'
+    buyRemark.value = ''
+    buyError.value = ''
+  }
+
+  async function openBuyModalFromAction() {
+    const holding = selectedHolding.value
+    if (!holding || isBuyingPosition.value) {
+      return
+    }
+
+    actionError.value = ''
+    buyError.value = ''
+
+    try {
+      const position = await loadPositionDetail(holding.positionId)
+      if (!position) {
+        return
+      }
+
+      buyingPosition.value = position
+      selectedHolding.value = null
+      resetBuyForm()
+      showBuyModal.value = true
+    } catch (error) {
+      const message = getErrorMessage(error, '持仓详情加载失败')
+      actionError.value = message
+      showFeedback(message, 'error')
+    }
+  }
+
+  function closeBuyModal(force = false) {
+    if (isBuyingPosition.value && !force) {
+      return
+    }
+
+    showBuyModal.value = false
+    buyingPosition.value = null
+    buyError.value = ''
+  }
+
+  async function submitBuyPosition() {
+    if (isBuyingPosition.value || !buyingPosition.value) {
+      return
+    }
+
+    const currentUser = getStoredCurrentUser()
+    if (!currentUser) {
+      buyError.value = '请先登录后再买入持仓'
+      return
+    }
+
+    const fundingAccountId = Number(buyFundingAccountId.value)
+    const quantity = Number(buyWeight.value)
+    const price = Number(buyPrice.value)
+    const fee = Number(buyFee.value)
+    const amount = quantity * price
+
+    if (!Number.isFinite(fundingAccountId) || fundingAccountId <= 0) {
+      buyError.value = '请选择资金账户'
+      return
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      buyError.value = '请输入有效的买入克数'
+      return
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      buyError.value = '请输入有效的买入价格'
+      return
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      buyError.value = '买入克数或价格不正确'
+      return
+    }
+    if (!Number.isFinite(fee) || fee < 0) {
+      buyError.value = '请输入有效的手续费'
+      return
+    }
+
+    isBuyingPosition.value = true
+    buyError.value = ''
+
+    try {
+      await createInvestmentTransaction(buySubmission.withRequestId({
+        userId: currentUser.id,
+        accountId: buyingPosition.value.accountId,
+        positionId: buyingPosition.value.id,
+        productId: buyingPosition.value.productId,
+        tradeType: 'buy' as const,
+        quantity: toFixedNumber(quantity, 6),
+        price: toFixedNumber(price, 6),
+        amount: toFixedNumber(amount, 2),
+        feeAmount: toFixedNumber(fee, 2),
+        taxAmount: 0,
+        currencyCode: buyingPosition.value.currencyCode || 'CNY',
+        fundingAccountId,
+        remark: buyRemark.value.trim() || null,
+      }, () => ({ tradeAt: toApiDateTime(new Date()) })))
+      buySubmission.reset()
+      closeBuyModal(true)
+      showFeedback('买入成功', 'success')
+      await loadGoldPosition()
+    } catch (error) {
+      const message = getErrorMessage(error, '买入失败')
+      buyError.value = message
+      showFeedback(message, 'error')
+    } finally {
+      isBuyingPosition.value = false
+    }
+  }
+
   async function confirmDeletePosition() {
     if (!deletingHolding.value || isDeletingPosition.value) {
       return
@@ -563,19 +714,23 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
     isDeletingPosition,
     isLoadingPositionDetail,
     isSellingPosition,
+    isBuyingPosition,
     isSavingAccountSettings,
     actionError,
     positionFormError,
     deleteError,
     sellError,
+    buyError,
     showPositionModal,
     showDeleteConfirmModal,
     showSellModal,
+    showBuyModal,
     showAccountSettingsModal,
     editingPosition,
     selectedHolding,
     deletingHolding,
     sellingPosition,
+    buyingPosition,
     formWeight,
     formBuyPrice,
     formIncludeInNetWorth,
@@ -585,6 +740,12 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
     sellPrice,
     sellFee,
     sellRemark,
+    buyFundingAccountId,
+    buyWeight,
+    buyPrice,
+    buyFee,
+    buyRemark,
+    buyFundingAccountOptions,
     accountSettingsName,
     accountSettingsIcon,
     accountSettingsRemark,
@@ -593,8 +754,10 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
     isCurrentAccountFixed,
     positionModalTitle,
     sellModalTitle,
+    buyModalTitle,
     sellAvailableQuantityText,
     sellAmountPreview,
+    buyAmountPreview,
     openAccountSettingsModal,
     closeAccountSettingsModal,
     saveAccountSettings,
@@ -610,9 +773,12 @@ export function useGoldPositionActions(options: UseGoldPositionActionsOptions) {
     openDeleteConfirmModal,
     openDeleteConfirmModalFromAction,
     openSellModalFromAction,
+    openBuyModalFromAction,
     closeDeleteConfirmModal,
     closeSellModal,
+    closeBuyModal,
     confirmDeletePosition,
     submitSellPosition,
+    submitBuyPosition,
   }
 }

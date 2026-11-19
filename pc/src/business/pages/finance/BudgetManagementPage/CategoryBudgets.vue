@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatPercentage } from '@/business/utils/percentage'
 
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, ref, watch } from 'vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
@@ -128,7 +128,7 @@ async function remove() {
 type DesktopRow = (typeof items.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <el-alert
       v-if="error"
       :title="error"
@@ -138,7 +138,13 @@ type DesktopRow = (typeof items.value)[number]
     >
       <el-button link type="primary" @click="load">重试</el-button>
     </el-alert>
-    <DesktopTable :rows="items" :loading="loading" title="分类预算">
+    <DesktopRecordList
+      :rows="items"
+      :loading="loading"
+      title="分类预算"
+      empty-title="暂无分类预算"
+      empty-hint="为支出分类单独设置月度预算"
+    >
       <template #toolbar>
         <el-button
           type="primary"
@@ -148,34 +154,34 @@ type DesktopRow = (typeof items.value)[number]
           新增分类预算
         </el-button>
       </template>
-      <el-table-column
-        prop="categoryName"
-        label="支出分类"
-        min-width="180"
-        sortable="custom"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="预算" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.amount) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="已使用" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.usedAmount) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="剩余预算" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ money(row.remainingAmount) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="执行进度" min-width="200">
-        <template #default="{ row }: { row: DesktopRow }">
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card category-budget-card"
+          :class="{
+            'is-over': row.usagePercent >= 100,
+            'is-warning': row.usagePercent >= 80 && row.usagePercent < 100,
+          }"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.categoryName }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag
+                size="small"
+                effect="light"
+                :type="
+                  row.usagePercent >= 100
+                    ? 'danger'
+                    : row.usagePercent >= 80
+                      ? 'warning'
+                      : 'success'
+                "
+              >
+                {{ formatPercentage(row.usagePercent) }}
+              </el-tag>
+            </div>
+          </div>
           <el-progress
             :format="formatPercentage"
             :percentage="Math.min(100, Math.max(0, row.usagePercent))"
@@ -187,27 +193,38 @@ type DesktopRow = (typeof items.value)[number]
                   : undefined
             "
           />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column fixed="right" label="操作" width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          <el-button link type="primary" @click="open(row)">修改</el-button>
-          <el-button
-            link
-            type="danger"
-            @click="
-              () => {
-                deleting = row
-                formError = ''
-              }
-            "
-          >
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <dl class="record-card-body">
+            <div>
+              <dt>预算</dt>
+              <dd>{{ money(row.amount) }}</dd>
+            </div>
+            <div>
+              <dt>已使用</dt>
+              <dd>{{ money(row.usedAmount) }}</dd>
+            </div>
+            <div>
+              <dt>剩余预算</dt>
+              <dd>{{ money(row.remainingAmount) }}</dd>
+            </div>
+          </dl>
+          <div class="record-card-foot">
+            <el-button link type="primary" @click="open(row)">修改</el-button>
+            <el-button
+              link
+              type="danger"
+              @click="
+                () => {
+                  deleting = row
+                  formError = ''
+                }
+              "
+            >
+              删除
+            </el-button>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonModal
       v-model="show"
       title="分类预算"
@@ -272,3 +289,13 @@ type DesktopRow = (typeof items.value)[number]
     </CommonModal>
   </section>
 </template>
+<style scoped>
+/* 分类预算进度卡：分类名 + 用量徽标 + 进度条 + 已用/剩余明细 */
+.category-budget-card.is-warning {
+  border-color: var(--el-color-warning-light-5);
+}
+
+.category-budget-card.is-over {
+  border-color: var(--el-color-danger-light-5);
+}
+</style>

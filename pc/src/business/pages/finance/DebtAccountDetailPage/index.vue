@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -493,6 +493,19 @@ function getPrincipalRemainingAmount(record: DebtRecord) {
   return Math.max(0, Number(record.remainingAmount ?? amount - linkedAmount))
 }
 
+// 借入/借出主记录的已结清百分比，用于卡片上的结清进度条。
+function getSettledPercent(record: DebtRecord) {
+  const amount = Number(record.amount ?? 0)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0
+  }
+  const remaining = getPrincipalRemainingAmount(record)
+  return Math.min(
+    100,
+    Math.max(0, Math.round(((amount - remaining) / amount) * 100)),
+  )
+}
+
 function formatFundingAccountName(record: DebtRecord) {
   return record.fundingAccountName?.trim() || '未关联现金账户'
 }
@@ -585,7 +598,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DetailTableRow = (typeof topLevelRecords.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader :title="detailName">
       <template #right>
         <el-button type="primary" @click="openAddRecordModal">
@@ -609,73 +622,78 @@ type DetailTableRow = (typeof topLevelRecords.value)[number]
       ]"
     />
     <div class="desktop-main-aside">
-      <DesktopTable :rows="topLevelRecords" title="往来记录" searchable>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="发生时间" min-width="160">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatDate(row.occurredAt) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="类型" min-width="120">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatDebtRecordActionLabel(row) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="金额" min-width="140">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatRecordAmount(row) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="剩余金额" min-width="140">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatCurrency(getPrincipalRemainingAmount(row)) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="现金账户" min-width="160">
-          <template #default="{ row }: { row: DetailTableRow }">
-            {{ formatFundingAccountName(row) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column
-          label="备注"
-          prop="remark"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {DetailTableRow} -->
-        <el-table-column label="操作" width="270" fixed="right">
-          <template #default="{ row }: { row: DetailTableRow }">
-            <div class="pc-row-actions">
+      <DesktopRecordList
+        :rows="topLevelRecords"
+        :loading="isLoading"
+        title="往来记录"
+        searchable
+        search-placeholder="备注 / 现金账户"
+        :search-keys="['remark', 'fundingAccountName']"
+        row-key="id"
+        empty-title="没有往来记录"
+        empty-hint="点击右上角登记第一笔借入或借出"
+      >
+        <template #default="{ row }: { row: DetailTableRow }">
+          <article
+            class="record-card debt-detail-card"
+            :class="row.direction === 'receivable' ? 'is-receivable' : 'is-payable'"
+          >
+            <div class="record-card-head">
+              <div class="record-card-title">
+                <span class="debt-detail-kind">{{ formatDebtRecordActionLabel(row) }}</span>
+                <span class="debt-detail-date">{{ formatDate(row.occurredAt) }}</span>
+              </div>
+              <div class="record-card-aside">
+                <strong class="debt-detail-amount">{{ formatRecordAmount(row) }}</strong>
+              </div>
+            </div>
+            <div class="debt-detail-remaining">
+              <div class="debt-detail-remaining-meta">
+                <span>剩余 {{ formatCurrency(getPrincipalRemainingAmount(row)) }}</span>
+                <span>已结 {{ getSettledPercent(row) }}%</span>
+              </div>
+              <el-progress
+                :percentage="getSettledPercent(row)"
+                :show-text="false"
+                :stroke-width="6"
+                :status="getPrincipalRemainingAmount(row) === 0 ? 'success' : undefined"
+              />
+            </div>
+            <div class="record-card-body">
+              <div>
+                <dt>现金账户</dt>
+                <dd>{{ formatFundingAccountName(row) }}</dd>
+              </div>
+            </div>
+            <p v-if="row.remark" class="record-card-note">{{ row.remark }}</p>
+            <div class="record-card-foot">
               <el-button link type="primary" @click="openRecordDetail(row.id)">
                 明细
               </el-button>
-              <el-button
-                link
-                type="primary"
-                v-if="
-                  row.recordType !== 'repayment' &&
-                  !row.parentRecordId &&
-                  getPrincipalRemainingAmount(row) > 0
-                "
-                @click="openOffsetRecordModal(row)"
-              >
-                {{ formatOffsetActionLabel(row) }}
-              </el-button>
-              <el-button link type="primary" @click="openEditRecordModal(row)">
-                修改
-              </el-button>
-              <el-button link type="danger" @click="openDeleteModal(row)">
-                删除
-              </el-button>
+              <div class="pc-row-actions">
+                <el-button
+                  v-if="
+                    row.recordType !== 'repayment' &&
+                    !row.parentRecordId &&
+                    getPrincipalRemainingAmount(row) > 0
+                  "
+                  link
+                  type="primary"
+                  @click="openOffsetRecordModal(row)"
+                >
+                  {{ formatOffsetActionLabel(row) }}
+                </el-button>
+                <el-button link type="primary" @click="openEditRecordModal(row)">
+                  修改
+                </el-button>
+                <el-button link type="danger" @click="openDeleteModal(row)">
+                  删除
+                </el-button>
+              </div>
             </div>
-          </template>
-        </el-table-column>
-      </DesktopTable>
+          </article>
+        </template>
+      </DesktopRecordList>
       <PagePanel title="账户资料">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="联系人">
@@ -794,3 +812,51 @@ type DetailTableRow = (typeof topLevelRecords.value)[number]
     </CommonModal>
   </section>
 </template>
+<style scoped>
+/* 往来记录卡：借出/收款=红（应收资产）、借入/还款=绿（支出方向）。 */
+.debt-detail-kind {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.debt-detail-card.is-receivable .debt-detail-kind {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+.debt-detail-card.is-payable .debt-detail-kind {
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
+}
+.debt-detail-date {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.debt-detail-amount {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.debt-detail-card.is-receivable .debt-detail-amount {
+  color: var(--el-color-danger);
+}
+.debt-detail-card.is-payable .debt-detail-amount {
+  color: var(--el-color-success);
+}
+.debt-detail-remaining {
+  display: grid;
+  gap: 6px;
+}
+.debt-detail-remaining-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+</style>

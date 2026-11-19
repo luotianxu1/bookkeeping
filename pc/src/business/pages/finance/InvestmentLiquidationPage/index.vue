@@ -2,7 +2,7 @@
 import { formatPercentage } from '@/business/utils/percentage'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { formatAmount } from '@/business/utils/format'
 // 投资清仓明细页：展示指定投资账户已清仓的股票和基金持仓。
@@ -276,7 +276,7 @@ function formatDateTime(value: string | null | undefined) {
 type DesktopRow = (typeof rows.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader title="清仓明细"><template #right></template></PageHeader>
     <el-alert
       v-if="pageError"
@@ -293,64 +293,93 @@ type DesktopRow = (typeof rows.value)[number]
         { label: '股票数量', value: stockCount },
       ]"
     />
-    <DesktopTable
+    <DesktopRecordList
       :rows="rows"
       :loading="isLoading"
       title="清仓记录"
       search-placeholder="搜索产品"
       searchable
+      :search-keys="['position.productName']"
+      row-key="position.id"
     >
-      <el-table-column
-        prop="position.productName"
-        label="产品"
-        min-width="220"
-        sortable="custom"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="代码" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ getProductCode(row.position) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="类型" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ getProductTypeLabel(row.position) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="卖出金额" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatCurrency(row.sellAmount) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="累计收益" min-width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          <AmountText
-            :value="formatSignedCurrency(row.position.cumulativeProfit)"
-          />
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="清仓时间" min-width="180">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatDateTime(row.lastSellAt || row.position.updatedAt) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column fixed="right" label="操作" width="150">
-        <template #default="{ row }: { row: DesktopRow }">
-          <el-button
-            link
-            type="primary"
-            @click="openPositionDetail(row.position.id)"
-          >
-            查看详情
-          </el-button>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card liquidation-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.position.productName }}</span>
+              <el-tag size="small" effect="plain">
+                {{ getProductTypeLabel(row.position) }}
+              </el-tag>
+            </div>
+            <div class="record-card-aside liquidation-card-code">
+              {{ getProductCode(row.position) }}
+            </div>
+          </div>
+          <div class="liquidation-card-figures">
+            <div class="liquidation-card-figure">
+              <span>卖出金额</span>
+              <strong>{{ formatCurrency(row.sellAmount) }}</strong>
+            </div>
+            <div class="liquidation-card-figure">
+              <span>累计收益</span>
+              <strong>
+                <AmountText
+                  :value="formatSignedCurrency(row.position.cumulativeProfit)"
+                />
+              </strong>
+            </div>
+          </div>
+          <div class="record-card-foot">
+            <span class="liquidation-card-time">
+              清仓于
+              {{ formatDateTime(row.lastSellAt || row.position.updatedAt) }}
+            </span>
+            <el-button
+              link
+              type="primary"
+              @click="openPositionDetail(row.position.id)"
+            >
+              查看详情
+            </el-button>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
   </section>
 </template>
+
+<style scoped>
+/* 清仓卡：紧凑交易行——产品+代码在首行，双列金额，时间为脚注 */
+.liquidation-card-code {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-text-color-secondary);
+}
+
+.liquidation-card-figures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.liquidation-card-figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.liquidation-card-figure strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.liquidation-card-time {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+</style>

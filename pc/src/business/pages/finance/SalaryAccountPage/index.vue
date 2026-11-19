@@ -4,7 +4,7 @@ import { formatPercentageText } from '@/business/utils/percentage'
 import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
 
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -286,7 +286,7 @@ function formatInterestSettlementDate(value?: string | null) {
 }
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader :title="pageTitle">
       <template #right>
         <CommonSelect
@@ -331,33 +331,50 @@ function formatInterestSettlementDate(value?: string | null) {
         "
       />
       <div class="desktop-main-aside">
-        <DesktopTable title="账户记录" searchable :rows="pageData.records">
-          <el-table-column prop="monthLabel" label="月份" min-width="140" />
-          <el-table-column
-            prop="amountLabel"
-            label="记录类型"
-            min-width="180"
-          />
-          <!-- @vue-generic {SalaryAccountRecordItem} -->
-          <el-table-column label="金额" min-width="160" align="right">
-            <template #default="{ row }: { row: SalaryAccountRecordItem }">
-              {{ formatSalaryCurrency(row.amountValue) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {SalaryAccountRecordItem} -->
-          <el-table-column label="操作" width="100" fixed="right">
-            <template #default="{ row }: { row: SalaryAccountRecordItem }">
-              <el-button
-                link
-                type="primary"
-                :disabled="!row.editable || isSaving"
-                @click="handleRecordClick(row)"
-              >
-                编辑
-              </el-button>
-            </template>
-          </el-table-column>
-        </DesktopTable>
+        <DesktopRecordList
+          title="账户记录"
+          search-placeholder="搜索月份或备注"
+          searchable
+          :search-keys="['monthLabel', 'note']"
+          row-key="id"
+          empty-title="暂无账户记录"
+          empty-hint="账户的缴存与调账记录会在这里出现"
+          :rows="pageData.records"
+          :loading="isLoading"
+        >
+          <template #default="{ row }: { row: SalaryAccountRecordItem }">
+            <article
+              class="record-card salary-account-record-card"
+              :class="{ 'is-locked': !row.editable }"
+            >
+              <div class="record-card-head">
+                <div class="record-card-title">
+                  <span>{{ row.monthLabel }}</span>
+                </div>
+                <div class="record-card-aside">
+                  <el-tag size="small" effect="plain" type="info">
+                    {{ row.amountLabel }}
+                  </el-tag>
+                </div>
+              </div>
+              <div class="salary-account-amount">
+                <span class="salary-account-amount-label">记录金额</span>
+                <strong>{{ formatSalaryCurrency(row.amountValue) }}</strong>
+              </div>
+              <p v-if="row.note" class="record-card-note">{{ row.note }}</p>
+              <div class="record-card-foot">
+                <el-button
+                  link
+                  type="primary"
+                  :disabled="!row.editable || isSaving"
+                  @click="handleRecordClick(row)"
+                >
+                  编辑
+                </el-button>
+              </div>
+            </article>
+          </template>
+        </DesktopRecordList>
         <PagePanel title="缴纳明细">
           <el-descriptions :column="1" border>
             <el-descriptions-item
@@ -525,3 +542,27 @@ function formatInterestSettlementDate(value?: string | null) {
     />
   </section>
 </template>
+<style scoped>
+/* 账户记录卡片：月份标题 + 记录类型标签 + 金额大数字 */
+.salary-account-amount {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.salary-account-amount-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.salary-account-amount strong {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.salary-account-record-card.is-locked {
+  opacity: 0.75;
+}
+</style>

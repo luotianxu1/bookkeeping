@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -126,7 +126,7 @@ function showFeedback(message: string, type: 'success' | 'error') {
 type DesktopRow = (typeof filteredOrders.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="菜单订单">
       <template #right>
         <el-button
@@ -144,7 +144,13 @@ type DesktopRow = (typeof filteredOrders.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable title="菜单订单" :rows="filteredOrders" :loading="isLoading">
+    <DesktopRecordList
+      title="菜单订单"
+      :rows="filteredOrders"
+      :loading="isLoading"
+      empty-title="没有菜单"
+      empty-hint="从菜品页选择菜品即可新建菜单"
+    >
       <template #toolbar>
         <el-input
           v-model="keyword"
@@ -153,54 +159,44 @@ type DesktopRow = (typeof filteredOrders.value)[number]
           style="width: 260px"
         />
       </template>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="名称"
-        prop="title"
-        sortable="custom"
-        min-width="200"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="日期" min-width="140">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ formatPlannedDate(row.plannedFor) }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="菜品" min-width="280">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ row.dishNames.join(' / ') }}
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="预计用时" min-width="120">
-        <template #default="{ row }: { row: DesktopRow }">
-          {{ row.totalCookMinutes }} 分钟
-        </template>
-      </el-table-column>
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="备注"
-        prop="remark"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="140" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button link type="primary" @click="openOrderDetail(row.id)">
-              详情
-            </el-button>
-            <el-button link type="danger" @click="openDeleteConfirmModal(row)">
-              删除
-            </el-button>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article class="record-card">
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.title }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag size="small" type="primary" effect="plain">
+                {{ row.dishNames.length }} 道菜
+              </el-tag>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <dl class="record-card-body">
+            <div>
+              <dt>日期</dt>
+              <dd>{{ formatPlannedDate(row.plannedFor) }}</dd>
+            </div>
+            <div>
+              <dt>预计用时</dt>
+              <dd>{{ row.totalCookMinutes }} 分钟</dd>
+            </div>
+          </dl>
+          <p class="record-card-note">
+            {{ row.dishNames.join(' / ') || '未选择菜品' }}
+          </p>
+          <div class="record-card-foot">
+            <div class="pc-row-actions">
+              <el-button link type="primary" @click="openOrderDetail(row.id)">
+                详情
+              </el-button>
+              <el-button link type="danger" @click="openDeleteConfirmModal(row)">
+                删除
+              </el-button>
+            </div>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonModal
       v-model="showDeleteConfirmModal"
       title="确认删除"

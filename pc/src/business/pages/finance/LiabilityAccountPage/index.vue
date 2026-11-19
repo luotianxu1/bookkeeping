@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -29,12 +29,16 @@ import { getErrorMessage } from '@/business/api/request'
 
 type LiabilityCardView = {
   account: Account
-  avatarText: string
-  avatarClass: string
   secondaryText: string
   noteText: string
   amountText: string
   amountHint: string
+  isSettled: boolean
+  progressPercent: number
+  repaidText: string
+  totalText: string
+  interestRateText: string
+  monthlyPaymentText: string
 }
 
 type DeleteTarget = {
@@ -110,7 +114,7 @@ const recordsByAccountId = computed(() => {
 })
 
 const liabilityCards = computed<LiabilityCardView[]>(() =>
-  accounts.value.map((account, index) => {
+  accounts.value.map((account) => {
     const records = recordsByAccountId.value.get(account.id) ?? []
     const pendingRecords = records.filter(
       (record) => record.repaymentStatus !== 'paid',
@@ -126,10 +130,19 @@ const liabilityCards = computed<LiabilityCardView[]>(() =>
     const isSettled =
       Boolean(account.loanSettledAt) || Number(account.currentBalance ?? 0) <= 0
 
+    const totalRepaymentAmount = getTotalRepaymentAmount(account)
+    const remainingAmount = Number(account.currentBalance ?? 0)
+    const repaidAmount = Math.max(0, totalRepaymentAmount - remainingAmount)
+    const progressPercent =
+      totalRepaymentAmount > 0
+        ? Math.min(
+            100,
+            Math.round((repaidAmount / totalRepaymentAmount) * 100),
+          )
+        : 0
+
     return {
       account,
-      avatarText: (account.name || '负').slice(0, 1),
-      avatarClass: `debt-avatar-${index % 4}`,
       secondaryText: isSettled
         ? '已结清'
         : `每月 ${account.loanRepaymentDay ?? '--'} 日 · 第 ${displayPeriod}/${account.loanTotalPeriods ?? '--'} 期`,
@@ -140,7 +153,7 @@ const liabilityCards = computed<LiabilityCardView[]>(() =>
           : scheduledDate
             ? `${currentPendingRecord ? '本期待还' : '下期应还'} ${formatDate(scheduledDate.toISOString())}`
             : '点击查看月供账单'),
-      amountText: formatCurrency(Number(account.currentBalance ?? 0)),
+      amountText: formatCurrency(remainingAmount),
       amountHint: latestRecord
         ? latestRecord.repaymentStatus === 'paid' && latestRecord.paidAt
           ? `最近还款 ${formatDate(latestRecord.paidAt)}`
@@ -148,6 +161,15 @@ const liabilityCards = computed<LiabilityCardView[]>(() =>
         : isSettled
           ? '合同已结清'
           : `月供约 ${formatCurrency(getMonthlyPayment(account))}`,
+      isSettled,
+      progressPercent,
+      repaidText: formatCurrency(repaidAmount),
+      totalText: formatCurrency(totalRepaymentAmount),
+      interestRateText:
+        account.loanInterestRate != null
+          ? `${Number(account.loanInterestRate)}%`
+          : '—',
+      monthlyPaymentText: formatCurrency(getMonthlyPayment(account)),
     }
   }),
 )
@@ -554,7 +576,7 @@ function buildScheduledDate(account: Account, period: number) {
 type DesktopRow = (typeof liabilityCards.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace desktop-list-workspace">
+  <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="负债账户">
       <template #right>
         <el-button type="primary" @click="openCreateAccountModal">
@@ -569,70 +591,83 @@ type DesktopRow = (typeof liabilityCards.value)[number]
       :closable="false"
       show-icon
     />
-    <DesktopTable
+    <DesktopRecordList
       title="贷款账户列表"
       searchable
       search-placeholder="贷款名称 / 还款信息"
+      :search-keys="['account.name', 'noteText', 'secondaryText']"
       :rows="liabilityCards"
       :loading="isLoading"
+      row-key="account.id"
+      empty-title="没有负债账户"
+      empty-hint="点击右上角录入第一笔贷款"
     >
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="账户"
-        prop="account.name"
-        sortable="custom"
-        min-width="180"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="待还金额"
-        prop="amountText"
-        sortable="custom"
-        min-width="140"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="还款周期"
-        prop="secondaryText"
-        sortable="custom"
-        min-width="220"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column
-        label="还款信息"
-        prop="noteText"
-        sortable="custom"
-        min-width="220"
-        show-overflow-tooltip
-      />
-      <!-- @vue-generic {DesktopRow} -->
-      <el-table-column label="操作" width="210" fixed="right">
-        <template #default="{ row }: { row: DesktopRow }">
-          <div class="pc-row-actions">
-            <el-button
-              link
-              type="primary"
-              @click="openLiabilityDetail(row.account.id)"
-            >
-              明细
-            </el-button>
-            <el-button
-              link
-              type="primary"
-              @click="openEditAccountModal(row.account)"
-            >
-              编辑
-            </el-button>
-            <el-button link type="danger" @click="openDeleteModal(row.account)">
-              删除
-            </el-button>
+      <template #default="{ row }: { row: DesktopRow }">
+        <article
+          class="record-card liability-card"
+          :class="row.isSettled ? 'is-settled' : 'is-ongoing'"
+        >
+          <div class="record-card-head">
+            <div class="record-card-title">
+              <span>{{ row.account.name }}</span>
+            </div>
+            <div class="record-card-aside">
+              <el-tag
+                size="small"
+                effect="light"
+                :type="row.isSettled ? 'info' : 'success'"
+              >
+                {{ row.isSettled ? '已结清' : '还款中' }}
+              </el-tag>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-    </DesktopTable>
+          <div class="liability-remaining">
+            <span class="liability-remaining-label">待还余额</span>
+            <strong class="liability-remaining-value">{{ row.amountText }}</strong>
+          </div>
+          <div class="liability-progress">
+            <div class="liability-progress-meta">
+              <span>已还 {{ row.repaidText }} / 共 {{ row.totalText }}</span>
+              <span>{{ row.progressPercent }}%</span>
+            </div>
+            <el-progress
+              :percentage="row.progressPercent"
+              :show-text="false"
+              :stroke-width="8"
+              :status="row.isSettled ? 'success' : undefined"
+            />
+          </div>
+          <div class="liability-badges">
+            <span class="liability-badge">利率 {{ row.interestRateText }}</span>
+            <span class="liability-badge">月供 {{ row.monthlyPaymentText }}</span>
+            <span class="liability-badge">{{ row.secondaryText }}</span>
+          </div>
+          <p v-if="row.noteText" class="record-card-note">{{ row.noteText }}</p>
+          <div class="record-card-foot">
+            <span class="liability-foot-hint">{{ row.amountHint }}</span>
+            <div class="pc-row-actions">
+              <el-button
+                link
+                type="primary"
+                @click="openLiabilityDetail(row.account.id)"
+              >
+                明细
+              </el-button>
+              <el-button
+                link
+                type="primary"
+                @click="openEditAccountModal(row.account)"
+              >
+                编辑
+              </el-button>
+              <el-button link type="danger" @click="openDeleteModal(row.account)">
+                删除
+              </el-button>
+            </div>
+          </div>
+        </article>
+      </template>
+    </DesktopRecordList>
     <CommonFeedback
       v-model="showFeedbackModal"
       :message="feedbackMessage"
@@ -740,3 +775,60 @@ type DesktopRow = (typeof liabilityCards.value)[number]
     </CommonModal>
   </section>
 </template>
+<style scoped>
+/* 贷款账户卡：待还大数字 + 已还进度条 + 利率/月供/期数徽标，欠款=绿（支出方向）。 */
+.liability-remaining {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.liability-remaining-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.liability-remaining-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-color-success);
+}
+.liability-card.is-settled .liability-remaining-value {
+  color: var(--el-text-color-secondary);
+}
+.liability-progress {
+  display: grid;
+  gap: 6px;
+}
+.liability-progress-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.liability-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.liability-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-lighter);
+  font-variant-numeric: tabular-nums;
+}
+.liability-foot-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+</style>

@@ -3,7 +3,7 @@ import { formatPercentage } from '@/business/utils/percentage'
 
 import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
+import DesktopRecordList from '@/business/components/DesktopRecordList.vue'
 
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -151,14 +151,10 @@ function formatDate(value: string) {
   return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-function formatRecordAmount(record: DebtRecord) {
-  return `${actionLabel.value} ${formatCurrency(Number(record.amount ?? 0))}`
-}
-
 type DesktopRow = (typeof repaymentRecords.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace stagger-in">
     <PageHeader :title="detailTitle"><template #right></template></PageHeader>
     <el-alert
       v-if="pageError"
@@ -183,40 +179,75 @@ type DesktopRow = (typeof repaymentRecords.value)[number]
           :status="isSettled ? 'success' : undefined"
         />
       </PagePanel>
-      <DesktopTable
+      <DesktopRecordList
         :rows="repaymentRecords"
         :loading="isLoading"
         title="结算记录"
-        search-placeholder="搜索账户、备注"
         searchable
+        search-placeholder="现金账户 / 备注"
+        :search-keys="['fundingAccountName', 'remark']"
+        row-key="id"
+        empty-title="暂无结算记录"
+        empty-hint="每次收款或还款后会在这里留下记录"
       >
-        <!-- @vue-generic {DesktopRow} -->
-        <el-table-column label="发生时间" min-width="180">
-          <template #default="{ row }: { row: DesktopRow }">
-            {{ formatDate(row.occurredAt) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {DesktopRow} -->
-        <el-table-column label="金额" min-width="150">
-          <template #default="{ row }: { row: DesktopRow }">
-            {{ formatRecordAmount(row) }}
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="fundingAccountName"
-          label="现金账户"
-          min-width="200"
-          sortable="custom"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="remark"
-          label="备注"
-          min-width="220"
-          sortable="custom"
-          show-overflow-tooltip
-        />
-      </DesktopTable>
+        <template #default="{ row, index }: { row: DesktopRow; index: number }">
+          <article
+            class="record-card debt-settle-card"
+            :class="isReceivable ? 'is-in' : 'is-out'"
+          >
+            <div class="record-card-head">
+              <div class="record-card-title">
+                <span class="debt-settle-index" aria-hidden="true">{{
+                  String(index + 1).padStart(2, '0')
+                }}</span>
+                <span>{{ formatDate(row.occurredAt) }}</span>
+              </div>
+              <div class="record-card-aside">
+                <strong class="debt-settle-amount">
+                  {{ actionLabel }} {{ formatCurrency(Number(row.amount ?? 0)) }}
+                </strong>
+              </div>
+            </div>
+            <div class="record-card-body">
+              <div>
+                <dt>现金账户</dt>
+                <dd>{{ row.fundingAccountName?.trim() || '未关联现金账户' }}</dd>
+              </div>
+            </div>
+            <p v-if="row.remark" class="record-card-note">{{ row.remark }}</p>
+          </article>
+        </template>
+      </DesktopRecordList>
     </template>
   </section>
 </template>
+<style scoped>
+/* 结算流水卡：序号 + 时间 + 方向色金额，像一张张收/支小票。 */
+.debt-settle-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 22px;
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color);
+  font-variant-numeric: tabular-nums;
+}
+.debt-settle-amount {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.debt-settle-card.is-in .debt-settle-amount {
+  color: var(--el-color-danger);
+}
+.debt-settle-card.is-out .debt-settle-amount {
+  color: var(--el-color-success);
+}
+</style>
