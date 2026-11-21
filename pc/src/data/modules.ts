@@ -104,6 +104,7 @@ export const modules: MenuModule[] = [
       ['纪念日', '/tools/anniversaries'],
       ['待办事项', '/tools/todo-items'],
       ['联系人', '/tools/contacts'],
+      ['九宫格拼图', '/tools/image-grid'],
       ['摄影订单', '/tools/photography-orders'],
       ['订单总览', '/tools/photography-orders/overview'],
       ['旅行计划', '/tools/travel-plans'],

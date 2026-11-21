@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import MetricStrip from '@/business/components/MetricStrip.vue'
 import PagePanel from '@/business/components/PagePanel.vue'
-import DesktopTable from '@/business/components/DesktopTable.vue'
 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -38,7 +36,10 @@ import {
 import {
   formatAxisMoney,
   formatCurrency,
+  formatDateTime,
   formatSignedCurrency,
+  getAllocationDotStyle,
+  getAllocationTrackStyle,
 } from './trendFormat'
 
 type TrendRangeLabel = '近7日' | '近30日' | '近60日' | '年内' | '全部'
@@ -161,14 +162,43 @@ const previousPointRateText = computed(() => {
 const hasTrendPoints = computed(
   () => (trend.value?.trendPoints?.length ?? 0) > 0,
 )
+const previousPointLabel = computed(() => {
+  const range = (trend.value?.range ?? rangeMap[activeRange.value]) as
+    | AssetTrendRange
+    | string
+  if (range === '7d' || range === '30d' || range === '60d') return '较上一天'
+  if (range === 'ytd') return '较上月'
+  if (range === 'all') return '较上年'
+  return '较上期'
+})
+const rangeDateText = computed(() => {
+  if (!trend.value?.startDate || !trend.value?.endDate) return '--'
+  return `${trend.value.startDate} 至 ${trend.value.endDate}`
+})
+const syncText = computed(() => {
+  if (!trend.value?.lastSyncedAt) return `统计区间 ${rangeDateText.value}`
+  return `更新于 ${formatDateTime(trend.value.lastSyncedAt)}`
+})
+const familyViewHint = computed(() => {
+  if (!showFamilySwitch.value || !isReadOnlyFamilyView.value) return ''
+  return selectedFamilyView.value.kind === 'total'
+    ? '当前为家庭总计视角，可查看全家资产趋势。'
+    : `当前查看 ${selectedFamilyView.value.label} 的资产趋势。`
+})
 
 const allocations = computed(() => trend.value?.allocations ?? [])
 
-const visibleYesterdaySnapshots = computed(() =>
-  yesterdaySnapshots.value.filter(
-    (item) => Math.abs(Number(item.changeAmount ?? 0)) > 0,
-  ),
-)
+const snapshotKeyword = ref('')
+const visibleYesterdaySnapshots = computed(() => {
+  const keyword = snapshotKeyword.value.trim().toLowerCase()
+  return yesterdaySnapshots.value.filter((item) => {
+    if (Math.abs(Number(item.changeAmount ?? 0)) <= 0) return false
+    if (!keyword) return true
+    return [item.accountName, item.accountTypeLabel, item.ownerLabel]
+      .filter(Boolean)
+      .some((text) => String(text).toLowerCase().includes(keyword))
+  })
+})
 
 const trendRangeKey = computed<AssetTrendRange>(() => {
   const range = trend.value?.range
@@ -191,6 +221,18 @@ const rangeDetailCompareText = computed(() => {
   if (trendRangeKey.value === 'ytd') return '较上月'
   return '较上年'
 })
+const rangeDetailSummaryText = computed(() => {
+  if (trendRangeKey.value === '7d') return '7天总资产'
+  if (trendRangeKey.value === '30d') return '30天总资产'
+  if (trendRangeKey.value === '60d') return '60天总资产'
+  if (trendRangeKey.value === 'ytd') return '12个月总资产'
+  return '按年总资产'
+})
+const snapshotDateText = computed(() =>
+  yesterdaySnapshotDate.value
+    ? `${yesterdaySnapshotDate.value} 快照`
+    : '昨日快照',
+)
 const rangeDetailPoints = computed<RangeDetailPoint[]>(() => {
   const points = latestTrendPoints.value
 
@@ -558,12 +600,9 @@ function resetYesterdaySnapshots() {
   snapshotError.value = ''
 }
 
-type AllocationRow = (typeof allocations.value)[number]
-type TrendRow = (typeof rangeDetailPoints.value)[number]
-type SnapshotRow = (typeof visibleYesterdaySnapshots.value)[number]
 </script>
 <template>
-  <section class="desktop-workspace">
+  <section class="desktop-workspace trend-workspace">
     <PageHeader title="资产趋势">
       <template #right>
         <CommonSelect
@@ -574,6 +613,7 @@ type SnapshotRow = (typeof visibleYesterdaySnapshots.value)[number]
         />
       </template>
     </PageHeader>
+    <p v-if="familyViewHint" class="trend-family-hint">{{ familyViewHint }}</p>
     <el-alert
       v-if="pageError"
       :title="pageError"
@@ -582,14 +622,37 @@ type SnapshotRow = (typeof visibleYesterdaySnapshots.value)[number]
       show-icon
     ></el-alert>
     <template v-if="trend">
-      <MetricStrip
-        :items="[
-          { label: '总资产', value: totalAssets },
-          { label: '资产变动', value: previousPointAmountText },
-          { label: '变动比例', value: previousPointRateText },
-        ]"
-      />
-      <div class="desktop-columns dashboard-columns">
+      <section class="trend-summary" aria-label="资产总览">
+        <div class="trend-summary-main">
+          <span class="trend-summary-label">总资产</span>
+          <AmountText
+            tag="strong"
+            tone="inherit"
+            class="trend-summary-value"
+            :value="totalAssets"
+            show-unit
+          />
+          <span class="trend-summary-meta">{{ syncText }}</span>
+        </div>
+        <div class="trend-summary-change">
+          <span class="trend-summary-label">{{ previousPointLabel }}</span>
+          <AmountText
+            tag="strong"
+            class="trend-change-value"
+            :value="previousPointAmountText"
+            show-sign
+            show-unit
+          />
+          <AmountText
+            tag="span"
+            class="trend-change-rate"
+            :value="previousPointRateText"
+            show-sign
+          />
+        </div>
+      </section>
+
+      <div class="desktop-columns dashboard-columns trend-overview-columns">
         <PagePanel title="总资产走势">
           <template #actions>
             <SegmentedControl
@@ -599,119 +662,533 @@ type SnapshotRow = (typeof visibleYesterdaySnapshots.value)[number]
               variant="surface"
             />
           </template>
-          <div v-if="hasTrendPoints" ref="chartRef" class="desktop-chart" />
-          <el-empty v-else description="暂无趋势数据" />
+          <div
+            v-if="hasTrendPoints"
+            ref="chartRef"
+            class="desktop-chart trend-chart"
+          />
+          <el-empty v-else description="当前区间暂无可展示的资产走势" />
         </PagePanel>
-        <DesktopTable :rows="allocations" :loading="false" title="资产分布">
-          <el-table-column
-            prop="label"
-            label="类型"
-            min-width="140"
-            sortable="custom"
-            show-overflow-tooltip
-          />
-          <!-- @vue-generic {AllocationRow} -->
-          <el-table-column label="余额" min-width="150">
-            <template #default="{ row }: { row: AllocationRow }">
-              {{ formatCurrency(row.balance) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {AllocationRow} -->
-          <el-table-column label="占比" min-width="150">
-            <template #default="{ row }: { row: AllocationRow }">
-              {{ Number(row.percent ?? 0).toFixed(1) }}%
-            </template>
-          </el-table-column>
-        </DesktopTable>
+
+        <PagePanel title="资产分布">
+          <div v-if="allocations.length > 0" class="trend-allocation-list">
+            <article
+              v-for="item in allocations"
+              :key="`${item.accountTypeCode}-${item.label}`"
+              class="trend-allocation-item"
+            >
+              <div class="trend-allocation-row">
+                <div class="trend-allocation-name">
+                  <span
+                    class="trend-allocation-dot"
+                    :style="getAllocationDotStyle(item, isDark)"
+                  ></span>
+                  <strong>{{ item.label }}</strong>
+                </div>
+                <div class="trend-allocation-values">
+                  <AmountText
+                    tone="neutral"
+                    :value="formatCurrency(item.balance)"
+                    show-unit
+                  />
+                  <span>{{ Number(item.percent ?? 0).toFixed(2) }}%</span>
+                </div>
+              </div>
+              <div
+                class="trend-allocation-track"
+                :style="getAllocationTrackStyle(item, isDark)"
+              >
+                <span></span>
+              </div>
+            </article>
+          </div>
+          <el-empty v-else description="暂无可展示的资产分布" />
+        </PagePanel>
       </div>
-      <DesktopTable
-        :rows="rangeDetailPoints"
-        :loading="false"
-        title="区间资产明细"
-      >
-        <el-table-column
-          prop="label"
-          label="日期"
-          min-width="140"
-          sortable="custom"
-          show-overflow-tooltip
-        />
-        <!-- @vue-generic {TrendRow} -->
-        <el-table-column label="资产" min-width="150">
-          <template #default="{ row }: { row: TrendRow }">
-            {{ row.value === null ? '—' : formatCurrency(row.value) }}
-          </template>
-        </el-table-column>
-        <!-- @vue-generic {TrendRow} -->
-        <el-table-column label="变动" min-width="150">
-          <template #default="{ row }: { row: TrendRow }">
-            <AmountText
-              :value="
-                row.changeAmount === null
-                  ? '—'
-                  : formatCurrency(row.changeAmount)
-              "
-              show-sign
+
+      <PagePanel title="区间资产明细">
+        <template #actions>
+          <span class="trend-panel-subtitle">
+            {{ rangeDetailSummaryText }} · {{ rangeDetailCompareText }}
+          </span>
+        </template>
+        <div v-if="rangeDetailPoints.length > 0" class="trend-range-grid">
+          <article
+            v-for="item in rangeDetailPoints"
+            :key="item.key"
+            class="trend-range-item"
+          >
+            <div class="trend-range-head">
+              <span class="trend-range-date">{{ item.label }}</span>
+              <span class="trend-range-index">{{ rangeDetailCompareText }}</span>
+            </div>
+            <div class="trend-range-value">
+              <span class="trend-range-value-label">资产</span>
+              <AmountText
+                tag="strong"
+                tone="inherit"
+                :value="item.value === null ? '--' : formatCurrency(item.value)"
+                show-unit
+              />
+            </div>
+            <div class="trend-range-change">
+              <span>变动</span>
+              <AmountText
+                :value="
+                  item.changeAmount === null
+                    ? '--'
+                    : formatCurrency(item.changeAmount)
+                "
+                show-sign
+                show-unit
+              />
+            </div>
+          </article>
+        </div>
+        <el-empty v-else description="当前区间暂无可展示的资产数据" />
+      </PagePanel>
+
+      <PagePanel v-if="showYesterdaySnapshotSection" title="账户快照对比">
+        <template #actions>
+          <div class="trend-snapshot-actions">
+            <el-input
+              v-model="snapshotKeyword"
+              class="trend-snapshot-search"
+              placeholder="搜索账户 / 类型 / 成员"
+              clearable
             />
-          </template>
-        </el-table-column>
-      </DesktopTable>
-      <template v-if="showYesterdaySnapshotSection">
-        <DesktopTable
-          :rows="visibleYesterdaySnapshots"
-          :loading="false"
-          title="账户快照对比"
-          search-placeholder="搜索账户"
-          searchable
-        >
-          <el-table-column
-            prop="accountName"
-            label="账户"
-            min-width="200"
-            sortable="custom"
-            show-overflow-tooltip
+            <span class="trend-panel-subtitle">{{ snapshotDateText }}</span>
+          </div>
+        </template>
+        <p class="trend-snapshot-summary">
+          今日总资产
+          <AmountText
+            tone="inherit"
+            :value="
+              yesterdaySnapshotCurrentTotal === null
+                ? '--'
+                : formatCurrency(yesterdaySnapshotCurrentTotal)
+            "
+            show-unit
+          />，
+          <AmountText
+            :value="
+              yesterdaySnapshotChangeAmount === null
+                ? '--'
+                : formatCurrency(yesterdaySnapshotChangeAmount)
+            "
+            show-sign
+            show-unit
           />
-          <el-table-column
-            prop="accountTypeLabel"
-            label="类型"
-            min-width="140"
-            sortable="custom"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            prop="ownerLabel"
-            label="成员"
-            min-width="140"
-            sortable="custom"
-            show-overflow-tooltip
-          />
-          <!-- @vue-generic {SnapshotRow} -->
-          <el-table-column label="昨日资产" min-width="150">
-            <template #default="{ row }: { row: SnapshotRow }">
-              {{ formatCurrency(row.totalAssets) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {SnapshotRow} -->
-          <el-table-column label="今日资产" min-width="150">
-            <template #default="{ row }: { row: SnapshotRow }">
-              {{ formatCurrency(row.currentAssets) }}
-            </template>
-          </el-table-column>
-          <!-- @vue-generic {SnapshotRow} -->
-          <el-table-column label="资产变动" min-width="150">
-            <template #default="{ row }: { row: SnapshotRow }">
-              <AmountText :value="formatCurrency(row.changeAmount)" show-sign />
-            </template>
-          </el-table-column>
-        </DesktopTable>
+        </p>
+        <div v-if="visibleYesterdaySnapshots.length > 0" class="trend-snapshot-grid">
+          <article
+            v-for="item in visibleYesterdaySnapshots"
+            :key="`${item.userId}-${item.accountId}`"
+            class="trend-snapshot-item"
+          >
+            <div class="trend-snapshot-head">
+              <strong>{{ item.accountName }}</strong>
+              <div class="trend-snapshot-tags">
+                <span>{{ item.accountTypeLabel }}</span>
+                <span v-if="item.ownerLabel">{{ item.ownerLabel }}</span>
+              </div>
+            </div>
+            <div class="trend-snapshot-values">
+              <div class="trend-snapshot-value">
+                <span>昨日资产</span>
+                <AmountText
+                  tone="inherit"
+                  :value="formatCurrency(item.totalAssets)"
+                  show-unit
+                />
+              </div>
+              <div class="trend-snapshot-value">
+                <span>今日资产</span>
+                <AmountText
+                  tone="inherit"
+                  :value="formatCurrency(item.currentAssets)"
+                  show-unit
+                />
+              </div>
+            </div>
+            <div class="trend-snapshot-change">
+              <span>资产变动</span>
+              <AmountText
+                :value="formatCurrency(item.changeAmount)"
+                show-sign
+                show-unit
+              />
+            </div>
+          </article>
+        </div>
+        <el-empty v-else :description="snapshotError || '暂无变动账户快照'" />
         <el-alert
-          v-if="snapshotError"
+          v-if="snapshotError && visibleYesterdaySnapshots.length > 0"
           :title="snapshotError"
           type="info"
           :closable="false"
           show-icon
         ></el-alert>
-      </template>
+      </PagePanel>
     </template>
   </section>
 </template>
+
+<style scoped>
+.trend-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.trend-family-hint {
+  margin: -6px 0 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.trend-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 24px;
+  border: 1px solid rgba(29, 78, 216, 0.12);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 88% -30%, rgba(59, 130, 246, 0.22), transparent 46%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(234, 242, 255, 0.92));
+  box-shadow: 0 12px 30px rgba(87, 120, 190, 0.15);
+}
+
+.trend-summary-main,
+.trend-summary-change {
+  min-width: 0;
+  display: grid;
+}
+
+.trend-summary-main {
+  gap: 8px;
+}
+
+.trend-summary-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.trend-summary-value {
+  font-size: 32px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.trend-summary-meta {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}
+
+.trend-summary-change {
+  justify-items: end;
+  gap: 6px;
+  min-width: 190px;
+  padding: 12px 18px;
+  border: 1px solid rgba(29, 78, 216, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.trend-change-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.trend-change-rate {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+}
+
+.trend-overview-columns {
+  align-items: stretch;
+}
+
+.trend-chart {
+  height: 280px;
+}
+
+.trend-panel-subtitle {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.trend-allocation-list {
+  display: grid;
+  gap: 16px;
+}
+
+.trend-allocation-item {
+  display: grid;
+  gap: 8px;
+}
+
+.trend-allocation-row,
+.trend-allocation-name,
+.trend-allocation-values {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.trend-allocation-row {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.trend-allocation-name {
+  gap: 8px;
+}
+
+.trend-allocation-name strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.trend-allocation-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+}
+
+.trend-allocation-values {
+  justify-content: flex-end;
+  gap: 10px;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.trend-allocation-values > span:last-child {
+  min-width: 52px;
+  text-align: right;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.trend-allocation-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--allocation-track);
+}
+
+.trend-allocation-track > span {
+  display: block;
+  width: var(--allocation-width);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--allocation-fill);
+}
+
+.trend-range-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.trend-range-item {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  background: var(--color-bg-card);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.trend-range-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(87, 120, 190, 0.12);
+}
+
+.trend-range-head,
+.trend-range-value,
+.trend-range-change,
+.trend-snapshot-change {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trend-range-date {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.trend-range-index,
+.trend-range-value-label,
+.trend-range-change > span,
+.trend-snapshot-change > span,
+.trend-snapshot-value > span {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.trend-range-value {
+  align-items: baseline;
+}
+
+.trend-range-value strong {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.trend-snapshot-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.trend-snapshot-search {
+  width: 220px;
+}
+
+.trend-snapshot-summary {
+  margin: 0 0 14px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.trend-snapshot-summary .amount-text {
+  font-weight: 700;
+}
+
+.trend-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 12px;
+}
+
+.trend-snapshot-item {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 12px;
+  background: var(--color-bg-card);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.trend-snapshot-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(87, 120, 190, 0.12);
+}
+
+.trend-snapshot-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trend-snapshot-head strong {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.trend-snapshot-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.trend-snapshot-tags span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-bg-soft);
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.trend-snapshot-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.trend-snapshot-value {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.trend-snapshot-value .amount-text {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.trend-snapshot-change {
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-border-soft);
+}
+
+:global(html.dark) .trend-summary {
+  border-color: rgba(96, 165, 250, 0.22);
+  background:
+    radial-gradient(circle at 88% -30%, rgba(59, 130, 246, 0.16), transparent 46%),
+    linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.92));
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
+:global(html.dark) .trend-summary-change {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.48);
+}
+
+:global(html.dark) .trend-range-item,
+:global(html.dark) .trend-snapshot-item {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(30, 41, 59, 0.55);
+}
+
+@media (max-width: 1180px) {
+  .trend-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .trend-summary-change {
+    justify-items: start;
+    width: 100%;
+  }
+
+  .trend-overview-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .trend-snapshot-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .trend-snapshot-search {
+    width: 100%;
+  }
+
+  .trend-snapshot-values {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+</style>

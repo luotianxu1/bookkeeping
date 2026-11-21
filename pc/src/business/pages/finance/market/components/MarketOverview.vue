@@ -80,9 +80,6 @@ function barH(count: number): string {
 <template>
   <section class="desktop-workspace">
     <PagePanel title="市场涨跌分布">
-      <template #actions>
-        <el-button :loading="loading" text @click="load">刷新</el-button>
-      </template>
       <el-alert
         v-if="error"
         :title="error"

@@ -288,13 +288,7 @@ watch([klineRows, band, confirmDays, isDark], () => {
 </script>
 <template>
   <section class="desktop-workspace">
-    <PageHeader title="红利策略">
-      <template #right>
-        <el-button :loading="isRefreshing" @click="loadKline({ silent: true })">
-          刷新行情
-        </el-button>
-      </template>
-    </PageHeader>
+    <PageHeader title="红利策略" />
     <el-alert
       v-if="loadError"
       :title="loadError"

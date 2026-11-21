@@ -68,7 +68,7 @@ test('desktop investment workspace renders its chart and retries a trade with th
   })
   await page.goto('/finance/accounts/investment/detail?positionId=1')
   await expect(
-    page.getByRole('heading', { name: '桌面测试基金' }),
+    page.getByRole('region', { name: '持仓操作' }),
   ).toBeVisible()
   await expect(
     page.locator('.investment-detail-chart canvas').first(),
@@ -164,7 +164,7 @@ test('desktop travel tabs expose itinerary actions and save expenses directly', 
     return ok(route, detail)
   })
   await page.goto('/tools/travel-plans/1')
-  await expect(page.getByRole('heading', { name: '杭州周末游' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: '旅行概览' })).toBeVisible()
   await page.getByRole('tab', { name: '行程安排' }).click()
   const itinerary = page.getByRole('row').filter({ hasText: '西湖散步' })
   await expect(

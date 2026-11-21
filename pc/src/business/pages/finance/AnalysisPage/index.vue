@@ -382,11 +382,7 @@ function selectDesktopPeriod(key: string) {
 </script>
 <template>
   <section class="desktop-workspace">
-    <PageHeader title="收支分析">
-      <template #right>
-        <el-button :loading="isLoading" @click="loadAnalysis">刷新</el-button>
-      </template>
-    </PageHeader>
+    <PageHeader title="收支分析" />
     <div class="desktop-filter-bar">
       <SegmentedControl
         v-model="period"

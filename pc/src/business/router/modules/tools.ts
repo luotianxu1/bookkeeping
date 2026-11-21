@@ -12,6 +12,15 @@ export const toolsRoutes: RouteRecordRaw[] = [
     },
   },
   {
+    path: '/tools/image-grid',
+    name: 'tools-image-grid',
+    component: () => import('@/business/pages/tools/ImageGridPage/index.vue'),
+    meta: {
+      section: 'tools',
+      title: '九宫格拼图',
+    },
+  },
+  {
     path: '/tools/calendar',
     name: 'tools-calendar',
     component: () => import('@/business/pages/tools/CalendarPage/index.vue'),

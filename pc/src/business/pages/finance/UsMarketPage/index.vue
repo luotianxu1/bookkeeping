@@ -364,11 +364,7 @@ type ProxyRow = NonNullable<typeof premarketData.value>['indices'][number]
 </script>
 <template>
   <section class="desktop-workspace">
-    <PageHeader title="美股行情">
-      <template #right>
-        <el-button :loading="isRefreshing" @click="refresh">刷新行情</el-button>
-      </template>
-    </PageHeader>
+    <PageHeader title="美股行情" />
     <el-alert
       v-if="premarketError"
       :title="premarketError"

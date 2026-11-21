@@ -322,6 +322,108 @@ svg {
   color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
 }
+/* Opened-page tabs: a slim strip directly under the topbar. The scroll
+   container owns all overflow so the document itself never scrolls sideways. */
+.page-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 38px;
+  flex-shrink: 0;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.6);
+  border-bottom: 1px solid #e9ecf3;
+  z-index: 1;
+}
+.page-tabs-scroll {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.page-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+.page-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 27px;
+  flex-shrink: 0;
+  padding: 0 6px 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+.page-tab:hover {
+  color: var(--el-text-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.page-tab.is-active {
+  color: var(--el-color-primary);
+  background: var(--el-bg-color);
+  border-color: var(--el-color-primary-light-8);
+  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.08);
+  font-weight: 500;
+}
+.page-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+.page-tab-close.el-button {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  opacity: 0.55;
+}
+.page-tab-close.el-button:hover {
+  opacity: 1;
+  background: var(--el-color-primary-light-8);
+}
+.page-tabs-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+}
+.page-tabs-more:hover {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+html.dark .page-tabs {
+  background: var(--el-bg-color);
+  border-color: var(--el-border-color-light);
+}
+html.dark .page-tab.is-active {
+  background: #242936;
+  border-color: #33405e;
+}
 .page-crash-fallback {
   display: flex;
   flex-direction: column;
@@ -363,6 +465,9 @@ svg {
   gap: 16px;
   min-height: 32px;
   margin-bottom: 12px;
+}
+.page-heading--actions {
+  justify-content: flex-end;
 }
 .page-heading h1 {
   display: flex;

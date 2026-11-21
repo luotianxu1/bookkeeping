@@ -309,11 +309,7 @@ type DesktopRow = (typeof items.value)[number]
 </script>
 <template>
   <section class="desktop-workspace desktop-list-workspace stagger-in">
-    <PageHeader title="退款与报销">
-      <template #right>
-        <el-button :loading="loading" @click="load">刷新</el-button>
-      </template>
-    </PageHeader>
+    <PageHeader title="退款与报销" />
     <el-alert
       v-if="error"
       :title="error"

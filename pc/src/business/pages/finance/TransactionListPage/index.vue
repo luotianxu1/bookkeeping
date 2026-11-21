@@ -583,12 +583,6 @@ function resetDesktopFilters() {
     <PageHeader title="收支流水">
       <template #right>
         <el-button
-          :loading="isLoadingTransactions"
-          @click="loadCashTransactions"
-        >
-          刷新
-        </el-button>
-        <el-button
           v-if="isSelfView"
           type="primary"
           @click="router.push('/finance/entry/expense')"

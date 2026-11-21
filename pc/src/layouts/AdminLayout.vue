@@ -24,6 +24,8 @@ import { ElMessageBox, type MenuInstance } from 'element-plus'
 import { api } from '@/api/admin'
 import { modules, findMenu } from '@/data/modules'
 import { can, clearSession, session } from '@/stores/session'
+import { clearPageTabs, openPageTab } from '@/stores/pageTabs'
+import PageTabs from '@/layouts/PageTabs.vue'
 import { showError } from '@/utils/feedback'
 import { useTheme } from '@/business/utils/theme'
 const route = useRoute()
@@ -44,6 +46,20 @@ watch(
   () => content.value?.$el.scrollTo({ top: 0 }),
   { flush: 'post' },
 )
+// 每进入一个页面就在顶栏下方登记一个标签；相同 fullPath 只保留一个。
+watch(
+  () => route.fullPath,
+  (fullPath) => {
+    openPageTab({
+      key: fullPath,
+      path: route.path,
+      title: String(
+        route.meta.title || findMenu(route.path)?.entry.title || '页面',
+      ),
+    })
+  },
+  { immediate: true },
+)
 const menu = ref<MenuInstance>()
 const loggingOut = ref(false)
 const moduleIcons = {
@@ -56,6 +72,20 @@ const moduleIcons = {
   users: UsersRound,
 }
 const activeMenu = computed(() => findMenu(route.path))
+
+// 左侧菜单对齐 H5 的层级：显示「模块 → 功能级入口」两级，
+// 更深的从属页（工资设置/账户明细/行情子市场等）不在左侧平铺，
+// 从模块首页或「功能总览」进入，避免侧栏被几十个三级项淹没。
+// 判断规则：路径为 2 段及以内的是功能级入口；3 段及以上默认隐藏。
+const PRIMARY_DEEP_ENTRIES = new Set([
+  '/finance/entry/expense', // 记一笔
+  '/finance/global-market/global', // 全球行情中心入口
+])
+function isPrimaryEntry(path: string) {
+  const depth = path.split('/').filter(Boolean).length
+  return depth <= 2 || PRIMARY_DEEP_ENTRIES.has(path)
+}
+
 const navigation = computed(() =>
   modules
     .map((module) => ({
@@ -66,11 +96,24 @@ const navigation = computed(() =>
           (!item.adminOnly ||
             ['admin', 'super_admin'].includes(
               session.data?.user.roleCode || '',
-            )),
+            )) &&
+          isPrimaryEntry(item.path),
       ),
     }))
-    .filter((module) => module.entries.length),
+    .filter((module) => module.entries.length)
+    .map((module) => ({ ...module, homePath: module.entries[0]!.path })),
 )
+// 高亮到当前可见项；若停留在被隐藏的深层页，则高亮其所属模块入口
+const activeMenuPath = computed(() => {
+  const current = activeMenu.value
+  if (!current) return route.path
+  const navModule = navigation.value.find((m) => m.id === current.module.id)
+  if (!navModule) return route.path
+  return navModule.entries.some((entry) => entry.path === current.entry.path)
+    ? current.entry.path
+    : navModule.homePath
+})
+// sub-menu 随当前路由自动展开
 watch(
   () => [activeMenu.value?.module.id, isCollapsed.value],
   ([id]) => {
@@ -78,6 +121,9 @@ watch(
   },
   { flush: 'post' },
 )
+// 未匹配到具体模块（如停在功能总览）时默认展开权限管理，
+// 保证 admin 二级入口（用户/角色/权限配置）始终可达
+const defaultOpeneds = computed(() => [activeMenu.value?.module.id || 'access'])
 async function logout() {
   try {
     await ElMessageBox.confirm('退出当前设备的管理端登录？', '退出登录', {
@@ -92,6 +138,7 @@ async function logout() {
   try {
     await api.logout()
     clearSession()
+    clearPageTabs()
     await router.replace('/login')
   } catch (error) {
     showError(error)
@@ -125,8 +172,8 @@ function retryPage() {
       <nav aria-label="主导航">
         <el-menu
           ref="menu"
-          :default-active="activeMenu?.entry.path || route.path"
-          :default-openeds="[activeMenu?.module.id || 'access']"
+          :default-active="activeMenuPath"
+          :default-openeds="defaultOpeneds"
           :collapse="isCollapsed"
           :collapse-transition="false"
           unique-opened
@@ -207,6 +254,16 @@ function retryPage() {
           <el-breadcrumb-item>{{ route.meta.title }}</el-breadcrumb-item>
         </el-breadcrumb>
         <div class="topbar-actions">
+          <el-tooltip content="刷新当前页面">
+            <el-button
+              text
+              class="icon-button"
+              aria-label="刷新当前页面"
+              @click="retryPage"
+            >
+              <RotateCw :size="18" />
+            </el-button>
+          </el-tooltip>
           <el-tooltip :content="isDark ? '切换到浅色模式' : '切换到深色模式'">
             <el-button
               text
@@ -219,6 +276,7 @@ function retryPage() {
           </el-tooltip>
         </div>
       </el-header>
+      <PageTabs />
       <el-main
         ref="content"
         class="page-container"

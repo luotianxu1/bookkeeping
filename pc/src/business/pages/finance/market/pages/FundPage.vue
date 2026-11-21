@@ -14,7 +14,6 @@ import {
 } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 
 import { useAsyncSection } from '@/business/composables/useAsyncSection'
@@ -266,11 +265,6 @@ type SearchRow = NonNullable<typeof searchResult.value>['items'][number]
           >
             {{ order === 'desc' ? '从高到低 ↓' : '从低到高 ↑' }}
           </el-button>
-          <CommonHeaderRefreshButton
-            label="刷新基金行情"
-            :loading="list.loading.value"
-            @click="list.run"
-          />
         </div>
       </div>
       <el-alert

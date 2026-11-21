@@ -2,7 +2,7 @@
 import { reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, ElTableColumn } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Search, RotateCw } from '@lucide/vue'
+import { Plus, Search } from '@lucide/vue'
 import { api } from '@/api/admin'
 import type { Page, User, UserStatus } from '@/api/types'
 import { useResource } from '@/composables/useResource'
@@ -238,10 +238,6 @@ async function changeStatus(user: User, status: UserStatus) {
         </el-tag>
       </h1>
       <div class="heading-actions">
-        <el-button :loading="loading" aria-label="刷新用户列表" @click="reload">
-          <RotateCw :size="16" />
-          刷新
-        </el-button>
         <el-button
           v-if="can('user.create')"
           type="primary"

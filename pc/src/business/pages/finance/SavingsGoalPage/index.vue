@@ -347,9 +347,6 @@ type DesktopRow = (typeof visibleGoals.value)[number]
   <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="储蓄目标">
       <template #right>
-        <el-button :loading="list.loading.value" @click="list.run">
-          刷新
-        </el-button>
         <el-button
           type="primary"
           :disabled="!list.ready.value || !!list.error.value"

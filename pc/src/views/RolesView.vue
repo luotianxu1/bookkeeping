@@ -6,7 +6,6 @@ import type { FormInstance, FormRules } from 'element-plus'
 import {
   Plus,
   Search,
-  RotateCw,
   ShieldCheck,
   KeyRound,
   LockKeyhole,
@@ -143,10 +142,6 @@ async function remove(role: Role) {
         </el-tag>
       </h1>
       <div class="heading-actions">
-        <el-button :loading="loading" aria-label="刷新角色列表" @click="reload">
-          <RotateCw :size="16" />
-          刷新
-        </el-button>
         <el-button
           v-if="can('role.create')"
           type="primary"

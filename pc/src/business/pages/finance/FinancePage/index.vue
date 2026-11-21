@@ -321,12 +321,6 @@ const dashboardMetrics = computed(() => [
   <section class="desktop-workspace">
     <PageHeader title="财务总览">
       <template #right>
-        <el-button
-          :loading="isLoadingTransactions"
-          @click="loadCashTransactions"
-        >
-          刷新
-        </el-button>
         <el-button type="primary" @click="openExpenseEntryPage">
           记一笔
         </el-button>

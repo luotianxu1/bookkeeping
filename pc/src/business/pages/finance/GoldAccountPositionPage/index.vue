@@ -34,7 +34,6 @@ const { showFeedbackModal, feedbackMessage, feedbackType, showFeedback } =
 const {
   isLoading,
   pageError,
-  isRefreshingGold,
   goldAccounts,
   formAccountId,
   formFundingAccountId,
@@ -49,7 +48,6 @@ const {
   sellFundingAccountOptions,
   syncFormSelections,
   loadGoldPosition,
-  refreshGoldData,
   openLiquidationList,
 } = useGoldPositionData({ showFeedback })
 
@@ -131,9 +129,6 @@ function formatSignedGoldProfit(value: number | null | undefined) {
     <PageHeader :title="scopedAccount?.name || '黄金持仓'">
       <template #right>
         <el-button @click="openLiquidationList">清仓明细</el-button>
-        <el-button :loading="isRefreshingGold" @click="refreshGoldData">
-          刷新金价
-        </el-button>
         <el-button v-if="scopedAccount" @click="openAccountSettingsModal">
           账户设置
         </el-button>

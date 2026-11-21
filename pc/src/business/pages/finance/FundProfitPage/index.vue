@@ -35,11 +35,8 @@ const {
   isLoading,
   isDetailLoading,
   isCalendarLoading,
-  isRefreshingPositions,
   pageError,
-  shouldShowPositionRefreshButton,
   viewModel,
-  refreshPositionData,
   handlePeriodSelect,
   shiftCalendarAnchor,
   showFeedbackModal,
@@ -110,17 +107,7 @@ type ProfitRow = (typeof visibleDetails.value)[number]
 </script>
 <template>
   <section class="desktop-workspace stagger-in">
-    <PageHeader title="基金收益">
-      <template #right>
-        <el-button
-          v-if="shouldShowPositionRefreshButton"
-          :loading="isRefreshingPositions"
-          @click="refreshPositionData"
-        >
-          刷新持仓
-        </el-button>
-      </template>
-    </PageHeader>
+    <PageHeader title="基金收益" />
     <el-alert
       v-if="pageError"
       :title="pageError"

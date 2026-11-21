@@ -89,7 +89,7 @@ test('PC savings reserves funds and opens records in a standalone page', async (
   const goal = goals.data.find((x: { name: string }) => x.name === '桌面储蓄目标')
   await row.getByRole('button', { name: '存取记录', exact: true }).click()
   await expect(page).toHaveURL(`/finance/savings-goals/${goal.id}/entries`)
-  await expect(page.getByRole('heading', { name: '存取记录', exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: '存取记录', exact: true })).toBeVisible()
   await expect(dialog).not.toBeVisible()
   await expect(page.getByRole('row').filter({ hasText: '手动分配' })).toContainText('+¥100.00')
   await page.reload()

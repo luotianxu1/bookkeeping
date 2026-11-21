@@ -673,9 +673,6 @@ function maturityCountdown(d: TermDeposit) {
   <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="定期存款">
       <template #right>
-        <el-button :loading="list.loading.value" @click="refresh">
-          刷新
-        </el-button>
         <el-button type="primary" @click="openForm()">新增存单</el-button>
       </template>
     </PageHeader>

@@ -293,7 +293,7 @@ test('desktop pages render without console errors or horizontal page overflow', 
   await login(page)
   for (const path of ['overview', 'users', 'roles', 'permissions']) {
     await page.goto(`/${path}`)
-    await expect(page.locator('.page-heading h1')).toBeVisible()
+    await expect(page.locator('.page-heading')).toBeVisible()
     await expect(page.locator('.el-loading-mask:visible')).toHaveCount(0)
     expect(
       await page.evaluate(
@@ -494,7 +494,7 @@ test('menu and browser history only replace the content and preserve the shell',
       .hover()
     await page.getByRole('menuitem', { name: title, exact: true }).click()
     await expect(page).toHaveURL(new RegExp(`/${path}$`))
-    await expect(page.locator('.page-heading h1')).toContainText(title!)
+    await expect(page.getByRole('navigation', { name: '面包屑' })).toContainText(title!)
     await expect(page.locator('.el-loading-mask:visible')).toHaveCount(0)
     expect(
       await shell!.evaluate(

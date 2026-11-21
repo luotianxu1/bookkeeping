@@ -539,16 +539,7 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <section class="desktop-workspace">
-    <PageHeader title="黄金行情">
-      <template #right>
-        <el-button
-          :loading="isRefreshingPrice"
-          @click="refreshCurrentGoldPrice"
-        >
-          刷新金价
-        </el-button>
-      </template>
-    </PageHeader>
+    <PageHeader title="黄金行情" />
     <el-alert
       v-if="goldPriceError"
       :title="goldPriceError"

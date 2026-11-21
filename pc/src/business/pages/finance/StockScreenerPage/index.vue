@@ -9,7 +9,6 @@ import { getErrorMessage } from '@/business/api/request'
 
 import CommonSelect from '@/business/components/common/CommonSelect/index.vue'
 import CommonSwitch from '@/business/components/common/CommonSwitch/index.vue'
-import CommonHeaderRefreshButton from '@/business/components/common/CommonHeaderRefreshButton/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
 import PageHeader from '@/business/components/common/PageHeader/index.vue'
 import {
@@ -467,12 +466,6 @@ type LimitRow = (typeof activeLimitStocks.value)[number]
               : formatPercentage(scanProgressPercent)
           }}
         </el-button>
-        <CommonHeaderRefreshButton
-          v-else
-          label="刷新选股数据"
-          :loading="isSubmittingScan"
-          @click="handleHeaderScanAction"
-        />
       </template>
     </PageHeader>
     <el-alert

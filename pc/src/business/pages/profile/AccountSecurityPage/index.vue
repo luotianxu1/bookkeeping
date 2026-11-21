@@ -179,7 +179,6 @@ type SessionRow = (typeof sessions.value)[number]
   <section class="desktop-workspace">
     <PageHeader title="隐私与安全">
       <template #right>
-        <el-button :loading="loading" @click="load">刷新</el-button>
         <el-button
           v-if="otherSessions.length"
           :disabled="loading"

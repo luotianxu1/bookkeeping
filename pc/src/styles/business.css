@@ -73,7 +73,6 @@
   margin: 0;
 }
 .pc-page-header,
-.pc-page-title,
 .pc-page-actions,
 .pc-row-actions {
   display: flex;
@@ -86,23 +85,12 @@
   flex-wrap: wrap;
   min-height: 32px;
 }
-.pc-page-header h1 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-.pc-page-header h1::before {
-  content: '';
-  width: 4px;
-  height: 18px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
-  flex-shrink: 0;
+/* Keep the actions container mounted for FloatingAddButton's Teleport. */
+.pc-page-header:not(:has(> .el-button, .pc-page-actions > *)) {
+  display: none;
 }
 .pc-page-actions {
+  margin-left: auto;
   justify-content: flex-end;
   flex-wrap: wrap;
 }

@@ -512,13 +512,6 @@ type DetailTableRow = (typeof holdings.value)[number]
     <PageHeader :title="selectedAccount?.name || '投资持仓'">
       <template #right>
         <el-button @click="openLiquidationList">清仓明细</el-button>
-        <el-button
-          v-if="shouldShowQuoteRefreshButton"
-          :loading="isRefreshingQuotes"
-          @click="refreshQuoteData"
-        >
-          刷新行情
-        </el-button>
         <el-button v-if="selectedAccount" @click="openAccountSettingsModal">
           账户设置
         </el-button>

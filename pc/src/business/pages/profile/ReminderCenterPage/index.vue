@@ -31,7 +31,6 @@ const {
   unreadCount,
   loading,
   busy,
-  refreshing,
   error,
   refresh,
   reload,
@@ -156,7 +155,6 @@ type ReminderRow = (typeof visibleItems.value)[number]
     <PageHeader title="统一提醒">
       <template #right>
         <el-button :disabled="busy" @click="openSettings">提醒设置</el-button>
-        <el-button :loading="refreshing" @click="refresh">刷新</el-button>
       </template>
     </PageHeader>
     <el-alert

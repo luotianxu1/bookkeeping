@@ -96,9 +96,6 @@ const points = computed(() => {
   return ordered.value.filter((p) => p.date >= start)
 })
 const recent = computed(() => ordered.value.slice(-5).reverse())
-const loading = computed(
-  () => info.loading.value || trend.loading.value || periods.loading.value,
-)
 let active = true,
   loadedCode = ''
 function reset() {
@@ -157,9 +154,6 @@ type NavRow = (typeof recent.value)[number]
     <PageHeader :title="base?.Datas?.SHORTNAME || code">
       <template #right>
         <el-button @click="back">返回列表</el-button>
-        <el-button :loading="loading" :disabled="!valid" @click="load">
-          刷新
-        </el-button>
       </template>
     </PageHeader>
     <el-alert v-if="!valid" title="基金代码无效" type="error" />

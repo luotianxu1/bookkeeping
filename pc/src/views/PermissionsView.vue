@@ -8,7 +8,6 @@ import {
   ShieldCheck,
   LockKeyhole,
   KeyRound,
-  RotateCw,
 } from '@lucide/vue'
 import { api } from '@/api/admin'
 import type { Role } from '@/api/types'
@@ -147,10 +146,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
   <section>
     <div class="page-heading">
       <h1>权限配置</h1>
-      <el-button :disabled="loading || saving" @click="refresh">
-        <RotateCw :size="16" />
-        刷新权限
-      </el-button>
     </div>
     <el-alert
       v-if="error"

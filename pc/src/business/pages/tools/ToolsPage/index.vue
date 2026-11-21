@@ -14,6 +14,13 @@ type ToolItem = {
 
 const toolItems: ToolItem[] = [
   {
+    key: 'image-grid',
+    title: '九宫格拼图',
+    short: '拼',
+    tone: 'blue',
+    to: '/tools/image-grid',
+  },
+  {
     key: 'todo',
     title: '代办事项',
     short: '办',

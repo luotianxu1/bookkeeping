@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useRouter, useRoute } from 'vue-router'
 import { ArrowLeft } from '@lucide/vue'
+import { useSlots, computed } from 'vue'
+import { hasRenderableSlotContent } from '@/business/utils/slotContent'
 const props = defineProps<{
   title: string
   backTo?: string
@@ -9,6 +11,18 @@ const props = defineProps<{
 }>()
 const router = useRouter()
 const route = useRoute()
+const slots = useSlots()
+// 插槽即使存在，内容也可能全为空（如空 <template #right> 或内部 v-if 均为 false，
+// 后者会渲染出 children 为 "v-if" 的注释节点）。渲染一次插槽并检查有效节点，
+// 确保空 header 真正被隐藏，不残留顶部留白。
+const hasSlotContent = computed(() => {
+  const renderSlot = slots.right || slots.default
+  return renderSlot ? hasRenderableSlotContent(renderSlot()) : false
+})
+// 有返回按钮（详情页）或确实有操作内容时才显示整行
+const showHeader = computed(
+  () => Object.keys(route.params).length > 0 || hasSlotContent.value,
+)
 function goBack() {
   if (props.backTo) return router.push(props.backTo)
   if (router.options.history.state.back) return router.back()
@@ -19,18 +33,17 @@ function goBack() {
 }
 </script>
 <template>
-  <header class="pc-page-header">
-    <div class="pc-page-title">
-      <el-button
-        v-if="Object.keys(route.params).length"
-        text
-        :aria-label="backLabel || '返回'"
-        @click="goBack"
-      >
-        <ArrowLeft :size="16" />
-      </el-button>
-      <h1>{{ title }}</h1>
-    </div>
+  <!-- 没有返回按钮、也没有任何操作插槽内容时隐藏整行，避免顶部留白；
+       保留 DOM 容器（v-show 而非 v-if），FloatingAddButton 的 Teleport 目标仍在。 -->
+  <header v-show="showHeader" class="pc-page-header">
+    <el-button
+      v-if="Object.keys(route.params).length"
+      text
+      :aria-label="backLabel || '返回'"
+      @click="goBack"
+    >
+      <ArrowLeft :size="16" />
+    </el-button>
     <div class="pc-page-actions">
       <slot name="right"><slot /></slot>
     </div>

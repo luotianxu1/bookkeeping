@@ -468,13 +468,6 @@ type ExpenseRow = (typeof expenseCoverageItems.value)[number]
         <el-button type="primary" @click="openCreateExpenseModal">
           新增固定支出
         </el-button>
-        <el-button
-          :loading="isRefreshing"
-          :disabled="isLoading"
-          @click="refreshDividendIncomeData"
-        >
-          刷新
-        </el-button>
       </template>
     </PageHeader>
     <el-alert

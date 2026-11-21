@@ -501,9 +501,6 @@ function goldProfitToneClass(value: number | null | undefined) {
   <section class="desktop-workspace desktop-list-workspace stagger-in">
     <PageHeader title="黄金账户">
       <template #right>
-        <el-button :loading="isRefreshingGold" @click="refreshGoldData">
-          刷新金价
-        </el-button>
         <el-button type="primary" @click="openCreateModal">
           新增黄金账户
         </el-button>

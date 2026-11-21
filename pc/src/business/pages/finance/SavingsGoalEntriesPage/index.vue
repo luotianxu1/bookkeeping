@@ -54,11 +54,7 @@ watch(() => route.params.id, refresh, { immediate: true })
 
 <template>
   <section class="desktop-workspace desktop-list-workspace stagger-in" aria-label="存取记录">
-    <PageHeader title="存取记录" back-to="/finance/savings-goals" back-label="返回储蓄目标">
-      <template #right>
-        <el-button :loading="history.loading.value" @click="refresh">刷新存取记录</el-button>
-      </template>
-    </PageHeader>
+    <PageHeader title="存取记录" back-to="/finance/savings-goals" back-label="返回储蓄目标" />
     <el-card v-if="goal" class="savings-goal-card" shadow="never">
       <div class="goal-title">
         <h2>{{ goal.name }}</h2>

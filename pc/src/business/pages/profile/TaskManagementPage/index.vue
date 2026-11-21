@@ -110,13 +110,7 @@ type TaskRow = (typeof tasks.value)[number]
 </script>
 <template>
   <section class="desktop-workspace stagger-in">
-    <PageHeader title="任务管理">
-      <template #right>
-        <el-button :loading="isRefreshing" @click="loadTasks(true)">
-          刷新状态
-        </el-button>
-      </template>
-    </PageHeader>
+    <PageHeader title="任务管理" />
     <el-alert
       v-if="pageError"
       :title="pageError"
