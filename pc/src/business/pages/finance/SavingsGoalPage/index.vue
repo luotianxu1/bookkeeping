@@ -372,7 +372,7 @@ type DesktopRow = (typeof visibleGoals.value)[number]
       :search-keys="['name', 'accountName']"
       row-key="id"
       empty-title="还没有储蓄目标"
-      empty-hint="点击右上角新增第一个储蓄目标"
+      empty-hint="点击上方按钮新增第一个储蓄目标"
     >
       <template #toolbar>
         <SegmentedControl

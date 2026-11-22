@@ -218,7 +218,7 @@ type DetailTableRow = NonNullable<typeof pageData.value>['records'][number]
         :search-keys="['monthLabel', 'note']"
         row-key="id"
         empty-title="还没有工资记录"
-        empty-hint="点击右上角新增第一个月工资"
+        empty-hint="点击上方按钮新增第一个月工资"
       >
         <template #default="{ row }: { row: DetailTableRow }">
           <article class="record-card salary-slip-card">

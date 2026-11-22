@@ -388,7 +388,7 @@ type DesktopRow = Category & { children: Category[] }
       :loading="isLoadingCategories"
       row-key="id"
       empty-title="没有分类"
-      empty-hint="点击右上角新增第一个收支分类"
+      empty-hint="点击上方按钮新增第一个收支分类"
     >
       <template #toolbar>
         <SegmentedControl

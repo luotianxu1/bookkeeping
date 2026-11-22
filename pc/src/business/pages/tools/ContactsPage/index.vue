@@ -238,7 +238,7 @@ type DesktopRow = (typeof contacts.value)[number]
       :rows="contacts"
       :loading="isLoading"
       empty-title="还没有联系人"
-      empty-hint="点击右上角新增第一位联系人"
+      empty-hint="点击上方按钮新增第一位联系人"
     >
       <template #default="{ row }: { row: DesktopRow }">
         <article class="record-card">

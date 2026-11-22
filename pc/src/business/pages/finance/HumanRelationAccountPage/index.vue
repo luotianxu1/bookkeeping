@@ -407,7 +407,7 @@ type DesktopRow = (typeof relationCards.value)[number]
       :loading="isLoading"
       row-key="account.id"
       empty-title="没有人情账户"
-      empty-hint="点击右上角新增第一个人情账户"
+      empty-hint="点击上方按钮新增第一个人情账户"
     >
       <template #default="{ row }: { row: DesktopRow }">
         <article

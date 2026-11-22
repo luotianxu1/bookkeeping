@@ -127,6 +127,17 @@ const requestKey = computed(
 const showYesterdaySnapshotSection = computed(() => !accountId.value)
 
 const totalAssets = computed(() => formatCurrency(trend.value?.totalAssets))
+const cumulativeProfitText = computed(() =>
+  formatSignedCurrency(trend.value?.cumulativeProfit ?? 0),
+)
+const cumulativeProfitRateText = computed(() => {
+  const rate = trend.value?.cumulativeProfitRate
+  if (rate === null || rate === undefined) return '--'
+  return `${rate.toLocaleString('zh-CN', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`
+})
 const latestTrendPoints = computed(() => trend.value?.trendPoints ?? [])
 
 const previousPointAmount = computed<number | null>(() => {
@@ -634,18 +645,34 @@ function resetYesterdaySnapshots() {
           />
           <span class="trend-summary-meta">{{ syncText }}</span>
         </div>
+        <div class="trend-summary-stat">
+          <span class="trend-summary-label">累计盈亏</span>
+          <AmountText
+            tag="strong"
+            class="trend-stat-value"
+            :value="cumulativeProfitText"
+            show-sign
+            show-unit
+          />
+          <AmountText
+            tag="span"
+            class="trend-stat-rate"
+            :value="cumulativeProfitRateText"
+            show-sign
+          />
+        </div>
         <div class="trend-summary-change">
           <span class="trend-summary-label">{{ previousPointLabel }}</span>
           <AmountText
             tag="strong"
-            class="trend-change-value"
+            class="trend-stat-value"
             :value="previousPointAmountText"
             show-sign
             show-unit
           />
           <AmountText
             tag="span"
-            class="trend-change-rate"
+            class="trend-stat-rate"
             :value="previousPointRateText"
             show-sign
           />
@@ -847,28 +874,49 @@ function resetYesterdaySnapshots() {
   font-size: 12px;
 }
 
+/* 紧凑数据仪表带：干净白底 + 左侧强调条，三段数据用发丝线分隔铺满宽度，
+   避免旧版全宽渐变 + 右侧孤立小盒造成的 700px 空档。 */
 .trend-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 20px 24px;
-  border: 1px solid rgba(29, 78, 216, 0.12);
-  border-radius: 16px;
-  background:
-    radial-gradient(circle at 88% -30%, rgba(59, 130, 246, 0.22), transparent 46%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(234, 242, 255, 0.92));
-  box-shadow: 0 12px 30px rgba(87, 120, 190, 0.15);
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  column-gap: 0;
+  row-gap: 0;
+  align-items: start;
+  padding: 14px 22px 13px;
+  border: 1px solid var(--color-border-soft, var(--el-border-color-light));
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  box-shadow: 0 8px 20px rgba(183, 200, 244, 0.18);
+  overflow: hidden;
+}
+
+/* 左侧一条细强调色，替代整块渐变，作为财务数据带的记忆点 */
+.trend-summary::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--el-color-primary), rgba(59, 130, 246, 0.35));
 }
 
 .trend-summary-main,
+.trend-summary-stat,
 .trend-summary-change {
   min-width: 0;
   display: grid;
+  gap: 5px;
+  padding-left: 22px;
 }
 
 .trend-summary-main {
-  gap: 8px;
+  padding-left: 0;
+}
+
+/* 发丝分隔线：主数字段之后的每一段左侧各一条 */
+.trend-summary-stat,
+.trend-summary-change {
+  border-left: 1px solid var(--color-border-soft, var(--el-border-color-lighter));
 }
 
 .trend-summary-label {
@@ -879,36 +927,35 @@ function resetYesterdaySnapshots() {
 }
 
 .trend-summary-value {
-  font-size: 32px;
-  line-height: 1.1;
+  font-size: 26px;
+  line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
-.trend-summary-meta {
-  color: var(--color-text-tertiary);
-  font-size: 12px;
-}
-
-.trend-summary-change {
-  justify-items: end;
-  gap: 6px;
-  min-width: 190px;
-  padding: 12px 18px;
-  border: 1px solid rgba(29, 78, 216, 0.1);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.7);
-}
-
-.trend-change-value {
-  font-size: 18px;
+.trend-stat-value {
+  font-size: 19px;
   font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
-.trend-change-rate {
+.trend-stat-rate {
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 统计区间并入总资产段，作为第三行弱提示，与另两段的比率行对齐 */
+.trend-summary-meta {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .trend-overview-columns {
@@ -1143,16 +1190,14 @@ function resetYesterdaySnapshots() {
 }
 
 :global(html.dark) .trend-summary {
-  border-color: rgba(96, 165, 250, 0.22);
-  background:
-    radial-gradient(circle at 88% -30%, rgba(59, 130, 246, 0.16), transparent 46%),
-    linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.92));
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+  border-color: rgba(148, 163, 184, 0.18);
+  background: var(--el-bg-color);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
 }
 
+:global(html.dark) .trend-summary-stat,
 :global(html.dark) .trend-summary-change {
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.48);
+  border-left-color: rgba(148, 163, 184, 0.18);
 }
 
 :global(html.dark) .trend-range-item,
@@ -1163,17 +1208,34 @@ function resetYesterdaySnapshots() {
 
 @media (max-width: 1180px) {
   .trend-summary {
-    align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr 1fr;
+    row-gap: 10px;
+  }
+
+  .trend-summary-main {
+    grid-column: 1 / -1;
   }
 
   .trend-summary-change {
-    justify-items: start;
-    width: 100%;
+    border-left: 1px solid var(--color-border-soft, var(--el-border-color-lighter));
   }
 
   .trend-overview-columns {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .trend-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .trend-summary-stat,
+  .trend-summary-change {
+    padding-left: 0;
+    padding-top: 10px;
+    border-left: 0;
+    border-top: 1px solid var(--color-border-soft, var(--el-border-color-lighter));
   }
 }
 

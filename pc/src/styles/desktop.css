@@ -9,6 +9,36 @@
 .desktop-workspace > * {
   min-width: 0;
 }
+
+/* 页面头部降级为浮动操作条：直接位于 workspace 下的 PageHeader 脱离 grid 流，
+   浮到右上角，不再独占一行（原来 38px 行 + 16px gap）。
+   组件在有可见操作时给 workspace 挂 .has-floating-actions，这里补回顶部避让；
+   返回按钮（详情页 route.params）仍靠左，操作插槽靠右，互不遮挡。 */
+.desktop-workspace.has-floating-actions {
+  position: relative;
+  /* 避让高度由组件按浮动条实际高度写入，默认兜底 40px */
+  padding-top: calc(var(--floating-header-h, 32px) + 8px);
+}
+.desktop-workspace.has-floating-actions > .pc-page-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 3;
+  min-height: 0;
+  padding: 0;
+}
+/* 无返回键的普通页：操作区占满整条浮动条，让操作与下方内容共用同一条左对齐轴。
+   单个操作时把按钮推到左缘（与内容面板对齐），避免它孤零零悬在屏幕最右上角；
+   多个操作仍保持右对齐（默认 justify-content:flex-end），不改变多按钮页布局。
+   详情页（has-back）保持「返回靠左 / 操作靠右」的原始形态，不受影响。 */
+.desktop-workspace.has-floating-actions > .pc-page-header:not(.has-back) .pc-page-actions {
+  width: 100%;
+  margin-left: 0;
+}
+.desktop-workspace.has-floating-actions > .pc-page-header:not(.has-back) .pc-page-actions > :only-child {
+  margin-right: auto;
+}
 /* 对齐手机端的入场编排：根节点加 .stagger-in，子元素错峰浮现。 */
 @keyframes desktop-stagger-rise {
   to {

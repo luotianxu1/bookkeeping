@@ -265,7 +265,7 @@ type DesktopRow = (typeof filteredCategories.value)[number]
       :rows="filteredCategories"
       :loading="isLoading"
       empty-title="没有菜品分类"
-      empty-hint="点击右上角新增第一个分类"
+      empty-hint="点击上方按钮新增第一个分类"
     >
       <template #toolbar>
         <el-input

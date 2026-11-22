@@ -600,7 +600,7 @@ type DesktopRow = (typeof liabilityCards.value)[number]
       :loading="isLoading"
       row-key="account.id"
       empty-title="没有负债账户"
-      empty-hint="点击右上角录入第一笔贷款"
+      empty-hint="点击上方按钮录入第一笔贷款"
     >
       <template #default="{ row }: { row: DesktopRow }">
         <article

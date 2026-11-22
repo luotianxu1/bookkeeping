@@ -556,7 +556,7 @@ type DesktopRow = (typeof filteredSubscriptions.value)[number]
       :search-keys="['name', 'remark']"
       row-key="id"
       empty-title="暂无固定支出"
-      empty-hint="点击右上角新增第一笔固定支出"
+      empty-hint="点击上方按钮新增第一笔固定支出"
     >
       <template #toolbar>
         <el-select v-model="selectedFilter">
