@@ -223,6 +223,30 @@ final class InvestmentCalcUtils {
     }
 
 
+    /** 已实现收益（卖出落袋收益+分红），不含浮动盈亏；空值按 0 处理。 */
+    public static BigDecimal realizedProfitOf(InvestmentPositionEntity position) {
+        return defaultZero(position.getRealizedProfit()).setScale(2, RoundingMode.HALF_UP);
+    }
+
+
+    /**
+     * 累计收益率分母：优先累计投入成本（买入累加、卖出不扣减，卖出越多不失真）。
+     * 取 max(invested, cost)：新流程 invested ≥ cost 恒成立；未回填的历史数据（invested=0）
+     * 或历史数据后又发生买入时，以当前持仓成本兜底，避免分母低估。
+     */
+    public static BigDecimal investedBaseOf(InvestmentPositionEntity position) {
+        BigDecimal invested = defaultZero(position.getInvestedAmount()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal cost = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
+        return invested.max(cost);
+    }
+
+
+    /** 累计收益 = 已实现收益 + 持仓浮盈；展示口径与主流记账 App 一致。 */
+    public static BigDecimal cumulativeProfitOf(InvestmentPositionEntity position) {
+        return realizedProfitOf(position).add(defaultZero(position.getHoldingProfit())).setScale(2, RoundingMode.HALF_UP);
+    }
+
+
     public static BigDecimal sum(List<InvestmentPositionEntity> positions, Function<InvestmentPositionEntity, BigDecimal> getter) {
         return positions.stream().map(getter).filter(item -> item != null).reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
     }

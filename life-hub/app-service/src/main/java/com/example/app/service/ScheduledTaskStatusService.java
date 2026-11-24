@@ -104,9 +104,20 @@ public class ScheduledTaskStatusService {
         }
 
         switch (taskName + "::" + triggerName) {
-            case "asset-daily-snapshot::scheduled-00:00", "asset-daily-snapshot::scheduled-00:10" ->
-                scheduledTaskRunService.run(taskName, triggerName, () ->
-                    "savedCount=" + assetSnapshotService.captureDailySnapshots(today.minusDays(1)));
+            // 手动执行主任务：按当前时间拍快照（记录今天的资产），而不是重跑 0:00 的昨日快照
+            case "asset-daily-snapshot::scheduled-00:00" ->
+                scheduledTaskRunService.run(taskName, triggerName, () -> {
+                    LocalDate snapshotDate = LocalDate.now(SHANGHAI_ZONE_ID);
+                    int savedCount = assetSnapshotService.captureDailySnapshots(snapshotDate);
+                    return "snapshotDate=" + snapshotDate + ", savedCount=" + savedCount;
+                });
+            // 补偿任务保留原语义：补写昨天的日快照
+            case "asset-daily-snapshot::scheduled-00:10" ->
+                scheduledTaskRunService.run(taskName, triggerName, () -> {
+                    LocalDate snapshotDate = LocalDate.now(SHANGHAI_ZONE_ID).minusDays(1);
+                    int savedCount = assetSnapshotService.captureDailySnapshots(snapshotDate);
+                    return "snapshotDate=" + snapshotDate + ", savedCount=" + savedCount;
+                });
             case "renewal-auto-deduct::scheduled-08:00" -> runDueRenewals(taskName, triggerName, today);
             case "salary-settlement::scheduled-08:10" ->
                 scheduledTaskRunService.run(taskName, triggerName, () -> {

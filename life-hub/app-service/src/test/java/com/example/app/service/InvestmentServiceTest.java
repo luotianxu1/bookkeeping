@@ -299,6 +299,50 @@ class InvestmentServiceTest {
         }
     }
 
+    @Test void manualCumulativeProfitAdjustmentWritesRealizedAndRejectsOutsider() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            seed(db, "fund");
+            var service = service(db, mock(InvestmentQuoteSyncService.class), mock(MarketQuoteClient.class));
+            try {
+                asUser(2L);
+                var outsider = new com.example.app.dto.InvestmentCumulativeProfitRequest();
+                outsider.setUserId(2L); outsider.setCumulativeProfit(new BigDecimal("88"));
+                assertTrue(service.updateCumulativeProfit(1L, outsider).isEmpty());
+
+                asUser(1L);
+                var request = new com.example.app.dto.InvestmentCumulativeProfitRequest();
+                request.setUserId(1L); request.setCumulativeProfit(new BigDecimal("88"));
+                var response = service.updateCumulativeProfit(1L, request).orElseThrow();
+                // 持仓成本100、现价1 → 浮盈0；手动目标88 全额落入已实现收益
+                assertEquals(0, new BigDecimal("88").compareTo(response.getCumulativeProfit()));
+                assertEquals(0, new BigDecimal("88").compareTo(response.getRealizedProfit()));
+                var position = db.mapper(InvestmentPositionMapper.class).selectById(1L);
+                assertEquals(0, new BigDecimal("88").compareTo(position.getRealizedProfit()));
+                // 行情同步后累计收益 = 已实现88 + 新浮盈（模拟价格涨到2）
+                var quotes = mock(InvestmentQuoteSyncService.class);
+                doCallRealMethod().when(quotes).applyFundQuoteToPosition(any(), any(), any(), any());
+                quotes.applyFundQuoteToPosition(position, new BigDecimal("2"), BigDecimal.ONE, LocalDateTime.now());
+                assertEquals(0, new BigDecimal("188").compareTo(position.getCumulativeProfit()));
+                assertEquals(0, new BigDecimal("88").compareTo(position.getRealizedProfit()));
+            } finally { org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes(); service.shutdownExecutor(); }
+        }
+    }
+
+    @Test void summaryKeepsClosedPositionRealizedProfit() throws Exception {
+        try (var db = new AccountingDatabase()) {
+            seed(db, "stock");
+            // 清仓持仓：份额与成本为 0，但历史已实现收益 500 必须继续计入汇总
+            db.jdbc.update("INSERT INTO investment_positions(id,user_id,account_id,product_id,holding_quantity,available_quantity,frozen_quantity,cost_amount,avg_cost_price,current_price,market_value,cumulative_profit,realized_profit,invested_amount,status,subscription_status,dividend_type,dividend_funding_account_id,created_at) VALUES(2,1,3,1,0,0,0,0,0,0,0,500,500,300,'closed','confirmed','cash',1,CURRENT_TIMESTAMP)");
+            db.jdbc.update("UPDATE investment_positions SET realized_profit=200, invested_amount=200, cumulative_profit=200 WHERE id=1");
+            var service = service(db, mock(InvestmentQuoteSyncService.class), mock(MarketQuoteClient.class));
+            try {
+                var summary = service.summary(1L, 3L);
+                assertEquals(0, new BigDecimal("700").compareTo(summary.getCumulativeProfit()));
+                assertEquals(0, new BigDecimal("500").compareTo(summary.getInvestedAmount()));
+            } finally { service.shutdownExecutor(); }
+        }
+    }
+
     private com.example.app.dto.InvestmentPositionRequest newPosition(String type) {
         var request = new com.example.app.dto.InvestmentPositionRequest();
         request.setUserId(1L); request.setAccountId(3L); request.setFundingAccountId(1L);

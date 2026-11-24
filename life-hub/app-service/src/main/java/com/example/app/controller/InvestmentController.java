@@ -4,6 +4,7 @@ import com.example.common.result.Result;
 import com.example.app.dto.InvestmentAssetDetailResponse;
 import com.example.app.dto.InvestmentAutoInvestPlanRequest;
 import com.example.app.dto.InvestmentAutoInvestPlanResponse;
+import com.example.app.dto.InvestmentCumulativeProfitRequest;
 import com.example.app.dto.InvestmentDividendIncomePageResponse;
 import com.example.app.dto.InvestmentDividendForecastRequest;
 import com.example.app.dto.InvestmentDividendForecastResponse;
@@ -182,6 +183,17 @@ public class InvestmentController {
         @Valid @RequestBody InvestmentPositionRequest request
     ) {
         return investmentService.updatePosition(id, request)
+            .map(Result::ok)
+            .orElseGet(() -> Result.<InvestmentPositionResponse>fail().code(404).message("投资持仓不存在"));
+    }
+
+    @PutMapping("/positions/{id}/cumulative-profit")
+    @Operation(summary = "手动校准投资持仓累计收益")
+    public Result<InvestmentPositionResponse> updateCumulativeProfit(
+        @PathVariable("id") @NotNull Long id,
+        @Valid @RequestBody InvestmentCumulativeProfitRequest request
+    ) {
+        return investmentService.updateCumulativeProfit(id, request)
             .map(Result::ok)
             .orElseGet(() -> Result.<InvestmentPositionResponse>fail().code(404).message("投资持仓不存在"));
     }

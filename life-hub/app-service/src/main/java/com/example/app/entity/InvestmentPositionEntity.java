@@ -66,6 +66,12 @@ public class InvestmentPositionEntity {
     @TableField("cumulative_profit_rate")
     private BigDecimal cumulativeProfitRate;
 
+    @TableField("realized_profit")
+    private BigDecimal realizedProfit;
+
+    @TableField("invested_amount")
+    private BigDecimal investedAmount;
+
     @TableField("include_in_net_worth")
     private Boolean includeInNetWorth;
 

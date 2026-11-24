@@ -32,6 +32,10 @@ public class InvestmentPositionResponse {
     private BigDecimal holdingProfitRate;
     private BigDecimal cumulativeProfit;
     private BigDecimal cumulativeProfitRate;
+    /** 已实现收益（卖出落袋+分红），累计收益 = 已实现 + 持仓浮盈 */
+    private BigDecimal realizedProfit;
+    /** 累计投入成本，买入累加、卖出不扣减；累计收益率分母 */
+    private BigDecimal investedAmount;
     private Boolean includeInNetWorth;
     private String status;
     private LocalDateTime lastSyncedAt;

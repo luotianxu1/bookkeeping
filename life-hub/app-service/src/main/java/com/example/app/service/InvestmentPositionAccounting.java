@@ -24,9 +24,12 @@ final class InvestmentPositionAccounting {
         BigDecimal nextHoldingQuantity = defaultZero(position.getHoldingQuantity()).add(quantity).setScale(6, RoundingMode.HALF_UP);
         BigDecimal nextAvailableQuantity = defaultZero(position.getAvailableQuantity()).add(quantity).setScale(6, RoundingMode.HALF_UP);
         BigDecimal nextCostAmount = defaultZero(position.getCostAmount()).add(amount).add(feeAmount).add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+        // 累计投入随买入累加，卖出不扣减：保证累计收益率分母不因清仓缩小
+        BigDecimal nextInvestedAmount = defaultZero(position.getInvestedAmount()).add(amount).add(feeAmount).add(taxAmount).setScale(2, RoundingMode.HALF_UP);
         position.setHoldingQuantity(nextHoldingQuantity);
         position.setAvailableQuantity(nextAvailableQuantity);
         position.setCostAmount(nextCostAmount);
+        position.setInvestedAmount(nextInvestedAmount);
         if (price.compareTo(BigDecimal.ZERO) > 0) {
             position.setCurrentPrice(price);
         }
@@ -52,7 +55,8 @@ final class InvestmentPositionAccounting {
         BigDecimal avgCostPrice = defaultZero(position.getAvgCostPrice()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal soldCostAmount = avgCostPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
         BigDecimal nextCostAmount = defaultZero(position.getCostAmount()).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal previousCumulativeProfit = defaultZero(position.getCumulativeProfit()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal previousRealizedProfit = realizedProfitOf(position);
+
         if (nextCostAmount.compareTo(BigDecimal.ZERO) < 0) {
             nextCostAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         }
@@ -66,8 +70,8 @@ final class InvestmentPositionAccounting {
         recalculatePositionMetrics(position, nextHoldingQuantity.compareTo(BigDecimal.ZERO) == 0 ? "closed" : ACTIVE_STATUS);
 
         BigDecimal realizedProfit = amount.subtract(feeAmount).subtract(taxAmount).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
-        position.setCumulativeProfit(previousCumulativeProfit.add(realizedProfit).setScale(2, RoundingMode.HALF_UP));
-        position.setCumulativeProfitRate(rate(position.getCumulativeProfit(), position.getCostAmount()));
+        position.setRealizedProfit(previousRealizedProfit.add(realizedProfit).setScale(2, RoundingMode.HALF_UP));
+        recalculatePositionMetrics(position, nextHoldingQuantity.compareTo(BigDecimal.ZERO) == 0 ? "closed" : ACTIVE_STATUS);
     }
 
     static void freezePendingFundSellQuantity(InvestmentPositionEntity position, BigDecimal quantity) {
@@ -109,7 +113,7 @@ final class InvestmentPositionAccounting {
         BigDecimal avgCostPrice = defaultZero(position.getAvgCostPrice()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal soldCostAmount = avgCostPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
         BigDecimal nextCostAmount = defaultZero(position.getCostAmount()).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal previousCumulativeProfit = defaultZero(position.getCumulativeProfit()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal previousRealizedProfit = realizedProfitOf(position);
 
         if (nextCostAmount.compareTo(BigDecimal.ZERO) < 0) {
             nextCostAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
@@ -122,8 +126,8 @@ final class InvestmentPositionAccounting {
         recalculatePositionMetrics(position, nextHoldingQuantity.compareTo(BigDecimal.ZERO) == 0 ? "closed" : ACTIVE_STATUS);
 
         BigDecimal realizedProfit = actualAmount.subtract(feeAmount).subtract(taxAmount).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
-        position.setCumulativeProfit(previousCumulativeProfit.add(realizedProfit).setScale(2, RoundingMode.HALF_UP));
-        position.setCumulativeProfitRate(rate(position.getCumulativeProfit(), position.getCostAmount()));
+        position.setRealizedProfit(previousRealizedProfit.add(realizedProfit).setScale(2, RoundingMode.HALF_UP));
+        recalculatePositionMetrics(position, nextHoldingQuantity.compareTo(BigDecimal.ZERO) == 0 ? "closed" : ACTIVE_STATUS);
         transaction.setAmount(actualAmount);
         transaction.setFeeAmount(feeAmount);
         transaction.setPrice(confirmedPrice.setScale(6, RoundingMode.HALF_UP));
@@ -138,7 +142,8 @@ final class InvestmentPositionAccounting {
             ? costAmount.divide(holdingQuantity, 6, RoundingMode.HALF_UP)
             : BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
         BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal cumulativeProfit = defaultZero(position.getCumulativeProfit()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal realizedProfit = realizedProfitOf(position);
+        BigDecimal cumulativeProfit = realizedProfit.add(holdingProfit).setScale(2, RoundingMode.HALF_UP);
 
         position.setHoldingQuantity(holdingQuantity);
         position.setAvailableQuantity(defaultZero(position.getAvailableQuantity()).setScale(6, RoundingMode.HALF_UP));
@@ -147,8 +152,9 @@ final class InvestmentPositionAccounting {
         position.setMarketValue(marketValue);
         position.setHoldingProfit(holdingProfit);
         position.setHoldingProfitRate(rate(holdingProfit, costAmount));
+        position.setRealizedProfit(realizedProfit);
         position.setCumulativeProfit(cumulativeProfit);
-        position.setCumulativeProfitRate(rate(cumulativeProfit, costAmount));
+        position.setCumulativeProfitRate(rate(cumulativeProfit, investedBaseOf(position)));
         position.setStatus(status);
         if (!"pending".equals(position.getSubscriptionStatus())) {
             position.setSubscriptionStatus(SUBSCRIPTION_STATUS_CONFIRMED);

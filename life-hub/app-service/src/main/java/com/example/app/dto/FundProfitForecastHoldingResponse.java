@@ -16,6 +16,8 @@ public class FundProfitForecastHoldingResponse {
     private String unitName;
     private BigDecimal holdingQuantity;
     private BigDecimal costAmount;
+    /** 累计投入成本（含已实现收益的分母口径） */
+    private BigDecimal investedAmount;
     private BigDecimal holdingAmount;
     private BigDecimal estimateProfit;
     private BigDecimal estimateProfitRate;

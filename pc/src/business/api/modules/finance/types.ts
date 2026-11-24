@@ -695,6 +695,8 @@ export interface InvestmentSummary {
   holdingProfitRate: number
   cumulativeProfit: number
   cumulativeProfitRate: number
+  /** 累计投入成本（买入累加、卖出不扣减），累计收益率分母 */
+  investedAmount?: number | null
   lastSyncedAt?: string | null
 }
 
@@ -980,6 +982,10 @@ export interface InvestmentPosition {
   holdingProfitRate: number
   cumulativeProfit: number
   cumulativeProfitRate: number
+  /** 已实现收益（卖出落袋+分红），累计收益 = 已实现 + 持仓浮盈 */
+  realizedProfit?: number | null
+  /** 累计投入成本，买入累加、卖出不扣减；累计收益率分母 */
+  investedAmount?: number | null
   includeInNetWorth: boolean
   status: string
   lastSyncedAt?: string | null

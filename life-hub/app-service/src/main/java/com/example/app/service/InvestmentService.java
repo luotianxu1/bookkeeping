@@ -16,6 +16,7 @@ import com.example.app.dto.InvestmentProductQuoteResponse;
 import com.example.app.dto.InvestmentAssetDetailResponse;
 import com.example.app.dto.InvestmentAutoInvestPlanRequest;
 import com.example.app.dto.InvestmentAutoInvestPlanResponse;
+import com.example.app.dto.InvestmentCumulativeProfitRequest;
 import com.example.app.dto.InvestmentChartPointResponse;
 import com.example.app.dto.InvestmentDetailStatResponse;
 import com.example.app.dto.InvestmentFundRedeemFeeOptionResponse;
@@ -116,6 +117,7 @@ public class InvestmentService {
     private static final String DEFAULT_CURRENCY_CODE = "CNY";
     private static final String DEFAULT_UNIT_NAME = "份";
     private static final String ACTIVE_STATUS = "active";
+    private static final String CLOSED_STATUS = "closed";
     private static final String DELETED_STATUS = "deleted";
     private static final String INVESTMENT_ACCOUNT_TYPE_CODE = "investment";
     private static final String NORMAL_STATUS = "normal";
@@ -598,6 +600,31 @@ public class InvestmentService {
         return Optional.of(toPositionResponse(positionMapper.selectById(id), product, account));
     }
 
+    /**
+     * 手动校准持仓累计收益：展示口径含浮盈，直接改累计收益会被行情同步覆盖，
+     * 因此把差额写入已实现收益（realized = 目标值 − 当前浮盈），累计收益立即等于目标值。
+     */
+    public Optional<InvestmentPositionResponse> updateCumulativeProfit(Long id, InvestmentCumulativeProfitRequest request) {
+        return transactionTemplate.execute(status -> doUpdateCumulativeProfit(id, request));
+    }
+
+    private Optional<InvestmentPositionResponse> doUpdateCumulativeProfit(Long id, InvestmentCumulativeProfitRequest request) {
+        accountMapper.lockUserForWrite(request.getUserId());
+        InvestmentPositionEntity entity = positionMapper.selectById(id);
+        if (entity == null || !request.getUserId().equals(entity.getUserId())) {
+            return Optional.empty();
+        }
+        InvestmentProductEntity product = entity.getProductId() == null ? null : productMapper.selectById(entity.getProductId());
+        AccountEntity account = accountMapper.selectById(entity.getAccountId());
+
+        BigDecimal target = defaultZero(request.getCumulativeProfit()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal holdingProfit = defaultZero(entity.getHoldingProfit()).setScale(2, RoundingMode.HALF_UP);
+        entity.setRealizedProfit(target.subtract(holdingProfit).setScale(2, RoundingMode.HALF_UP));
+        recalculatePositionMetrics(entity, entity.getStatus() == null ? ACTIVE_STATUS : entity.getStatus());
+        positionMapper.updateById(entity);
+        return Optional.of(toPositionResponse(positionMapper.selectById(id), product, account));
+    }
+
     public boolean deletePosition(Long id, Long userId) {
         InvestmentPositionEntity original = positionMapper.selectById(id);
         if (original == null || !userId.equals(original.getUserId())) return false;
@@ -628,12 +655,14 @@ public class InvestmentService {
     }
 
     public InvestmentSummaryResponse summary(Long userId, Long accountId) {
-        return buildSummaryResponse(userId, accountId, loadActiveInvestmentPositions(userId, accountId));
+        return buildSummaryResponse(userId, accountId, loadSummaryPositions(userId, accountId));
     }
 
     public InvestmentTrendResponse trend(Long userId, Long accountId, String range) {
+        // 汇总头使用 active+closed（累计收益保留历史），走势/贡献仍只看当前持仓
+        List<InvestmentPositionEntity> summaryPositions = loadSummaryPositions(userId, accountId);
         List<InvestmentPositionEntity> positions = loadActiveInvestmentPositions(userId, accountId);
-        InvestmentSummaryResponse summary = buildSummaryResponse(userId, accountId, positions);
+        InvestmentSummaryResponse summary = buildSummaryResponse(userId, accountId, summaryPositions);
         TrendRangeMeta rangeMeta = resolveTrendRange(range, userId, accountId, positions);
 
         Map<Long, InvestmentProductEntity> products = positions.isEmpty()
@@ -697,6 +726,11 @@ public class InvestmentService {
             .setScale(2, RoundingMode.HALF_UP);
         BigDecimal holdingProfit = sum(positions, InvestmentPositionEntity::getHoldingProfit);
         BigDecimal cumulativeProfit = sum(positions, InvestmentPositionEntity::getCumulativeProfit);
+        // 累计收益率分母改为累计投入（买入累加、卖出不扣减），避免越卖分母越小导致的收益率失真
+        BigDecimal totalInvestedAmount = positions.stream()
+            .map(this::resolveInvestedBase)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
         boolean allPositionsSyncedToday = !positions.isEmpty() && positions.stream().allMatch(this::hasTodayDayProfit);
         BigDecimal dayProfit = allPositionsSyncedToday
             ? sum(positions, InvestmentPositionEntity::getDayProfit)
@@ -710,7 +744,8 @@ public class InvestmentService {
         response.setHoldingProfit(holdingProfit);
         response.setHoldingProfitRate(rate(holdingProfit, totalMarketValue.subtract(holdingProfit)));
         response.setCumulativeProfit(cumulativeProfit);
-        response.setCumulativeProfitRate(rate(cumulativeProfit, totalMarketValue.subtract(holdingProfit)));
+        response.setCumulativeProfitRate(rate(cumulativeProfit, totalInvestedAmount));
+        response.setInvestedAmount(totalInvestedAmount);
         response.setLastSyncedAt(positions.stream()
             .map(InvestmentPositionEntity::getLastSyncedAt)
             .filter(item -> item != null)
@@ -724,6 +759,17 @@ public class InvestmentService {
             .eq(userId != null, InvestmentPositionEntity::getUserId, userId)
             .eq(accountId != null, InvestmentPositionEntity::getAccountId, accountId)
             .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)), INVESTMENT_ACCOUNT_TYPE_CODE);
+    }
+
+    /**
+     * 汇总口径：active + closed。累计收益是历史口径，清仓后已实现收益必须继续计入，
+     * 否则全仓卖出后账户累计收益会"归零蒸发"。disabled 仍排除。
+     */
+    private List<InvestmentPositionEntity> loadSummaryPositions(Long userId, Long accountId) {
+        return filterPositionsByAccountType(positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
+            .eq(userId != null, InvestmentPositionEntity::getUserId, userId)
+            .eq(accountId != null, InvestmentPositionEntity::getAccountId, accountId)
+            .in(InvestmentPositionEntity::getStatus, List.of(ACTIVE_STATUS, CLOSED_STATUS))), INVESTMENT_ACCOUNT_TYPE_CODE);
     }
 
     private TrendRangeMeta resolveTrendRange(
@@ -2010,7 +2056,7 @@ public class InvestmentService {
             ? costAmount.divide(quantity, 6, RoundingMode.HALF_UP)
             : BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
         BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal cumulativeProfit = defaultZero(entity.getCumulativeProfit()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal realizedProfit = defaultZero(entity.getRealizedProfit()).setScale(2, RoundingMode.HALF_UP);
 
         entity.setUserId(request.getUserId());
         entity.setAccountId(request.getAccountId());
@@ -2024,8 +2070,11 @@ public class InvestmentService {
         entity.setMarketValue(marketValue);
         entity.setHoldingProfit(holdingProfit);
         entity.setHoldingProfitRate(rate(holdingProfit, costAmount));
-        entity.setCumulativeProfit(cumulativeProfit);
-        entity.setCumulativeProfitRate(rate(cumulativeProfit, costAmount));
+        // 手工建仓视同一次性买入：累计投入 = 当前成本；已实现收益保留既有值（编辑场景不丢历史）
+        entity.setRealizedProfit(realizedProfit);
+        entity.setInvestedAmount(defaultZero(entity.getInvestedAmount()).setScale(2, RoundingMode.HALF_UP).max(costAmount));
+        entity.setCumulativeProfit(realizedProfit.add(holdingProfit).setScale(2, RoundingMode.HALF_UP));
+        entity.setCumulativeProfitRate(rate(realizedProfit.add(holdingProfit), investedBaseOf(entity)));
         entity.setDayProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         entity.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
         entity.setIncludeInNetWorth(request.getIncludeInNetWorth() == null ? Boolean.TRUE : request.getIncludeInNetWorth());
@@ -2911,6 +2960,11 @@ public class InvestmentService {
         return defaultZero(position.getMarketValue()).setScale(2, RoundingMode.HALF_UP);
     }
 
+    /** 单持仓累计收益率分母：优先累计投入，未回填的历史数据回退持仓成本。 */
+    private BigDecimal resolveInvestedBase(InvestmentPositionEntity position) {
+        return investedBaseOf(position);
+    }
+
     private InvestmentProductEntity requireProduct(Long productId) {
         InvestmentProductEntity product = productMapper.selectById(productId);
         if (product == null) {
@@ -2976,6 +3030,8 @@ public class InvestmentService {
         response.setHoldingProfitRate(entity.getHoldingProfitRate());
         response.setCumulativeProfit(entity.getCumulativeProfit());
         response.setCumulativeProfitRate(entity.getCumulativeProfitRate());
+        response.setRealizedProfit(entity.getRealizedProfit());
+        response.setInvestedAmount(entity.getInvestedAmount());
         response.setIncludeInNetWorth(entity.getIncludeInNetWorth());
         response.setStatus(entity.getStatus());
         response.setLastSyncedAt(entity.getLastSyncedAt());
@@ -3350,7 +3406,7 @@ public class InvestmentService {
             position.setAvailableQuantity(defaultZero(position.getAvailableQuantity()).add(reinvestQuantity).setScale(6, RoundingMode.HALF_UP));
             position.setMarketValue(defaultZero(position.getHoldingQuantity()).multiply(price).setScale(2, RoundingMode.HALF_UP));
             position.setCurrentPrice(price.setScale(6, RoundingMode.HALF_UP));
-            position.setCumulativeProfit(defaultZero(position.getCumulativeProfit()).add(netAmount).setScale(2, RoundingMode.HALF_UP));
+            position.setRealizedProfit(realizedProfitOf(position).add(netAmount).setScale(2, RoundingMode.HALF_UP));
             recalculatePositionMetrics(position, ACTIVE_STATUS);
             createDividendReinvestTransaction(position, plan, reinvestQuantity, price, netAmount, snapshot.syncedAt());
         } else {
@@ -3360,8 +3416,9 @@ public class InvestmentService {
             }
             AccountEntity fundingAccount = requireCashFundingAccount(position.getUserId(), fundingAccountId);
             creditFundingAccount(fundingAccount, netAmount);
-            position.setCumulativeProfit(defaultZero(position.getCumulativeProfit()).add(netAmount).setScale(2, RoundingMode.HALF_UP));
-            position.setCumulativeProfitRate(rate(position.getCumulativeProfit(), position.getCostAmount()));
+            position.setRealizedProfit(realizedProfitOf(position).add(netAmount).setScale(2, RoundingMode.HALF_UP));
+            position.setCumulativeProfit(cumulativeProfitOf(position));
+            position.setCumulativeProfitRate(rate(cumulativeProfitOf(position), investedBaseOf(position)));
         }
         InvestmentDividendRecordEntity record = new InvestmentDividendRecordEntity();
         record.setUserId(position.getUserId());

@@ -146,11 +146,11 @@ const investmentAccountCards = computed<InvestmentAccountCard[]>(() =>
               0,
             )
           : null,
+      // 后端累计收益已含浮盈（已实现+分红+持仓盈亏），直接累加
       totalProfit: accountPositions.reduce(
         (total, position) =>
           total +
-          Number(position.cumulativeProfit ?? 0) +
-          Number(position.holdingProfit ?? 0),
+          Number(position.cumulativeProfit ?? 0),
         0,
       ),
     }

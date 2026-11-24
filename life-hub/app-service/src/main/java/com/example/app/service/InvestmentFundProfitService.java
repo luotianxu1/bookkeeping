@@ -117,6 +117,7 @@ public class InvestmentFundProfitService {
     }
 
     private static final String ACTIVE_STATUS = "active";
+    private static final String CLOSED_STATUS = "closed";
     private static final String INVESTMENT_ACCOUNT_TYPE_CODE = "investment";
     private static final String FUND_PRODUCT_TYPE = "fund";
     private static final LocalTime FUND_PROFIT_SYNC_READY_TIME = LocalTime.of(21, 30);
@@ -283,7 +284,8 @@ public class InvestmentFundProfitService {
 
         List<InvestmentPositionEntity> rawPositions = positionMapper.selectList(new LambdaQueryWrapper<InvestmentPositionEntity>()
             .eq(InvestmentPositionEntity::getUserId, userId)
-            .eq(InvestmentPositionEntity::getStatus, ACTIVE_STATUS)
+            // 收益页为历史口径：closed 持仓的已实现收益与历史交易仍需计入趋势/日历/明细
+            .in(InvestmentPositionEntity::getStatus, List.of(ACTIVE_STATUS, CLOSED_STATUS))
             .in(InvestmentPositionEntity::getAccountId, accountIds));
         if (rawPositions.isEmpty()) {
             LocalDate today = LocalDate.now();
@@ -633,7 +635,9 @@ public class InvestmentFundProfitService {
                 item.setAccountName(account.getName());
                 item.setHoldingAmount(sum(positions, InvestmentPositionEntity::getMarketValue));
                 item.setTotalProfit(sum(positions, InvestmentPositionEntity::getCumulativeProfit));
-                item.setTotalProfitRate(rate(item.getTotalProfit(), sum(positions, InvestmentPositionEntity::getCostAmount)));
+                item.setTotalProfitRate(rate(item.getTotalProfit(), positions.stream()
+                    .map(this::resolveInvestedBase)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)));
                 item.setFundCount(positions.size());
                 return item;
             })
@@ -643,7 +647,10 @@ public class InvestmentFundProfitService {
     private FundProfitPageSummaryResponse buildFundProfitSummary(FundProfitPageContext context, String view) {
         FundProfitPageSummaryResponse response = new FundProfitPageSummaryResponse();
         BigDecimal holdingAmount = sum(context.positions(), InvestmentPositionEntity::getMarketValue);
-        BigDecimal investedAmount = sum(context.positions(), InvestmentPositionEntity::getCostAmount);
+        BigDecimal investedAmount = context.positions().stream()
+            .map(this::resolveInvestedBase)
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP);
         BigDecimal totalProfit = sum(context.positions(), InvestmentPositionEntity::getCumulativeProfit);
         boolean todayProfitAvailable = hasTodayFundProfitData(context.positions(), context.latestDate());
 
@@ -960,11 +967,21 @@ public class InvestmentFundProfitService {
             && !position.getLastSyncedAt().toLocalTime().isBefore(FUND_PROFIT_SYNC_READY_TIME);
     }
 
+    /** 单持仓累计收益率分母：优先累计投入，未回填的历史数据回退持仓成本。 */
+    private BigDecimal resolveInvestedBase(InvestmentPositionEntity position) {
+        return investedBaseOf(position);
+    }
+
+
     private boolean hasTodayFundProfitData(List<InvestmentPositionEntity> positions, LocalDate latestDate) {
+        // closed 持仓不再同步行情，今日数据可见性只看仍有持仓的基金
+        List<InvestmentPositionEntity> holdingPositions = positions.stream()
+            .filter(position -> defaultZero(position.getHoldingQuantity()).compareTo(BigDecimal.ZERO) > 0)
+            .toList();
         return latestDate != null
             && LocalDate.now().equals(latestDate)
-            && !positions.isEmpty()
-            && positions.stream().allMatch(this::hasTodayDayProfit);
+            && !holdingPositions.isEmpty()
+            && holdingPositions.stream().allMatch(this::hasTodayDayProfit);
     }
 
     private List<AccountEntity> listActiveAccountsByTypeCode(Long userId, Long accountId, String accountTypeCode) {
@@ -1026,7 +1043,9 @@ public class InvestmentFundProfitService {
         BigDecimal holdingAmount = resolveEstimatedHoldingAmount(position, holdingQuantity, estimatedNetValue);
         BigDecimal previousHoldingAmount = resolvePreviousHoldingAmount(position, holdingQuantity, officialNetValue, holdingAmount);
         BigDecimal estimateProfit = holdingAmount.subtract(previousHoldingAmount).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal totalProfit = holdingAmount.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
+        // 与详情/收益页口径一致：总收益 = 估算市值 − 持仓成本 + 已实现收益（分红、历史赎回）
+        BigDecimal investedBase = investedBaseOf(position);
+        BigDecimal totalProfit = holdingAmount.subtract(costAmount).add(realizedProfitOf(position)).setScale(2, RoundingMode.HALF_UP);
 
         FundProfitForecastHoldingResponse response = new FundProfitForecastHoldingResponse();
         response.setAccountId(position.getAccountId());
@@ -1038,11 +1057,12 @@ public class InvestmentFundProfitService {
         response.setUnitName(product.getUnitName());
         response.setHoldingQuantity(holdingQuantity);
         response.setCostAmount(costAmount);
+        response.setInvestedAmount(investedBase);
         response.setHoldingAmount(holdingAmount);
         response.setEstimateProfit(estimateProfit);
         response.setEstimateProfitRate(rate(estimateProfit, previousHoldingAmount));
         response.setTotalProfit(totalProfit);
-        response.setTotalProfitRate(rate(totalProfit, costAmount));
+        response.setTotalProfitRate(rate(totalProfit, investedBase));
         response.setEstimatedNetValue(estimatedNetValue);
         response.setOfficialNetValue(officialNetValue);
         response.setEstimatedAt(resolveFundEstimateTime(position, estimateInfo));
@@ -1084,8 +1104,10 @@ public class InvestmentFundProfitService {
             .map(item -> defaultZero(item.getHoldingAmount()).subtract(defaultZero(item.getEstimateProfit())).setScale(2, RoundingMode.HALF_UP))
             .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
-        BigDecimal totalCostAmount = holdings.stream()
-            .map(FundProfitForecastHoldingResponse::getCostAmount)
+        BigDecimal totalInvestedAmount = holdings.stream()
+            .map(item -> defaultZero(item.getInvestedAmount()).compareTo(BigDecimal.ZERO) > 0
+                ? item.getInvestedAmount()
+                : defaultZero(item.getCostAmount()))
             .reduce(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP), BigDecimal::add)
             .setScale(2, RoundingMode.HALF_UP);
         LocalDateTime estimatedAt = holdings.stream()
@@ -1099,7 +1121,7 @@ public class InvestmentFundProfitService {
             estimateProfit,
             rate(estimateProfit, previousHoldingAmount),
             totalProfit,
-            rate(totalProfit, totalCostAmount),
+            rate(totalProfit, totalInvestedAmount),
             holdings.size(),
             estimatedAt
         );

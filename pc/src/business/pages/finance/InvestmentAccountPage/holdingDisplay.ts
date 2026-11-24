@@ -247,17 +247,17 @@ export function getHoldingBottomLabel(position: InvestmentPosition) {
 }
 
 export function getHoldingTotalProfit(position: InvestmentPosition) {
-  return (
-    Number(position.cumulativeProfit ?? 0) + Number(position.holdingProfit ?? 0)
-  )
+  // 后端累计收益已含浮盈（已实现+分红+持仓盈亏）
+  return Number(position.cumulativeProfit ?? 0)
 }
 
 export function getHoldingTotalProfitRate(position: InvestmentPosition) {
-  const costAmount = Number(position.costAmount ?? 0)
-  if (!Number.isFinite(costAmount) || costAmount <= 0) {
+  // 分母优先累计投入（买入累加、卖出不扣减），旧数据回退持仓成本
+  const base = Math.max(Number(position.investedAmount ?? 0), Number(position.costAmount ?? 0))
+  if (!Number.isFinite(base) || base <= 0) {
     return 0
   }
-  return (getHoldingTotalProfit(position) / costAmount) * 100
+  return (getHoldingTotalProfit(position) / base) * 100
 }
 
 export function getHoldingBottomValue(position: InvestmentPosition) {

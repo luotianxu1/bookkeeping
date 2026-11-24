@@ -158,7 +158,8 @@ const isFundProfitChartActive = computed(() =>
   showFundCumulativeProfitChart.value && selectedFundChartView.value === 'profit',
 )
 const currentTotalProfit = computed(() =>
-  Number(currentPosition.value?.holdingProfit ?? 0) + Number(currentPosition.value?.cumulativeProfit ?? 0),
+  // 后端累计收益已含浮盈（已实现+分红+持仓盈亏），直接使用
+  Number(currentPosition.value?.cumulativeProfit ?? 0),
 )
 
 const {
@@ -190,11 +191,14 @@ const currentFundChartProfit = computed(() => {
   return Number.isFinite(latestValue) ? latestValue : currentTotalProfit.value
 })
 const currentFundChartProfitRate = computed(() => {
+  // 累计收益率分母为累计投入（买入累加、卖出不扣减），旧数据回退持仓成本
+  const investedAmount = Number(currentPosition.value?.investedAmount ?? 0)
   const costAmount = Number(currentPosition.value?.costAmount ?? 0)
-  if (!Number.isFinite(costAmount) || costAmount <= 0) {
+  const base = Math.max(investedAmount, costAmount)
+  if (!Number.isFinite(base) || base <= 0) {
     return null
   }
-  return currentFundChartProfit.value / costAmount * 100
+  return currentFundChartProfit.value / base * 100
 })
 const currentTotalProfitTone = computed<'positive' | 'negative' | 'neutral'>(() => toneByNumber(currentFundChartProfit.value))
 const currentFundChartProfitRateText = computed(() => {

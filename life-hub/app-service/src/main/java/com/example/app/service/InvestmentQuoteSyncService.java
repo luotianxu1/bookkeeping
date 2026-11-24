@@ -286,6 +286,8 @@ public class InvestmentQuoteSyncService {
         position.setDayProfitRate(rate(dayProfit, previousMarketValue));
         position.setHoldingProfit(holdingProfit);
         position.setHoldingProfitRate(rate(holdingProfit, costAmount));
+        position.setCumulativeProfit(cumulativeProfitOf(position));
+        position.setCumulativeProfitRate(rate(cumulativeProfitOf(position), investedBaseOf(position)));
         position.setLastSyncedAt(syncedAt);
     }
 
@@ -312,6 +314,8 @@ public class InvestmentQuoteSyncService {
         position.setDayProfitRate(rate(dayProfit, previousMarketValue));
         position.setHoldingProfit(holdingProfit);
         position.setHoldingProfitRate(rate(holdingProfit, costAmount));
+        position.setCumulativeProfit(cumulativeProfitOf(position));
+        position.setCumulativeProfitRate(rate(cumulativeProfitOf(position), investedBaseOf(position)));
         position.setLastSyncedAt(syncedAt);
     }
 
@@ -326,6 +330,8 @@ public class InvestmentQuoteSyncService {
         position.setHoldingProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         position.setHoldingProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
         position.setMarketValue(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        position.setCumulativeProfit(realizedProfitOf(position));
+        position.setCumulativeProfitRate(rate(realizedProfitOf(position), investedBaseOf(position)));
         position.setLastSyncedAt(syncedAt);
     }
 

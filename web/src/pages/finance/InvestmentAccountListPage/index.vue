@@ -129,17 +129,21 @@ const investmentAccountCards = computed<InvestmentAccountCard[]>(() =>
       dayProfit: dayProfitPositions.length > 0
         ? dayProfitPositions.reduce((total, position) => total + Number(position.dayProfit), 0)
         : null,
+      // 后端累计收益已含浮盈（已实现+分红+持仓盈亏），直接累加
       totalProfit: accountPositions.reduce(
-        (total, position) => total + Number(position.cumulativeProfit ?? 0) + Number(position.holdingProfit ?? 0),
+        (total, position) => total + Number(position.cumulativeProfit ?? 0),
         0,
       ),
     }
   }),
 )
 
-const totalSummaryProfit = computed(() => Number(summary.value.cumulativeProfit ?? 0) + Number(summary.value.holdingProfit ?? 0))
+const totalSummaryProfit = computed(() => Number(summary.value.cumulativeProfit ?? 0))
 const totalSummaryProfitRate = computed(() => {
-  const currentCostAmount = Number(summary.value.totalMarketValue ?? 0) - Number(summary.value.holdingProfit ?? 0)
+  // 分母优先累计投入，旧数据回退（总市值 − 持仓盈亏）≈ 持仓成本
+  const investedAmount = Number(summary.value.investedAmount ?? 0)
+  const fallbackBase = Number(summary.value.totalMarketValue ?? 0) - Number(summary.value.holdingProfit ?? 0)
+  const currentCostAmount = Math.max(investedAmount, fallbackBase)
   if (!Number.isFinite(currentCostAmount) || currentCostAmount <= 0) {
     return 0
   }

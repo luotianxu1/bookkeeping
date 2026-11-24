@@ -186,6 +186,20 @@ export function updateInvestmentPosition(
   )
 }
 
+export function updateInvestmentPositionCumulativeProfit(
+  id: number,
+  params: { userId: number; cumulativeProfit: number },
+) {
+  return requestPut<
+    InvestmentPosition,
+    { userId: number; cumulativeProfit: number }
+  >(
+    financeRequest,
+    `/api/finance/investments/positions/${id}/cumulative-profit`,
+    params,
+  )
+}
+
 export function deleteInvestmentPosition(id: number, userId: number) {
   return requestDelete<void>(
     financeRequest,

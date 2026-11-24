@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import DesktopInput from '@/business/components/DesktopInput.vue'
 
-// 修改持仓弹窗：价格、份额、成本、分红方式与备注编辑。
+// 修改持仓弹窗：价格、份额、成本、分红方式、累计收益校准与备注编辑。
 import { computed, ref } from 'vue'
 import CommonButton from '@/business/components/common/CommonButton/index.vue'
 import CommonModal from '@/business/components/common/CommonModal/index.vue'
@@ -11,6 +11,7 @@ import CommonSelect, {
 import SegmentedControl from '@/business/components/common/SegmentedControl/index.vue'
 import {
   updateInvestmentPosition,
+  updateInvestmentPositionCumulativeProfit,
   type Account,
   type InvestmentAssetDetail,
 } from '@/business/api/modules/finance'
@@ -38,6 +39,7 @@ const isSubmitting = ref(false)
 const editPrice = ref('')
 const editHoldingQuantity = ref('')
 const editCostPrice = ref('')
+const editCumulativeProfit = ref('')
 const editDividendType = ref<'cash' | 'reinvest'>('cash')
 const editDividendFundingAccountId = ref('')
 const editIncludeInNetWorth = ref(true)
@@ -73,6 +75,9 @@ function open() {
     ? formatEditableFundQuantity(position.holdingQuantity)
     : String(Number(position.holdingQuantity ?? 0) || '')
   editCostPrice.value = String(Number(position.avgCostPrice ?? 0) || '')
+  editCumulativeProfit.value = String(
+    Number(position.cumulativeProfit ?? 0) || '',
+  )
   editDividendType.value =
     position.dividendType === 'reinvest' ? 'reinvest' : 'cash'
   editDividendFundingAccountId.value = position.dividendFundingAccountId
@@ -135,6 +140,15 @@ async function submitEdit() {
     editError.value = '现金分红必须选择到账资金账户'
     return
   }
+  const targetCumulativeProfit = Number(editCumulativeProfit.value)
+  if (!Number.isFinite(targetCumulativeProfit)) {
+    editError.value = '请输入有效的累计收益金额'
+    return
+  }
+  const roundedCumulativeProfit = Number(targetCumulativeProfit.toFixed(2))
+  const cumulativeProfitChanged =
+    roundedCumulativeProfit !==
+    Number(currentPosition.value.cumulativeProfit ?? 0)
 
   isSubmitting.value = true
   editError.value = ''
@@ -169,6 +183,16 @@ async function submitEdit() {
       status: currentPosition.value.status,
       remark: editRemark.value.trim() || null,
     })
+    if (cumulativeProfitChanged) {
+      // 校准放在持仓更新之后：后端按最新浮盈计算差额（realized = 目标值 − 浮盈）。
+      await updateInvestmentPositionCumulativeProfit(
+        currentPosition.value.id,
+        {
+          userId: currentUser.id,
+          cumulativeProfit: roundedCumulativeProfit,
+        },
+      )
+    }
     close(true)
     emit('feedback', '修改成功', 'success')
     emit('saved')
@@ -238,6 +262,18 @@ defineExpose({ open })
           />
         </label>
       </div>
+      <label class="pc-field investment-detail-modal-field">
+        <span>累计收益</span>
+        <DesktopInput
+          v-model="editCumulativeProfit"
+          class="investment-detail-field-control investment-detail-number-control"
+          type="number"
+          inputmode="decimal"
+          step="0.01"
+          placeholder="请输入累计收益"
+        />
+      </label>
+
       <label
         v-if="isFundPosition"
         class="pc-field investment-detail-modal-field"

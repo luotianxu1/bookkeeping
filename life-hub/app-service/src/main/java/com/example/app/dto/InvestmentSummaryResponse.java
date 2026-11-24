@@ -15,5 +15,7 @@ public class InvestmentSummaryResponse {
     private BigDecimal holdingProfitRate;
     private BigDecimal cumulativeProfit;
     private BigDecimal cumulativeProfitRate;
+    /** 累计投入成本（买入累加、卖出不扣减），累计收益率分母 */
+    private BigDecimal investedAmount;
     private LocalDateTime lastSyncedAt;
 }
