@@ -336,7 +336,7 @@ public class InvestmentService {
 
         BigDecimal currentPrice = forecastPrice != null && forecastPrice.price() != null
             && forecastPrice.price().compareTo(BigDecimal.ZERO) > 0
-            ? forecastPrice.price().setScale(6, RoundingMode.HALF_UP)
+            ? forecastPrice.price().setScale(4, RoundingMode.HALF_UP)
             : resolveForecastCurrentPrice(productType, symbol, request.getExchangeCode(), request.getLatestPrice());
         BigDecimal estimatedHoldingQuantity = requestedQuantity;
         if ((estimatedHoldingQuantity == null || estimatedHoldingQuantity.compareTo(BigDecimal.ZERO) <= 0)
@@ -2050,11 +2050,11 @@ public class InvestmentService {
     private void fillPosition(InvestmentPositionEntity entity, InvestmentPositionRequest request, Long productId) {
         BigDecimal quantity = defaultZero(request.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal costAmount = defaultZero(request.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal currentPrice = defaultZero(request.getCurrentPrice()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal currentPrice = defaultZero(request.getCurrentPrice()).setScale(4, RoundingMode.HALF_UP);
         BigDecimal marketValue = quantity.multiply(currentPrice).setScale(2, RoundingMode.HALF_UP);
         BigDecimal avgCostPrice = quantity.compareTo(BigDecimal.ZERO) > 0
-            ? costAmount.divide(quantity, 6, RoundingMode.HALF_UP)
-            : BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+            ? costAmount.divide(quantity, 4, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
         BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
         BigDecimal realizedProfit = defaultZero(entity.getRealizedProfit()).setScale(2, RoundingMode.HALF_UP);
 
@@ -2490,8 +2490,8 @@ public class InvestmentService {
         entity.setAvailableQuantity(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
         entity.setFrozenQuantity(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
         entity.setCostAmount(costAmount);
-        entity.setAvgCostPrice(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
-        entity.setCurrentPrice(defaultZero(officialPrice).setScale(6, RoundingMode.HALF_UP));
+        entity.setAvgCostPrice(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
+        entity.setCurrentPrice(defaultZero(officialPrice).setScale(4, RoundingMode.HALF_UP));
         entity.setMarketValue(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         entity.setDayProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         entity.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
@@ -3159,7 +3159,7 @@ public class InvestmentService {
         response.setTradeType("buy");
         boolean pendingSubscription = isPendingFundSubscription(position);
         response.setQuantity(pendingSubscription ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP) : position.getHoldingQuantity());
-        response.setPrice(pendingSubscription ? BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP) : position.getAvgCostPrice());
+        response.setPrice(pendingSubscription ? BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP) : position.getAvgCostPrice());
         response.setAmount(position.getCostAmount());
         response.setFeeAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         response.setTaxAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
@@ -3405,7 +3405,7 @@ public class InvestmentService {
             position.setHoldingQuantity(holdingQuantity.add(reinvestQuantity).setScale(6, RoundingMode.HALF_UP));
             position.setAvailableQuantity(defaultZero(position.getAvailableQuantity()).add(reinvestQuantity).setScale(6, RoundingMode.HALF_UP));
             position.setMarketValue(defaultZero(position.getHoldingQuantity()).multiply(price).setScale(2, RoundingMode.HALF_UP));
-            position.setCurrentPrice(price.setScale(6, RoundingMode.HALF_UP));
+            position.setCurrentPrice(price.setScale(4, RoundingMode.HALF_UP));
             position.setRealizedProfit(realizedProfitOf(position).add(netAmount).setScale(2, RoundingMode.HALF_UP));
             recalculatePositionMetrics(position, ACTIVE_STATUS);
             createDividendReinvestTransaction(position, plan, reinvestQuantity, price, netAmount, snapshot.syncedAt());
@@ -3640,8 +3640,8 @@ public class InvestmentService {
         position.setHoldingQuantity(quantity);
         position.setAvailableQuantity(quantity);
         position.setFrozenQuantity(BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP));
-        position.setAvgCostPrice(confirmedPrice);
-        position.setCurrentPrice(confirmedPrice);
+        position.setAvgCostPrice(confirmedPrice.setScale(4, RoundingMode.HALF_UP));
+        position.setCurrentPrice(confirmedPrice.setScale(4, RoundingMode.HALF_UP));
         position.setMarketValue(costAmount);
         position.setDayProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         position.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));

@@ -856,7 +856,10 @@ export function buildFundProfitFallbackPoints(
 ) {
   const holdingQuantity = Number(position.holdingQuantity ?? 0)
   const averageCostPrice = Number(position.avgCostPrice ?? 0)
-  const realizedProfit = Number(position.cumulativeProfit ?? 0)
+  // 已实现收益不含浮盈；浮盈由 (netValue - avgCost) × qty 单独累加，勿用含浮盈的 cumulativeProfit
+  const realizedProfit = Number(
+    position.realizedProfit ?? position.cumulativeProfit ?? 0,
+  )
   const positionStartTime =
     parsePointLabelDate(normalizeDateLabel(position.createdAt))?.getTime() ??
     NaN

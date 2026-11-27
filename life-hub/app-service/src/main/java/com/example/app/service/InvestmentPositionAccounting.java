@@ -52,7 +52,7 @@ final class InvestmentPositionAccounting {
 
         BigDecimal nextHoldingQuantity = holdingQuantity.subtract(quantity).setScale(6, RoundingMode.HALF_UP);
         BigDecimal nextAvailableQuantity = availableQuantity.subtract(quantity).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal avgCostPrice = defaultZero(position.getAvgCostPrice()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal avgCostPrice = defaultZero(position.getAvgCostPrice()).setScale(4, RoundingMode.HALF_UP);
         BigDecimal soldCostAmount = avgCostPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
         BigDecimal nextCostAmount = defaultZero(position.getCostAmount()).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
         BigDecimal previousRealizedProfit = realizedProfitOf(position);
@@ -110,7 +110,7 @@ final class InvestmentPositionAccounting {
         BigDecimal taxAmount = defaultZero(transaction.getTaxAmount()).setScale(2, RoundingMode.HALF_UP);
         BigDecimal nextHoldingQuantity = holdingQuantity.subtract(quantity).setScale(6, RoundingMode.HALF_UP);
         BigDecimal nextFrozenQuantity = frozenQuantity.subtract(quantity).setScale(6, RoundingMode.HALF_UP);
-        BigDecimal avgCostPrice = defaultZero(position.getAvgCostPrice()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal avgCostPrice = defaultZero(position.getAvgCostPrice()).setScale(4, RoundingMode.HALF_UP);
         BigDecimal soldCostAmount = avgCostPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
         BigDecimal nextCostAmount = defaultZero(position.getCostAmount()).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
         BigDecimal previousRealizedProfit = realizedProfitOf(position);
@@ -122,7 +122,7 @@ final class InvestmentPositionAccounting {
         position.setHoldingQuantity(nextHoldingQuantity);
         position.setFrozenQuantity(nextFrozenQuantity);
         position.setCostAmount(nextCostAmount);
-        position.setCurrentPrice(confirmedPrice.setScale(6, RoundingMode.HALF_UP));
+        position.setCurrentPrice(confirmedPrice.setScale(4, RoundingMode.HALF_UP));
         recalculatePositionMetrics(position, nextHoldingQuantity.compareTo(BigDecimal.ZERO) == 0 ? "closed" : ACTIVE_STATUS);
 
         BigDecimal realizedProfit = actualAmount.subtract(feeAmount).subtract(taxAmount).subtract(soldCostAmount).setScale(2, RoundingMode.HALF_UP);
@@ -136,11 +136,11 @@ final class InvestmentPositionAccounting {
     static void recalculatePositionMetrics(InvestmentPositionEntity position, String status) {
         BigDecimal holdingQuantity = defaultZero(position.getHoldingQuantity()).setScale(6, RoundingMode.HALF_UP);
         BigDecimal costAmount = defaultZero(position.getCostAmount()).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal currentPrice = defaultZero(position.getCurrentPrice()).setScale(6, RoundingMode.HALF_UP);
+        BigDecimal currentPrice = defaultZero(position.getCurrentPrice()).setScale(4, RoundingMode.HALF_UP);
         BigDecimal marketValue = holdingQuantity.multiply(currentPrice).setScale(2, RoundingMode.HALF_UP);
         BigDecimal avgCostPrice = holdingQuantity.compareTo(BigDecimal.ZERO) > 0
-            ? costAmount.divide(holdingQuantity, 6, RoundingMode.HALF_UP)
-            : BigDecimal.ZERO.setScale(6, RoundingMode.HALF_UP);
+            ? costAmount.divide(holdingQuantity, 4, RoundingMode.HALF_UP)
+            : BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
         BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
         BigDecimal realizedProfit = realizedProfitOf(position);
         BigDecimal cumulativeProfit = realizedProfit.add(holdingProfit).setScale(2, RoundingMode.HALF_UP);

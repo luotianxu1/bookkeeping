@@ -53,11 +53,17 @@ function open() {
   if (!position) {
     return
   }
-  editPrice.value = isPendingSubscription.value ? '' : String(Number(props.detail.latestPrice ?? position.currentPrice ?? 0) || '')
+  editPrice.value = isPendingSubscription.value
+    ? ''
+    : Number(props.detail.latestPrice ?? position.currentPrice ?? 0) > 0
+      ? Number(props.detail.latestPrice ?? position.currentPrice).toFixed(4)
+      : ''
   editHoldingQuantity.value = isFundPosition.value
     ? formatEditableFundQuantity(position.holdingQuantity)
     : String(Number(position.holdingQuantity ?? 0) || '')
-  editCostPrice.value = String(Number(position.avgCostPrice ?? 0) || '')
+  editCostPrice.value = Number(position.avgCostPrice ?? 0) > 0
+    ? Number(position.avgCostPrice).toFixed(4)
+    : ''
   editCumulativeProfit.value = String(Number(position.cumulativeProfit ?? 0) || '')
   editDividendType.value = position.dividendType === 'reinvest' ? 'reinvest' : 'cash'
   editDividendFundingAccountId.value = position.dividendFundingAccountId ? String(position.dividendFundingAccountId) : ''

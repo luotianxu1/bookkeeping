@@ -183,13 +183,9 @@ const {
   mergeDetail,
 })
 
-const currentFundChartProfit = computed(() => {
-  if (!historyReady.value) return currentTotalProfit.value
-  const points = cumulativeProfitPoints.value
-  const latestPoint = points[points.length - 1]
-  const latestValue = Number(latestPoint?.value)
-  return Number.isFinite(latestValue) ? latestValue : currentTotalProfit.value
-})
+// 顶部累计收益直接读持仓字段（cumulativeProfit）：手动校准后立即显示校准值。
+// 走势曲线仍用历史推算——盘中等估值时段曲线末点可能与字段有轻微偏差，属预期行为。
+const currentFundChartProfit = computed(() => currentTotalProfit.value)
 const currentFundChartProfitRate = computed(() => {
   // 累计收益率分母为累计投入（买入累加、卖出不扣减），旧数据回退持仓成本
   const investedAmount = Number(currentPosition.value?.investedAmount ?? 0)

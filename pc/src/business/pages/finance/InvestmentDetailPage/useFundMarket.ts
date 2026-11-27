@@ -420,7 +420,11 @@ export function useFundMarket(options: UseFundMarketOptions) {
       )
     }
 
-    const expectedRealizedProfit = Number(position.cumulativeProfit ?? 0)
+    // 偏移基准是已实现收益（不含浮盈）：cumulativeProfit 新口径已含浮盈，
+    // 直接用会把浮盈算两次，导致详情页累计收益与校准值对不上。旧数据无 realizedProfit 时回退。
+    const expectedRealizedProfit = Number(
+      position.realizedProfit ?? position.cumulativeProfit ?? 0,
+    )
     const finalState = tradeEvents.reduce(
       (state, item) => applyFundProfitTransaction(state, item.entry),
       createEmptyFundProfitState(),

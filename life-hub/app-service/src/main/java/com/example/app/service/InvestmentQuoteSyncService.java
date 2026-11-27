@@ -280,7 +280,7 @@ public class InvestmentQuoteSyncService {
             : marketValue.subtract(previousMarketValue).setScale(2, RoundingMode.HALF_UP);
         BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
 
-        position.setCurrentPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
+        position.setCurrentPrice(latestPrice.setScale(4, RoundingMode.HALF_UP));
         position.setMarketValue(marketValue);
         position.setDayProfit(dayProfit);
         position.setDayProfitRate(rate(dayProfit, previousMarketValue));
@@ -308,7 +308,7 @@ public class InvestmentQuoteSyncService {
             : marketValue.subtract(previousMarketValue).setScale(2, RoundingMode.HALF_UP);
         BigDecimal holdingProfit = marketValue.subtract(costAmount).setScale(2, RoundingMode.HALF_UP);
 
-        position.setCurrentPrice(latestPrice.setScale(6, RoundingMode.HALF_UP));
+        position.setCurrentPrice(latestPrice.setScale(4, RoundingMode.HALF_UP));
         position.setMarketValue(marketValue);
         position.setDayProfit(dayProfit);
         position.setDayProfitRate(rate(dayProfit, previousMarketValue));
@@ -324,7 +324,7 @@ public class InvestmentQuoteSyncService {
         BigDecimal latestPrice,
         LocalDateTime syncedAt
     ) {
-        position.setCurrentPrice(defaultZero(latestPrice).setScale(6, RoundingMode.HALF_UP));
+        position.setCurrentPrice(defaultZero(latestPrice).setScale(4, RoundingMode.HALF_UP));
         position.setDayProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         position.setDayProfitRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP));
         position.setHoldingProfit(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
